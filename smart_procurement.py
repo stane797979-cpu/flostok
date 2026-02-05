@@ -1765,15 +1765,11 @@ def main():
                         st.sidebar.success(f"✅ {uploaded_file.name} 업로드 완료\n📊 수식 캐시 생성 완료")
                     except Exception as e:
                         st.sidebar.success(f"✅ {uploaded_file.name} 업로드 완료")
-                    finally:
-                        st.rerun()
             else:
                 # Linux/Streamlit Cloud - 수식 계산 건너뛰기
                 st.sidebar.success(f"✅ {uploaded_file.name} 업로드 완료!")
-                import time
-                time.sleep(0.1)  # 파일 쓰기 완료 대기
-                st.rerun()
 
+            # 업로드된 파일을 즉시 로드
             excel_file = CURRENT_PSI_FILE
         else:
             st.sidebar.info("파일을 업로드하세요")
