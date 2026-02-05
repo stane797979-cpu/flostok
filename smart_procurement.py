@@ -1355,37 +1355,44 @@ def load_psi_data(file_path):
             df_psi[col] = pd.to_numeric(df_psi[col], errors='coerce').fillna(0)
 
     # 대시보드 데이터를 실제 데이터로부터 항상 계산
-    # 여러 방법으로 재고금액 계산 시도
+    # Streamlit Cloud에서는 Excel 수식이 계산되지 않으므로 직접 계산 필수
     total_value = 0
 
     try:
-        if len(df_inventory) > 0 and len(df_abc) > 0:
-            # 방법 1: df_abc와 병합하여 매입원가로 계산
-            df_temp = pd.merge(
-                df_inventory[['SKU코드', '현재고']],
-                df_abc[['SKU코드', '매입원가']],
-                on='SKU코드',
-                how='left'
-            )
-            df_temp['현재고'] = pd.to_numeric(df_temp['현재고'], errors='coerce').fillna(0)
-            df_temp['매입원가'] = pd.to_numeric(df_temp['매입원가'], errors='coerce').fillna(0)
-            df_temp['재고금액'] = df_temp['현재고'] * df_temp['매입원가']
-            total_value = df_temp['재고금액'].sum()
-
-            # 값이 0이면 방법 2 시도: ABC 테이블의 연간COGS 사용
-            if total_value == 0 and '연간COGS' in df_abc.columns:
+        if len(df_abc) > 0:
+            # 방법 1 (권장): ABC 테이블의 연간COGS 사용 (가장 신뢰할 수 있는 데이터)
+            if '연간COGS' in df_abc.columns:
                 total_value = pd.to_numeric(df_abc['연간COGS'], errors='coerce').fillna(0).sum()
+
+            # 방법 2: 연간COGS가 0이면 매입원가 × 현재고로 계산
+            if total_value == 0 and len(df_inventory) > 0 and '매입원가' in df_abc.columns:
+                df_temp = pd.merge(
+                    df_inventory[['SKU코드', '현재고']],
+                    df_abc[['SKU코드', '매입원가']],
+                    on='SKU코드',
+                    how='left'
+                )
+                df_temp['현재고'] = pd.to_numeric(df_temp['현재고'], errors='coerce').fillna(0)
+                df_temp['매입원가'] = pd.to_numeric(df_temp['매입원가'], errors='coerce').fillna(0)
+                df_temp['재고금액'] = df_temp['현재고'] * df_temp['매입원가']
+                total_value = df_temp['재고금액'].sum()
     except Exception as e:
         # 에러 발생시 기본값 0 사용
         total_value = 0
         print(f"재고금액 계산 오류: {e}")
 
-    # dashboard_data가 아직 비어있으면 계산한 값으로 업데이트
-    # (이미 Excel에서 읽은 값이 있으면 그대로 유지)
-    if dashboard_data['total_sku'] == 0:
+    # dashboard_data가 비어있거나 0이면 계산한 값으로 업데이트
+    # Streamlit Cloud에서는 Excel 수식이 계산 안 되므로 항상 계산 값 사용
+    if dashboard_data['total_sku'] == 0 or dashboard_data['total_sku'] is None:
         dashboard_data['total_sku'] = len(df_inventory)
-    if dashboard_data['total_value'] == 0 and total_value > 0:
-        dashboard_data['total_value'] = total_value
+
+    if dashboard_data['total_value'] == 0 or dashboard_data['total_value'] is None:
+        if total_value > 0:
+            dashboard_data['total_value'] = total_value
+        else:
+            # 최후의 수단: 연간판매 데이터라도 사용
+            if len(df_abc) > 0 and '연간판매' in df_abc.columns:
+                dashboard_data['total_value'] = pd.to_numeric(df_abc['연간판매'], errors='coerce').fillna(0).sum() * 0.7  # 추정: 판매의 70%가 재고
 
     return dashboard_data, df_inventory, df_safety, df_abc, df_psi
 
