@@ -83,12 +83,12 @@ def record_order_to_excel(psi_file_path, order_data):
 
         # 발주 데이터 작성
         발주일 = datetime.now().strftime('%Y-%m-%d')  # 날짜만 (시간 제외)
-        리드타임 = order_data.get('리드타임', 30)
+        리드타임 = int(order_data.get('리드타임', 30))  # int로 변환
         예상입고일 = (datetime.now() + timedelta(days=리드타임)).strftime('%Y-%m-%d')  # 날짜만
 
         # 발주 후 재고소진일 계산
-        발주후재고 = order_data['현재고'] + order_data['발주량']
-        일평균판매 = order_data.get('일평균판매', 0)
+        발주후재고 = float(order_data['현재고']) + float(order_data['발주량'])
+        일평균판매 = float(order_data.get('일평균판매', 0))
         if 일평균판매 > 0:
             발주후재고소진일 = 발주후재고 / 일평균판매
         else:
@@ -390,19 +390,19 @@ st.markdown("""
     }
 
     html, body {
-        background-color: #F5F1E8 !important;
+        background-color: #F8F9FA !important;
         color: #1E293B !important;
     }
 
     /* 전체 배경 - 밝은 회색 */
     .stApp {
-        background-color: #F5F1E8 !important;
+        background-color: #F8F9FA !important;
         overflow-y: auto !important;
         color: #1E293B !important;
     }
 
     .main {
-        background-color: #F5F1E8 !important;
+        background-color: #F8F9FA !important;
         overflow-y: auto !important;
         color: #1E293B !important;
     }
@@ -413,15 +413,15 @@ st.markdown("""
     }
 
     section[data-testid="stSidebar"] > div {
-        background-color: #E8E4D8 !important;
+        background-color: #F5F5F5 !important;
     }
 
     [data-testid="stAppViewContainer"] {
-        background-color: #F5F1E8 !important;
+        background-color: #F8F9FA !important;
     }
 
     [data-testid="stHeader"] {
-        background-color: #F5F1E8 !important;
+        background-color: #F8F9FA !important;
     }
 
     /* 메인 컨테이너 */
@@ -437,12 +437,30 @@ st.markdown("""
         padding-top: 1rem !important;
     }
 
-    /* 사이드바 - 연한 보라/회색 */
-    [data-testid="stSidebar"] {
-        background-color: #E8E4D8 !important;
+    /* 사이드바 - 연한 보라/회색 - 강제 라이트 모드 */
+    [data-testid="stSidebar"],
+    section[data-testid="stSidebar"],
+    .css-1d391kg,
+    .css-1lcbmhc {
+        background-color: #F5F5F5 !important;
     }
 
-    [data-testid="stSidebar"] * {
+    [data-testid="stSidebar"] *,
+    section[data-testid="stSidebar"] *,
+    .css-1d391kg *,
+    .css-1lcbmhc * {
+        color: #1E293B !important;
+    }
+
+    /* 사이드바 내부 모든 컴포넌트 배경 */
+    [data-testid="stSidebar"] div,
+    [data-testid="stSidebar"] section,
+    [data-testid="stSidebar"] [data-testid="stExpander"] {
+        background-color: transparent !important;
+    }
+
+    /* 사이드바 위젯 라벨 */
+    [data-testid="stSidebar"] label {
         color: #1E293B !important;
     }
 
@@ -470,26 +488,39 @@ st.markdown("""
         font-weight: 700 !important;
     }
 
-    /* 탭 스타일 */
+    /* 탭 스타일 - 명확한 테두리와 배경 */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        background-color: white;
-        border-radius: 8px;
-        padding: 4px;
+        gap: 12px !important;
+        background-color: #F8F9FA !important;
+        border-radius: 12px !important;
+        padding: 8px !important;
+        border: 2px solid #E5E7EB !important;
     }
 
     .stTabs [data-baseweb="tab"] {
-        height: 50px;
-        border-radius: 6px;
-        color: #64748B;
-        font-weight: 600;
-        background-color: transparent;
+        height: 50px !important;
+        border-radius: 8px !important;
+        color: #1E293B !important;
+        font-weight: 600 !important;
+        background-color: white !important;
+        border: 2px solid #E5E7EB !important;
+        padding: 8px 24px !important;
+        transition: all 0.3s ease !important;
+    }
+
+    .stTabs [data-baseweb="tab"]:hover {
+        background-color: #F8F9FA !important;
+        border-color: #81C784 !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1) !important;
     }
 
     .stTabs [aria-selected="true"] {
-        background-color: #C8E6C9 !important;
-        color: #2C3E50 !important;
-        font-weight: 700;
+        background-color: #81C784 !important;
+        color: white !important;
+        font-weight: 700 !important;
+        border: 2px solid #81C784 !important;
+        box-shadow: 0 4px 12px rgba(129,199,132,0.4) !important;
     }
 
     /* 버튼 - Primary */
@@ -521,7 +552,7 @@ st.markdown("""
     }
 
     .stButton > button:hover {
-        background-color: #EDE9DC;
+        background-color: #E8E8E8;
     }
 
     /* 알림 박스 - 긴급 (빨강) */
@@ -569,7 +600,7 @@ st.markdown("""
     }
 
     .dataframe thead tr th {
-        background-color: #F5F1E8 !important;
+        background-color: #F8F9FA !important;
         color: #1E293B !important;
         font-weight: 700 !important;
         padding: 1rem !important;
@@ -583,7 +614,7 @@ st.markdown("""
     }
 
     .dataframe tbody tr:hover {
-        background-color: #F5F1E8 !important;
+        background-color: #F8F9FA !important;
     }
 
     /* Streamlit 데이터프레임 */
@@ -599,7 +630,7 @@ st.markdown("""
     }
 
     [data-testid="stDataFrame"] thead th {
-        background-color: #F5F1E8 !important;
+        background-color: #F8F9FA !important;
         color: #1E293B !important;
         font-weight: 700 !important;
         text-align: left !important;
@@ -614,28 +645,84 @@ st.markdown("""
     }
 
     [data-testid="stDataFrame"] tbody tr:hover {
-        background-color: #F5F1E8 !important;
+        background-color: #F8F9FA !important;
     }
 
-    /* 입력 필드 */
+    /* 입력 필드 - 강제 라이트 모드 */
     .stTextInput > div > div > input,
     .stNumberInput > div > div > input,
     .stSelectbox > div > div,
-    .stMultiselect > div > div {
-        border: 2px solid #E5E7EB;
-        border-radius: 8px;
-        padding: 0.75rem;
-        background-color: white;
-        color: #1E293B;
-        transition: all 0.3s ease;
+    .stMultiselect > div > div,
+    [data-baseweb="select"],
+    [data-baseweb="input"] {
+        border: 2px solid #E5E7EB !important;
+        border-radius: 8px !important;
+        padding: 0.75rem !important;
+        background-color: white !important;
+        color: #1E293B !important;
+        transition: all 0.3s ease !important;
     }
 
     .stTextInput > div > div > input:focus,
     .stNumberInput > div > div > input:focus,
     .stSelectbox > div > div:focus-within,
     .stMultiselect > div > div:focus-within {
-        border-color: #C8E6C9;
-        box-shadow: 0 0 0 3px rgba(68, 97, 242, 0.1);
+        border-color: #C8E6C9 !important;
+        box-shadow: 0 0 0 3px rgba(68, 97, 242, 0.1) !important;
+    }
+
+    /* Multiselect 태그 - 명확한 테두리 */
+    [data-baseweb="tag"] {
+        background-color: #81C784 !important;
+        color: white !important;
+        border: 3px solid #4CAF50 !important;
+        border-radius: 8px !important;
+        padding: 6px 12px !important;
+        font-weight: 600 !important;
+        box-shadow: 0 2px 6px rgba(76, 175, 80, 0.3) !important;
+        margin: 4px !important;
+    }
+
+    /* 태그 호버 효과 */
+    [data-baseweb="tag"]:hover {
+        background-color: #66BB6A !important;
+        border-color: #388E3C !important;
+        box-shadow: 0 4px 8px rgba(76, 175, 80, 0.4) !important;
+        transform: translateY(-1px) !important;
+    }
+
+    /* 태그 내부 텍스트 */
+    [data-baseweb="tag"] span {
+        color: white !important;
+        font-weight: 600 !important;
+    }
+
+    /* 태그 X 버튼 */
+    [data-baseweb="tag"] svg {
+        color: white !important;
+        opacity: 0.9 !important;
+    }
+
+    [data-baseweb="tag"] svg:hover {
+        opacity: 1 !important;
+    }
+
+    /* Multiselect 드롭다운 */
+    [data-baseweb="popover"] {
+        background-color: white !important;
+    }
+
+    [role="listbox"] {
+        background-color: white !important;
+    }
+
+    [role="option"] {
+        background-color: white !important;
+        color: #1E293B !important;
+    }
+
+    [role="option"]:hover {
+        background-color: #F8F9FA !important;
     }
 
     /* 슬라이더 */
@@ -671,24 +758,36 @@ st.markdown("""
         border-color: #C8E6C9;
     }
 
-    /* Expander */
-    .streamlit-expanderHeader {
-        background-color: white;
-        border: 1px solid #E5E7EB;
-        border-radius: 8px;
-        color: #1E293B;
-        font-weight: 600;
+    /* Expander - 강제 라이트 모드 */
+    .streamlit-expanderHeader,
+    [data-testid="stExpander"] summary,
+    [data-testid="stExpander"] > details > summary {
+        background-color: white !important;
+        border: 1px solid #E5E7EB !important;
+        border-radius: 8px !important;
+        color: #1E293B !important;
+        font-weight: 600 !important;
     }
 
-    .streamlit-expanderHeader:hover {
-        background-color: #F5F1E8;
+    .streamlit-expanderHeader:hover,
+    [data-testid="stExpander"] summary:hover {
+        background-color: #F8F9FA !important;
     }
 
-    .streamlit-expanderContent {
-        background-color: white;
-        border: 1px solid #E5E7EB;
-        border-top: none;
-        border-radius: 0 0 8px 8px;
+    .streamlit-expanderContent,
+    [data-testid="stExpander"] > details > div,
+    [data-testid="stExpanderDetails"] {
+        background-color: white !important;
+        border: 1px solid #E5E7EB !important;
+        border-top: none !important;
+        border-radius: 0 0 8px 8px !important;
+    }
+
+    /* Expander 내부 모든 요소 */
+    [data-testid="stExpander"] *,
+    .streamlit-expanderHeader *,
+    .streamlit-expanderContent * {
+        color: #1E293B !important;
     }
 
     /* 차트 */
@@ -705,14 +804,39 @@ st.markdown("""
         font-weight: 700 !important;
     }
 
-    /* 텍스트 */
+    /* 텍스트 - 더 진한 색상 */
     p, span, div {
-        color: #475569 !important;
+        color: #1E293B !important;
     }
 
     /* 마크다운 */
     .stMarkdown {
-        color: #475569 !important;
+        color: #1E293B !important;
+    }
+
+    /* 위젯 레이블 - 명확한 색상 */
+    label, .stLabel, [data-testid="stWidgetLabel"] {
+        color: #0F172A !important;
+        font-weight: 600 !important;
+    }
+
+    /* 입력 필드 레이블 */
+    .stTextInput label,
+    .stNumberInput label,
+    .stSelectbox label,
+    .stMultiselect label,
+    .stSlider label,
+    .stRadio label,
+    .stCheckbox label {
+        color: #0F172A !important;
+        font-weight: 600 !important;
+        font-size: 0.95rem !important;
+    }
+
+    /* 섹션 제목 */
+    .stSubheader {
+        color: #0F172A !important;
+        font-weight: 700 !important;
     }
 
     /* 다운로드 버튼 */
@@ -726,7 +850,7 @@ st.markdown("""
     }
 
     .stDownloadButton > button:hover {
-        background-color: #EDE9DC;
+        background-color: #E8E8E8;
     }
 
     /* 프로그레스 바 */
@@ -748,13 +872,13 @@ st.markdown("""
 
     /* 코드 블록 */
     .stCodeBlock {
-        background-color: #F5F1E8;
+        background-color: #F8F9FA;
         border: 1px solid #E5E7EB;
         border-radius: 8px;
     }
 
     code {
-        background-color: #F5F1E8;
+        background-color: #F8F9FA;
         color: #C8E6C9;
         padding: 0.2rem 0.4rem;
         border-radius: 4px;
@@ -865,23 +989,29 @@ st.markdown("""
         border: 1px solid #E5E7EB;
     }
 
-    /* 파일 업로더 - 잘 보이게 개선 */
-    .stFileUploader {
-        background: linear-gradient(135deg, #FFFFFF 0%, #F5F1E8 100%);
-        border: 3px dashed #C8E6C9;
-        border-radius: 16px;
-        padding: 3rem 2rem;
-        transition: all 0.3s ease;
+    /* 파일 업로더 - 강제 라이트 모드 */
+    .stFileUploader,
+    [data-testid="stFileUploader"],
+    section[data-testid="stFileUploadDropzone"] {
+        background: linear-gradient(135deg, #FFFFFF 0%, #F8F9FA 100%) !important;
+        border: 3px dashed #C8E6C9 !important;
+        border-radius: 16px !important;
+        padding: 3rem 2rem !important;
+        transition: all 0.3s ease !important;
     }
 
-    .stFileUploader:hover {
-        border-color: #7BA591;
-        background: linear-gradient(135deg, #F5F1E8 0%, #E8E4D8 100%);
-        box-shadow: 0 4px 12px rgba(200, 230, 201, 0.3);
-        transform: scale(1.01);
+    .stFileUploader:hover,
+    [data-testid="stFileUploader"]:hover {
+        border-color: #7BA591 !important;
+        background: linear-gradient(135deg, #F8F9FA 0%, #F5F5F5 100%) !important;
+        box-shadow: 0 4px 12px rgba(200, 230, 201, 0.3) !important;
+        transform: scale(1.01) !important;
     }
 
-    .stFileUploader label {
+    .stFileUploader label,
+    .stFileUploader *,
+    [data-testid="stFileUploader"] *,
+    [data-testid="stFileUploader"] label {
         color: #2C3E50 !important;
         font-size: 1.2rem !important;
         font-weight: 700 !important;
@@ -889,7 +1019,9 @@ st.markdown("""
     }
 
     /* 드래그 앤 드롭 영역 */
-    [data-testid="stFileUploaderDropzone"] {
+    [data-testid="stFileUploaderDropzone"],
+    [data-testid="stFileUploadDropzone"],
+    section[data-testid="stFileUploadDropzone"] > div {
         background-color: #FFFFFF !important;
         border: 2px dashed #C8E6C9 !important;
         border-radius: 12px !important;
@@ -897,15 +1029,34 @@ st.markdown("""
         padding: 2rem !important;
     }
 
-    [data-testid="stFileUploaderDropzone"]:hover {
-        background-color: #F5F1E8 !important;
+    [data-testid="stFileUploaderDropzone"]:hover,
+    [data-testid="stFileUploadDropzone"]:hover {
+        background-color: #F8F9FA !important;
         border-color: #7BA591 !important;
     }
 
-    [data-testid="stFileUploaderDropzoneInstructions"] {
+    [data-testid="stFileUploaderDropzoneInstructions"],
+    [data-testid="stFileUploadDropzone"] span,
+    [data-testid="stFileUploadDropzone"] p,
+    [data-testid="stFileUploadDropzone"] small {
         color: #2C3E50 !important;
         font-size: 1.1rem !important;
         font-weight: 600 !important;
+    }
+
+    /* 업로드된 파일 목록 */
+    [data-testid="stFileUploaderFile"],
+    [data-testid="stFileUploaderFileName"] {
+        background-color: white !important;
+        color: #1E293B !important;
+    }
+
+    /* 파일 업로더 버튼 */
+    [data-testid="stFileUploaderButton"] button,
+    [data-testid="stFileUploadDropzone"] button {
+        background-color: #81C784 !important;
+        color: white !important;
+        border: none !important;
     }
 
     /* 채팅 메시지 */
@@ -923,7 +1074,7 @@ st.markdown("""
     }
 
     .stChatMessage[data-testid="assistant-message"] {
-        background-color: #F5F1E8;
+        background-color: #F8F9FA;
         border-color: #E5E7EB;
     }
 </style>
@@ -1284,10 +1435,16 @@ def main():
 
         # 현재 선택된 탭을 session_state로 관리
         if 'current_page' not in st.session_state:
-            st.session_state.current_page = "수요예측"
+            st.session_state.current_page = "대시보드"
 
-        # 파일 선택 (숨김 - 자동)
-        file_option = "마지막 업로드 파일"
+        # 파일 선택
+        with st.expander("☁️ 데이터 소스 선택", expanded=True):
+            file_option = st.radio(
+                "파일 옵션:",
+                ["마지막 업로드 파일", "파일 업로드"],
+                label_visibility="collapsed",
+                horizontal=False
+            )
 
     # 헤더
     st.markdown(f"""
@@ -1358,11 +1515,14 @@ def main():
                         workbook.Close(SaveChanges=True)
                         excel.Quit()
                         st.sidebar.success(f"✅ {uploaded_file.name} 업로드 완료\n📊 수식 캐시 생성 완료")
+                        st.rerun()
                     except Exception as e:
                         st.sidebar.success(f"✅ {uploaded_file.name} 업로드 완료")
+                        st.rerun()
             else:
                 # Linux/Streamlit Cloud - 수식 계산 건너뛰기
                 st.sidebar.success(f"✅ {uploaded_file.name} 업로드 완료!")
+                st.rerun()
 
             excel_file = CURRENT_PSI_FILE
         else:
@@ -1410,56 +1570,13 @@ def main():
 
     # ===== 사이드바 계속 =====
     with st.sidebar:
-        # 데이터 업로드 섹션
-        st.markdown("""
-        <div style='color: #94A3B8; font-size: 0.75rem; font-weight: 600;
-                    text-transform: uppercase; letter-spacing: 1px; margin: 1.5rem 0 0.5rem 0.5rem;'>
-            Data Management
-        </div>
-        """, unsafe_allow_html=True)
-
-        # 파일 업로드 버튼만 표시
-        with st.expander("📤 데이터 업로드", expanded=False):
-            uploaded_file = st.file_uploader(
-                "PSI 엑셀 파일",
-                type=['xlsx'],
-                help="PSI 형식의 엑셀 파일을 업로드하세요",
-                label_visibility="collapsed"
-            )
-            if uploaded_file:
-                CURRENT_PSI_FILE = "current_psi.xlsx"
-                with open(CURRENT_PSI_FILE, 'wb') as f:
-                    f.write(uploaded_file.getvalue())
-
-                # 수식 캐시 생성
-                with st.spinner('📊 처리 중...'):
-                    try:
-                        import win32com.client
-                        excel_app = win32com.client.Dispatch("Excel.Application")
-                        excel_app.Visible = False
-                        excel_app.DisplayAlerts = False
-                        abs_path = os.path.abspath(CURRENT_PSI_FILE)
-                        workbook = excel_app.Workbooks.Open(abs_path)
-                        excel_app.Calculation = -4105
-                        excel_app.CalculateFull()
-                        for sheet in workbook.Worksheets:
-                            sheet.Calculate()
-                        excel_app.CalculateFull()
-                        workbook.Save()
-                        workbook.Close(SaveChanges=True)
-                        excel_app.Quit()
-                        st.success("✅ 업로드 완료")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"⚠️ 오류: {str(e)}")
-
-        # 현재 파일 정보
+        # 현재 파일 정보 표시
         if os.path.exists("current_psi.xlsx"):
             mtime = os.path.getmtime("current_psi.xlsx")
             mtime_str = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M')
             st.markdown(f"""
             <div style='font-size: 0.75rem; color: #64748B; padding: 0.5rem;
-                        background-color: #F5F1E8; border-radius: 6px; margin-top: 0.5rem;'>
+                        background-color: #F8F9FA; border-radius: 6px; margin-top: 0.5rem;'>
                 📄 현재 파일<br/>
                 <span style='color: #1E293B;'>📅 {mtime_str}</span>
             </div>
@@ -1496,14 +1613,13 @@ def main():
     ]
 
     # 탭 구성
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
         "📊 대시보드",
         "📦 발주 관리",
         "📋 발주 현황",
         "🎯 KPI 관리",
         "📈 분석",
         "🎲 시뮬레이션",
-        "🤖 AI 어시스턴트",
         "⚡ 자동 발주",
         "⚙️ 설정"
     ])
@@ -1527,12 +1643,9 @@ def main():
         show_simulation(df_analysis, df_psi)
 
     with tab7:
-        show_ai_assistant(dashboard_data, df_analysis)
-
-    with tab8:
         show_auto_orders(df_analysis)
 
-    with tab9:
+    with tab8:
         show_settings()
 
 def show_dashboard(dashboard_data, df_analysis):
@@ -1683,12 +1796,20 @@ def show_dashboard(dashboard_data, df_analysis):
             if st.button("전체 선택", key="select_all_dashboard"):
                 all_skus = set(reorder['SKU코드'].tolist())
                 st.session_state.selected_items = all_skus
-                # 상태만 업데이트, 페이지 스크롤 유지
+                # 체크박스 키 업데이트
+                for idx, row in reorder.iterrows():
+                    sku_code = row['SKU코드']
+                    checkbox_key = f"check_{sku_code}_{idx}"
+                    st.session_state[checkbox_key] = True
 
         with col_clear:
             if st.button("선택 해제", key="deselect_all"):
                 st.session_state.selected_items = set()
-                # 상태만 업데이트, 페이지 스크롤 유지
+                # 체크박스 키 업데이트
+                for idx, row in reorder.iterrows():
+                    sku_code = row['SKU코드']
+                    checkbox_key = f"check_{sku_code}_{idx}"
+                    st.session_state[checkbox_key] = False
 
         with col_action:
             selected_count = len(st.session_state.selected_items)
@@ -1703,16 +1824,21 @@ def show_dashboard(dashboard_data, df_analysis):
             with col_check:
                 sku_code = row['SKU코드']
                 is_checked = sku_code in st.session_state.selected_items
-                checked = st.checkbox("", value=is_checked, key=f"check_{sku_code}_{idx}", label_visibility="collapsed")
+                checkbox_key = f"check_{sku_code}_{idx}"
+                # 키가 없으면 is_checked로 초기화, 있으면 유지
+                if checkbox_key not in st.session_state:
+                    st.session_state[checkbox_key] = is_checked
+                # 키 값과 is_checked 중 하나라도 True이면 True (전체 선택 반영)
+                if is_checked or st.session_state.get(checkbox_key, False):
+                    st.session_state[checkbox_key] = True
 
-                # 전체 선택/해제 직후에는 개별 체크박스 로직 실행 안 함
-                skip_logic_dash = st.session_state.get('just_selected_all_dash', False) or st.session_state.get('just_cleared_all_dash', False)
+                checked = st.checkbox("", key=checkbox_key, label_visibility="collapsed")
 
-                if not skip_logic_dash:
-                    if checked and sku_code not in st.session_state.selected_items:
-                        st.session_state.selected_items.add(sku_code)
-                    elif not checked and sku_code in st.session_state.selected_items:
-                        st.session_state.selected_items.remove(sku_code)
+                # 체크박스 변경 시 selected_items 업데이트
+                if checked and sku_code not in st.session_state.selected_items:
+                    st.session_state.selected_items.add(sku_code)
+                elif not checked and sku_code in st.session_state.selected_items:
+                    st.session_state.selected_items.remove(sku_code)
 
             with col_content:
                 coverage_text = f"{row['재고소진일']}일치" if row['재고소진일'] < 999 else "충분"
@@ -2024,30 +2150,20 @@ def show_procurement(df_filtered):
                 if st.button("전체 선택", key="select_all_reorder_tab"):
                     all_skus = set(need_order_df['SKU코드'].tolist())
                     st.session_state.selected_items = all_skus
-                    # 전체 선택 플래그 설정
-                    st.session_state.just_selected_all = True
                     # 체크박스 상태 업데이트 (각 체크박스 키에 맞게)
                     for enum_idx, (idx, row) in enumerate(need_order_df.iterrows()):
                         sku_code = row['SKU코드']
                         checkbox_key = f"sel_reorder_{sku_code}_{enum_idx}"
-                        # 기존 키가 있으면 업데이트
-                        if checkbox_key in st.session_state:
-                            st.session_state[checkbox_key] = True
-                    # 상태만 업데이트, rerun 제거로 스크롤 유지
+                        st.session_state[checkbox_key] = True
 
             with col_clear:
                 if st.button("선택 해제", key="clear_all_reorder_tab"):
                     st.session_state.selected_items = set()
-                    # 전체 해제 플래그 설정
-                    st.session_state.just_cleared_all = True
                     # 체크박스 상태 업데이트 (각 체크박스 키에 맞게)
                     for enum_idx, (idx, row) in enumerate(need_order_df.iterrows()):
                         sku_code = row['SKU코드']
                         checkbox_key = f"sel_reorder_{sku_code}_{enum_idx}"
-                        # 기존 키가 있으면 업데이트
-                        if checkbox_key in st.session_state:
-                            st.session_state[checkbox_key] = False
-                    # 상태만 업데이트, rerun 제거로 스크롤 유지
+                        st.session_state[checkbox_key] = False
 
             # 선택된 품목 수 표시
             selected_count = len(st.session_state.selected_items)
@@ -2067,22 +2183,23 @@ def show_procurement(df_filtered):
             col_check, col_expand = st.columns([0.3, 4.7])
 
             with col_check:
-                # 체크박스 키를 session_state와 동기화
+                # 체크박스 키 관리
                 checkbox_key = f"sel_reorder_{sku_code}_{enum_idx}"
+                # 키가 없으면 is_checked로 초기화, 있으면 유지
                 if checkbox_key not in st.session_state:
                     st.session_state[checkbox_key] = is_checked
+                # 키 값과 is_checked 중 하나라도 True이면 True (전체 선택 반영)
+                if is_checked or st.session_state.get(checkbox_key, False):
+                    st.session_state[checkbox_key] = True
 
-                # 체크박스 (value 파라미터 제거하여 충돌 방지)
+                # 체크박스
                 selected = st.checkbox("선택", key=checkbox_key, label_visibility="collapsed")
 
-                # 전체 선택/해제 직후에는 개별 체크박스 로직 실행 안 함
-                skip_logic = st.session_state.get('just_selected_all', False) or st.session_state.get('just_cleared_all', False)
-
-                if not skip_logic:
-                    if selected and sku_code not in st.session_state.selected_items:
-                        st.session_state.selected_items.add(sku_code)
-                    elif not selected and sku_code in st.session_state.selected_items:
-                        st.session_state.selected_items.remove(sku_code)
+                # 체크박스 변경 시 selected_items 업데이트
+                if selected and sku_code not in st.session_state.selected_items:
+                    st.session_state.selected_items.add(sku_code)
+                elif not selected and sku_code in st.session_state.selected_items:
+                    st.session_state.selected_items.remove(sku_code)
 
             with col_expand:
                 # Expander 상태를 session_state로 관리
@@ -3055,118 +3172,115 @@ def show_kpi_management(df_analysis, df_psi, df_abc):
             st.warning(suggestion)
 
 def show_order_status(df_analysis):
-    """발주 현황 대시보드"""
+    """발주 현황 대시보드 - PSI 파일에서 실제 발주 내역 읽기"""
 
     st.header("📋 발주 현황 대시보드")
+
+    # PSI 파일에서 발주리스트 읽기
+    psi_file = st.session_state.get('psi_file_path', 'current_psi.xlsx')
+    df_orders = None
+
+    if os.path.exists(psi_file):
+        try:
+            wb = openpyxl.load_workbook(psi_file, data_only=True)
+            if '발주리스트' in wb.sheetnames:
+                ws = wb['발주리스트']
+
+                # 데이터 읽기 (헤더 제외)
+                data = []
+                for row in ws.iter_rows(min_row=2, values_only=True):
+                    if row[0]:  # 발주일이 있으면
+                        data.append({
+                            '발주일': row[0],
+                            'SKU코드': row[1],
+                            '제품명': row[2],
+                            'ABC/XYZ': row[3],
+                            '현재고': row[4],
+                            '발주량': row[5],
+                            '구매원가': row[6],
+                            '발주 전 재고소진일': row[7],
+                            '발주 후 재고소진일': row[8],
+                            '예상입고일': row[9]
+                        })
+
+                if data:
+                    df_orders = pd.DataFrame(data)
+                wb.close()
+        except Exception as e:
+            st.error(f"발주 내역을 불러오는 중 오류: {str(e)}")
 
     # 발주 통계
     col1, col2, col3, col4 = st.columns(4)
 
-    # 오늘 발주
-    today = datetime.now().date()
-    today_orders = [v for k, v in st.session_state.order_history.items()
-                    if v['timestamp'].date() == today]
+    if df_orders is not None and len(df_orders) > 0:
+        today = datetime.now().date()
 
-    with col1:
-        st.metric(
-            label="오늘 발주",
-            value=f"{len(today_orders)}건"
-        )
+        # 오늘 발주
+        df_orders['발주일_date'] = pd.to_datetime(df_orders['발주일']).dt.date
+        today_orders = df_orders[df_orders['발주일_date'] == today]
 
-    # 이번주 발주
-    week_start = today - timedelta(days=today.weekday())
-    week_orders = [v for k, v in st.session_state.order_history.items()
-                   if v['timestamp'].date() >= week_start]
+        with col1:
+            st.metric("오늘 발주", f"{len(today_orders)}건")
 
-    with col2:
-        st.metric(
-            label="이번주 발주",
-            value=f"{len(week_orders)}건"
-        )
+        # 이번주 발주
+        week_start = today - timedelta(days=today.weekday())
+        week_orders = df_orders[df_orders['발주일_date'] >= week_start]
 
-    # 이번달 발주
-    month_start = today.replace(day=1)
-    month_orders = [v for k, v in st.session_state.order_history.items()
-                    if v['timestamp'].date() >= month_start]
+        with col2:
+            st.metric("이번주 발주", f"{len(week_orders)}건")
 
-    with col3:
-        st.metric(
-            label="이번달 발주",
-            value=f"{len(month_orders)}건"
-        )
+        # 이번달 발주
+        month_start = today.replace(day=1)
+        month_orders = df_orders[df_orders['발주일_date'] >= month_start]
 
-    # 전체 발주
-    with col4:
-        st.metric(
-            label="전체 발주",
-            value=f"{len(st.session_state.order_history)}건"
-        )
+        with col3:
+            st.metric("이번달 발주", f"{len(month_orders)}건")
+
+        # 전체 발주
+        with col4:
+            st.metric("전체 발주", f"{len(df_orders)}건")
+    else:
+        with col1:
+            st.metric("오늘 발주", "0건")
+        with col2:
+            st.metric("이번주 발주", "0건")
+        with col3:
+            st.metric("이번달 발주", "0건")
+        with col4:
+            st.metric("전체 발주", "0건")
 
     st.markdown("---")
 
-    # 미발주 위험 품목
-    need_order = df_analysis[
-        (df_analysis['발주필요'] == True) &
-        (df_analysis['권장발주량'] > 0)
-    ]
+    # 발주 완료 목록
+    st.subheader("✅ 발주 완료 목록")
 
-    not_ordered = []
-    for idx, row in need_order.iterrows():
-        if row['SKU코드'] not in st.session_state.order_history:
-            not_ordered.append(row)
+    if df_orders is not None and len(df_orders) > 0:
+        # 최신 순으로 정렬
+        df_display = df_orders.copy()
+        df_display = df_display.sort_values('발주일', ascending=False)
 
-    col1, col2 = st.columns([1, 1])
+        # 컬럼 선택 및 포맷
+        display_cols = ['발주일', 'SKU코드', '제품명', 'ABC/XYZ', '현재고',
+                        '발주량', '구매원가', '예상입고일']
+        df_display = df_display[display_cols]
 
-    with col1:
-        st.subheader(f"🔴 미발주 위험 품목: {len(not_ordered)}건")
-        if len(not_ordered) > 0:
-            for row in not_ordered[:5]:
-                st.warning(f"{row['SKU코드']} - {row['제품명']} (재고: {row['재고소진일']}일치)")
-
-    with col2:
-        st.subheader(f"🟢 발주 완료: {len(st.session_state.order_history)}건")
-        if len(st.session_state.order_history) > 0:
-            for sku, info in list(st.session_state.order_history.items())[:5]:
-                days_ago = (datetime.now() - info['timestamp']).days
-                st.success(f"{sku} - {info['quantity']:,}개 ({days_ago}일 전)")
-
-    st.markdown("---")
-
-    # 발주 이력 테이블
-    st.subheader("📋 발주 이력")
-
-    if len(st.session_state.order_history) > 0:
-        # DataFrame 생성
-        history_data = []
-        for sku, info in st.session_state.order_history.items():
-            history_data.append({
-                '발주일시': info['timestamp'].strftime('%Y-%m-%d %H:%M'),
-                'SKU코드': sku,
-                '제품명': info['product_name'],
-                '발주량': f"{info['quantity']:,}개",
-                '경과': f"{(datetime.now() - info['timestamp']).days}일 전"
-            })
-
-        df_history = pd.DataFrame(history_data)
-        df_history = df_history.sort_values('발주일시', ascending=False)
-
-        st.dataframe(df_history, use_container_width=True, height=400)
+        st.dataframe(df_display, use_container_width=True, height=500)
 
         # Excel 다운로드
         from io import BytesIO
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df_history.to_excel(writer, index=False, sheet_name='발주이력')
+            df_display.to_excel(writer, index=False, sheet_name='발주내역')
 
         output.seek(0)
         st.download_button(
-            label="📥 발주 이력 Excel 다운로드",
+            label="📥 발주 내역 Excel 다운로드",
             data=output,
-            file_name=f"발주이력_{datetime.now().strftime('%Y%m%d')}.xlsx",
+            file_name=f"발주내역_{datetime.now().strftime('%Y%m%d')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
     else:
-        st.info("발주 이력이 없습니다.")
+        st.info("📋 발주 내역이 없습니다. '자동 발주' 또는 '발주 관리' 탭에서 발주를 실행하세요.")
 
 def show_simulation(df_analysis, df_psi):
     """시뮬레이션 및 예측 화면"""
@@ -3179,7 +3293,7 @@ def show_simulation(df_analysis, df_psi):
 
     # 세션 상태에 선택된 탭 저장
     if 'sim_selected_tab' not in st.session_state:
-        st.session_state.sim_selected_tab = "📈 수요 예측"
+        st.session_state.sim_selected_tab = "📈 판매 추이 분석"
 
     # 탭 선택 콜백 함수
     def on_tab_change():
@@ -3188,8 +3302,8 @@ def show_simulation(df_analysis, df_psi):
     # 탭 선택 (radio 버튼 사용)
     sim_tab_option = st.radio(
         "분석 유형 선택:",
-        ["📈 수요 예측", "🎲 시나리오 분석", "📉 재고 최적화"],
-        index=["📈 수요 예측", "🎲 시나리오 분석", "📉 재고 최적화"].index(st.session_state.sim_selected_tab),
+        ["📈 판매 추이 분석", "🎲 시나리오 분석", "📉 재고 최적화"],
+        index=["📈 판매 추이 분석", "🎲 시나리오 분석", "📉 재고 최적화"].index(st.session_state.sim_selected_tab),
         horizontal=True,
         key='sim_tab_selector',
         on_change=on_tab_change
@@ -3201,8 +3315,8 @@ def show_simulation(df_analysis, df_psi):
     st.markdown("---")
 
     # ===== 1. 수요 예측 =====
-    if sim_tab_option == "📈 수요 예측":
-        st.subheader("📈 수요 예측 모델")
+    if sim_tab_option == "📈 판매 추이 분석":
+        st.subheader("📈 판매 추이 분석 모델")
         st.markdown("이동평균과 지수평활법을 이용한 수요 예측")
 
         # 제품 선택
@@ -3655,20 +3769,21 @@ def show_simulation(df_analysis, df_psi):
                 use_container_width=True
             )
 
-            # Excel 다운로드
-            from io import BytesIO
-            buffer = BytesIO()
-            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                opt_df[['SKU코드', '제품명', 'ABC등급', 'XYZ등급', '현재고', '최적_재고수준',
-                       '재고_조정필요', '조정_방향']].to_excel(writer, sheet_name='최적화결과', index=False)
-                abc_opt.to_excel(writer, sheet_name='ABC별요약', index=False)
+            # Excel 다운로드 (데이터가 있을 때만)
+            if len(opt_df) > 0:
+                from io import BytesIO
+                buffer = BytesIO()
+                with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                    opt_df[['SKU코드', '제품명', 'ABC등급', 'XYZ등급', '현재고', '최적_재고수준',
+                           '재고_조정필요', '조정_방향']].to_excel(writer, sheet_name='최적화결과', index=False)
+                    abc_opt.to_excel(writer, sheet_name='ABC별요약', index=False)
 
-            st.download_button(
-                label="📥 최적화 결과 다운로드",
-                data=buffer.getvalue(),
-                file_name=f"재고최적화_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+                st.download_button(
+                    label="📥 최적화 결과 다운로드",
+                    data=buffer.getvalue(),
+                    file_name=f"재고최적화_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
 
 def show_ai_assistant(dashboard_data, df_analysis):
     """AI 어시스턴트 챗봇"""
@@ -4214,47 +4329,78 @@ def show_auto_orders(df_analysis):
         st.warning("⚠️ 필터 조건에 맞는 품목이 없습니다.")
         return
 
-    # DataFrame으로 변환
-    df_auto = pd.DataFrame(filtered_orders)
+    # 선택된 품목 관리
+    if 'auto_selected_items' not in st.session_state:
+        st.session_state.auto_selected_items = set()
 
-    # 표시용 컬럼 선택 및 이름 변경
-    display_df = df_auto[[
-        '우선순위', 'SKU코드', '제품명', 'ABC등급', 'XYZ등급',
-        '현재고', '안전재고', '발주점', '권장발주량',
-        '예측_일평균판매', '예측_신뢰도', '예측_트렌드',
-        '재고소진일', '예상_발주금액'
-    ]].copy()
+    # 전체 선택/해제 버튼
+    col_sel1, col_sel2, col_sel3 = st.columns([1, 1, 3])
+    with col_sel1:
+        if st.button("✅ 전체 선택", key="auto_select_all"):
+            st.session_state.auto_selected_items = set([o['SKU코드'] for o in filtered_orders])
+    with col_sel2:
+        if st.button("❌ 전체 해제", key="auto_deselect_all"):
+            st.session_state.auto_selected_items = set()
+    with col_sel3:
+        selected_count = len(st.session_state.auto_selected_items)
+        if selected_count > 0:
+            st.success(f"✅ 선택된 품목: **{selected_count}개**")
 
-    # 컬럼명 한글화
-    display_df.columns = [
-        '우선순위', 'SKU코드', '제품명', 'ABC', 'XYZ',
-        '현재고', '안전재고', '발주점', '권장수량',
-        '예측판매', '신뢰도(%)', '트렌드',
-        '소진일', '예상금액(원)'
-    ]
+    st.markdown("<br>", unsafe_allow_html=True)
 
-    # 숫자 포맷팅 (소수점 1자리)
-    numeric_format = {
-        '예측판매': '{:.1f}',
-        '소진일': '{:.1f}',
-        '현재고': '{:.1f}',
-        '안전재고': '{:.1f}',
-        '발주점': '{:.1f}',
-        '권장수량': '{:.1f}',
-        '예상금액(원)': '{:,.1f}'
-    }
+    # 각 품목을 체크박스와 함께 표시
+    for idx, order in enumerate(filtered_orders):
+        sku_code = order['SKU코드']
 
-    # 우선순위별 색상
-    def color_priority(row):
-        if row['우선순위'] == 'HIGH':
-            return ['background-color: #FEE2E2'] * len(row)  # 빨강
-        elif row['우선순위'] == 'MEDIUM':
-            return ['background-color: #FEF3C7'] * len(row)  # 노랑
-        else:
-            return ['background-color: #E5E7EB'] * len(row)  # 회색
+        # 체크박스 초기값
+        checkbox_key = f"auto_check_{sku_code}_{idx}"
+        is_checked = sku_code in st.session_state.auto_selected_items
+        if checkbox_key not in st.session_state:
+            st.session_state[checkbox_key] = is_checked
+        if is_checked or st.session_state.get(checkbox_key, False):
+            st.session_state[checkbox_key] = True
 
-    styled_df = display_df.style.apply(color_priority, axis=1).format(numeric_format)
-    st.dataframe(styled_df, use_container_width=True, height=400)
+        # 체크박스와 품목 정보
+        col_check, col_info = st.columns([0.3, 4.7])
+
+        with col_check:
+            checked = st.checkbox("선택", key=checkbox_key, label_visibility="collapsed")
+            if checked and sku_code not in st.session_state.auto_selected_items:
+                st.session_state.auto_selected_items.add(sku_code)
+            elif not checked and sku_code in st.session_state.auto_selected_items:
+                st.session_state.auto_selected_items.remove(sku_code)
+
+        with col_info:
+            # 우선순위별 색상
+            if order['우선순위'] == 'HIGH':
+                priority_color = '🔴'
+                bg_color = '#FEE2E2'
+            elif order['우선순위'] == 'MEDIUM':
+                priority_color = '🟡'
+                bg_color = '#FEF3C7'
+            else:
+                priority_color = '⚪'
+                bg_color = '#F3F4F6'
+
+            with st.expander(
+                f"{priority_color} **{order['SKU코드']}** - {order['제품명']} ({order['ABC등급']}등급)",
+                expanded=False
+            ):
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("현재고", f"{order['현재고']:,.0f}개")
+                    st.metric("발주점", f"{order['발주점']:,.0f}개")
+                with col2:
+                    st.metric("권장발주량", f"{order['권장발주량']:,.0f}개")
+                    st.metric("예측판매", f"{order['예측_일평균판매']:.1f}개/일")
+                with col3:
+                    st.metric("재고소진일", f"{order['재고소진일']:.0f}일")
+                    st.metric("신뢰도", f"{order['예측_신뢰도']:.0f}%")
+                with col4:
+                    st.metric("예상금액", f"{order['예상_발주금액']/10000:.0f}만원")
+                    st.metric("트렌드", order['예측_트렌드'])
+
+                st.caption(f"XYZ등급: {order['XYZ등급']} | 리드타임: {order['리드타임']}일")
 
     # 일괄 승인 섹션
     st.markdown("---")
@@ -4271,39 +4417,118 @@ def show_auto_orders(df_analysis):
         """)
 
     with col_approve2:
-        st.metric("선택된 품목", f"{len(filtered_orders)}개")
+        selected_count = len(st.session_state.auto_selected_items)
+        st.metric("선택된 품목", f"{selected_count}개")
 
     # 일괄 승인 버튼
-    if st.button("⚡ 일괄 자동 발주 실행", type="primary", use_container_width=True):
-        st.warning("🚧 일괄 자동 발주 기능은 개발 중입니다.")
-        st.info("""
-        💡 **현재 사용 가능한 방법:**
-        1. '📦 발주 관리' 탭으로 이동
-        2. 필터에서 '발주필요' 선택
-        3. 개별 품목을 선택하여 발주 실행
-        """)
+    if st.button("⚡ 선택 품목 자동 발주 실행", type="primary", use_container_width=True):
+        # 선택된 품목만 필터링
+        selected_orders = [o for o in filtered_orders if o['SKU코드'] in st.session_state.auto_selected_items]
 
-        # TODO: 일괄 발주 로직 구현
-        # - 승인 확인 다이얼로그
-        # - 각 품목별 발주 실행
-        # - 발주 내역 기록
-        # - 성공/실패 보고
+        if not selected_orders:
+            st.error("❌ 발주할 품목을 먼저 선택하세요!")
+        else:
+            # 승인 확인
+            total_amount = sum([o['예상_발주금액'] for o in selected_orders])
+            total_qty = sum([o['권장발주량'] for o in selected_orders])
+
+            st.warning(f"""
+            ⚠️ **발주 확인**
+            - 발주 품목: **{len(selected_orders)}개**
+            - 총 발주량: **{total_qty:,.0f}개**
+            - 예상 금액: **{total_amount/10000:,.0f}만원**
+
+            아래 "최종 승인" 버튼을 눌러 발주를 실행하세요.
+            """)
+
+            # 최종 승인 버튼
+            if st.button("✅ 최종 승인 및 발주 실행", type="secondary", use_container_width=True):
+                # PSI 파일 경로 확인
+                psi_file = st.session_state.get('psi_file_path', 'current_psi.xlsx')
+
+                if not os.path.exists(psi_file):
+                    st.error("❌ PSI 파일을 찾을 수 없습니다. 먼저 데이터를 업로드하세요.")
+                else:
+                    # 발주 실행
+                    success_count = 0
+                    fail_count = 0
+
+                    with st.spinner('⚡ 자동 발주 실행 중...'):
+                        for order in selected_orders:
+                            try:
+                                # 발주 데이터 준비
+                                order_data = {
+                                    'SKU코드': order['SKU코드'],
+                                    '제품명': order['제품명'],
+                                    'ABC등급': order['ABC등급'],
+                                    'XYZ등급': order['XYZ등급'],
+                                    '현재고': order['현재고'],
+                                    '발주량': order['권장발주량'],
+                                    '매입원가': order['매입원가'],
+                                    '재고소진일': order['재고소진일'],
+                                    '리드타임': order['리드타임'],
+                                    '일평균판매': order['예측_일평균판매']
+                                }
+
+                                # 엑셀에 기록
+                                record_order_to_excel(psi_file, order_data)
+                                success_count += 1
+
+                            except Exception as e:
+                                fail_count += 1
+                                st.error(f"❌ {order['SKU코드']} 발주 실패: {str(e)}")
+
+                    # 결과 표시
+                    st.markdown("---")
+                    st.success(f"""
+                    ✅ **자동 발주 완료!**
+
+                    - ✅ 성공: **{success_count}개** 품목
+                    - ❌ 실패: **{fail_count}개** 품목
+                    - 📋 총 발주량: **{total_qty:,.0f}개**
+                    - 💰 총 금액: **{total_amount/10000:,.0f}만원**
+
+                    📋 **발주 현황 탭**에서 발주 내역을 확인하세요!
+                    """)
+
+                    if success_count > 0:
+                        st.balloons()
+
+                    # 발주 내역 저장 및 선택 초기화
+                    if 'order_history' not in st.session_state:
+                        st.session_state.order_history = {}
+
+                    for order in selected_orders:
+                        st.session_state.order_history[order['SKU코드']] = {
+                            'quantity': order['권장발주량'],
+                            'timestamp': datetime.now()
+                        }
+
+                    # 선택 초기화
+                    st.session_state.auto_selected_items = set()
 
     # Excel 다운로드
     st.markdown("---")
     st.subheader("📥 자동 발주 목록 다운로드")
 
-    from io import BytesIO
-    buffer = BytesIO()
-    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-        df_auto.to_excel(writer, sheet_name='자동발주추천', index=False)
+    # DataFrame 생성 (다운로드용)
+    df_auto = pd.DataFrame(filtered_orders)
 
-    st.download_button(
-        label="📥 Excel 다운로드",
-        data=buffer.getvalue(),
-        file_name=f"자동발주_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+    # 데이터가 있을 때만 다운로드 버튼 표시
+    if len(df_auto) > 0:
+        from io import BytesIO
+        buffer = BytesIO()
+        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+            df_auto.to_excel(writer, sheet_name='자동발주추천', index=False)
+
+        st.download_button(
+            label="📥 Excel 다운로드",
+            data=buffer.getvalue(),
+            file_name=f"자동발주_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    else:
+        st.info("📋 다운로드할 데이터가 없습니다.")
 
     # 수요 예측 상세
     st.markdown("---")
