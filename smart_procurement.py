@@ -1294,6 +1294,16 @@ def load_psi_data(file_path):
 
     df_safety = pd.DataFrame(safety_data)
 
+    # 매입원가 매핑 (재고 시트에서 SKU별 매입원가 읽기)
+    purchase_price_map = {}
+    if '재고' in wb.sheetnames:
+        ws_stock = wb['재고']
+        for row in range(2, min(ws_stock.max_row + 1, 410)):
+            sku = ws_stock.cell(row, 3).value  # 컬럼 C: SKU
+            price = ws_stock.cell(row, 8).value  # 컬럼 H: 매입원가
+            if sku and price:
+                purchase_price_map[sku] = price
+
     # ABC-XYZ 데이터 (월별 출고 포함)
     ws_abc = wb['ABC-XYZ분석 (2)']
     abc_data = []
@@ -1304,7 +1314,7 @@ def load_psi_data(file_path):
                 'SKU코드': sku,
                 '제품명': ws_abc.cell(row, 7).value,     # 컬럼 7: 제품명
                 '연간판매': ws_abc.cell(row, 22).value or 0,  # 컬럼 22: 연간 판매
-                '매입원가': ws_abc.cell(row, 24).value or 0,  # 컬럼 24: 평균 판매단가
+                '매입원가': purchase_price_map.get(sku, 0),  # 재고 시트에서 가져온 실제 매입원가
                 '연간COGS': ws_abc.cell(row, 26).value or 0,  # 컬럼 26: 25년 연간 판매금액
                 'ABC등급': ws_abc.cell(row, 29).value,   # 컬럼 29: ABC등급
             }
