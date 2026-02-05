@@ -1697,8 +1697,8 @@ def main():
                         st.sidebar.success(f"✅ {uploaded_file.name} 업로드 완료\n📊 수식 캐시 생성 완료")
                     except Exception as e:
                         st.sidebar.success(f"✅ {uploaded_file.name} 업로드 완료")
-                finally:
-                    st.rerun()
+                    finally:
+                        st.rerun()
             else:
                 # Linux/Streamlit Cloud - 수식 계산 건너뛰기
                 st.sidebar.success(f"✅ {uploaded_file.name} 업로드 완료!")
