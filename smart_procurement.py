@@ -3668,8 +3668,12 @@ def show_simulation(df_analysis, df_psi):
                 selected_sku = st.selectbox(
                     "분석할 제품 선택:",
                     options=df_analysis['SKU코드'].tolist(),
-                    format_func=lambda x: f"{x} - {df_analysis[df_analysis['SKU코드']==x]['제품명'].iloc[0]}"
+                    format_func=lambda x: f"{x} - {df_analysis[df_analysis['SKU코드']==x]['제품명'].iloc[0]}",
+                    key="sales_trend_sku"
                 )
+                if selected_sku:
+                    product_name = df_analysis[df_analysis['SKU코드']==selected_sku]['제품명'].iloc[0]
+                    st.caption(f"✓ 선택됨: {selected_sku} - {product_name}")
 
             with col2:
                 forecast_days = st.number_input("예측 기간 (일)", min_value=7, max_value=90, value=30, step=7)
@@ -3811,8 +3815,10 @@ def show_simulation(df_analysis, df_psi):
             with col2:
                 apply_to = st.selectbox(
                     "적용 대상:",
-                    ["전체 품목", "A등급만", "B등급만", "C등급만"]
+                    ["전체 품목", "A등급만", "B등급만", "C등급만"],
+                    key="scenario_apply_to"
                 )
+                st.caption(f"✓ {apply_to}")
 
             # 필터 적용
             if apply_to == "전체 품목":
@@ -3888,6 +3894,7 @@ def show_simulation(df_analysis, df_psi):
                     ["전체 품목", "A등급만", "B등급만", "C등급만"],
                     key="lt_apply"
                 )
+                st.caption(f"✓ {apply_to_lt}")
 
             # 필터 적용
             if apply_to_lt == "전체 품목":
