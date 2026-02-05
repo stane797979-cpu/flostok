@@ -1806,15 +1806,30 @@ def main():
                     if len(df_inventory) > 0:
                         st.write(f"✅ 재고 데이터: {len(df_inventory)}행")
 
-                    # 시트 이름 표시
+                    # 시트 이름 표시 (모든 시트)
                     if 'sheet_names' in dashboard_data:
-                        st.write(f"📋 **Excel 시트:** {', '.join(dashboard_data['sheet_names'][:3])}")
+                        all_sheets = ', '.join(dashboard_data['sheet_names'])
+                        st.write(f"📋 **Excel 시트 ({len(dashboard_data['sheet_names'])}개):**")
+                        st.write(f"   {all_sheets}")
+                        st.write(f"   {'✅' if '재고분석' in dashboard_data['sheet_names'] else '❌'} 재고분석 시트")
 
                     # 상세 디버그 정보
                     debug_samples = dashboard_data.get('debug_samples', {})
                     if debug_samples:
                         st.write("---")
                         st.write("**🔍 상세 디버깅:**")
+
+                        # 재고분석 시트 정보
+                        if 'sheet_check' in debug_samples:
+                            st.write(f"- 시트 체크: {debug_samples['sheet_check']}")
+                        if '재고분석_info' in debug_samples:
+                            st.write(f"- 재고분석 시트 정보: {debug_samples['재고분석_info']}")
+                        if 'first_3_rows_raw' in debug_samples:
+                            st.write("- 재고분석 첫 3행:")
+                            for row in debug_samples['first_3_rows_raw']:
+                                st.write(f"  {row}")
+                        if 'calc_data_count' in debug_samples:
+                            st.write(f"- 수집된 데이터: {debug_samples['calc_data_count']}개")
 
                         if 'nonzero_stock_count' in debug_samples:
                             st.write(f"- 재고 있는 SKU: {debug_samples['nonzero_stock_count']}개")
