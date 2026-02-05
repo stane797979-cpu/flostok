@@ -1331,25 +1331,34 @@ def load_psi_data(file_path):
             df_psi[col] = pd.to_numeric(df_psi[col], errors='coerce').fillna(0)
 
     # 대시보드 데이터를 실제 데이터로부터 항상 계산
-    # df_abc와 df_inventory를 병합하여 재고금액 계산
-    if len(df_inventory) > 0 and len(df_abc) > 0:
-        # SKU코드로 병합하여 매입원가 가져오기
-        df_temp = pd.merge(
-            df_inventory[['SKU코드', '현재고']],
-            df_abc[['SKU코드', '매입원가']],
-            on='SKU코드',
-            how='left'
-        )
-        df_temp['현재고'] = pd.to_numeric(df_temp['현재고'], errors='coerce').fillna(0)
-        df_temp['매입원가'] = pd.to_numeric(df_temp['매입원가'], errors='coerce').fillna(0)
-        df_temp['재고금액'] = df_temp['현재고'] * df_temp['매입원가']
-        total_value = df_temp['재고금액'].sum()
-    else:
+    # 여러 방법으로 재고금액 계산 시도
+    total_value = 0
+
+    try:
+        if len(df_inventory) > 0 and len(df_abc) > 0:
+            # 방법 1: df_abc와 병합하여 매입원가로 계산
+            df_temp = pd.merge(
+                df_inventory[['SKU코드', '현재고']],
+                df_abc[['SKU코드', '매입원가']],
+                on='SKU코드',
+                how='left'
+            )
+            df_temp['현재고'] = pd.to_numeric(df_temp['현재고'], errors='coerce').fillna(0)
+            df_temp['매입원가'] = pd.to_numeric(df_temp['매입원가'], errors='coerce').fillna(0)
+            df_temp['재고금액'] = df_temp['현재고'] * df_temp['매입원가']
+            total_value = df_temp['재고금액'].sum()
+
+            # 값이 0이면 방법 2 시도: ABC 테이블의 연간COGS 사용
+            if total_value == 0 and '연간COGS' in df_abc.columns:
+                total_value = pd.to_numeric(df_abc['연간COGS'], errors='coerce').fillna(0).sum()
+    except Exception as e:
+        # 에러 발생시 기본값 0 사용
         total_value = 0
+        print(f"재고금액 계산 오류: {e}")
 
     dashboard_data = {
         'total_sku': len(df_inventory),
-        'total_value': total_value,
+        'total_value': total_value if total_value > 0 else 0,
         'avg_turnover_days': 30,  # 기본값, 나중에 analyze_procurement_needs에서 계산
         'shortage': 0,  # 나중에 계산
         'reorder': 0,  # 나중에 계산
