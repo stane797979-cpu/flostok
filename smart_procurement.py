@@ -1834,17 +1834,7 @@ def main():
             # PSI 파일 경로 저장 (발주 기록용)
             st.session_state.psi_file_path = excel_file
 
-            # 디버그 정보 표시
-            if dashboard_data:
-                with st.sidebar.expander("📊 데이터 로딩 정보", expanded=True):
-                    st.write(f"✅ SKU 수: {dashboard_data.get('total_sku', 0)}개")
-                    st.write(f"✅ 재고금액: {dashboard_data.get('total_value', 0):,.0f}원")
-                    st.write(f"✅ 평균일: {dashboard_data.get('avg_turnover_days', 0):.1f}일")
-                    st.write(f"✅ 계산방법: {dashboard_data.get('calc_method', '없음')}")
-                    if len(df_abc) > 0:
-                        st.write(f"✅ ABC 데이터: {len(df_abc)}행")
-                    if len(df_inventory) > 0:
-                        st.write(f"✅ 재고 데이터: {len(df_inventory)}행")
+            # 디버그 정보는 제거됨 (사용자 요청)
 
                     # 시트 이름 표시 (모든 시트)
                     if 'sheet_names' in dashboard_data:
@@ -2045,11 +2035,13 @@ def show_dashboard(dashboard_data, df_analysis):
 
     with col2:
         total_value = dashboard_data.get('total_value', 0) or 0
+        calc_method = dashboard_data.get('calc_method', '알 수 없음')
         st.metric(
             label="총 재고금액",
             value=f"{total_value/100000000:.1f}억원" if total_value > 0 else "0.0억원",
             delta=None
         )
+        st.caption(f"계산: {calc_method}")
 
     with col3:
         # 평균 재고 소진일 (NaN 처리 추가)
