@@ -1172,7 +1172,15 @@ def load_psi_data(file_path):
         st.error(f"❌ PSI 파일을 찾을 수 없습니다: {file_path}")
         return None, None, None, None, None
 
-    wb = openpyxl.load_workbook(file_path, data_only=True)
+    try:
+        wb = openpyxl.load_workbook(file_path, data_only=True)
+    except Exception as e:
+        st.error(f"❌ Excel 파일 읽기 실패: {e}")
+        return None, None, None, None, None
+
+    # 시트 목록 확인 (디버깅용)
+    available_sheets = wb.sheetnames
+    debug_info = [f"📋 발견된 시트: {', '.join(available_sheets)}"]
 
     # 대시보드 시트에서 직접 값 읽기
     dashboard_data = {
@@ -1181,10 +1189,10 @@ def load_psi_data(file_path):
         'avg_turnover_days': 30,
         'shortage': 0,
         'reorder': 0,
+        'sheet_names': available_sheets,  # 디버깅용
     }
 
     # 대시보드 시트가 있으면 값 읽기
-    debug_info = []
     if '대시보드' in wb.sheetnames:
         ws_dashboard = wb['대시보드']
         try:
@@ -1364,33 +1372,55 @@ def load_psi_data(file_path):
     # Streamlit Cloud에서는 Excel 수식이 계산되지 않으므로 직접 계산 필수
     total_value = 0
     calc_method = "없음"
+    debug_samples = {}
 
     try:
         if len(df_inventory) > 0 and len(df_abc) > 0:
+            # 디버그: 원본 데이터 샘플 확인
+            debug_samples['inventory_columns'] = list(df_inventory.columns)
+            debug_samples['abc_columns'] = list(df_abc.columns)
+            debug_samples['inventory_sample'] = df_inventory.head(3)[['SKU코드', '현재고']].to_dict('records') if '현재고' in df_inventory.columns else []
+            debug_samples['abc_sample'] = df_abc.head(3)[['SKU코드', '매입원가']].to_dict('records') if '매입원가' in df_abc.columns else []
+
             # 재고금액 = 현재고 × 매입원가 (올바른 계산 방법)
-            if '매입원가' in df_abc.columns:
+            if '매입원가' in df_abc.columns and '현재고' in df_inventory.columns:
                 df_temp = pd.merge(
                     df_inventory[['SKU코드', '현재고']],
                     df_abc[['SKU코드', '매입원가']],
                     on='SKU코드',
                     how='left'
                 )
+
+                # 디버그: 병합 후 샘플
+                debug_samples['merged_before'] = df_temp.head(3).to_dict('records')
+
                 df_temp['현재고'] = pd.to_numeric(df_temp['현재고'], errors='coerce').fillna(0)
                 df_temp['매입원가'] = pd.to_numeric(df_temp['매입원가'], errors='coerce').fillna(0)
                 df_temp['재고금액'] = df_temp['현재고'] * df_temp['매입원가']
+
+                # 디버그: 계산 후 샘플
+                debug_samples['merged_after'] = df_temp.head(3)[['SKU코드', '현재고', '매입원가', '재고금액']].to_dict('records')
+                debug_samples['total_stock_sum'] = float(df_temp['현재고'].sum())
+                debug_samples['nonzero_stock_count'] = int((df_temp['현재고'] > 0).sum())
+                debug_samples['nonzero_price_count'] = int((df_temp['매입원가'] > 0).sum())
+
                 total_value = df_temp['재고금액'].sum()
                 calc_method = "현재고×매입원가"
 
                 # 디버그: 상위 5개 SKU 정보 저장
                 df_temp_sorted = df_temp.nlargest(5, '재고금액')
                 dashboard_data['debug_top5'] = df_temp_sorted[['SKU코드', '현재고', '매입원가', '재고금액']].to_dict('records')
+            else:
+                calc_method = "매입원가 또는 현재고 컬럼 없음"
     except Exception as e:
         # 에러 발생시 기본값 0 사용
         total_value = 0
         calc_method = f"에러: {str(e)}"
+        debug_samples['error'] = str(e)
 
-    # 계산 방법 저장 (디버깅용)
+    # 계산 방법 및 디버그 정보 저장
     dashboard_data['calc_method'] = calc_method
+    dashboard_data['debug_samples'] = debug_samples
 
     # dashboard_data가 비어있거나 0이면 계산한 값으로 업데이트
     # Streamlit Cloud에서는 Excel 수식이 계산 안 되므로 항상 계산 값 사용
@@ -1692,8 +1722,41 @@ def main():
                     if len(df_inventory) > 0:
                         st.write(f"✅ 재고 데이터: {len(df_inventory)}행")
 
+                    # 시트 이름 표시
+                    if 'sheet_names' in dashboard_data:
+                        st.write(f"📋 **Excel 시트:** {', '.join(dashboard_data['sheet_names'][:3])}")
+
+                    # 상세 디버그 정보
+                    debug_samples = dashboard_data.get('debug_samples', {})
+                    if debug_samples:
+                        st.write("---")
+                        st.write("**🔍 상세 디버깅:**")
+
+                        if 'nonzero_stock_count' in debug_samples:
+                            st.write(f"- 재고 있는 SKU: {debug_samples['nonzero_stock_count']}개")
+                        if 'nonzero_price_count' in debug_samples:
+                            st.write(f"- 가격 있는 SKU: {debug_samples['nonzero_price_count']}개")
+                        if 'total_stock_sum' in debug_samples:
+                            st.write(f"- 총 재고수량: {debug_samples['total_stock_sum']:,.0f}개")
+
+                        if 'inventory_sample' in debug_samples and debug_samples['inventory_sample']:
+                            st.write("**재고 샘플 (상위 3개):**")
+                            for item in debug_samples['inventory_sample']:
+                                st.write(f"  {item}")
+
+                        if 'abc_sample' in debug_samples and debug_samples['abc_sample']:
+                            st.write("**매입원가 샘플 (상위 3개):**")
+                            for item in debug_samples['abc_sample']:
+                                st.write(f"  {item}")
+
+                        if 'merged_after' in debug_samples and debug_samples['merged_after']:
+                            st.write("**병합 후 샘플 (상위 3개):**")
+                            for item in debug_samples['merged_after']:
+                                st.write(f"  {item}")
+
                     # 상위 5개 SKU 재고금액 표시
                     if 'debug_top5' in dashboard_data and dashboard_data['debug_top5']:
+                        st.write("---")
                         st.write("**📦 재고금액 상위 5개 SKU:**")
                         for item in dashboard_data['debug_top5']:
                             st.write(f"- {item['SKU코드']}: {item['현재고']:.0f}개 × {item['매입원가']:,.0f}원 = {item['재고금액']:,.0f}원")
