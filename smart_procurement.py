@@ -2069,7 +2069,7 @@ def show_dashboard(dashboard_data, df_analysis):
         </div>
     """, unsafe_allow_html=True)
 
-    urgent = df_analysis[df_analysis['재고상태'] == '🔴 부족'].sort_values('현재고', ascending=True).head(10)
+    urgent = df_analysis[df_analysis['재고상태'] == '🔴 부족'].sort_values('현재고', ascending=True, na_position='last').head(10)
 
     if len(urgent) > 0:
         for idx, row in urgent.iterrows():
@@ -2120,7 +2120,7 @@ def show_dashboard(dashboard_data, df_analysis):
     reorder = df_analysis[
         (df_analysis['발주필요'] == True) &
         (df_analysis['권장발주량'] > 0)
-    ].sort_values('재고소진일', ascending=True).head(10)
+    ].sort_values('재고소진일', ascending=True, na_position='last').head(10)
 
     if len(reorder) > 0:
         # 전체 선택/해제
@@ -2469,7 +2469,7 @@ def show_procurement(df_filtered):
     need_order = df_filtered[
         (df_filtered['발주필요'] == True) &
         (df_filtered['권장발주량'] > 0)
-    ].sort_values('현재고', ascending=True)
+    ].sort_values('현재고', ascending=True, na_position='last')
 
     st.subheader(f"발주 필요 품목: {len(need_order)}개")
 
@@ -2489,7 +2489,7 @@ def show_procurement(df_filtered):
                         sku_code = row['SKU코드']
                         checkbox_key = f"sel_reorder_{sku_code}_{enum_idx}"
                         st.session_state[checkbox_key] = True
-                    st.rerun()  # 체크박스 표시 업데이트
+                    # st.rerun() 제거 - 페이지 스크롤 방지
 
             with col_clear:
                 if st.button("선택 해제", key="clear_all_reorder_tab"):
@@ -2957,7 +2957,7 @@ def show_analysis(df_analysis, df_abc):
         # 순서 정렬
         order = ["0-30일 (우수)", "31-60일 (양호)", "61-90일 (보통)", "90일 이상 (개선 필요)"]
         turnover_summary['회전구간'] = pd.Categorical(turnover_summary['회전구간'], categories=order, ordered=True)
-        turnover_summary = turnover_summary.sort_values('회전구간')
+        turnover_summary = turnover_summary.sort_values('회전구간', na_position='last')
 
         fig_turnover_bar = px.bar(
             turnover_summary,
@@ -3049,13 +3049,13 @@ def show_analysis(df_analysis, df_abc):
 
         # 정렬 적용
         if sort_option == "재고회전일 느림순":
-            df_display = df_turnover.sort_values('재고회전일', ascending=False)
+            df_display = df_turnover.sort_values('재고회전일', ascending=False, na_position='last')
         elif sort_option == "재고회전일 빠름순":
-            df_display = df_turnover[df_turnover['재고회전일'] > 0].sort_values('재고회전일', ascending=True)
+            df_display = df_turnover[df_turnover['재고회전일'] > 0].sort_values('재고회전일', ascending=True, na_position='last')
         elif sort_option == "ABC등급":
-            df_display = df_turnover.sort_values(['ABC등급', '재고회전일'], ascending=[True, False])
+            df_display = df_turnover.sort_values(['ABC등급', '재고회전일'], ascending=[True, False], na_position='last')
         else:
-            df_display = df_turnover.sort_values('SKU코드')
+            df_display = df_turnover.sort_values('SKU코드', na_position='last')
 
         # 표시할 컬럼 선택
         display_columns = ['SKU코드', '제품명', 'ABC등급', '회전구간', '현재고', '연간판매', '재고회전율', '재고회전일']
@@ -4330,7 +4330,7 @@ def generate_rule_based_response(question, dashboard_data, df_analysis):
         need_order = df_analysis[df_analysis['발주필요'] == True]
         if len(need_order) > 0:
             # ABC 우선순위로 정렬
-            need_order_sorted = need_order.sort_values('ABC등급')
+            need_order_sorted = need_order.sort_values('ABC등급', na_position='last')
 
             response = f"**📦 발주 필요 품목 {len(need_order)}개:**\n\n"
             response += "**[A등급 우선]**\n"
@@ -5065,7 +5065,7 @@ def show_settings():
 
                 # 시트 2: 긴급 발주 품목
                 ws_urgent = wb.create_sheet("긴급발주품목")
-                urgent_items = df[df['재고소진일'] <= 7].sort_values('재고소진일')
+                urgent_items = df[df['재고소진일'] <= 7].sort_values('재고소진일', na_position='last')
 
                 headers = ['SKU코드', '제품명', 'ABC', 'XYZ', '카테고리', '현재고', '안전재고', '재고소진일', '권장발주량']
                 for col_idx, header in enumerate(headers, start=1):
@@ -5086,7 +5086,7 @@ def show_settings():
 
                 # 시트 3: 발주 필요 품목
                 ws_order = wb.create_sheet("발주필요품목")
-                order_items = df[(df['발주필요'] == True) & (df['권장발주량'] > 0)].sort_values('현재고')
+                order_items = df[(df['발주필요'] == True) & (df['권장발주량'] > 0)].sort_values('현재고', na_position='last')
 
                 for col_idx, header in enumerate(headers, start=1):
                     cell = ws_order.cell(1, col_idx, header)
