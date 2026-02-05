@@ -1174,7 +1174,7 @@ def load_psi_data(file_path):
 
     wb = openpyxl.load_workbook(file_path, data_only=True)
 
-    # 대시보드 데이터는 나중에 실제 데이터에서 계산 (수식 값 읽기 실패 방지)
+    # 대시보드 시트에서 직접 값 읽기
     dashboard_data = {
         'total_sku': 0,
         'total_value': 0,
@@ -1182,6 +1182,30 @@ def load_psi_data(file_path):
         'shortage': 0,
         'reorder': 0,
     }
+
+    # 대시보드 시트가 있으면 값 읽기
+    if '대시보드' in wb.sheetnames:
+        ws_dashboard = wb['대시보드']
+        try:
+            total_sku_val = ws_dashboard.cell(6, 3).value
+            total_value_val = ws_dashboard.cell(7, 3).value
+            avg_days_val = ws_dashboard.cell(8, 3).value
+            shortage_val = ws_dashboard.cell(9, 3).value
+            reorder_val = ws_dashboard.cell(10, 3).value
+
+            if total_sku_val:
+                dashboard_data['total_sku'] = int(total_sku_val)
+            if total_value_val:
+                dashboard_data['total_value'] = float(total_value_val)
+            if avg_days_val:
+                dashboard_data['avg_turnover_days'] = float(avg_days_val)
+            if shortage_val:
+                dashboard_data['shortage'] = int(shortage_val)
+            if reorder_val:
+                dashboard_data['reorder'] = int(reorder_val)
+        except Exception as e:
+            print(f"대시보드 값 읽기 오류: {e}")
+            pass
 
     # 재고분석 데이터는 수식이므로, PSI_메인과 안전재고에서 직접 생성
     # 먼저 안전재고 시트에서 SKU 리스트 가져오기
@@ -1356,13 +1380,12 @@ def load_psi_data(file_path):
         total_value = 0
         print(f"재고금액 계산 오류: {e}")
 
-    dashboard_data = {
-        'total_sku': len(df_inventory),
-        'total_value': total_value if total_value > 0 else 0,
-        'avg_turnover_days': 30,  # 기본값, 나중에 analyze_procurement_needs에서 계산
-        'shortage': 0,  # 나중에 계산
-        'reorder': 0,  # 나중에 계산
-    }
+    # dashboard_data가 아직 비어있으면 계산한 값으로 업데이트
+    # (이미 Excel에서 읽은 값이 있으면 그대로 유지)
+    if dashboard_data['total_sku'] == 0:
+        dashboard_data['total_sku'] = len(df_inventory)
+    if dashboard_data['total_value'] == 0 and total_value > 0:
+        dashboard_data['total_value'] = total_value
 
     return dashboard_data, df_inventory, df_safety, df_abc, df_psi
 
