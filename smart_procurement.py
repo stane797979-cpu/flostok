@@ -617,8 +617,10 @@ st.markdown("""
         background-color: #F8F9FA !important;
     }
 
-    /* Streamlit 데이터프레임 */
-    [data-testid="stDataFrame"] {
+    /* Streamlit 데이터프레임 - 강제 라이트 모드 */
+    [data-testid="stDataFrame"],
+    [data-testid="stDataFrame"] > div,
+    [data-testid="stDataFrame"] div[data-testid="stDataFrameResizable"] {
         background-color: white !important;
         border-radius: 12px;
         overflow: hidden;
@@ -627,6 +629,7 @@ st.markdown("""
     [data-testid="stDataFrame"] table {
         border-collapse: separate !important;
         border-spacing: 0 !important;
+        background-color: white !important;
     }
 
     [data-testid="stDataFrame"] thead th {
@@ -638,14 +641,33 @@ st.markdown("""
         border-bottom: 2px solid #E5E7EB !important;
     }
 
+    [data-testid="stDataFrame"] tbody tr {
+        background-color: white !important;
+    }
+
     [data-testid="stDataFrame"] tbody td {
-        color: #475569 !important;
+        background-color: white !important;
+        color: #1E293B !important;
         padding: 0.875rem !important;
         border-bottom: 1px solid #F1F5F9 !important;
     }
 
     [data-testid="stDataFrame"] tbody tr:hover {
         background-color: #F8F9FA !important;
+    }
+
+    [data-testid="stDataFrame"] tbody tr:hover td {
+        background-color: #F8F9FA !important;
+    }
+
+    /* 데이터 그리드 내부 모든 요소 */
+    [data-testid="stDataFrame"] * {
+        color: #1E293B !important;
+    }
+
+    /* 체크박스나 다른 요소들도 밝게 */
+    [data-testid="stDataFrame"] [role="gridcell"] {
+        background-color: white !important;
     }
 
     /* 입력 필드 - 강제 라이트 모드 */
@@ -1078,6 +1100,57 @@ st.markdown("""
         border-color: #E5E7EB;
     }
 </style>
+
+<script>
+// 페이지 로드 시 모든 데이터프레임을 강제로 라이트 모드로 변경
+function forceLightTheme() {
+    // 모든 데이터프레임 찾기
+    const dataframes = document.querySelectorAll('[data-testid="stDataFrame"]');
+    dataframes.forEach(df => {
+        df.style.backgroundColor = 'white';
+        df.style.color = '#1E293B';
+
+        // 내부 모든 요소도 라이트 모드로
+        const allElements = df.querySelectorAll('*');
+        allElements.forEach(el => {
+            el.style.backgroundColor = 'white';
+            el.style.color = '#1E293B';
+        });
+
+        // 테이블 행들
+        const rows = df.querySelectorAll('tr');
+        rows.forEach(row => {
+            row.style.backgroundColor = 'white';
+        });
+
+        // 테이블 셀들
+        const cells = df.querySelectorAll('td, th');
+        cells.forEach(cell => {
+            cell.style.backgroundColor = 'white';
+            cell.style.color = '#1E293B';
+        });
+    });
+
+    // 업로드 버튼도 수정
+    const buttons = document.querySelectorAll('button');
+    buttons.forEach(btn => {
+        if (btn.style.backgroundColor === 'rgb(38, 39, 48)' ||
+            btn.style.backgroundColor === '#262730') {
+            btn.style.backgroundColor = '#81C784';
+            btn.style.color = 'white';
+        }
+    });
+}
+
+// DOM 변경 감지하여 계속 적용
+const observer = new MutationObserver(forceLightTheme);
+observer.observe(document.body, { childList: true, subtree: true });
+
+// 초기 실행
+setTimeout(forceLightTheme, 100);
+setTimeout(forceLightTheme, 500);
+setTimeout(forceLightTheme, 1000);
+</script>
 """, unsafe_allow_html=True)
 
 
@@ -1101,14 +1174,13 @@ def load_psi_data(file_path):
 
     wb = openpyxl.load_workbook(file_path, data_only=True)
 
-    # 대시보드 데이터
-    ws_dashboard = wb['대시보드']
+    # 대시보드 데이터는 나중에 실제 데이터에서 계산 (수식 값 읽기 실패 방지)
     dashboard_data = {
-        'total_sku': ws_dashboard.cell(6, 3).value or 0,
-        'total_value': ws_dashboard.cell(7, 3).value or 0,
-        'avg_turnover_days': ws_dashboard.cell(8, 3).value or 30,
-        'shortage': ws_dashboard.cell(9, 3).value or 0,
-        'reorder': ws_dashboard.cell(10, 3).value or 0,
+        'total_sku': 0,
+        'total_value': 0,
+        'avg_turnover_days': 30,
+        'shortage': 0,
+        'reorder': 0,
     }
 
     # 재고분석 데이터는 수식이므로, PSI_메인과 안전재고에서 직접 생성
@@ -1258,15 +1330,30 @@ def load_psi_data(file_path):
         if col in df_psi.columns:
             df_psi[col] = pd.to_numeric(df_psi[col], errors='coerce').fillna(0)
 
-    # 대시보드 데이터를 실제 데이터로부터 계산 (수식이 있는 경우 None이므로)
-    if dashboard_data['total_sku'] is None or dashboard_data['total_sku'] == 0:
-        dashboard_data = {
-            'total_sku': len(df_inventory),
-            'total_value': df_inventory['현재고'].sum() if '현재고' in df_inventory.columns else 0,
-            'avg_turnover_days': 30,  # 기본값, 나중에 analyze_procurement_needs에서 계산
-            'shortage': 0,  # 나중에 계산
-            'reorder': 0,  # 나중에 계산
-        }
+    # 대시보드 데이터를 실제 데이터로부터 항상 계산
+    # df_abc와 df_inventory를 병합하여 재고금액 계산
+    if len(df_inventory) > 0 and len(df_abc) > 0:
+        # SKU코드로 병합하여 매입원가 가져오기
+        df_temp = pd.merge(
+            df_inventory[['SKU코드', '현재고']],
+            df_abc[['SKU코드', '매입원가']],
+            on='SKU코드',
+            how='left'
+        )
+        df_temp['현재고'] = pd.to_numeric(df_temp['현재고'], errors='coerce').fillna(0)
+        df_temp['매입원가'] = pd.to_numeric(df_temp['매입원가'], errors='coerce').fillna(0)
+        df_temp['재고금액'] = df_temp['현재고'] * df_temp['매입원가']
+        total_value = df_temp['재고금액'].sum()
+    else:
+        total_value = 0
+
+    dashboard_data = {
+        'total_sku': len(df_inventory),
+        'total_value': total_value,
+        'avg_turnover_days': 30,  # 기본값, 나중에 analyze_procurement_needs에서 계산
+        'shortage': 0,  # 나중에 계산
+        'reorder': 0,  # 나중에 계산
+    }
 
     return dashboard_data, df_inventory, df_safety, df_abc, df_psi
 
