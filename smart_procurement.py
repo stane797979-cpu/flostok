@@ -1173,10 +1173,24 @@ def load_psi_data(file_path):
         return None, None, None, None, None
 
     try:
+        # 방법 1: data_only=True로 시도
         wb = openpyxl.load_workbook(file_path, data_only=True)
-    except Exception as e:
-        st.error(f"❌ Excel 파일 읽기 실패: {e}")
-        return None, None, None, None, None
+    except Exception as e1:
+        try:
+            # 방법 2: data_only=False로 시도
+            st.warning(f"⚠️ data_only=True 실패, 대체 방법 시도 중...")
+            wb = openpyxl.load_workbook(file_path, data_only=False)
+        except Exception as e2:
+            try:
+                # 방법 3: read_only 모드로 시도
+                st.warning(f"⚠️ 일반 모드 실패, read_only 모드 시도 중...")
+                wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
+            except Exception as e3:
+                st.error(f"❌ Excel 파일 읽기 실패 (모든 방법 시도):")
+                st.error(f"  - data_only=True: {e1}")
+                st.error(f"  - data_only=False: {e2}")
+                st.error(f"  - read_only: {e3}")
+                return None, None, None, None, None
 
     # 시트 목록 확인 (디버깅용)
     available_sheets = wb.sheetnames
