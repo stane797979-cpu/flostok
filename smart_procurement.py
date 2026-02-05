@@ -3680,18 +3680,22 @@ def show_simulation(df_analysis, df_psi):
 
         # 제품 선택
         if len(df_analysis) > 0:
+            # 제품 목록 (SKU만)
+            sku_list = df_analysis['SKU코드'].tolist()
+
             col1, col2 = st.columns([2, 1])
 
             with col1:
                 selected_sku = st.selectbox(
-                    "분석할 제품 선택:",
-                    options=df_analysis['SKU코드'].tolist(),
-                    format_func=lambda x: f"{x} - {df_analysis[df_analysis['SKU코드']==x]['제품명'].iloc[0]}",
+                    "분석할 제품 선택 (SKU 코드):",
+                    options=sku_list,
                     key="sales_trend_sku"
                 )
-                if selected_sku:
-                    product_name = df_analysis[df_analysis['SKU코드']==selected_sku]['제품명'].iloc[0]
-                    st.caption(f"✓ 선택됨: {selected_sku} - {product_name}")
+
+            # 선택된 제품 정보를 크게 표시
+            if selected_sku:
+                product_name = df_analysis[df_analysis['SKU코드']==selected_sku]['제품명'].iloc[0]
+                st.info(f"**📦 선택된 제품:** {selected_sku} - {product_name}", icon="✅")
 
             with col2:
                 forecast_days = st.number_input("예측 기간 (일)", min_value=7, max_value=90, value=30, step=7)
