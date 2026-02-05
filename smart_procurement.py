@@ -29,6 +29,24 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Selectbox 표시 수정을 위한 CSS
+st.markdown("""
+<style>
+    /* Selectbox 선택값이 보이도록 CSS 수정 */
+    div[data-baseweb="select"] > div {
+        color: #000000 !important;
+        background-color: #ffffff !important;
+    }
+
+    /* Selectbox 내부 텍스트 강제 표시 */
+    div[data-baseweb="select"] span {
+        color: #000000 !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # 발주 기록 함수
 def record_order_to_excel(psi_file_path, order_data):
     """
