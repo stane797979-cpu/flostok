@@ -19,7 +19,7 @@
 
 ## 배포 URL
 
-https://smart-procurement.streamlit.app
+https://my-procurement.streamlit.app
 
 ## 로컬 실행
 
@@ -36,4 +36,4 @@ streamlit run smart_procurement.py
 
 - **개발자**: Claude AI
 - **버전**: 1.0
-- **최종 업데이트**: 2026-01-29
+- **최종 업데이트**: 2026-02-05

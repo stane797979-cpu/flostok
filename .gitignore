@@ -1,59 +1,39 @@
-# Python
+# Excel 데이터 파일 (절대 커밋 안함)
+*.xlsx
+*.xls
+current_psi.xlsx
+PSI_*.xlsx
+
+# 로그 파일
+logs/
+*.log
+
+# Python 캐시
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.Python
-env/
-venv/
-ENV/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
 
-# Streamlit
-.streamlit/secrets.toml
+# 환경 설정
+.env
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
+# 시스템 파일
 .DS_Store
-Thumbs.db
+ngrok.exe
+nul
 
-# 불필요한 파일들
-*.bat
-*.vbs
-check_*.py
-extract_*.py
-analyze_*.py
-create_*.py
-fix_*.py
-complete_*.py
-update_*.py
-add_*.py
+# 스크린샷
+screenshots/
+*.png
 
-# 문서 파일 (README는 제외)
-*.txt
-!requirements.txt
-*.md
-!README.md
+# 문서 파일
+*.pptx
+*.html
 
-# Excel 임시 파일
-~$*.xlsx
+# 임시 스크립트
+test_*.py
+debug_*.py
+run_*.py
+setup_*.py
+ngrok_*.py
+make_package.py
+system_check.py
+daily_*.py
