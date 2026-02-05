@@ -2489,6 +2489,7 @@ def show_procurement(df_filtered):
                         sku_code = row['SKU코드']
                         checkbox_key = f"sel_reorder_{sku_code}_{enum_idx}"
                         st.session_state[checkbox_key] = True
+                    st.rerun()  # 체크박스 표시 업데이트
 
             with col_clear:
                 if st.button("선택 해제", key="clear_all_reorder_tab"):
@@ -3591,7 +3592,13 @@ def show_order_status(df_analysis):
     if df_orders is not None and len(df_orders) > 0:
         # 최신 순으로 정렬
         df_display = df_orders.copy()
-        df_display = df_display.sort_values('발주일', ascending=False)
+
+        # 발주일 컬럼을 datetime으로 변환 (에러 방지)
+        if '발주일' in df_display.columns:
+            df_display['발주일'] = pd.to_datetime(df_display['발주일'], errors='coerce')
+
+        # NaN 값을 뒤로 보내고 정렬
+        df_display = df_display.sort_values('발주일', ascending=False, na_position='last')
 
         # 컬럼 선택 및 포맷
         display_cols = ['발주일', 'SKU코드', '제품명', 'ABC/XYZ', '현재고',
