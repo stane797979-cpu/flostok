@@ -4981,19 +4981,19 @@ def show_settings():
         with col1:
             st.write("**A등급 설정**")
             a_safety_multiplier = st.slider("안전재고 배수", 1.0, 2.0, 1.5, 0.1, key="a_safety")
-            a_order_cycle = st.selectbox("발주 주기", ["주 1회", "월 1회", "격주 1회"], index=1, key="a_cycle")
-            st.caption(f"✓ 선택됨: {a_order_cycle}")
+            st.write("발주 주기")
+            a_order_cycle = st.radio("A등급 발주 주기", ["주 1회", "월 1회", "격주 1회"], index=1, key="a_cycle", horizontal=True, label_visibility="collapsed")
 
             st.write("**B등급 설정**")
             b_safety_multiplier = st.slider("안전재고 배수", 1.0, 2.0, 1.2, 0.1, key="b_safety")
-            b_order_cycle = st.selectbox("발주 주기", ["월 1회", "격월 1회", "분기 1회"], index=1, key="b_cycle")
-            st.caption(f"✓ 선택됨: {b_order_cycle}")
+            st.write("발주 주기")
+            b_order_cycle = st.radio("B등급 발주 주기", ["월 1회", "격월 1회", "분기 1회"], index=1, key="b_cycle", horizontal=True, label_visibility="collapsed")
 
         with col2:
             st.write("**C등급 설정**")
             c_safety_multiplier = st.slider("안전재고 배수", 0.5, 1.5, 1.0, 0.1, key="c_safety")
-            c_order_cycle = st.selectbox("발주 주기", ["분기 1회", "반기 1회", "수요 기반"], index=0, key="c_cycle")
-            st.caption(f"✓ 선택됨: {c_order_cycle}")
+            st.write("발주 주기")
+            c_order_cycle = st.radio("C등급 발주 주기", ["분기 1회", "반기 1회", "수요 기반"], index=0, key="c_cycle", horizontal=True, label_visibility="collapsed")
 
             st.write("**알림 설정**")
             email_notification = st.checkbox("이메일 알림", value=True, key="email_notif")
