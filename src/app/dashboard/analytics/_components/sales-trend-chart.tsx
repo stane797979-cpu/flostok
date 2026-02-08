@@ -317,7 +317,7 @@ export function SalesTrendChart({ className, data: _data }: SalesTrendChartProps
                     y={label.y}
                     textAnchor="end"
                     dominantBaseline="middle"
-                    className="fill-slate-500 text-xs"
+                    className="fill-slate-500" fontSize="11"
                   >
                     {formatCurrency(label.value)}
                   </text>
@@ -361,7 +361,7 @@ export function SalesTrendChart({ className, data: _data }: SalesTrendChartProps
                   x={xScale(label.index)}
                   y={chartHeight - padding.bottom + 20}
                   textAnchor="middle"
-                  className="fill-slate-500 text-xs"
+                  className="fill-slate-500" fontSize="11"
                 >
                   {formatDate(label.date, period)}
                 </text>
@@ -383,7 +383,7 @@ export function SalesTrendChart({ className, data: _data }: SalesTrendChartProps
                     x={xScale(hoveredPoint)}
                     y={yScale(data[hoveredPoint].sales) - 35}
                     textAnchor="middle"
-                    className="fill-white text-xs font-medium"
+                    className="fill-white font-medium" fontSize="10"
                   >
                     {formatDate(data[hoveredPoint].date, period)}
                   </text>
@@ -391,7 +391,7 @@ export function SalesTrendChart({ className, data: _data }: SalesTrendChartProps
                     x={xScale(hoveredPoint)}
                     y={yScale(data[hoveredPoint].sales) - 20}
                     textAnchor="middle"
-                    className="fill-white text-xs font-bold"
+                    className="fill-white font-bold" fontSize="10"
                   >
                     {data[hoveredPoint].sales.toLocaleString("ko-KR")}원
                   </text>
@@ -399,7 +399,7 @@ export function SalesTrendChart({ className, data: _data }: SalesTrendChartProps
                     x={xScale(hoveredPoint)}
                     y={yScale(data[hoveredPoint].sales) - 8}
                     textAnchor="middle"
-                    className="fill-white text-xs"
+                    className="fill-white" fontSize="10"
                   >
                     {data[hoveredPoint].quantity.toLocaleString("ko-KR")}개
                   </text>

@@ -296,7 +296,7 @@ export function DemandForecastChart() {
                           y={label.y}
                           textAnchor="end"
                           dominantBaseline="middle"
-                          className="fill-slate-500 text-xs"
+                          className="fill-slate-500" fontSize="11"
                         >
                           {Math.round(label.value).toLocaleString("ko-KR")}
                         </text>
@@ -359,7 +359,7 @@ export function DemandForecastChart() {
                         x={chart.xScale(label.index)}
                         y={chart.height - chart.pad.bottom + 20}
                         textAnchor="middle"
-                        className="fill-slate-500 text-xs"
+                        className="fill-slate-500" fontSize="11"
                       >
                         {label.month.slice(2).replace("-", "/")}
                       </text>
@@ -381,7 +381,7 @@ export function DemandForecastChart() {
                           x={chart.xScale(hoveredPoint)}
                           y={chart.yScale(chartData[hoveredPoint].value) - 30}
                           textAnchor="middle"
-                          className="fill-white text-xs font-medium"
+                          className="fill-white font-medium" fontSize="10"
                         >
                           {chartData[hoveredPoint].month} ({chartData[hoveredPoint].type === "history" ? "실적" : "예측"})
                         </text>
@@ -389,7 +389,7 @@ export function DemandForecastChart() {
                           x={chart.xScale(hoveredPoint)}
                           y={chart.yScale(chartData[hoveredPoint].value) - 15}
                           textAnchor="middle"
-                          className="fill-white text-xs font-bold"
+                          className="fill-white font-bold" fontSize="10"
                         >
                           {chartData[hoveredPoint].value.toLocaleString("ko-KR")}개
                         </text>
@@ -401,7 +401,7 @@ export function DemandForecastChart() {
                       x={chart.xScale(Math.floor(chart.historyCount / 2))}
                       y={chart.pad.top + 10}
                       textAnchor="middle"
-                      className="fill-blue-600 text-xs"
+                      className="fill-blue-600" fontSize="10"
                     >
                       과거 실적
                     </text>
@@ -409,7 +409,7 @@ export function DemandForecastChart() {
                       x={chart.xScale(chart.historyCount + Math.floor((chartData.length - chart.historyCount) / 2))}
                       y={chart.pad.top + 10}
                       textAnchor="middle"
-                      className="fill-amber-600 text-xs"
+                      className="fill-amber-600" fontSize="10"
                     >
                       수요 예측
                     </text>
