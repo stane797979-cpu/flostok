@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle, CheckCircle2, Package } from "lucide-react";
-import { confirmInbound, type ConfirmInboundInput } from "@/server/actions/inbound";
+import { confirmInbound, closeOrderWithPartialInbound, type ConfirmInboundInput } from "@/server/actions/inbound";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -58,6 +58,7 @@ export function InboundDialog({
   const [expiryDates, setExpiryDates] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
   const { toast } = useToast();
 
   // 입고 가능한 항목만 필터링 (아직 전량 입고되지 않은 항목)
@@ -177,6 +178,40 @@ export function InboundDialog({
       setIsSubmitting(false);
     }
   };
+
+  // 잔여 포기 및 완료 처리
+  const handleCloseOrder = async () => {
+    if (!confirm("잔여수량을 포기하고 발주를 완료 처리하시겠습니까?")) return;
+
+    setIsClosing(true);
+    try {
+      const result = await closeOrderWithPartialInbound(orderId, notes || "잔여수량 포기 처리");
+      if (result.success) {
+        toast({
+          title: "완료 처리됨",
+          description: "부분입고 상태로 발주가 완료 처리되었습니다",
+        });
+        onOpenChange(false);
+      } else {
+        toast({
+          title: "완료 처리 실패",
+          description: result.error || "알 수 없는 오류가 발생했습니다",
+          variant: "destructive",
+        });
+      }
+    } catch {
+      toast({
+        title: "완료 처리 실패",
+        description: "서버 오류가 발생했습니다",
+        variant: "destructive",
+      });
+    } finally {
+      setIsClosing(false);
+    }
+  };
+
+  // 기입고 수량이 있는지 확인 (부분입고 완료 버튼 표시 조건)
+  const hasAnyReceived = items.some((item) => item.receivedQuantity > 0);
 
   // 입고 상태 뱃지
   const getStatusBadge = (item: InboundDialogItem) => {
@@ -374,15 +409,24 @@ export function InboundDialog({
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="flex-col gap-2 sm:flex-row">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
-            disabled={isSubmitting}
+            disabled={isSubmitting || isClosing}
           >
             취소
           </Button>
-          <Button onClick={handleSubmit} disabled={isSubmitting}>
+          {hasAnyReceived && (
+            <Button
+              variant="destructive"
+              onClick={handleCloseOrder}
+              disabled={isSubmitting || isClosing}
+            >
+              {isClosing ? "처리중..." : "잔여 포기 및 완료"}
+            </Button>
+          )}
+          <Button onClick={handleSubmit} disabled={isSubmitting || isClosing}>
             {isSubmitting ? "처리중..." : "입고 확인"}
           </Button>
         </DialogFooter>

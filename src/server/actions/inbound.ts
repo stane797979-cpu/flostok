@@ -248,6 +248,75 @@ export async function confirmInbound(input: ConfirmInboundInput): Promise<{
 }
 
 /**
+ * 부분입고 완료 처리 (잔여수량 포기)
+ *
+ * 부분입고 상태의 발주서를 잔여수량을 포기하고 완료 처리합니다.
+ *
+ * @param orderId - 발주서 ID
+ * @param notes - 사유 메모
+ * @returns 성공 여부
+ */
+export async function closeOrderWithPartialInbound(
+  orderId: string,
+  notes?: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const user = await requireAuth();
+
+    // 발주서 조회
+    const [purchaseOrder] = await db
+      .select()
+      .from(purchaseOrders)
+      .where(
+        and(
+          eq(purchaseOrders.id, orderId),
+          eq(purchaseOrders.organizationId, user.organizationId)
+        )
+      )
+      .limit(1);
+
+    if (!purchaseOrder) {
+      return { success: false, error: "발주서를 찾을 수 없습니다" };
+    }
+
+    if (!["partially_received", "ordered", "confirmed", "shipped"].includes(purchaseOrder.status)) {
+      return {
+        success: false,
+        error: `완료 처리할 수 없는 발주서 상태입니다: ${purchaseOrder.status}`,
+      };
+    }
+
+    const today = new Date().toISOString().split("T")[0];
+
+    await db
+      .update(purchaseOrders)
+      .set({
+        status: "completed",
+        actualDate: today,
+        notes: purchaseOrder.notes
+          ? `${purchaseOrder.notes}\n[부분입고 완료] ${notes || "잔여수량 포기"}`
+          : `[부분입고 완료] ${notes || "잔여수량 포기"}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(purchaseOrders.id, orderId));
+
+    await logActivity({
+      user,
+      action: "UPDATE",
+      entityType: "purchase_order",
+      description: `발주서 ${purchaseOrder.orderNumber} 부분입고 완료 처리 (잔여수량 포기)`,
+    });
+
+    revalidatePath("/dashboard/orders");
+
+    return { success: true };
+  } catch (error) {
+    console.error("부분입고 완료 처리 오류:", error);
+    return { success: false, error: "부분입고 완료 처리에 실패했습니다" };
+  }
+}
+
+/**
  * 기타 입고 (반품/조정/이동 입고) 스키마
  */
 const otherInboundSchema = z.object({
