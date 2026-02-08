@@ -25,21 +25,16 @@ import { InboundDialog, type InboundDialogItem } from "./inbound-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { exportPurchaseOrderToExcel } from "@/server/actions/excel-export";
 
-// 상태별 다음 단계 정의
+// 상태별 다음 단계 정의 (단순화: 발주확정 → 입고 → 완료)
 const nextStatusActions: Record<string, { label: string; status: string; variant?: "default" | "outline" }[]> = {
   draft: [
     { label: "발주 확정", status: "ordered" },
     { label: "취소", status: "cancelled", variant: "outline" },
   ],
   ordered: [
-    { label: "공급자 확인", status: "confirmed" },
-    { label: "출하 처리", status: "shipped" },
     { label: "취소", status: "cancelled", variant: "outline" },
   ],
-  confirmed: [
-    { label: "출하 처리", status: "shipped" },
-    { label: "취소", status: "cancelled", variant: "outline" },
-  ],
+  confirmed: [],
   shipped: [],
   partially_received: [],
   received: [
