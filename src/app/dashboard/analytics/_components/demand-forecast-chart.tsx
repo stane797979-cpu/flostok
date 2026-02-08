@@ -95,8 +95,8 @@ export function DemandForecastChart() {
   const chart = useMemo(() => {
     if (chartData.length === 0) return null;
     const width = 800;
-    const height = 360;
-    const pad = { top: 30, right: 24, bottom: 40, left: 56 };
+    const height = 250;
+    const pad = { top: 20, right: 20, bottom: 36, left: 52 };
     const innerW = width - pad.left - pad.right;
     const innerH = height - pad.top - pad.bottom;
 
@@ -325,14 +325,14 @@ export function DemandForecastChart() {
                     />
 
                     {/* 과거 실적 라인 */}
-                    <path d={chart.historyPath} stroke="#3b82f6" strokeWidth="3" fill="none" />
+                    <path d={chart.historyPath} stroke="#3b82f6" strokeWidth="2.5" fill="none" />
 
                     {/* 예측 라인 */}
                     <path
                       d={chart.predictedPath}
                       stroke="#f59e0b"
-                      strokeWidth="3"
-                      strokeDasharray="10 5"
+                      strokeWidth="2.5"
+                      strokeDasharray="8 4"
                       fill="none"
                     />
 
@@ -342,7 +342,7 @@ export function DemandForecastChart() {
                         key={index}
                         cx={chart.xScale(index)}
                         cy={chart.yScale(point.value)}
-                        r={hoveredPoint === index ? 7 : 5}
+                        r={hoveredPoint === index ? 5 : 4}
                         fill={point.type === "history" ? "#3b82f6" : "#f59e0b"}
                         stroke="white"
                         strokeWidth="2"
@@ -399,17 +399,19 @@ export function DemandForecastChart() {
                     {/* 범례 라벨 */}
                     <text
                       x={chart.xScale(Math.floor(chart.historyCount / 2))}
-                      y={chart.pad.top + 15}
+                      y={chart.pad.top + 12}
                       textAnchor="middle"
-                      className="fill-blue-600 text-xs font-medium"
+                      className="fill-blue-600"
+                      fontSize="10"
                     >
                       과거 실적
                     </text>
                     <text
                       x={chart.xScale(chart.historyCount + Math.floor((chartData.length - chart.historyCount) / 2))}
-                      y={chart.pad.top + 15}
+                      y={chart.pad.top + 12}
                       textAnchor="middle"
-                      className="fill-amber-600 text-xs font-medium"
+                      className="fill-amber-600"
+                      fontSize="10"
                     >
                       수요 예측
                     </text>
