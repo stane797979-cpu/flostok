@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Download, Loader2, PackagePlus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Loader2, PackagePlus, XCircle } from "lucide-react";
 import { ReorderSummary } from "./reorder-summary";
 import { ReorderItemsTable, type ReorderItem } from "./reorder-items-table";
 import { PurchaseOrdersTable, type PurchaseOrderListItem } from "./purchase-orders-table";
@@ -25,6 +25,7 @@ import {
   rejectAutoReorders,
   getPurchaseOrders,
   getReorderItems,
+  cancelBulkPurchaseOrders,
 } from "@/server/actions/purchase-orders";
 import { exportPurchaseOrderToExcel, exportInboundRecordsToExcel } from "@/server/actions/excel-export";
 import { getInboundRecords } from "@/server/actions/inbound";
@@ -162,6 +163,10 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [] }
   const [selectedOrderId, setSelectedOrderId] = useState<string>("");
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrderListItem[]>([]);
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
+
+  // 발주 현황 체크박스
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [isCancellingOrders, setIsCancellingOrders] = useState(false);
 
   // 입고 현황 상태
   const [inboundMonth, setInboundMonth] = useState<Date>(() => new Date());
@@ -451,6 +456,42 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [] }
     }
   };
 
+  const handleBulkCancel = async () => {
+    if (selectedOrderIds.length === 0) return;
+
+    setIsCancellingOrders(true);
+    try {
+      const result = await cancelBulkPurchaseOrders(selectedOrderIds);
+
+      if (result.success) {
+        toast({
+          title: "일괄 취소 완료",
+          description: `${result.cancelledCount}건의 발주서가 취소되었습니다`,
+        });
+        setSelectedOrderIds([]);
+        loadPurchaseOrders();
+        loadReorderItems();
+      }
+
+      if (result.errors.length > 0) {
+        toast({
+          title: result.cancelledCount > 0 ? "일부 취소 실패" : "취소 실패",
+          description: result.errors[0]?.error || "취소 처리에 실패한 발주서가 있습니다",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("일괄 취소 오류:", error);
+      toast({
+        title: "오류",
+        description: "일괄 취소 처리 중 오류가 발생했습니다",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCancellingOrders(false);
+    }
+  };
+
   const handleApproveAutoReorders = async (ids: string[]) => {
     try {
       // 선택된 추천 목록에서 발주 데이터 추출
@@ -591,8 +632,27 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [] }
         <TabsContent value="orders" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>발주 현황</CardTitle>
-              <CardDescription>진행 중인 발주서 목록입니다</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>발주 현황</CardTitle>
+                  <CardDescription>진행 중인 발주서 목록입니다</CardDescription>
+                </div>
+                {selectedOrderIds.length > 0 && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleBulkCancel}
+                    disabled={isCancellingOrders}
+                  >
+                    {isCancellingOrders ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <XCircle className="mr-2 h-4 w-4" />
+                    )}
+                    {selectedOrderIds.length}건 일괄 취소
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               {isLoadingOrders ? (
@@ -604,6 +664,8 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [] }
                   orders={purchaseOrders}
                   onViewClick={handleViewOrder}
                   onDownloadClick={handleDownloadOrder}
+                  selectedIds={selectedOrderIds}
+                  onSelectChange={setSelectedOrderIds}
                 />
               )}
             </CardContent>

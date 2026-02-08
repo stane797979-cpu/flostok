@@ -4,9 +4,22 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, TrendingUp, BarChart3, Target, AlertCircle } from "lucide-react";
+import { Loader2, TrendingUp, BarChart3, Target, AlertCircle, Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getDemandForecast } from "@/server/actions/analytics";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 interface ForecastData {
   productId: string;
@@ -42,6 +55,7 @@ export function DemandForecastChart() {
   const [forecast, setForecast] = useState<ForecastData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [hoveredPoint, setHoveredPoint] = useState<number | null>(null);
+  const [comboboxOpen, setComboboxOpen] = useState(false);
 
   const loadForecast = useCallback(async (productId?: string) => {
     setIsLoading(true);
@@ -179,17 +193,55 @@ export function DemandForecastChart() {
           <CardDescription>수요예측을 확인할 제품을 선택하세요</CardDescription>
         </CardHeader>
         <CardContent>
-          <select
-            value={selectedProductId}
-            onChange={(e) => handleProductChange(e.target.value)}
-            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-700 dark:bg-slate-900"
-          >
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>
-                [{p.sku}] {p.name}
-              </option>
-            ))}
-          </select>
+          <Popover open={comboboxOpen} onOpenChange={setComboboxOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                role="combobox"
+                aria-expanded={comboboxOpen}
+                className="w-full justify-between font-normal"
+              >
+                {selectedProductId
+                  ? (() => {
+                      const p = products.find((p) => p.id === selectedProductId);
+                      return p ? `[${p.sku}] ${p.name}` : "제품을 검색하세요...";
+                    })()
+                  : "제품을 검색하세요..."}
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+              <Command>
+                <CommandInput placeholder="SKU 또는 제품명 검색..." />
+                <CommandList>
+                  <CommandEmpty>검색 결과가 없습니다</CommandEmpty>
+                  <CommandGroup>
+                    {products.map((product) => (
+                      <CommandItem
+                        key={product.id}
+                        value={`${product.sku} ${product.name}`}
+                        onSelect={() => {
+                          handleProductChange(product.id);
+                          setComboboxOpen(false);
+                        }}
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            selectedProductId === product.id ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        <span className="font-mono text-xs text-muted-foreground mr-2">
+                          [{product.sku}]
+                        </span>
+                        {product.name}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
         </CardContent>
       </Card>
 

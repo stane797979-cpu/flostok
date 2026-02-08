@@ -316,33 +316,36 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
     const user = await getCurrentUser();
     const orgId = user?.organizationId || TEMP_ORG_ID;
 
-    // 발주 제한 확인
-    const { checkOrderLimit } = await import("@/server/services/subscription/limits");
-    const limit = await checkOrderLimit(orgId);
-    if (!limit.allowed) {
-      return {
-        success: false,
-        error: `월간 발주 한도를 초과했습니다. 현재 플랜(${limit.plan})에서는 월 ${limit.limit}건의 발주를 생성할 수 있습니다. (현재: ${limit.current}건)`,
-      };
-    }
+    // 공급자 + 제품 + 발주번호 시퀀스 병렬 조회
+    const productIds = validated.items.map((item) => item.productId);
+    const today = new Date();
+    const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
 
-    // 공급자 확인
-    const [supplier] = await db
-      .select()
-      .from(suppliers)
-      .where(and(eq(suppliers.id, validated.supplierId), eq(suppliers.organizationId, orgId)))
-      .limit(1);
+    const [supplierResult, productsData, todayOrders] = await Promise.all([
+      db
+        .select()
+        .from(suppliers)
+        .where(and(eq(suppliers.id, validated.supplierId), eq(suppliers.organizationId, orgId)))
+        .limit(1),
+      db
+        .select()
+        .from(products)
+        .where(and(sql`${products.id} IN ${productIds}`, eq(products.organizationId, orgId))),
+      db
+        .select({ count: sql<number>`count(*)` })
+        .from(purchaseOrders)
+        .where(
+          and(
+            eq(purchaseOrders.organizationId, orgId),
+            sql`DATE(${purchaseOrders.createdAt}) = CURRENT_DATE`
+          )
+        ),
+    ]);
 
+    const supplier = supplierResult[0];
     if (!supplier) {
       return { success: false, error: "공급자를 찾을 수 없습니다" };
     }
-
-    // 제품 정보 조회
-    const productIds = validated.items.map((item) => item.productId);
-    const productsData = await db
-      .select()
-      .from(products)
-      .where(and(sql`${products.id} IN ${productIds}`, eq(products.organizationId, orgId)));
 
     if (productsData.length !== validated.items.length) {
       return { success: false, error: "일부 제품을 찾을 수 없습니다" };
@@ -368,17 +371,6 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
     });
 
     // 발주번호 생성 (PO-YYYYMMDD-XXX)
-    const today = new Date();
-    const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
-    const todayOrders = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(purchaseOrders)
-      .where(
-        and(
-          eq(purchaseOrders.organizationId, orgId),
-          sql`DATE(${purchaseOrders.createdAt}) = CURRENT_DATE`
-        )
-      );
     const sequence = (Number(todayOrders[0]?.count || 0) + 1).toString().padStart(3, "0");
     const orderNumber = `PO-${dateStr}-${sequence}`;
 
@@ -420,15 +412,15 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
 
     revalidatePath("/purchase-orders");
 
-    // 활동 로깅
+    // 활동 로깅 (비동기 — 응답 지연 방지)
     if (user) {
-      await logActivity({
+      logActivity({
         user,
         action: "CREATE",
         entityType: "purchase_order",
         entityId: newOrder.id,
         description: `${orderNumber} 발주서 생성`,
-      });
+      }).catch(console.error);
     }
 
     return { success: true, orderId: newOrder.id };
@@ -662,6 +654,83 @@ export async function getPurchaseOrderById(orderId: string): Promise<
       product: row.product,
     })),
   };
+}
+
+/**
+ * 발주서 일괄 취소
+ *
+ * 선택된 발주서들을 한번에 취소 처리합니다.
+ * 취소 가능한 상태(draft, ordered, confirmed)만 처리됩니다.
+ */
+export async function cancelBulkPurchaseOrders(
+  orderIds: string[]
+): Promise<{
+  success: boolean;
+  cancelledCount: number;
+  errors: Array<{ orderId: string; orderNumber: string; error: string }>;
+}> {
+  const errors: Array<{ orderId: string; orderNumber: string; error: string }> = [];
+  let cancelledCount = 0;
+
+  try {
+    if (orderIds.length === 0) {
+      return { success: false, cancelledCount: 0, errors: [] };
+    }
+
+    // 선택된 발주서 조회
+    const orders = await db
+      .select({ id: purchaseOrders.id, orderNumber: purchaseOrders.orderNumber, status: purchaseOrders.status })
+      .from(purchaseOrders)
+      .where(
+        and(
+          eq(purchaseOrders.organizationId, TEMP_ORG_ID),
+          sql`${purchaseOrders.id} IN ${orderIds}`
+        )
+      );
+
+    const cancellableStatuses = ["draft", "pending", "approved", "ordered", "confirmed"];
+
+    for (const order of orders) {
+      if (!cancellableStatuses.includes(order.status)) {
+        errors.push({
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          error: `현재 상태(${order.status})에서는 취소할 수 없습니다`,
+        });
+        continue;
+      }
+
+      await db
+        .update(purchaseOrders)
+        .set({ status: "cancelled", updatedAt: new Date() })
+        .where(eq(purchaseOrders.id, order.id));
+
+      cancelledCount++;
+    }
+
+    revalidatePath("/dashboard/orders");
+
+    // 활동 로깅
+    const user = await getCurrentUser();
+    if (user && cancelledCount > 0) {
+      await logActivity({
+        user,
+        action: "UPDATE",
+        entityType: "purchase_order",
+        description: `발주서 ${cancelledCount}건 일괄 취소`,
+        metadata: { orderIds: orderIds.slice(0, 10) },
+      });
+    }
+
+    return { success: cancelledCount > 0, cancelledCount, errors };
+  } catch (error) {
+    console.error("발주서 일괄 취소 오류:", error);
+    return {
+      success: false,
+      cancelledCount: 0,
+      errors: [{ orderId: "", orderNumber: "", error: "일괄 취소 처리 중 오류가 발생했습니다" }],
+    };
+  }
 }
 
 /**

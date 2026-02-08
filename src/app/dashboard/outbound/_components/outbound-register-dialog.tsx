@@ -22,10 +22,10 @@ import {
 } from "@/components/ui/select";
 import { Loader2, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { getProducts } from "@/server/actions/products";
 import { getInventoryByProductId, processInventoryTransaction } from "@/server/actions/inventory";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { InventoryChangeTypeKey } from "@/server/services/inventory/types";
+import { ProductCombobox } from "@/components/features/common/product-combobox";
 
 const OUTBOUND_TYPES = [
   { value: "OUTBOUND_SALE", label: "판매 출고" },
@@ -48,26 +48,9 @@ export function OutboundRegisterDialog({ open, onOpenChange, onSuccess }: Outbou
   const [quantity, setQuantity] = useState("");
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [productOptions, setProductOptions] = useState<Array<{ id: string; sku: string; name: string }>>([]);
-  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
   const [currentStock, setCurrentStock] = useState<number | null>(null);
   const [isLoadingStock, setIsLoadingStock] = useState(false);
   const { toast } = useToast();
-
-  // 제품 목록 로드
-  useEffect(() => {
-    if (open && productOptions.length === 0) {
-      setIsLoadingProducts(true);
-      getProducts({ limit: 500 })
-        .then((result) => {
-          setProductOptions(
-            result.products.map((p) => ({ id: p.id, sku: p.sku, name: p.name }))
-          );
-        })
-        .catch(console.error)
-        .finally(() => setIsLoadingProducts(false));
-    }
-  }, [open, productOptions.length]);
 
   // 제품 선택 시 현재고 조회
   useEffect(() => {
@@ -157,21 +140,14 @@ export function OutboundRegisterDialog({ open, onOpenChange, onSuccess }: Outbou
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* 제품 선택 */}
+          {/* 제품 선택 — Combobox */}
           <div className="space-y-2">
             <Label>제품</Label>
-            <Select value={productId} onValueChange={setProductId}>
-              <SelectTrigger>
-                <SelectValue placeholder={isLoadingProducts ? "로딩 중..." : "제품을 선택하세요"} />
-              </SelectTrigger>
-              <SelectContent>
-                {productOptions.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    [{p.sku}] {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ProductCombobox
+              value={productId}
+              onValueChange={setProductId}
+              disabled={isSubmitting}
+            />
           </div>
 
           {/* 현재고 표시 */}

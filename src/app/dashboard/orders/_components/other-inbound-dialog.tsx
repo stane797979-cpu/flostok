@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -20,10 +20,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
+import { Loader2, Download, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { getProducts } from "@/server/actions/products";
 import { createOtherInbound } from "@/server/actions/inbound";
+import { importOtherInboundExcel, getOtherInboundTemplate } from "@/server/actions/inbound-import";
+import { ProductCombobox } from "@/components/features/common/product-combobox";
 
 const INBOUND_TYPES = [
   { value: "INBOUND_RETURN", label: "반품 입고" },
@@ -46,24 +47,10 @@ export function OtherInboundDialog({ open, onOpenChange, onSuccess }: OtherInbou
   const [expiryDate, setExpiryDate] = useState("");
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [productOptions, setProductOptions] = useState<Array<{ id: string; sku: string; name: string }>>([]);
-  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
-
-  // 제품 목록 로드
-  useEffect(() => {
-    if (open && productOptions.length === 0) {
-      setIsLoadingProducts(true);
-      getProducts({ limit: 500 })
-        .then((result) => {
-          setProductOptions(
-            result.products.map((p) => ({ id: p.id, sku: p.sku, name: p.name }))
-          );
-        })
-        .catch(console.error)
-        .finally(() => setIsLoadingProducts(false));
-    }
-  }, [open, productOptions.length]);
 
   const handleSubmit = async () => {
     if (!productId || !inboundType || !quantity) return;
@@ -116,9 +103,84 @@ export function OtherInboundDialog({ open, onOpenChange, onSuccess }: OtherInbou
     onOpenChange(false);
   };
 
+  // Excel 양식 다운로드
+  const handleDownloadTemplate = async () => {
+    setIsDownloading(true);
+    try {
+      const result = await getOtherInboundTemplate();
+      if (result.success && result.data) {
+        const binaryString = atob(result.data);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], {
+          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "기타입고_양식.xlsx";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        toast({ title: "다운로드 완료", description: "기타입고 양식이 다운로드되었습니다" });
+      }
+    } catch {
+      toast({ title: "다운로드 실패", description: "양식 다운로드 중 오류가 발생했습니다", variant: "destructive" });
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  // Excel 파일 업로드
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        const base64 = ev.target?.result as string;
+        const result = await importOtherInboundExcel({
+          fileBase64: base64,
+          fileName: file.name,
+        });
+
+        if (result.success) {
+          toast({
+            title: "일괄 입고 완료",
+            description: `${result.successCount}건 입고 처리 완료${result.errorCount > 0 ? ` (${result.errorCount}건 오류)` : ""}`,
+          });
+          handleClose();
+          onSuccess();
+        } else {
+          const errorMsg = result.errors?.length > 0
+            ? result.errors.slice(0, 3).map((e) => `${e.row}행: ${e.message}`).join("\n")
+            : result.message;
+          toast({
+            title: "일괄 입고 실패",
+            description: errorMsg,
+            variant: "destructive",
+          });
+        }
+        setIsUploading(false);
+      };
+      reader.readAsDataURL(file);
+    } catch {
+      toast({ title: "업로드 실패", description: "파일 처리 중 오류가 발생했습니다", variant: "destructive" });
+      setIsUploading(false);
+    }
+
+    // 파일 input 초기화
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
           <DialogTitle>기타 입고</DialogTitle>
           <DialogDescription>
@@ -126,22 +188,49 @@ export function OtherInboundDialog({ open, onOpenChange, onSuccess }: OtherInbou
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          {/* 제품 선택 */}
+        {/* Excel 일괄 입고 영역 */}
+        <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3">
+          <div className="flex-1 text-xs text-blue-800">
+            여러 건을 한번에 처리하려면 양식을 다운로드 후 업로드하세요.
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDownloadTemplate}
+            disabled={isDownloading}
+            className="shrink-0"
+          >
+            {isDownloading ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Download className="mr-1 h-3 w-3" />}
+            양식
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+            className="shrink-0"
+          >
+            {isUploading ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Upload className="mr-1 h-3 w-3" />}
+            업로드
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            className="hidden"
+            onChange={handleFileUpload}
+          />
+        </div>
+
+        <div className="space-y-4">
+          {/* 제품 선택 — Combobox */}
           <div className="space-y-2">
             <Label>제품</Label>
-            <Select value={productId} onValueChange={setProductId}>
-              <SelectTrigger>
-                <SelectValue placeholder={isLoadingProducts ? "로딩 중..." : "제품을 선택하세요"} />
-              </SelectTrigger>
-              <SelectContent>
-                {productOptions.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    [{p.sku}] {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ProductCombobox
+              value={productId}
+              onValueChange={setProductId}
+              disabled={isSubmitting}
+            />
           </div>
 
           {/* 입고 유형 */}

@@ -12,6 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Eye, Download, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 
 export interface PurchaseOrderListItem {
@@ -29,6 +30,8 @@ interface PurchaseOrdersTableProps {
   orders: PurchaseOrderListItem[];
   onViewClick: (orderId: string) => void;
   onDownloadClick?: (orderId: string) => void;
+  selectedIds?: string[];
+  onSelectChange?: (ids: string[]) => void;
   className?: string;
 }
 
@@ -37,7 +40,28 @@ type SortDirection = "asc" | "desc";
 
 const STATUS_ORDER = ["draft", "ordered", "pending_receipt", "received", "cancelled"];
 
-export function PurchaseOrdersTable({ orders, onViewClick, onDownloadClick, className }: PurchaseOrdersTableProps) {
+export function PurchaseOrdersTable({ orders, onViewClick, onDownloadClick, selectedIds, onSelectChange, className }: PurchaseOrdersTableProps) {
+  const cancellableStatuses: PurchaseOrderListItem["status"][] = ["draft", "ordered"];
+  const cancellableOrders = orders.filter((o) => cancellableStatuses.includes(o.status));
+  const allCancellableSelected = cancellableOrders.length > 0 && cancellableOrders.every((o) => selectedIds?.includes(o.id));
+
+  const handleSelectAll = (checked: boolean) => {
+    if (!onSelectChange) return;
+    if (checked) {
+      onSelectChange(cancellableOrders.map((o) => o.id));
+    } else {
+      onSelectChange([]);
+    }
+  };
+
+  const handleSelectOne = (orderId: string, checked: boolean) => {
+    if (!onSelectChange || !selectedIds) return;
+    if (checked) {
+      onSelectChange([...selectedIds, orderId]);
+    } else {
+      onSelectChange(selectedIds.filter((id) => id !== orderId));
+    }
+  };
   const [sortKey, setSortKey] = useState<SortKey>("orderDate");
   const [sortDir, setSortDir] = useState<SortDirection>("desc");
 
@@ -138,6 +162,15 @@ export function PurchaseOrdersTable({ orders, onViewClick, onDownloadClick, clas
       <Table>
         <TableHeader>
           <TableRow>
+            {onSelectChange && (
+              <TableHead className="w-[40px]">
+                <Checkbox
+                  checked={allCancellableSelected}
+                  onCheckedChange={(checked) => handleSelectAll(!!checked)}
+                  aria-label="취소 가능 발주 전체 선택"
+                />
+              </TableHead>
+            )}
             <TableHead className={cn("whitespace-nowrap", sortableHeadClass)} onClick={() => handleSort("orderNumber")}>
               <div className="flex items-center gap-0.5">발주번호 <SortIcon columnKey="orderNumber" /><span className="text-[10px] text-primary-600">{sortLabel("orderNumber")}</span></div>
             </TableHead>
@@ -163,8 +196,23 @@ export function PurchaseOrdersTable({ orders, onViewClick, onDownloadClick, clas
           </TableRow>
         </TableHeader>
         <TableBody>
-          {sorted.map((order) => (
+          {sorted.map((order) => {
+            const isCancellable = cancellableStatuses.includes(order.status);
+            return (
             <TableRow key={order.id}>
+              {onSelectChange && (
+                <TableCell>
+                  {isCancellable ? (
+                    <Checkbox
+                      checked={selectedIds?.includes(order.id) ?? false}
+                      onCheckedChange={(checked) => handleSelectOne(order.id, !!checked)}
+                      aria-label={`${order.orderNumber} 선택`}
+                    />
+                  ) : (
+                    <div className="h-4 w-4" />
+                  )}
+                </TableCell>
+              )}
               <TableCell className="whitespace-nowrap font-mono text-sm">{order.orderNumber}</TableCell>
               <TableCell className="font-medium">{order.supplierName}</TableCell>
               <TableCell className="whitespace-nowrap text-right">{order.itemsCount}개</TableCell>
@@ -192,7 +240,8 @@ export function PurchaseOrdersTable({ orders, onViewClick, onDownloadClick, clas
                 </div>
               </TableCell>
             </TableRow>
-          ))}
+            );
+          })}
         </TableBody>
       </Table>
     </div>

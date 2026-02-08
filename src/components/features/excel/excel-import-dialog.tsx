@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useTransition } from "react";
+import { useState, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -33,7 +33,7 @@ export function ExcelImportDialog({
   description,
   onSuccess,
 }: ExcelImportDialogProps) {
-  const [isPending, startTransition] = useTransition();
+  const [isPending, setIsPending] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [duplicateHandling, setDuplicateHandling] = useState<"skip" | "update" | "error">("skip");
   const [result, setResult] = useState<ImportExcelResult | null>(null);
@@ -58,7 +58,7 @@ export function ExcelImportDialog({
     setIsDragOver(false);
 
     const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile && droppedFile.name.endsWith(".xlsx")) {
+    if (droppedFile && (droppedFile.name.endsWith(".xlsx") || droppedFile.name.endsWith(".xls"))) {
       setFile(droppedFile);
       setResult(null);
     }
@@ -75,40 +75,41 @@ export function ExcelImportDialog({
   const handleImport = async () => {
     if (!file) return;
 
-    startTransition(async () => {
-      try {
-        // File -> Base64
-        const buffer = await file.arrayBuffer();
-        const bytes = new Uint8Array(buffer);
-        let binary = "";
-        for (let i = 0; i < bytes.length; i++) {
-          binary += String.fromCharCode(bytes[i]);
-        }
-        const base64 = btoa(binary);
-
-        const importResult = await importExcelFile({
-          type: importType,
-          fileBase64: base64,
-          fileName: file.name,
-          duplicateHandling,
-        });
-
-        setResult(importResult);
-
-        if (importResult.success && onSuccess) {
-          onSuccess(importResult);
-        }
-      } catch (error) {
-        setResult({
-          success: false,
-          message: error instanceof Error ? error.message : "알 수 없는 오류",
-          totalRows: 0,
-          successCount: 0,
-          errorCount: 1,
-          errors: [],
-        });
+    setIsPending(true);
+    try {
+      // File -> Base64
+      const buffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      let binary = "";
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
       }
-    });
+      const base64 = btoa(binary);
+
+      const importResult = await importExcelFile({
+        type: importType,
+        fileBase64: base64,
+        fileName: file.name,
+        duplicateHandling,
+      });
+
+      setResult(importResult);
+
+      if (importResult.success && onSuccess) {
+        onSuccess(importResult);
+      }
+    } catch (error) {
+      setResult({
+        success: false,
+        message: error instanceof Error ? error.message : "알 수 없는 오류",
+        totalRows: 0,
+        successCount: 0,
+        errorCount: 1,
+        errors: [],
+      });
+    } finally {
+      setIsPending(false);
+    }
   };
 
   const [templateDownloading, setTemplateDownloading] = useState(false);
@@ -208,7 +209,7 @@ export function ExcelImportDialog({
                 <p className="text-xs text-slate-400">.xlsx 파일만 지원</p>
                 <input
                   type="file"
-                  accept=".xlsx"
+                  accept=".xlsx,.xls"
                   onChange={handleFileChange}
                   className="absolute inset-0 cursor-pointer opacity-0"
                 />
