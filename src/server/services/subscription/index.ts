@@ -20,12 +20,12 @@ export const SUBSCRIPTION_PLANS = {
     name: "무료",
     price: 0,
     features: {
-      maxProducts: 10,
-      maxOrders: 5, // 월간
-      maxUsers: 1,
-      aiChatEnabled: false,
-      advancedAnalytics: false,
-      apiAccess: false,
+      maxProducts: Infinity,
+      maxOrders: Infinity, // 무제한
+      maxUsers: Infinity,
+      aiChatEnabled: true,
+      advancedAnalytics: true,
+      apiAccess: true,
     },
   },
   STARTER: {
