@@ -5,12 +5,16 @@ import * as schema from "./schema";
 const connectionString = process.env.DATABASE_URL;
 
 if (!connectionString) {
-  throw new Error("DATABASE_URL is not defined");
+  console.warn("DATABASE_URL is not defined — DB 연결이 비활성화됩니다.");
 }
 
 // For queries
-const queryClient = postgres(connectionString);
-export const db = drizzle(queryClient, { schema });
+const queryClient = connectionString ? postgres(connectionString) : null;
+export const db = queryClient
+  ? drizzle(queryClient, { schema })
+  : (null as unknown as ReturnType<typeof drizzle<typeof schema>>);
 
 // For migrations
-export const migrationClient = postgres(connectionString, { max: 1 });
+export const migrationClient = connectionString
+  ? postgres(connectionString, { max: 1 })
+  : null;
