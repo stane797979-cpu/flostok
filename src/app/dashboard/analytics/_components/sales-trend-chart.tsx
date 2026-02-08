@@ -143,8 +143,8 @@ export function SalesTrendChart({ className, data: _data }: SalesTrendChartProps
       padding: { top: number; right: number; bottom: number; left: number };
     } => {
       const width = 800;
-      const height = 300;
-      const pad = { top: 20, right: 20, bottom: 40, left: 60 };
+      const height = 240;
+      const pad = { top: 16, right: 20, bottom: 36, left: 60 };
       const innerWidth = width - pad.left - pad.right;
       const innerHeight = height - pad.top - pad.bottom;
       const xScaleFunc = (index: number) => pad.left + (index / (data.length - 1)) * innerWidth;

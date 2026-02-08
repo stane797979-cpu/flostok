@@ -2,6 +2,14 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { ImprovementProposal } from '@/server/services/scm/kpi-improvement';
 import {
@@ -13,15 +21,13 @@ import {
   CheckCircle2,
   Clock,
   Target,
+  ClipboardList,
+  Calendar,
+  ArrowRight,
+  CircleDot,
 } from 'lucide-react';
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-
-const CATEGORY_ROUTES: Record<string, string> = {
-  inventory: '/dashboard/inventory',
-  order: '/dashboard/orders',
-  cost: '/dashboard/analytics',
-};
+import { useToast } from '@/hooks/use-toast';
 
 interface KPIImprovementCardProps {
   proposal: ImprovementProposal;
@@ -30,7 +36,17 @@ interface KPIImprovementCardProps {
 
 export function KPIImprovementCard({ proposal, className }: KPIImprovementCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const router = useRouter();
+  const [showPlanDialog, setShowPlanDialog] = useState(false);
+  const [showDetailDialog, setShowDetailDialog] = useState(false);
+  const [checkedSteps, setCheckedSteps] = useState<Record<number, boolean>>({});
+  const { toast } = useToast();
+
+  const toggleStep = (index: number) => {
+    setCheckedSteps((prev) => ({ ...prev, [index]: !prev[index] }));
+  };
+
+  const completedSteps = Object.values(checkedSteps).filter(Boolean).length;
+  const totalSteps = proposal.actionSteps.length;
 
   const priorityConfig = {
     high: {
@@ -191,21 +207,258 @@ export function KPIImprovementCard({ proposal, className }: KPIImprovementCardPr
               variant="default"
               size="sm"
               className="flex-1"
-              onClick={() => router.push(CATEGORY_ROUTES[proposal.kpiCategory] || '/dashboard/analytics')}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowPlanDialog(true);
+              }}
             >
+              <ClipboardList className="mr-1 h-4 w-4" />
               실행 계획 수립
             </Button>
             <Button
               variant="outline"
               size="sm"
               className="flex-1"
-              onClick={() => router.push('/dashboard/analytics')}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowDetailDialog(true);
+              }}
             >
               상세 보기
             </Button>
           </div>
         </CardContent>
       )}
+
+      {/* 실행 계획 수립 다이얼로그 */}
+      <Dialog open={showPlanDialog} onOpenChange={setShowPlanDialog}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ClipboardList className="h-5 w-5 text-primary" />
+              실행 계획
+            </DialogTitle>
+            <DialogDescription>
+              {proposal.title}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5 py-2">
+            {/* 개요 */}
+            <div className="rounded-lg bg-slate-50 p-4 dark:bg-slate-900">
+              <p className="text-sm text-slate-700 dark:text-slate-300">
+                {proposal.description}
+              </p>
+            </div>
+
+            {/* 일정 & 영향 */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex items-center gap-2 rounded-lg border p-3">
+                <Calendar className="h-4 w-4 text-primary flex-shrink-0" />
+                <div>
+                  <p className="text-xs text-slate-500">예상 기간</p>
+                  <p className="text-sm font-semibold">{proposal.timeToImplement}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 rounded-lg border p-3">
+                <TrendingUp className="h-4 w-4 text-green-600 flex-shrink-0" />
+                <div>
+                  <p className="text-xs text-slate-500">예상 효과</p>
+                  <p className="text-sm font-semibold text-green-700 dark:text-green-400">
+                    {proposal.estimatedImpact}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* 실행 단계 체크리스트 */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold">실행 단계</h4>
+                <span className="text-xs text-slate-500">
+                  {completedSteps}/{totalSteps} 완료
+                </span>
+              </div>
+
+              {/* 프로그레스 바 */}
+              <div className="w-full bg-slate-200 rounded-full h-1.5 dark:bg-slate-700">
+                <div
+                  className="bg-primary rounded-full h-1.5 transition-all"
+                  style={{ width: `${totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0}%` }}
+                />
+              </div>
+
+              <div className="space-y-2 mt-3">
+                {proposal.actionSteps.map((step, index) => (
+                  <div
+                    key={index}
+                    className={cn(
+                      'flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors',
+                      checkedSteps[index]
+                        ? 'bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800'
+                        : 'hover:bg-slate-50 dark:hover:bg-slate-900'
+                    )}
+                    onClick={() => toggleStep(index)}
+                  >
+                    <div className="flex-shrink-0 mt-0.5">
+                      {checkedSteps[index] ? (
+                        <CheckCircle2 className="h-4 w-4 text-green-600" />
+                      ) : (
+                        <CircleDot className="h-4 w-4 text-slate-400" />
+                      )}
+                    </div>
+                    <span
+                      className={cn(
+                        'text-sm',
+                        checkedSteps[index] && 'line-through text-slate-400'
+                      )}
+                    >
+                      {step}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 영향 KPI */}
+            <div className="space-y-2">
+              <h4 className="text-sm font-semibold">영향받는 KPI</h4>
+              <div className="flex flex-wrap gap-1.5">
+                {proposal.affectedKPIs.map((kpi) => (
+                  <span
+                    key={kpi}
+                    className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary"
+                  >
+                    <ArrowRight className="h-3 w-3" />
+                    {kpi}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPlanDialog(false)}>
+              닫기
+            </Button>
+            <Button
+              onClick={() => {
+                toast({
+                  title: '실행 계획이 저장되었습니다',
+                  description: `${proposal.title} - ${completedSteps}/${totalSteps}단계 완료`,
+                });
+                setShowPlanDialog(false);
+              }}
+            >
+              계획 저장
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 상세 보기 다이얼로그 */}
+      <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Zap className="h-5 w-5" />
+              {proposal.title}
+            </DialogTitle>
+            <DialogDescription>
+              {proposal.description}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* 우선순위 & 카테고리 */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-slate-500 mb-1">우선순위</p>
+                <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium', config.badgeColor)}>
+                  <PriorityIcon className="h-3 w-3" />
+                  {config.label}
+                </span>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-slate-500 mb-1">카테고리</p>
+                <p className="text-sm font-medium">
+                  {catConfig.icon} {catConfig.label}
+                </p>
+              </div>
+            </div>
+
+            {/* 예상 효과 */}
+            <div className="rounded-lg bg-green-50 border border-green-200 p-4 dark:bg-green-950 dark:border-green-800">
+              <div className="flex items-center gap-2 mb-2">
+                <TrendingUp className="h-4 w-4 text-green-600" />
+                <p className="text-xs font-medium text-green-600">예상 효과</p>
+              </div>
+              <p className="text-sm font-semibold text-green-700 dark:text-green-300">
+                {proposal.estimatedImpact}
+              </p>
+            </div>
+
+            {/* 구현 기간 */}
+            <div className="flex items-center gap-3 rounded-lg border p-4">
+              <Clock className="h-5 w-5 text-slate-500 flex-shrink-0" />
+              <div>
+                <p className="text-xs text-slate-500">구현 기간</p>
+                <p className="text-sm font-semibold">{proposal.timeToImplement}</p>
+              </div>
+            </div>
+
+            {/* 영향 KPI */}
+            <div className="space-y-2">
+              <h4 className="text-sm font-semibold flex items-center gap-2">
+                <Target className="h-4 w-4" />
+                영향받는 KPI
+              </h4>
+              <div className="flex flex-wrap gap-1.5">
+                {proposal.affectedKPIs.map((kpi) => (
+                  <span
+                    key={kpi}
+                    className="inline-block rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                  >
+                    {kpi}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* 상세 실행 단계 */}
+            <div className="space-y-2">
+              <h4 className="text-sm font-semibold">실행 단계 상세</h4>
+              <div className="space-y-2">
+                {proposal.actionSteps.map((step, index) => (
+                  <div key={index} className="flex items-start gap-3 rounded-lg bg-slate-50 p-3 dark:bg-slate-900">
+                    <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-white flex-shrink-0">
+                      {index + 1}
+                    </div>
+                    <span className="text-sm text-slate-700 dark:text-slate-300">
+                      {step.replace(/^\d+\.\s*/, '')}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDetailDialog(false)}>
+              닫기
+            </Button>
+            <Button
+              onClick={() => {
+                setShowDetailDialog(false);
+                setShowPlanDialog(true);
+              }}
+            >
+              <ClipboardList className="mr-1 h-4 w-4" />
+              실행 계획 수립
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

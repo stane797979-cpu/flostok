@@ -95,8 +95,8 @@ export function DemandForecastChart() {
   const chart = useMemo(() => {
     if (chartData.length === 0) return null;
     const width = 800;
-    const height = 300;
-    const pad = { top: 20, right: 20, bottom: 40, left: 60 };
+    const height = 360;
+    const pad = { top: 30, right: 24, bottom: 40, left: 56 };
     const innerW = width - pad.left - pad.right;
     const innerH = height - pad.top - pad.bottom;
 
@@ -278,7 +278,6 @@ export function DemandForecastChart() {
                   <svg
                     viewBox={`0 0 ${chart.width} ${chart.height}`}
                     className="w-full"
-                    style={{ minWidth: "600px" }}
                   >
                     {/* Y축 그리드 */}
                     {chart.yLabels.map((label, i) => (
@@ -326,14 +325,14 @@ export function DemandForecastChart() {
                     />
 
                     {/* 과거 실적 라인 */}
-                    <path d={chart.historyPath} stroke="#3b82f6" strokeWidth="2.5" fill="none" />
+                    <path d={chart.historyPath} stroke="#3b82f6" strokeWidth="3" fill="none" />
 
                     {/* 예측 라인 */}
                     <path
                       d={chart.predictedPath}
                       stroke="#f59e0b"
-                      strokeWidth="2.5"
-                      strokeDasharray="8 4"
+                      strokeWidth="3"
+                      strokeDasharray="10 5"
                       fill="none"
                     />
 
@@ -343,7 +342,7 @@ export function DemandForecastChart() {
                         key={index}
                         cx={chart.xScale(index)}
                         cy={chart.yScale(point.value)}
-                        r={hoveredPoint === index ? 6 : 4}
+                        r={hoveredPoint === index ? 7 : 5}
                         fill={point.type === "history" ? "#3b82f6" : "#f59e0b"}
                         stroke="white"
                         strokeWidth="2"

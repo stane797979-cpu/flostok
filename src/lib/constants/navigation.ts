@@ -13,6 +13,7 @@ import {
   CreditCard,
   Settings,
   HelpCircle,
+  FileSearch,
   type LucideIcon,
 } from "lucide-react";
 
@@ -98,6 +99,12 @@ export const MAIN_NAV: NavItem[] = [
     href: "/dashboard/chat",
     icon: MessageSquare,
     description: "AI 어시스턴트와 상담",
+  },
+  {
+    title: "데이터 온보딩",
+    href: "/dashboard/onboarding",
+    icon: FileSearch,
+    description: "회사 데이터 분석 및 매핑",
   },
 ];
 

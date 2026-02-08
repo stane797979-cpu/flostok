@@ -6,7 +6,7 @@ export const organizations = pgTable("organizations", {
   name: text("name").notNull(),
   slug: text("slug").unique().notNull(), // URL 친화적 식별자
   logoUrl: text("logo_url"),
-  plan: text("plan").default("free").notNull(), // free, starter, pro
+  plan: text("plan").default("enterprise").notNull(), // free, starter, pro, enterprise
   settings: jsonb("settings").default({}), // 조직별 설정 (리드타임 기본값, 안전재고 배수 등)
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

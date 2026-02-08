@@ -24,7 +24,7 @@ export async function seedOrganization(): Promise<Organization> {
       id: "00000000-0000-0000-0000-000000000001", // TEMP_ORG_ID와 일치
       name: "스마트 구매 데모 회사",
       slug: "smart-demo",
-      plan: "pro",
+      plan: "enterprise",
       settings,
     })
     .returning();

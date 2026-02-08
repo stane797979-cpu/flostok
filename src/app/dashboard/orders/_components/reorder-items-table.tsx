@@ -237,7 +237,7 @@ export function ReorderItemsTable({
                   onCheckedChange={handleSelectAll}
                 />
               </TableHead>
-              <TableHead className={cn("w-[100px]", sortableHeadClass)} onClick={() => handleSort("urgency")}>
+              <TableHead className={cn("w-[140px] whitespace-nowrap", sortableHeadClass)} onClick={() => handleSort("urgency")}>
                 <div className="flex items-center">
                   긴급도{sortLabel("urgency")}
                   <SortIcon columnKey="urgency" />
@@ -315,7 +315,7 @@ export function ReorderItemsTable({
                 </TableCell>
                 <TableCell className="text-sm text-slate-600">{item.supplierName || "-"}</TableCell>
                 <TableCell className="text-right">
-                  <Button size="sm" onClick={() => onOrderClick(item)} disabled={!item.supplierId}>
+                  <Button size="sm" onClick={() => onOrderClick(item)}>
                     <ShoppingCart className="mr-1 h-4 w-4" />
                     발주
                   </Button>

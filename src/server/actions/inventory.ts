@@ -5,7 +5,6 @@ import {
   inventory,
   inventoryHistory,
   products,
-  salesRecords,
   type Inventory,
   type InventoryHistory,
 } from "@/server/db/schema";
@@ -90,12 +89,12 @@ export async function getInventoryList(options?: {
     conditions.push(eq(inventory.status, status as (typeof inventory.status.enumValues)[number]));
   }
 
-  // 30일 전 날짜 (일평균판매량 계산용)
+  // 30일 전 날짜 (일평균출고량 계산용)
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split("T")[0];
 
-  const [items, countResult, salesData] = await Promise.all([
+  const [items, countResult, outboundData] = await Promise.all([
     db
       .select({
         id: inventory.id,
@@ -129,34 +128,35 @@ export async function getInventoryList(options?: {
       .select({ count: sql<number>`count(*)` })
       .from(inventory)
       .where(and(...conditions)),
-    // 최근 30일 제품별 총 판매수량 조회
+    // 최근 30일 제품별 총 출고수량 (inventory_history에서 음수 변동 합산)
     db
       .select({
-        productId: salesRecords.productId,
-        totalQty: sql<number>`coalesce(sum(${salesRecords.quantity}), 0)`,
+        productId: inventoryHistory.productId,
+        totalOutbound: sql<number>`coalesce(sum(abs(${inventoryHistory.changeAmount})), 0)`,
       })
-      .from(salesRecords)
+      .from(inventoryHistory)
       .where(
         and(
-          eq(salesRecords.organizationId, user.organizationId),
-          gte(salesRecords.date, thirtyDaysAgoStr)
+          eq(inventoryHistory.organizationId, user.organizationId),
+          gte(inventoryHistory.date, thirtyDaysAgoStr),
+          sql`${inventoryHistory.changeAmount} < 0`
         )
       )
-      .groupBy(salesRecords.productId),
+      .groupBy(inventoryHistory.productId),
   ]);
 
-  // 제품별 일평균판매량 매핑
-  const avgDailySalesMap = new Map<string, number>();
-  for (const row of salesData) {
-    avgDailySalesMap.set(row.productId, Math.round((Number(row.totalQty) / 30) * 100) / 100);
+  // 제품별 일평균출고량 매핑
+  const avgDailyOutboundMap = new Map<string, number>();
+  for (const row of outboundData) {
+    avgDailyOutboundMap.set(row.productId, Math.round((Number(row.totalOutbound) / 30) * 100) / 100);
   }
 
   return {
     items: items.map((row) => {
-      const avgDailySales = avgDailySalesMap.get(row.productId) ?? 0;
+      const avgDailyOutbound = avgDailyOutboundMap.get(row.productId) ?? 0;
       const calculatedDoi =
-        avgDailySales > 0
-          ? Math.round((row.currentStock / avgDailySales) * 100) / 100
+        avgDailyOutbound > 0
+          ? Math.round((row.currentStock / avgDailyOutbound) * 100) / 100
           : null;
 
       return {

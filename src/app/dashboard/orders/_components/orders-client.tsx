@@ -290,6 +290,14 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [] }
   const cautionCount = reorderItems.filter((item) => item.urgencyLevel === 3).length;
 
   const handleOrderClick = (item: ReorderItem) => {
+    if (!item.supplierId) {
+      toast({
+        title: "공급자 미지정",
+        description: `${item.productName}에 공급자가 지정되지 않았습니다. 제품 관리에서 공급자를 먼저 등록해주세요.`,
+        variant: "destructive",
+      });
+      return;
+    }
     setSelectedProduct(item);
     setOrderDialogOpen(true);
   };

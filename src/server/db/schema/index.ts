@@ -12,3 +12,4 @@ export * from "./alerts";
 export * from "./subscriptions";
 export * from "./payment-history";
 export * from "./activity-logs";
+export * from "./onboarding";
