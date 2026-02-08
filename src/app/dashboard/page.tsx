@@ -15,46 +15,43 @@ import { getKPISummary } from "@/server/actions/kpi";
 /** 안전하게 대시보드 데이터를 로드 (인증 실패 시 빈 데이터) */
 async function loadDashboardData() {
   try {
-    const [stats, { items }, kpiSummary] = await Promise.all([
+    // 병렬 로드: 통계 + 위험 품목 5개 + KPI (limit:200 제거)
+    const [stats, criticalItems, kpiSummary] = await Promise.all([
       getInventoryStats(),
-      getInventoryList({ limit: 200 }),
+      getInventoryList({ status: "out_of_stock", limit: 5 }).then(async (r) => {
+        // 품절 5개 미만이면 위험/부족 상태도 추가
+        if (r.items.length >= 5) return r.items;
+        const more = await getInventoryList({ status: "critical", limit: 5 - r.items.length });
+        return [...r.items, ...more.items];
+      }),
       getKPISummary(),
     ]);
 
-    // 발주 필요 품목: 품절/위험/부족 상태 필터링
-    const needsOrderProducts = items
-      .filter((item) => {
-        const status = getInventoryStatus(
-          item.currentStock,
-          item.product.safetyStock ?? 0,
-          item.product.reorderPoint ?? 0
-        );
-        return ["out_of_stock", "critical", "shortage"].includes(status.key);
-      })
-      .slice(0, 5)
-      .map((item) => ({
-        id: item.productId,
-        sku: item.product.sku,
-        name: item.product.name,
-        currentStock: item.currentStock,
-        safetyStock: item.product.safetyStock ?? 0,
-        status: getInventoryStatus(
-          item.currentStock,
-          item.product.safetyStock ?? 0,
-          item.product.reorderPoint ?? 0
-        ),
-      }));
-
-    // 재고상태 분포 계산
-    const statusDistribution: Record<string, number> = {};
-    for (const item of items) {
-      const status = getInventoryStatus(
+    // 발주 필요 품목 매핑
+    const needsOrderProducts = criticalItems.slice(0, 5).map((item) => ({
+      id: item.productId,
+      sku: item.product.sku,
+      name: item.product.name,
+      currentStock: item.currentStock,
+      safetyStock: item.product.safetyStock ?? 0,
+      status: getInventoryStatus(
         item.currentStock,
         item.product.safetyStock ?? 0,
         item.product.reorderPoint ?? 0
-      );
-      statusDistribution[status.key] = (statusDistribution[status.key] || 0) + 1;
-    }
+      ),
+    }));
+
+    // 재고상태 분포: getInventoryStats()에서 이미 계산된 데이터 활용
+    const statusDistribution: Record<string, number> = {};
+    if (stats.outOfStock > 0) statusDistribution["out_of_stock"] = stats.outOfStock;
+    if (stats.critical > 0) statusDistribution["critical"] = stats.critical;
+    if (stats.shortage > 0) statusDistribution["shortage"] = stats.shortage;
+    if (stats.optimal > 0) statusDistribution["optimal"] = stats.optimal;
+    if (stats.excess > 0) statusDistribution["excess"] = stats.excess;
+    // 나머지 = 적정 이상 (주의 + 과다)
+    const accounted = stats.outOfStock + stats.critical + stats.shortage + stats.optimal + stats.excess;
+    const remaining = stats.totalProducts - accounted;
+    if (remaining > 0) statusDistribution["caution"] = remaining;
 
     return {
       stats: {
@@ -66,7 +63,7 @@ async function loadDashboardData() {
       },
       needsOrderProducts,
       statusDistribution,
-      totalSku: items.length || stats.totalProducts,
+      totalSku: stats.totalProducts,
       kpi: kpiSummary,
     };
   } catch (error) {

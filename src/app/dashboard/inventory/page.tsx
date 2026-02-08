@@ -4,7 +4,7 @@ import { InventoryPageClient } from "@/components/features/inventory/inventory-p
 export default async function InventoryPage() {
   try {
     const [{ items }, stats] = await Promise.all([
-      getInventoryList({ limit: 200 }),
+      getInventoryList({ limit: 50 }),
       getInventoryStats(),
     ]);
 

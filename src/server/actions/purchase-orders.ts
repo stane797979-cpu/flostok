@@ -13,7 +13,7 @@ import {
 import { eq, and, desc, asc, sql, gte, lte, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { getAverageDailySales } from "./sales";
+import { salesRecords } from "@/server/db/schema";
 import {
   convertToReorderItem,
   sortReorderItems,
@@ -99,33 +99,61 @@ export async function getReorderItems(options?: {
         )
       );
 
-    // 각 제품의 일평균 판매량 조회 및 발주 아이템 변환
-    const reorderItemsPromises = reorderCandidates.map(async (row) => {
-      const avgDailySales = await getAverageDailySales(row.product.id, 30);
+    // 일평균 판매량을 단일 그룹 쿼리로 일괄 조회 (N+1 쿼리 제거)
+    const productIds = reorderCandidates.map((r) => r.product.id);
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split("T")[0];
+    const todayStr = new Date().toISOString().split("T")[0];
 
-      const data: ProductReorderData = {
-        productId: row.product.id,
-        sku: row.product.sku,
-        productName: row.product.name,
-        currentStock: row.inventory?.currentStock || 0,
-        safetyStock: row.product.safetyStock || 0,
-        reorderPoint: row.product.reorderPoint || 0,
-        avgDailySales,
-        abcGrade: row.product.abcGrade || undefined,
-        moq: row.product.moq || 1,
-        leadTime: row.supplier?.avgLeadTime || row.product.leadTime || 7,
-        unitPrice: row.product.unitPrice || 0,
-        costPrice: row.product.costPrice || 0,
-        supplierId: row.supplier?.id,
-        supplierName: row.supplier?.name,
-      };
+    const avgSalesMap = new Map<string, number>();
+    if (productIds.length > 0) {
+      const salesData = await db
+        .select({
+          productId: salesRecords.productId,
+          totalQuantity: sql<number>`coalesce(sum(${salesRecords.quantity}), 0)`,
+        })
+        .from(salesRecords)
+        .where(
+          and(
+            eq(salesRecords.organizationId, orgId),
+            sql`${salesRecords.productId} IN ${productIds}`,
+            gte(salesRecords.date, thirtyDaysAgoStr),
+            lte(salesRecords.date, todayStr)
+          )
+        )
+        .groupBy(salesRecords.productId);
 
-      return convertToReorderItem(data);
-    });
+      for (const row of salesData) {
+        avgSalesMap.set(row.productId, Math.round((Number(row.totalQuantity) / 30) * 100) / 100);
+      }
+    }
 
-    const allReorderItems = (await Promise.all(reorderItemsPromises)).filter(
-      (item): item is ReorderItem => item !== null
-    );
+    // 발주 아이템 변환 (DB 호출 없이 메모리에서 처리)
+    const allReorderItems = reorderCandidates
+      .map((row) => {
+        const avgDailySales = avgSalesMap.get(row.product.id) || 0;
+
+        const data: ProductReorderData = {
+          productId: row.product.id,
+          sku: row.product.sku,
+          productName: row.product.name,
+          currentStock: row.inventory?.currentStock || 0,
+          safetyStock: row.product.safetyStock || 0,
+          reorderPoint: row.product.reorderPoint || 0,
+          avgDailySales,
+          abcGrade: row.product.abcGrade || undefined,
+          moq: row.product.moq || 1,
+          leadTime: row.supplier?.avgLeadTime || row.product.leadTime || 7,
+          unitPrice: row.product.unitPrice || 0,
+          costPrice: row.product.costPrice || 0,
+          supplierId: row.supplier?.id,
+          supplierName: row.supplier?.name,
+        };
+
+        return convertToReorderItem(data);
+      })
+      .filter((item): item is ReorderItem => item !== null);
 
     // ABC 등급 매핑
     const abcGradesMap = new Map<string, "A" | "B" | "C">();
@@ -203,8 +231,20 @@ export async function calculateReorderQuantity(productId: string): Promise<{
       throw new Error("제품을 찾을 수 없습니다");
     }
 
-    // 일평균 판매량 조회
-    const avgDailySales = await getAverageDailySales(productId, 30);
+    // 일평균 판매량 조회 (최근 30일)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const salesResult = await db
+      .select({ total: sql<number>`coalesce(sum(${salesRecords.quantity}), 0)` })
+      .from(salesRecords)
+      .where(
+        and(
+          eq(salesRecords.organizationId, TEMP_ORG_ID),
+          eq(salesRecords.productId, productId),
+          gte(salesRecords.date, thirtyDaysAgo.toISOString().split("T")[0])
+        )
+      );
+    const avgDailySales = Math.round((Number(salesResult[0]?.total || 0) / 30) * 100) / 100;
 
     // 추천 수량 계산
     const data: ProductReorderData = {
@@ -410,7 +450,7 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
       return order;
     });
 
-    revalidatePath("/purchase-orders");
+    revalidatePath("/dashboard/orders");
 
     // 활동 로깅 (비동기 — 응답 지연 방지)
     if (user) {
@@ -510,7 +550,6 @@ export async function updatePurchaseOrderStatus(
       .set(updateData)
       .where(eq(purchaseOrders.id, orderId));
 
-    revalidatePath("/purchase-orders");
     revalidatePath("/dashboard/orders");
 
     // 활동 로깅
@@ -929,94 +968,66 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
       };
     }
 
-    // 2. 공급자별로 발주서 생성
+    // 2. 사전 데이터 로드 (루프 밖에서 1회만 조회)
+    const allSupplierIds = [...itemsBySupplier.keys()];
+    const allProductIds = validated.items.map((i) => i.productId);
+
+    const [allSuppliersData, allProductsData, todayOrderCount] = await Promise.all([
+      // 전체 공급자 한번에 조회
+      db.select().from(suppliers).where(
+        and(eq(suppliers.organizationId, TEMP_ORG_ID), sql`${suppliers.id} IN ${allSupplierIds}`)
+      ),
+      // 전체 제품 한번에 조회
+      db.select().from(products).where(
+        and(eq(products.organizationId, TEMP_ORG_ID), sql`${products.id} IN ${allProductIds}`)
+      ),
+      // 오늘 발주 수 1회만 조회
+      db.select({ count: sql<number>`count(*)` }).from(purchaseOrders).where(
+        and(eq(purchaseOrders.organizationId, TEMP_ORG_ID), sql`DATE(${purchaseOrders.createdAt}) = CURRENT_DATE`)
+      ),
+    ]);
+
+    const suppliersMap = new Map(allSuppliersData.map((s) => [s.id, s]));
+    const productsMap = new Map(allProductsData.map((p) => [p.id, p]));
+    const baseOrderCount = Number(todayOrderCount[0]?.count || 0);
+    const today = new Date();
+    const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
+
+    // 3. 공급자별로 발주서 생성 (DB 조회 없이 메모리에서 처리)
     for (const [supplierId, items] of itemsBySupplier.entries()) {
       try {
-        // 공급자 확인
-        const [supplier] = await db
-          .select()
-          .from(suppliers)
-          .where(and(eq(suppliers.id, supplierId), eq(suppliers.organizationId, TEMP_ORG_ID)))
-          .limit(1);
-
+        const supplier = suppliersMap.get(supplierId);
         if (!supplier) {
           items.forEach((item) => {
-            errors.push({
-              productId: item.productId,
-              error: `공급자를 찾을 수 없습니다 (ID: ${supplierId})`,
-            });
+            errors.push({ productId: item.productId, error: `공급자를 찾을 수 없습니다 (ID: ${supplierId})` });
           });
           continue;
         }
 
-        // 제품 정보 조회
-        const productIds = items.map((item) => item.productId);
-        const productsData = await db
-          .select()
-          .from(products)
-          .where(
-            and(sql`${products.id} IN ${productIds}`, eq(products.organizationId, TEMP_ORG_ID))
-          );
-
-        if (productsData.length !== items.length) {
-          items.forEach((item) => {
-            const found = productsData.find((p) => p.id === item.productId);
-            if (!found) {
-              errors.push({
-                productId: item.productId,
-                error: "제품을 찾을 수 없습니다",
-              });
-            }
-          });
-
-          // 찾은 제품만으로 진행
-          const validProductIds = productsData.map((p) => p.id);
-          const validItems = items.filter((item) => validProductIds.includes(item.productId));
-
-          if (validItems.length === 0) continue;
-
-          // 유효한 아이템으로 재설정
-          itemsBySupplier.set(supplierId, validItems);
-        }
-
-        // 제품 정보 매핑
-        const productsMap = new Map(productsData.map((p) => [p.id, p]));
+        // 제품 유효성 검증 (메모리에서)
+        const validItems = items.filter((item) => {
+          if (!productsMap.has(item.productId)) {
+            errors.push({ productId: item.productId, error: "제품을 찾을 수 없습니다" });
+            return false;
+          }
+          return true;
+        });
+        if (validItems.length === 0) continue;
 
         // 발주 항목 계산
         let totalAmount = 0;
-        const orderItems = items
-          .filter((item) => productsMap.has(item.productId))
-          .map((item) => {
-            const product = productsMap.get(item.productId)!;
-            const unitPrice = product.costPrice || 0;
-            const totalPrice = unitPrice * item.quantity;
-            totalAmount += totalPrice;
-
-            return {
-              productId: item.productId,
-              quantity: item.quantity,
-              unitPrice,
-              totalPrice,
-            };
-          });
+        const orderItems = validItems.map((item) => {
+          const product = productsMap.get(item.productId)!;
+          const unitPrice = product.costPrice || 0;
+          const totalPrice = unitPrice * item.quantity;
+          totalAmount += totalPrice;
+          return { productId: item.productId, quantity: item.quantity, unitPrice, totalPrice };
+        });
 
         if (orderItems.length === 0) continue;
 
-        // 발주번호 생성 (PO-YYYYMMDD-XXX)
-        const today = new Date();
-        const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
-        const todayOrders = await db
-          .select({ count: sql<number>`count(*)` })
-          .from(purchaseOrders)
-          .where(
-            and(
-              eq(purchaseOrders.organizationId, TEMP_ORG_ID),
-              sql`DATE(${purchaseOrders.createdAt}) = CURRENT_DATE`
-            )
-          );
-        const sequence = (Number(todayOrders[0]?.count || 0) + createdOrders.length + 1)
-          .toString()
-          .padStart(3, "0");
+        // 발주번호 생성 (사전 조회된 카운트 사용)
+        const sequence = (baseOrderCount + createdOrders.length + 1).toString().padStart(3, "0");
         const orderNumber = `PO-${dateStr}-${sequence}`;
 
         // 예상입고일 계산 (리드타임 기반)
@@ -1075,8 +1086,7 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
       }
     }
 
-    revalidatePath("/purchase-orders");
-    revalidatePath("/orders");
+    revalidatePath("/dashboard/orders");
 
     // 일괄 생성 전체에 대한 활동 로깅
     if (createdOrders.length > 0 && user) {
