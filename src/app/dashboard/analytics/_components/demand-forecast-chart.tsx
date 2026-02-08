@@ -95,8 +95,8 @@ export function DemandForecastChart() {
   const chart = useMemo(() => {
     if (chartData.length === 0) return null;
     const width = 800;
-    const height = 250;
-    const pad = { top: 20, right: 20, bottom: 36, left: 52 };
+    const height = 240;
+    const pad = { top: 16, right: 20, bottom: 36, left: 60 };
     const innerW = width - pad.left - pad.right;
     const innerH = height - pad.top - pad.bottom;
 
@@ -399,19 +399,17 @@ export function DemandForecastChart() {
                     {/* 범례 라벨 */}
                     <text
                       x={chart.xScale(Math.floor(chart.historyCount / 2))}
-                      y={chart.pad.top + 12}
+                      y={chart.pad.top + 10}
                       textAnchor="middle"
-                      className="fill-blue-600"
-                      fontSize="10"
+                      className="fill-blue-600 text-xs"
                     >
                       과거 실적
                     </text>
                     <text
                       x={chart.xScale(chart.historyCount + Math.floor((chartData.length - chart.historyCount) / 2))}
-                      y={chart.pad.top + 12}
+                      y={chart.pad.top + 10}
                       textAnchor="middle"
-                      className="fill-amber-600"
-                      fontSize="10"
+                      className="fill-amber-600 text-xs"
                     >
                       수요 예측
                     </text>
