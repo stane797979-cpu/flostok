@@ -42,6 +42,9 @@ export const purchaseOrders = pgTable("purchase_orders", {
   orderDate: date("order_date"), // 발주일
   expectedDate: date("expected_date"), // 예상입고일
   actualDate: date("actual_date"), // 실제입고일
+  requestedDate: date("requested_date"), // 요청일 (입고 희망일)
+  firstReceiptDate: date("first_receipt_date"), // 1차 입고일
+  secondReceiptDate: date("second_receipt_date"), // 2차 입고일
   // 담당자
   createdById: uuid("created_by_id").references(() => users.id, {
     onDelete: "set null",

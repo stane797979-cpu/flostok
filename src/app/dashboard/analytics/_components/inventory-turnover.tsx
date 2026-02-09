@@ -11,118 +11,18 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, Calendar, AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import {
+  TrendingUp,
+  TrendingDown,
+  Calendar,
+  AlertTriangle,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Zap,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
-
-// 재고회전율 데이터 타입 정의
-export interface TurnoverData {
-  id: string;
-  sku: string;
-  name: string;
-  annualRevenue: number; // 연간판매액
-  cogs: number; // 연간판매원가 (Cost of Goods Sold)
-  avgInventoryValue: number; // 평균재고금액
-  turnoverRate: number; // 재고회전율
-  daysOfInventory: number; // 재고일수 (DOI)
-  status: "high" | "normal" | "low" | "critical"; // 회전율 상태
-}
-
-interface InventoryTurnoverProps {
-  className?: string;
-}
-
-// Mock 데이터 생성 함수
-function generateMockTurnoverData(): TurnoverData[] {
-  const products = [
-    {
-      sku: "SKU-001",
-      name: "프리미엄 노트북",
-      annualRevenue: 50000000,
-      cogsRate: 0.7,
-      avgInv: 3500000,
-    },
-    {
-      sku: "SKU-002",
-      name: "무선 이어폰",
-      annualRevenue: 35000000,
-      cogsRate: 0.65,
-      avgInv: 1800000,
-    },
-    {
-      sku: "SKU-003",
-      name: "스마트워치",
-      annualRevenue: 28000000,
-      cogsRate: 0.68,
-      avgInv: 3200000,
-    },
-    {
-      sku: "SKU-004",
-      name: "블루투스 스피커",
-      annualRevenue: 25000000,
-      cogsRate: 0.72,
-      avgInv: 1400000,
-    },
-    { sku: "SKU-005", name: "태블릿 PC", annualRevenue: 22000000, cogsRate: 0.69, avgInv: 2500000 },
-    { sku: "SKU-006", name: "USB 충전기", annualRevenue: 8000000, cogsRate: 0.55, avgInv: 600000 },
-    {
-      sku: "SKU-007",
-      name: "노트북 거치대",
-      annualRevenue: 6500000,
-      cogsRate: 0.58,
-      avgInv: 850000,
-    },
-    {
-      sku: "SKU-008",
-      name: "마우스 패드",
-      annualRevenue: 5200000,
-      cogsRate: 0.52,
-      avgInv: 1100000,
-    },
-    { sku: "SKU-009", name: "HDMI 케이블", annualRevenue: 4800000, cogsRate: 0.5, avgInv: 350000 },
-    { sku: "SKU-010", name: "키보드 커버", annualRevenue: 4200000, cogsRate: 0.54, avgInv: 500000 },
-    {
-      sku: "SKU-011",
-      name: "화면 보호 필름",
-      annualRevenue: 3800000,
-      cogsRate: 0.48,
-      avgInv: 900000,
-    },
-    { sku: "SKU-012", name: "클리닝 키트", annualRevenue: 1200000, cogsRate: 0.45, avgInv: 450000 },
-    {
-      sku: "SKU-013",
-      name: "케이블 정리함",
-      annualRevenue: 950000,
-      cogsRate: 0.52,
-      avgInv: 850000,
-    },
-    { sku: "SKU-014", name: "스티커 팩", annualRevenue: 680000, cogsRate: 0.4, avgInv: 280000 },
-    { sku: "SKU-015", name: "먼지 플러그", annualRevenue: 520000, cogsRate: 0.42, avgInv: 90000 },
-  ];
-
-  return products.map((p, idx) => {
-    const cogs = p.annualRevenue * p.cogsRate;
-    const turnoverRate = cogs / p.avgInv;
-    const daysOfInventory = 365 / turnoverRate;
-
-    let status: TurnoverData["status"];
-    if (turnoverRate >= 12) status = "high";
-    else if (turnoverRate >= 6) status = "normal";
-    else if (turnoverRate >= 3) status = "low";
-    else status = "critical";
-
-    return {
-      id: (idx + 1).toString(),
-      sku: p.sku,
-      name: p.name,
-      annualRevenue: p.annualRevenue,
-      cogs,
-      avgInventoryValue: p.avgInv,
-      turnoverRate,
-      daysOfInventory,
-      status,
-    };
-  });
-}
+import type { TurnoverData, TurnoverSummary } from "@/server/actions/turnover";
 
 // 상태 Badge 컴포넌트
 function TurnoverStatusBadge({ status }: { status: TurnoverData["status"] }) {
@@ -154,32 +54,42 @@ function TurnoverStatusBadge({ status }: { status: TurnoverData["status"] }) {
   );
 }
 
-type SortKey = "sku" | "name" | "annualRevenue" | "avgInventoryValue" | "turnoverRate" | "daysOfInventory" | "status";
+type SortKey =
+  | "sku"
+  | "name"
+  | "annualRevenue"
+  | "avgInventoryValue"
+  | "turnoverRate"
+  | "daysOfInventory"
+  | "status";
 type SortOrder = "asc" | "desc";
 
-export function InventoryTurnover({ className }: InventoryTurnoverProps) {
-  const data = useMemo(() => generateMockTurnoverData(), []);
+interface InventoryTurnoverProps {
+  data?: TurnoverSummary | null;
+  className?: string;
+}
+
+export function InventoryTurnover({ data, className }: InventoryTurnoverProps) {
   const [sortKey, setSortKey] = useState<SortKey>("turnoverRate");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
 
-  // 요약 통계 계산
-  const summary = useMemo(() => {
-    const avgTurnoverRate = data.reduce((sum, item) => sum + item.turnoverRate, 0) / data.length;
-    const avgDOI = data.reduce((sum, item) => sum + item.daysOfInventory, 0) / data.length;
-    const lowTurnoverCount = data.filter(
-      (item) => item.status === "low" || item.status === "critical"
-    ).length;
+  const items = useMemo(() => data?.items || [], [data]);
 
-    return {
-      avgTurnoverRate: avgTurnoverRate.toFixed(1),
-      avgDOI: Math.round(avgDOI),
-      lowTurnoverCount,
-    };
+  // 요약 통계
+  const summary = useMemo(() => {
+    if (data) {
+      return {
+        avgTurnoverRate: data.avgTurnoverRate.toFixed(1),
+        avgDOI: data.avgDaysOfInventory,
+        lowTurnoverCount: data.lowTurnoverCount,
+      };
+    }
+    return { avgTurnoverRate: "0", avgDOI: 0, lowTurnoverCount: 0 };
   }, [data]);
 
   // 정렬 처리
   const sortedData = useMemo(() => {
-    const sorted = [...data].sort((a, b) => {
+    return [...items].sort((a, b) => {
       const aVal = a[sortKey];
       const bVal = b[sortKey];
 
@@ -193,8 +103,7 @@ export function InventoryTurnover({ className }: InventoryTurnoverProps) {
         ? Number(aVal) - Number(bVal)
         : Number(bVal) - Number(aVal);
     });
-    return sorted;
-  }, [data, sortKey, sortOrder]);
+  }, [items, sortKey, sortOrder]);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -215,7 +124,7 @@ export function InventoryTurnover({ className }: InventoryTurnoverProps) {
       { label: "120일 초과", min: 121, max: Infinity, count: 0 },
     ];
 
-    data.forEach((item) => {
+    items.forEach((item) => {
       const range = ranges.find(
         (r) => item.daysOfInventory >= r.min && item.daysOfInventory <= r.max
       );
@@ -223,8 +132,25 @@ export function InventoryTurnover({ className }: InventoryTurnoverProps) {
     });
 
     const maxCount = Math.max(...ranges.map((r) => r.count));
-    return ranges.map((r) => ({ ...r, percentage: maxCount > 0 ? (r.count / maxCount) * 100 : 0 }));
-  }, [data]);
+    return ranges.map((r) => ({
+      ...r,
+      percentage: maxCount > 0 ? (r.count / maxCount) * 100 : 0,
+    }));
+  }, [items]);
+
+  if (!data || items.length === 0) {
+    return (
+      <Card className="border-dashed">
+        <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+          <TrendingUp className="h-12 w-12 text-muted-foreground/50 mb-4" />
+          <h3 className="text-lg font-semibold text-muted-foreground">회전율 데이터 없음</h3>
+          <p className="mt-2 max-w-md text-sm text-muted-foreground/70">
+            제품을 등록하고 판매 데이터를 입력하면 재고회전율이 자동 계산됩니다.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className={cn("space-y-6", className)}>
@@ -264,6 +190,67 @@ export function InventoryTurnover({ className }: InventoryTurnoverProps) {
         </Card>
       </div>
 
+      {/* TOP5 빠름/느림 */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <Zap className="h-4 w-4 text-green-500" />
+              <CardTitle className="text-sm font-medium">TOP5 고회전 (빠름)</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="space-y-2">
+              {data.top5Fastest.map((item, idx) => (
+                <div key={item.id} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground w-4">{idx + 1}</span>
+                    <span className="font-medium truncate max-w-[140px]">{item.name}</span>
+                    <span className="text-muted-foreground text-xs">{item.sku}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-green-600">{item.turnoverRate}회</span>
+                    <span className="text-muted-foreground text-xs">{item.daysOfInventory}일</span>
+                  </div>
+                </div>
+              ))}
+              {data.top5Fastest.length === 0 && (
+                <p className="text-sm text-muted-foreground">데이터 없음</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <TrendingDown className="h-4 w-4 text-red-500" />
+              <CardTitle className="text-sm font-medium">TOP5 저회전 (느림)</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="space-y-2">
+              {data.top5Slowest.map((item, idx) => (
+                <div key={item.id} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground w-4">{idx + 1}</span>
+                    <span className="font-medium truncate max-w-[140px]">{item.name}</span>
+                    <span className="text-muted-foreground text-xs">{item.sku}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-red-600">{item.turnoverRate}회</span>
+                    <span className="text-muted-foreground text-xs">{item.daysOfInventory}일</span>
+                  </div>
+                </div>
+              ))}
+              {data.top5Slowest.length === 0 && (
+                <p className="text-sm text-muted-foreground">데이터 없음</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* 재고일수 분포 차트 */}
       <Card>
         <CardHeader>
@@ -279,7 +266,7 @@ export function InventoryTurnover({ className }: InventoryTurnoverProps) {
                   <div className="bg-muted h-8 overflow-hidden rounded-md">
                     <div
                       className="flex h-full items-center justify-end bg-blue-500 pr-2 transition-all duration-300"
-                      style={{ width: `${range.percentage}%` }}
+                      style={{ width: `${Math.max(range.percentage, range.count > 0 ? 8 : 0)}%` }}
                     >
                       {range.count > 0 && (
                         <span className="text-xs font-semibold text-white">{range.count}</span>
@@ -297,52 +284,131 @@ export function InventoryTurnover({ className }: InventoryTurnoverProps) {
       <Card>
         <CardHeader>
           <CardTitle>재고회전율 상세 현황</CardTitle>
-          <CardDescription>제품별 재고회전율 및 재고일수 분석</CardDescription>
+          <CardDescription>
+            제품별 재고회전율 및 재고일수 분석 ({items.length}개 제품)
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[100px]">
-                  <button onClick={() => handleSort("sku")} className="flex items-center gap-1 hover:text-slate-900">
+                  <button
+                    onClick={() => handleSort("sku")}
+                    className="flex items-center gap-1 hover:text-slate-900"
+                  >
                     SKU
-                    {sortKey === "sku" ? (sortOrder === "desc" ? <ArrowDown className="h-3 w-3" /> : <ArrowUp className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 text-slate-400" />}
+                    {sortKey === "sku" ? (
+                      sortOrder === "desc" ? (
+                        <ArrowDown className="h-3 w-3" />
+                      ) : (
+                        <ArrowUp className="h-3 w-3" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="h-3 w-3 text-slate-400" />
+                    )}
                   </button>
                 </TableHead>
                 <TableHead>
-                  <button onClick={() => handleSort("name")} className="flex items-center gap-1 hover:text-slate-900">
+                  <button
+                    onClick={() => handleSort("name")}
+                    className="flex items-center gap-1 hover:text-slate-900"
+                  >
                     제품명
-                    {sortKey === "name" ? (sortOrder === "desc" ? <ArrowDown className="h-3 w-3" /> : <ArrowUp className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 text-slate-400" />}
+                    {sortKey === "name" ? (
+                      sortOrder === "desc" ? (
+                        <ArrowDown className="h-3 w-3" />
+                      ) : (
+                        <ArrowUp className="h-3 w-3" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="h-3 w-3 text-slate-400" />
+                    )}
                   </button>
                 </TableHead>
                 <TableHead className="text-right">
-                  <button onClick={() => handleSort("annualRevenue")} className="ml-auto flex items-center gap-1 hover:text-slate-900">
+                  <button
+                    onClick={() => handleSort("annualRevenue")}
+                    className="ml-auto flex items-center gap-1 hover:text-slate-900"
+                  >
                     연간판매액
-                    {sortKey === "annualRevenue" ? (sortOrder === "desc" ? <ArrowDown className="h-3 w-3" /> : <ArrowUp className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 text-slate-400" />}
+                    {sortKey === "annualRevenue" ? (
+                      sortOrder === "desc" ? (
+                        <ArrowDown className="h-3 w-3" />
+                      ) : (
+                        <ArrowUp className="h-3 w-3" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="h-3 w-3 text-slate-400" />
+                    )}
                   </button>
                 </TableHead>
                 <TableHead className="text-right">
-                  <button onClick={() => handleSort("avgInventoryValue")} className="ml-auto flex items-center gap-1 hover:text-slate-900">
+                  <button
+                    onClick={() => handleSort("avgInventoryValue")}
+                    className="ml-auto flex items-center gap-1 hover:text-slate-900"
+                  >
                     평균재고금액
-                    {sortKey === "avgInventoryValue" ? (sortOrder === "desc" ? <ArrowDown className="h-3 w-3" /> : <ArrowUp className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 text-slate-400" />}
+                    {sortKey === "avgInventoryValue" ? (
+                      sortOrder === "desc" ? (
+                        <ArrowDown className="h-3 w-3" />
+                      ) : (
+                        <ArrowUp className="h-3 w-3" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="h-3 w-3 text-slate-400" />
+                    )}
                   </button>
                 </TableHead>
                 <TableHead className="text-right">
-                  <button onClick={() => handleSort("turnoverRate")} className="ml-auto flex items-center gap-1 hover:text-slate-900">
+                  <button
+                    onClick={() => handleSort("turnoverRate")}
+                    className="ml-auto flex items-center gap-1 hover:text-slate-900"
+                  >
                     회전율
-                    {sortKey === "turnoverRate" ? (sortOrder === "desc" ? <ArrowDown className="h-3 w-3" /> : <ArrowUp className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 text-slate-400" />}
+                    {sortKey === "turnoverRate" ? (
+                      sortOrder === "desc" ? (
+                        <ArrowDown className="h-3 w-3" />
+                      ) : (
+                        <ArrowUp className="h-3 w-3" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="h-3 w-3 text-slate-400" />
+                    )}
                   </button>
                 </TableHead>
                 <TableHead className="text-right">
-                  <button onClick={() => handleSort("daysOfInventory")} className="ml-auto flex items-center gap-1 hover:text-slate-900">
+                  <button
+                    onClick={() => handleSort("daysOfInventory")}
+                    className="ml-auto flex items-center gap-1 hover:text-slate-900"
+                  >
                     재고일수
-                    {sortKey === "daysOfInventory" ? (sortOrder === "desc" ? <ArrowDown className="h-3 w-3" /> : <ArrowUp className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 text-slate-400" />}
+                    {sortKey === "daysOfInventory" ? (
+                      sortOrder === "desc" ? (
+                        <ArrowDown className="h-3 w-3" />
+                      ) : (
+                        <ArrowUp className="h-3 w-3" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="h-3 w-3 text-slate-400" />
+                    )}
                   </button>
                 </TableHead>
                 <TableHead>
-                  <button onClick={() => handleSort("status")} className="flex items-center gap-1 hover:text-slate-900">
+                  <button
+                    onClick={() => handleSort("status")}
+                    className="flex items-center gap-1 hover:text-slate-900"
+                  >
                     상태
-                    {sortKey === "status" ? (sortOrder === "desc" ? <ArrowDown className="h-3 w-3" /> : <ArrowUp className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 text-slate-400" />}
+                    {sortKey === "status" ? (
+                      sortOrder === "desc" ? (
+                        <ArrowDown className="h-3 w-3" />
+                      ) : (
+                        <ArrowUp className="h-3 w-3" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="h-3 w-3 text-slate-400" />
+                    )}
                   </button>
                 </TableHead>
               </TableRow>
@@ -359,9 +425,11 @@ export function InventoryTurnover({ className }: InventoryTurnoverProps) {
                     {item.avgInventoryValue.toLocaleString("ko-KR")}원
                   </TableCell>
                   <TableCell className="text-right font-semibold">
-                    {item.turnoverRate.toFixed(1)}회
+                    {item.turnoverRate >= 999 ? "∞" : `${item.turnoverRate.toFixed(1)}회`}
                   </TableCell>
-                  <TableCell className="text-right">{Math.round(item.daysOfInventory)}일</TableCell>
+                  <TableCell className="text-right">
+                    {item.daysOfInventory === 0 ? "0일" : `${item.daysOfInventory}일`}
+                  </TableCell>
                   <TableCell>
                     <TurnoverStatusBadge status={item.status} />
                   </TableCell>

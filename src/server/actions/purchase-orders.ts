@@ -13,7 +13,7 @@ import {
 import { eq, and, desc, asc, sql, gte, lte, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { salesRecords } from "@/server/db/schema";
+import { salesRecords, organizations } from "@/server/db/schema";
 import {
   convertToReorderItem,
   sortReorderItems,
@@ -25,6 +25,7 @@ import {
 } from "@/server/services/scm/reorder-recommendation";
 import { getCurrentUser } from "./auth-helpers";
 import { logActivity } from "@/server/services/activity-log";
+import type { OrganizationSettings } from "@/types/organization-settings";
 
 // TODO: 인증 구현 후 실제 organizationId로 교체
 const TEMP_ORG_ID = "00000000-0000-0000-0000-000000000001";
@@ -60,6 +61,15 @@ export async function getReorderItems(options?: {
     const validatedOptions = reorderOptionsSchema.parse(options || {});
     const { urgencyLevel, abcGrade, limit = 100 } = validatedOptions;
 
+    // 조직 설정에서 보정계수 로드
+    const [orgData] = await db
+      .select({ settings: organizations.settings })
+      .from(organizations)
+      .where(eq(organizations.id, orgId))
+      .limit(1);
+    const orgSettings = orgData?.settings as OrganizationSettings | null;
+    const supplyCoefficients = orgSettings?.orderPolicy?.supplyCoefficients;
+
     // 발주 필요 제품 조회 (현재고 <= 발주점)
     const reorderCandidates = await db
       .select({
@@ -74,6 +84,7 @@ export async function getReorderItems(options?: {
           unitPrice: products.unitPrice,
           costPrice: products.costPrice,
           abcGrade: products.abcGrade,
+          xyzGrade: products.xyzGrade,
           primarySupplierId: products.primarySupplierId,
         },
         inventory: {
@@ -143,12 +154,14 @@ export async function getReorderItems(options?: {
           reorderPoint: row.product.reorderPoint || 0,
           avgDailySales,
           abcGrade: row.product.abcGrade || undefined,
+          xyzGrade: row.product.xyzGrade || undefined,
           moq: row.product.moq || 1,
           leadTime: row.supplier?.avgLeadTime || row.product.leadTime || 7,
           unitPrice: row.product.unitPrice || 0,
           costPrice: row.product.costPrice || 0,
           supplierId: row.supplier?.id,
           supplierName: row.supplier?.name,
+          supplyCoefficients,
         };
 
         return convertToReorderItem(data);
@@ -246,6 +259,14 @@ export async function calculateReorderQuantity(productId: string): Promise<{
       );
     const avgDailySales = Math.round((Number(salesResult[0]?.total || 0) / 30) * 100) / 100;
 
+    // 조직 설정에서 보정계수 로드
+    const [singleOrgData] = await db
+      .select({ settings: organizations.settings })
+      .from(organizations)
+      .where(eq(organizations.id, TEMP_ORG_ID))
+      .limit(1);
+    const singleOrgSettings = singleOrgData?.settings as OrganizationSettings | null;
+
     // 추천 수량 계산
     const data: ProductReorderData = {
       productId: productData.product.id,
@@ -256,12 +277,14 @@ export async function calculateReorderQuantity(productId: string): Promise<{
       reorderPoint: productData.product.reorderPoint || 0,
       avgDailySales,
       abcGrade: productData.product.abcGrade || undefined,
+      xyzGrade: productData.product.xyzGrade || undefined,
       moq: productData.product.moq || 1,
       leadTime: productData.supplier?.avgLeadTime || productData.product.leadTime || 7,
       unitPrice: productData.product.unitPrice || 0,
       costPrice: productData.product.costPrice || 0,
       supplierId: productData.supplier?.id,
       supplierName: productData.supplier?.name,
+      supplyCoefficients: singleOrgSettings?.orderPolicy?.supplyCoefficients,
     };
 
     const recommendedQty = calculateRecommendedQuantity(data);

@@ -5,6 +5,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Download, Loader2, PackagePlus, XCircle } from "lucide-react";
+import { DeliveryComplianceTab } from "./delivery-compliance-tab";
+import { ImportShipmentTab } from "./import-shipment-tab";
+import type { DeliveryComplianceResult } from "@/server/services/scm/delivery-compliance";
 import { ReorderSummary } from "./reorder-summary";
 import { ReorderItemsTable, type ReorderItem } from "./reorder-items-table";
 import { PurchaseOrdersTable, type PurchaseOrderListItem } from "./purchase-orders-table";
@@ -128,11 +131,12 @@ function formatMonth(date: Date): string {
 }
 
 interface OrdersClientProps {
-  initialTab?: "reorder" | "auto-reorder" | "orders" | "inbound";
+  initialTab?: "reorder" | "auto-reorder" | "orders" | "inbound" | "delivery";
   serverReorderItems?: ServerReorderItem[];
+  deliveryComplianceData?: DeliveryComplianceResult | null;
 }
 
-export function OrdersClient({ initialTab = "reorder", serverReorderItems = [] }: OrdersClientProps) {
+export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], deliveryComplianceData = null }: OrdersClientProps) {
   // 발주 필요 품목 (발주 후 재조회 가능하도록 state로 관리)
   const [reorderItems, setReorderItems] = useState<ReorderItem[]>(
     () => serverReorderItems.map(mapServerToClientReorderItem)
@@ -583,6 +587,8 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [] }
           <TabsTrigger value="inbound" onClick={() => loadInboundRecords(inboundMonth)}>
             입고 현황
           </TabsTrigger>
+          <TabsTrigger value="delivery">납기분석</TabsTrigger>
+          <TabsTrigger value="import-shipment">입항스케줄</TabsTrigger>
         </TabsList>
 
         <TabsContent value="reorder" className="space-y-4">
@@ -729,6 +735,14 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [] }
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="delivery" className="space-y-4">
+          <DeliveryComplianceTab data={deliveryComplianceData} />
+        </TabsContent>
+
+        <TabsContent value="import-shipment" className="space-y-4">
+          <ImportShipmentTab />
         </TabsContent>
       </Tabs>
 

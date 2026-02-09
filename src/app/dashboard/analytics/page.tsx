@@ -4,6 +4,9 @@ import { ABCXYZSummary } from "./_components/abc-xyz-summary";
 import { Card, CardContent } from "@/components/ui/card";
 import { Construction } from "lucide-react";
 import { getABCXYZAnalysis } from "@/server/actions/analytics";
+import { getInventoryTurnoverData } from "@/server/actions/turnover";
+import { getGradeChangeAnalysis } from "@/server/actions/grade-change";
+import { getFulfillmentRateData } from "@/server/actions/fulfillment-rate";
 import type { ProductAnalysis } from "./_components/abc-xyz-table";
 
 const ABCXYZClient = dynamic(
@@ -57,6 +60,28 @@ const DemandForecastChart = dynamic(
   }
 );
 
+const GradeChangeTable = dynamic(
+  () =>
+    import("./_components/grade-change-table").then((mod) => ({ default: mod.GradeChangeTable })),
+  {
+    loading: () => (
+      <div className="h-96 flex items-center justify-center text-slate-400">로딩 중...</div>
+    ),
+  }
+);
+
+const FulfillmentRateTable = dynamic(
+  () =>
+    import("./_components/fulfillment-rate-table").then((mod) => ({
+      default: mod.FulfillmentRateTable,
+    })),
+  {
+    loading: () => (
+      <div className="h-96 flex items-center justify-center text-slate-400">로딩 중...</div>
+    ),
+  }
+);
+
 export default async function AnalyticsPage() {
   let products: ProductAnalysis[] = [];
   let matrixData: { grade: string; count: number }[] = [];
@@ -70,14 +95,27 @@ export default async function AnalyticsPage() {
     period: "최근 6개월",
   };
 
-  try {
-    const data = await getABCXYZAnalysis();
-    products = data.products;
-    matrixData = data.matrixData;
-    summary = data.summary;
-  } catch {
-    // 인증 실패 등 → 빈 데이터
+  // 병렬 데이터 로드
+  const [abcResult, turnoverResult, gradeChangeResult, fulfillmentResult] =
+    await Promise.allSettled([
+      getABCXYZAnalysis(),
+      getInventoryTurnoverData(),
+      getGradeChangeAnalysis(),
+      getFulfillmentRateData(),
+    ]);
+
+  if (abcResult.status === "fulfilled") {
+    products = abcResult.value.products;
+    matrixData = abcResult.value.matrixData;
+    summary = abcResult.value.summary;
   }
+
+  const turnoverData =
+    turnoverResult.status === "fulfilled" ? turnoverResult.value : null;
+  const gradeChangeData =
+    gradeChangeResult.status === "fulfilled" ? gradeChangeResult.value : null;
+  const fulfillmentData =
+    fulfillmentResult.status === "fulfilled" ? fulfillmentResult.value : null;
 
   const hasData = products.length > 0;
 
@@ -93,6 +131,8 @@ export default async function AnalyticsPage() {
       <Tabs defaultValue="abc-xyz" className="space-y-6">
         <TabsList>
           <TabsTrigger value="abc-xyz">ABC-XYZ 분석</TabsTrigger>
+          <TabsTrigger value="grade-change">등급변동</TabsTrigger>
+          <TabsTrigger value="fulfillment">실출고율</TabsTrigger>
           <TabsTrigger value="demand-forecast">수요예측</TabsTrigger>
           <TabsTrigger value="turnover">재고회전율</TabsTrigger>
           <TabsTrigger value="sales-trend">판매 추이</TabsTrigger>
@@ -119,12 +159,20 @@ export default async function AnalyticsPage() {
           )}
         </TabsContent>
 
+        <TabsContent value="grade-change">
+          <GradeChangeTable data={gradeChangeData} />
+        </TabsContent>
+
+        <TabsContent value="fulfillment">
+          <FulfillmentRateTable data={fulfillmentData} />
+        </TabsContent>
+
         <TabsContent value="demand-forecast">
           <DemandForecastChart />
         </TabsContent>
 
         <TabsContent value="turnover">
-          <InventoryTurnover />
+          <InventoryTurnover data={turnoverData} />
         </TabsContent>
 
         <TabsContent value="sales-trend">

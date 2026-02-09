@@ -12,8 +12,8 @@ import {
   updateOrderPolicySettings,
   resetOrderPolicySettings,
 } from "@/server/actions/organization-settings";
-import type { OrderPolicySettings } from "@/types/organization-settings";
-import { DEFAULT_ORDER_POLICY } from "@/types/organization-settings";
+import type { OrderPolicySettings, SupplyAdjustmentCoefficients } from "@/types/organization-settings";
+import { DEFAULT_ORDER_POLICY, DEFAULT_SUPPLY_COEFFICIENTS } from "@/types/organization-settings";
 import { useToast } from "@/hooks/use-toast";
 
 interface OrderPolicySettingsProps {
@@ -326,6 +326,99 @@ export function OrderPolicySettingsComponent({ organizationId }: OrderPolicySett
               제품별 리드타임 미설정 시 사용되는 기본값입니다.
             </p>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* ABC-XYZ 공급물량 보정계수 */}
+      <Card>
+        <CardHeader>
+          <CardTitle>공급물량 보정계수</CardTitle>
+          <CardDescription>
+            ABC-XYZ 등급 조합별 적정재고 보정 비율을 설정합니다
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Alert>
+            <Info className="h-4 w-4" />
+            <AlertDescription>
+              1.0 = 보정 없음, 0.65 = 35% 축소. ABC(매출기여도) × XYZ(수요변동성) 조합에 따라
+              발주 추천 수량이 보정됩니다. 값 범위: 0.5 ~ 1.5
+            </AlertDescription>
+          </Alert>
+
+          {/* 3×3 매트릭스 테이블 */}
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr>
+                  <th className="border border-slate-200 bg-slate-50 px-3 py-2 text-left font-medium text-slate-600">
+                    ABC \ XYZ
+                  </th>
+                  <th className="border border-slate-200 bg-green-50 px-3 py-2 text-center font-medium text-green-700">
+                    X (안정)
+                  </th>
+                  <th className="border border-slate-200 bg-yellow-50 px-3 py-2 text-center font-medium text-yellow-700">
+                    Y (보통)
+                  </th>
+                  <th className="border border-slate-200 bg-red-50 px-3 py-2 text-center font-medium text-red-700">
+                    Z (불안정)
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {(["A", "B", "C"] as const).map((abc) => (
+                  <tr key={abc}>
+                    <td className="border border-slate-200 bg-slate-50 px-3 py-2 font-medium text-slate-600">
+                      {abc} ({abc === "A" ? "매출 高" : abc === "B" ? "매출 中" : "매출 低"})
+                    </td>
+                    {(["X", "Y", "Z"] as const).map((xyz) => {
+                      const key = `${abc}${xyz}` as keyof SupplyAdjustmentCoefficients;
+                      const coefficients = settings.supplyCoefficients || DEFAULT_SUPPLY_COEFFICIENTS;
+                      return (
+                        <td key={xyz} className="border border-slate-200 px-2 py-1">
+                          <Input
+                            type="number"
+                            min="0.5"
+                            max="1.5"
+                            step="0.05"
+                            value={coefficients[key]}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value);
+                              if (!isNaN(val) && val >= 0.5 && val <= 1.5) {
+                                setSettings((prev) => ({
+                                  ...prev,
+                                  supplyCoefficients: {
+                                    ...(prev.supplyCoefficients || DEFAULT_SUPPLY_COEFFICIENTS),
+                                    [key]: val,
+                                  },
+                                }));
+                              }
+                            }}
+                            className="h-8 text-center text-sm"
+                          />
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() =>
+              setSettings((prev) => ({
+                ...prev,
+                supplyCoefficients: { ...DEFAULT_SUPPLY_COEFFICIENTS },
+              }))
+            }
+            className="text-xs text-slate-500"
+          >
+            <RotateCcw className="mr-1 h-3 w-3" />
+            보정계수 기본값 복원
+          </Button>
         </CardContent>
       </Card>
 

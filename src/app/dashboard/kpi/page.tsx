@@ -1,15 +1,18 @@
-import { KPIGrid } from "@/components/features/dashboard/kpi-grid";
-import { KPIImprovementSuggestions } from "@/components/features/dashboard/kpi-improvement-suggestions";
 import { getKPIDashboardData } from "@/server/actions/kpi";
+import { getKpiSnapshots } from "@/server/actions/kpi-snapshots";
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertCircle } from "lucide-react";
+import { KpiTabsClient } from "./_components/kpi-tabs-client";
 
 export default async function KPIPage() {
   let data;
+  let snapshots;
   try {
-    data = await getKPIDashboardData();
+    [data, snapshots] = await Promise.all([
+      getKPIDashboardData(),
+      getKpiSnapshots(),
+    ]);
   } catch {
-    // 인증 실패 등 에러 시 빈 페이지 표시
     return (
       <div className="space-y-6">
         <div>
@@ -38,8 +41,12 @@ export default async function KPIPage() {
         <p className="mt-2 text-slate-500">핵심 성과 지표 현황 및 개선 제안</p>
       </div>
 
-      <KPIGrid metrics={metrics} trends={trends} targets={targets} />
-      <KPIImprovementSuggestions metrics={metrics} targets={targets} />
+      <KpiTabsClient
+        metrics={metrics}
+        trends={trends}
+        targets={targets}
+        snapshots={snapshots}
+      />
     </div>
   );
 }

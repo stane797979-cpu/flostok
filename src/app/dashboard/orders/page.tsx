@@ -1,15 +1,22 @@
 import { getReorderItems } from "@/server/actions/purchase-orders";
+import { getDeliveryComplianceData } from "@/server/actions/delivery-compliance";
 import { OrdersClient } from "./_components/orders-client";
 
 export default async function OrdersPage() {
-  let serverReorderItems: Awaited<ReturnType<typeof getReorderItems>>["items"] = [];
-  try {
-    const result = await getReorderItems();
-    serverReorderItems = result.items;
-  } catch (error) {
-    console.error("발주 필요 품목 조회 오류:", error);
-    serverReorderItems = [];
-  }
+  const [reorderResult, complianceResult] = await Promise.allSettled([
+    getReorderItems(),
+    getDeliveryComplianceData(),
+  ]);
 
-  return <OrdersClient serverReorderItems={serverReorderItems} />;
+  const serverReorderItems =
+    reorderResult.status === "fulfilled" ? reorderResult.value.items : [];
+  const deliveryComplianceData =
+    complianceResult.status === "fulfilled" ? complianceResult.value : null;
+
+  return (
+    <OrdersClient
+      serverReorderItems={serverReorderItems}
+      deliveryComplianceData={deliveryComplianceData}
+    />
+  );
 }

@@ -14,6 +14,8 @@ import {
   Settings,
   HelpCircle,
   FileSearch,
+  AlertOctagon,
+  CalendarRange,
   type LucideIcon,
 } from "lucide-react";
 
@@ -87,6 +89,18 @@ export const MAIN_NAV: NavItem[] = [
     href: "/dashboard/kpi",
     icon: Gauge,
     description: "핵심 성과 지표 현황",
+  },
+  {
+    title: "PSI 계획",
+    href: "/dashboard/psi",
+    icon: CalendarRange,
+    description: "수요·공급·재고 통합 계획표",
+  },
+  {
+    title: "결품관리",
+    href: "/dashboard/stockout",
+    icon: AlertOctagon,
+    description: "결품 감지, 원인 분석 및 조치 관리",
   },
   {
     title: "알림",

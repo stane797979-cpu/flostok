@@ -7,7 +7,7 @@
  */
 
 import { db } from "@/server/db";
-import { products, salesRecords } from "@/server/db/schema";
+import { products, salesRecords, gradeHistory } from "@/server/db/schema";
 import { eq, and, sql, min } from "drizzle-orm";
 import {
   performABCAnalysis,
@@ -277,6 +277,23 @@ export async function refreshGradesForOrganization(
               updatedAt: now,
             })
             .where(eq(products.id, productId));
+
+          // 등급 이력 저장 (grade_history)
+          const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+          const combinedGrade = abcGrade && xyzGrade ? `${abcGrade}${xyzGrade}` : null;
+          const salesValue = salesByProduct.get(productId)?.totalValue || 0;
+          const cv = xyzResult?.coefficientOfVariation ?? null;
+
+          await db.insert(gradeHistory).values({
+            organizationId,
+            productId,
+            period,
+            abcGrade,
+            xyzGrade,
+            combinedGrade,
+            salesValue: salesValue.toString(),
+            coefficientOfVariation: cv !== null ? cv.toFixed(2) : null,
+          });
 
           result.updatedCount++;
         } catch (error) {

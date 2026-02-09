@@ -6,6 +6,8 @@
 import { classifyInventoryStatus } from "./inventory-status";
 import { calculateEOQ, calculateHoldingCost } from "./eoq";
 import { calculateOrderQuantity } from "./reorder-point";
+import type { SupplyAdjustmentCoefficients } from "@/types/organization-settings";
+import { getSupplyCoefficient } from "@/types/organization-settings";
 
 export interface ReorderItem {
   productId: string;
@@ -35,12 +37,15 @@ export interface ProductReorderData {
   reorderPoint: number;
   avgDailySales: number;
   abcGrade?: "A" | "B" | "C";
+  xyzGrade?: "X" | "Y" | "Z";
   moq: number;
   leadTime: number;
   unitPrice: number;
   costPrice: number;
   supplierId?: string;
   supplierName?: string;
+  /** 조직 설정의 공급물량 보정계수 */
+  supplyCoefficients?: SupplyAdjustmentCoefficients;
 }
 
 /**
@@ -119,12 +124,25 @@ export function convertToReorderItem(data: ProductReorderData): ReorderItem | nu
 
 /**
  * 추천 발주 수량 계산
+ *
+ * 보정계수 적용 로직:
+ * 적정재고 = (일평균출고 × 목표재고일수 × 보정계수) + 안전재고
+ * 보정계수는 ABC-XYZ 등급 조합에 따라 0.65~1.0 범위
+ * (AX=1.0 → 핵심+안정 품목은 그대로, CZ=0.65 → 저가+불안정 품목은 35% 축소)
  */
 export function calculateRecommendedQuantity(data: ProductReorderData): number {
   const { currentStock, safetyStock, avgDailySales, moq, costPrice } = data;
 
-  // 연간 수요 추정
-  const annualDemand = avgDailySales * 365;
+  // ABC-XYZ 보정계수 조회
+  const coefficient = getSupplyCoefficient(
+    data.supplyCoefficients,
+    data.abcGrade,
+    data.xyzGrade
+  );
+
+  // 연간 수요 추정 (보정계수 적용)
+  const adjustedDailySales = avgDailySales * coefficient;
+  const annualDemand = adjustedDailySales * 365;
 
   // EOQ 계산 (연간 수요가 충분한 경우)
   let eoqQty = 0;
@@ -144,12 +162,12 @@ export function calculateRecommendedQuantity(data: ProductReorderData): number {
     eoqQty = eoqResult.eoq;
   }
 
-  // 발주량 계산 (EOQ 또는 목표 재고일수 기반)
+  // 발주량 계산 (EOQ 또는 목표 재고일수 기반, 보정된 일평균 적용)
   const orderQtyResult = calculateOrderQuantity({
     currentStock,
     reorderPoint: data.reorderPoint,
     safetyStock,
-    averageDailyDemand: avgDailySales,
+    averageDailyDemand: adjustedDailySales,
     targetDaysOfInventory: 30, // 목표 30일 재고
     eoq: eoqQty > 0 ? eoqQty : undefined,
     minOrderQuantity: moq,

@@ -8,27 +8,33 @@ import { InventoryStatusChart } from "@/components/features/dashboard/inventory-
 import { RecentActivityFeed } from "@/components/features/dashboard/recent-activity-feed";
 import { QuickActions } from "@/components/features/dashboard/quick-actions";
 import { KPICard } from "@/components/features/dashboard/kpi-card";
+import { TurnoverTop5Card } from "@/components/features/dashboard/turnover-top5-card";
+import { ABCXYZMiniMatrix } from "@/components/features/dashboard/abc-xyz-mini-matrix";
 import { getInventoryStats, getInventoryList } from "@/server/actions/inventory";
 import { getInventoryStatus } from "@/lib/constants/inventory-status";
 import { getKPISummary } from "@/server/actions/kpi";
+import { getInventoryTurnoverData } from "@/server/actions/turnover";
+import { getABCXYZAnalysis } from "@/server/actions/analytics";
 
 /** 안전하게 대시보드 데이터를 로드 (인증 실패 시 빈 데이터) */
 async function loadDashboardData() {
   try {
-    // 병렬 로드: 통계 + 위험 품목 5개 + KPI (limit:200 제거)
-    const [stats, criticalItems, kpiSummary] = await Promise.all([
+    // 병렬 로드: 통계 + 위험 품목 10개 + KPI + 회전율 + ABC-XYZ
+    const [stats, criticalItems, kpiSummary, turnoverResult, abcResult] = await Promise.all([
       getInventoryStats(),
-      getInventoryList({ status: "out_of_stock", limit: 5 }).then(async (r) => {
-        // 품절 5개 미만이면 위험/부족 상태도 추가
-        if (r.items.length >= 5) return r.items;
-        const more = await getInventoryList({ status: "critical", limit: 5 - r.items.length });
+      getInventoryList({ status: "out_of_stock", limit: 10 }).then(async (r) => {
+        // 품절 10개 미만이면 위험/부족 상태도 추가
+        if (r.items.length >= 10) return r.items;
+        const more = await getInventoryList({ status: "critical", limit: 10 - r.items.length });
         return [...r.items, ...more.items];
       }),
       getKPISummary(),
+      getInventoryTurnoverData().catch(() => null),
+      getABCXYZAnalysis().catch(() => ({ products: [], matrixData: [], summary: { aCount: 0, aPercentage: 0, bCount: 0, bPercentage: 0, cCount: 0, cPercentage: 0, period: "" } })),
     ]);
 
-    // 발주 필요 품목 매핑
-    const needsOrderProducts = criticalItems.slice(0, 5).map((item) => ({
+    // 발주 필요 품목 매핑 (TOP10)
+    const needsOrderProducts = criticalItems.slice(0, 10).map((item) => ({
       id: item.productId,
       sku: item.product.sku,
       name: item.product.name,
@@ -53,6 +59,24 @@ async function loadDashboardData() {
     const remaining = stats.totalProducts - accounted;
     if (remaining > 0) statusDistribution["caution"] = remaining;
 
+    // 회전율 TOP5 데이터
+    const turnoverTop5 = turnoverResult
+      ? {
+          fastest: turnoverResult.top5Fastest.map((t) => ({
+            sku: t.sku,
+            productName: t.name,
+            turnoverRate: t.turnoverRate,
+            daysOfInventory: t.daysOfInventory,
+          })),
+          slowest: turnoverResult.top5Slowest.map((t) => ({
+            sku: t.sku,
+            productName: t.name,
+            turnoverRate: t.turnoverRate,
+            daysOfInventory: t.daysOfInventory,
+          })),
+        }
+      : { fastest: [], slowest: [] };
+
     return {
       stats: {
         totalSku: stats.totalProducts,
@@ -65,6 +89,8 @@ async function loadDashboardData() {
       statusDistribution,
       totalSku: stats.totalProducts,
       kpi: kpiSummary,
+      turnoverTop5,
+      matrixData: abcResult.matrixData,
     };
   } catch (error) {
     console.error("대시보드 데이터 로드 실패:", error);
@@ -74,12 +100,14 @@ async function loadDashboardData() {
       statusDistribution: {},
       totalSku: 0,
       kpi: { inventoryTurnoverRate: 0, averageInventoryDays: 0, onTimeOrderRate: 0, stockoutRate: 0 },
+      turnoverTop5: { fastest: [], slowest: [] },
+      matrixData: [],
     };
   }
 }
 
 export default async function DashboardPage() {
-  const { stats, needsOrderProducts, statusDistribution, totalSku, kpi } =
+  const { stats, needsOrderProducts, statusDistribution, totalSku, kpi, turnoverTop5, matrixData } =
     await loadDashboardData();
 
   return (
@@ -229,8 +257,17 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      {/* 최근 활동 피드 */}
-      <RecentActivityFeed />
+      {/* 회전율 TOP5 */}
+      <div>
+        <h2 className="mb-4 text-xl font-semibold">재고 회전율 TOP5</h2>
+        <TurnoverTop5Card fastest={turnoverTop5.fastest} slowest={turnoverTop5.slowest} />
+      </div>
+
+      {/* ABC-XYZ 미니매트릭스 + 최근 활동 */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <ABCXYZMiniMatrix matrixData={matrixData} />
+        <RecentActivityFeed />
+      </div>
     </div>
   );
 }
