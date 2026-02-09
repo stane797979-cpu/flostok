@@ -6,8 +6,9 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Package, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NavItem } from "./nav-item";
-import { MAIN_NAV, BOTTOM_NAV } from "@/lib/constants/navigation";
+import { MAIN_SECTIONS, BOTTOM_NAV } from "@/lib/constants/navigation";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 
 interface SidebarProps {
   className?: string;
@@ -61,17 +62,32 @@ export function Sidebar({ className, userInfo }: SidebarProps) {
         </Link>
       </div>
 
-      {/* 메인 네비게이션 */}
-      <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-        {MAIN_NAV.map((item) => (
-          <NavItem
-            key={item.href}
-            title={item.title}
-            href={item.href}
-            icon={item.icon}
-            badge={badges[item.href]}
-            collapsed={collapsed}
-          />
+      {/* 메인 네비게이션 — SCM 프로세스 순서 섹션 */}
+      <nav className="flex-1 overflow-y-auto p-3">
+        {MAIN_SECTIONS.map((section, idx) => (
+          <div key={idx}>
+            {section.title && (
+              collapsed ? (
+                <Separator className="my-2" />
+              ) : (
+                <p className="px-3 pt-4 pb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                  {section.title}
+                </p>
+              )
+            )}
+            <div className="space-y-1">
+              {section.items.map((item) => (
+                <NavItem
+                  key={item.href}
+                  title={item.title}
+                  href={item.href}
+                  icon={item.icon}
+                  badge={badges[item.href]}
+                  collapsed={collapsed}
+                />
+              ))}
+            </div>
+          </div>
         ))}
       </nav>
 
