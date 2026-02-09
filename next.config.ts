@@ -24,17 +24,17 @@ const nextConfig: NextConfig = {
     removeConsole: process.env.NODE_ENV === "production",
   },
 
-  // 빌드 중 ESLint 에러 무시하지 않음 (strict)
+  // CI/CD에서 lint/type-check를 별도 실행하므로 빌드 시 생략 (메모리 절약)
   eslint: {
-    ignoreDuringBuilds: false,
+    ignoreDuringBuilds: true,
   },
 
-  // Sentry 소스맵 업로드 설정
-  // (production 배포 시 자동으로 활성화)
-  productionBrowserSourceMaps: true,
+  // 소스맵은 디버깅 시에만 활성화 (빌드 메모리/시간 절약)
+  productionBrowserSourceMaps: false,
 
-  // TypeScript 빌드 실패 시 배포 실패 (strict)
+  // CI/CD에서 type-check를 별도 실행하므로 빌드 시 생략 (메모리 절약)
   typescript: {
+    ignoreBuildErrors: true,
     tsconfigPath: "./tsconfig.json",
   },
 
