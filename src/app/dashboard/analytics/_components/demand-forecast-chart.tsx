@@ -64,7 +64,29 @@ interface ProductOption {
   id: string;
   sku: string;
   name: string;
+  abcGrade: string | null;
+  xyzGrade: string | null;
 }
+
+/** ABC-XYZ 등급 조합 필터 옵션 */
+const GRADE_FILTER_OPTIONS = [
+  { value: "all", label: "전체" },
+  { value: "A", label: "ABC: A" },
+  { value: "B", label: "ABC: B" },
+  { value: "C", label: "ABC: C" },
+  { value: "X", label: "XYZ: X" },
+  { value: "Y", label: "XYZ: Y" },
+  { value: "Z", label: "XYZ: Z" },
+  { value: "AX", label: "AX" },
+  { value: "AY", label: "AY" },
+  { value: "AZ", label: "AZ" },
+  { value: "BX", label: "BX" },
+  { value: "BY", label: "BY" },
+  { value: "BZ", label: "BZ" },
+  { value: "CX", label: "CX" },
+  { value: "CY", label: "CY" },
+  { value: "CZ", label: "CZ" },
+] as const;
 
 const METHOD_LABELS: Record<string, string> = {
   SMA: "단순이동평균 (SMA)",
@@ -102,12 +124,46 @@ export function DemandForecastChart() {
   const [isLoading, setIsLoading] = useState(true);
   const [comboboxOpen, setComboboxOpen] = useState(false);
 
+  // 등급 필터
+  const [gradeFilter, setGradeFilter] = useState<string>("all");
+
   // 수동/자동 선택 상태
   const [selectionMode, setSelectionMode] = useState<"auto" | "manual">("auto");
   const [manualMethod, setManualMethod] = useState<string>("SMA");
   const [manualAlpha, setManualAlpha] = useState<string>("0.3");
   const [manualBeta, setManualBeta] = useState<string>("0.1");
   const [manualWindowSize, setManualWindowSize] = useState<string>("3");
+
+  // 등급 필터링된 제품 목록
+  const filteredProducts = useMemo(() => {
+    if (gradeFilter === "all") return products;
+
+    return products.filter((p) => {
+      if (gradeFilter.length === 2) {
+        // AX, BY 등 조합 필터
+        return p.abcGrade === gradeFilter[0] && p.xyzGrade === gradeFilter[1];
+      } else if (["A", "B", "C"].includes(gradeFilter)) {
+        return p.abcGrade === gradeFilter;
+      } else if (["X", "Y", "Z"].includes(gradeFilter)) {
+        return p.xyzGrade === gradeFilter;
+      }
+      return true;
+    });
+  }, [products, gradeFilter]);
+
+  // 각 등급 조합별 제품 수 계산
+  const gradeCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: products.length };
+    for (const p of products) {
+      if (p.abcGrade) counts[p.abcGrade] = (counts[p.abcGrade] || 0) + 1;
+      if (p.xyzGrade) counts[p.xyzGrade] = (counts[p.xyzGrade] || 0) + 1;
+      if (p.abcGrade && p.xyzGrade) {
+        const combo = `${p.abcGrade}${p.xyzGrade}`;
+        counts[combo] = (counts[combo] || 0) + 1;
+      }
+    }
+    return counts;
+  }, [products]);
 
   const loadForecast = useCallback(async (
     productId?: string,
@@ -258,6 +314,49 @@ export function DemandForecastChart() {
           <CardDescription>수요예측을 확인할 제품을 선택하세요</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* 등급 조합 필터 */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Label className="text-xs font-medium text-muted-foreground">등급 필터</Label>
+              <span className="text-xs text-muted-foreground">
+                ({filteredProducts.length}개 제품)
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {GRADE_FILTER_OPTIONS.map((opt) => {
+                const count = gradeCounts[opt.value] || 0;
+                if (opt.value !== "all" && count === 0) return null;
+                return (
+                  <Button
+                    key={opt.value}
+                    size="sm"
+                    variant={gradeFilter === opt.value ? "default" : "outline"}
+                    onClick={() => {
+                      setGradeFilter(opt.value);
+                      // 필터 변경 시 해당 그룹의 첫 제품으로 자동 선택
+                      const filtered = opt.value === "all" ? products : products.filter((p) => {
+                        if (opt.value.length === 2) return p.abcGrade === opt.value[0] && p.xyzGrade === opt.value[1];
+                        if (["A", "B", "C"].includes(opt.value)) return p.abcGrade === opt.value;
+                        return p.xyzGrade === opt.value;
+                      });
+                      if (filtered.length > 0 && !filtered.find(p => p.id === selectedProductId)) {
+                        handleProductChange(filtered[0].id);
+                      }
+                    }}
+                    className={cn(
+                      "h-7 px-2 text-xs gap-1",
+                      opt.value.length === 2 && "font-mono"
+                    )}
+                  >
+                    {opt.label}
+                    <span className="text-[10px] opacity-60">{count}</span>
+                  </Button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 제품 검색 Combobox */}
           <Popover open={comboboxOpen} onOpenChange={setComboboxOpen}>
             <PopoverTrigger asChild>
               <Button
@@ -280,8 +379,8 @@ export function DemandForecastChart() {
                 <CommandInput placeholder="SKU 또는 제품명 검색..." />
                 <CommandList>
                   <CommandEmpty>검색 결과가 없습니다</CommandEmpty>
-                  <CommandGroup>
-                    {products.map((product) => (
+                  <CommandGroup heading={gradeFilter !== "all" ? `${gradeFilter} 등급 (${filteredProducts.length}개)` : undefined}>
+                    {filteredProducts.map((product) => (
                       <CommandItem
                         key={product.id}
                         value={`${product.sku} ${product.name}`}
@@ -299,7 +398,12 @@ export function DemandForecastChart() {
                         <span className="font-mono text-xs text-muted-foreground mr-2">
                           [{product.sku}]
                         </span>
-                        {product.name}
+                        <span className="flex-1 truncate">{product.name}</span>
+                        {product.abcGrade && product.xyzGrade && (
+                          <span className="ml-1 font-mono text-[10px] text-muted-foreground">
+                            {product.abcGrade}{product.xyzGrade}
+                          </span>
+                        )}
                       </CommandItem>
                     ))}
                   </CommandGroup>

@@ -177,6 +177,8 @@ export async function getDemandForecast(options?: {
     id: string
     sku: string
     name: string
+    abcGrade: string | null
+    xyzGrade: string | null
   }>
   forecast: {
     productId: string
@@ -207,9 +209,15 @@ export async function getDemandForecast(options?: {
     const manualMethod = options?.manualMethod
     const manualParams = options?.manualParams
 
-    // 1. 조직의 전체 제품 목록 조회
+    // 1. 조직의 전체 제품 목록 조회 (등급 포함)
     const allProducts = await db
-      .select({ id: products.id, sku: products.sku, name: products.name })
+      .select({
+        id: products.id,
+        sku: products.sku,
+        name: products.name,
+        abcGrade: products.abcGrade,
+        xyzGrade: products.xyzGrade,
+      })
       .from(products)
       .where(eq(products.organizationId, orgId))
 
