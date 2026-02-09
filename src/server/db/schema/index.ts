@@ -17,3 +17,4 @@ export * from "./grade-history";
 export * from "./stockout-records";
 export * from "./import-shipments";
 export * from "./kpi-snapshots";
+export * from "./psi-plans";

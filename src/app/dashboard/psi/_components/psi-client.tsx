@@ -1,10 +1,14 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useTransition } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Upload } from "lucide-react";
 import { PSIFilters } from "./psi-filters";
 import { PSITable } from "./psi-table";
+import { uploadPSIPlanExcel } from "@/server/actions/psi";
+import { useToast } from "@/hooks/use-toast";
 import type { PSIResult } from "@/server/services/scm/psi-aggregation";
 
 interface PSIClientProps {
@@ -15,6 +19,9 @@ export function PSIClient({ data }: PSIClientProps) {
   const [search, setSearch] = useState("");
   const [abcFilter, setAbcFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [isPending, startTransition] = useTransition();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
   // 카테고리 목록 추출
   const categories = useMemo(() => {
@@ -28,16 +35,13 @@ export function PSIClient({ data }: PSIClientProps) {
   // 필터링
   const filteredProducts = useMemo(() => {
     return data.products.filter((p) => {
-      // 텍스트 검색
       if (search) {
         const q = search.toLowerCase();
         if (!p.sku.toLowerCase().includes(q) && !p.productName.toLowerCase().includes(q)) {
           return false;
         }
       }
-      // ABC 등급 필터
       if (abcFilter !== "all" && p.abcGrade !== abcFilter) return false;
-      // 카테고리 필터
       if (categoryFilter !== "all" && p.category !== categoryFilter) return false;
       return true;
     });
@@ -50,13 +54,70 @@ export function PSIClient({ data }: PSIClientProps) {
     (p) => p.currentStock > 0 && p.currentStock < p.safetyStock
   ).length;
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    startTransition(async () => {
+      const result = await uploadPSIPlanExcel(formData);
+      if (result.success) {
+        toast({ title: "업로드 완료", description: result.message });
+      } else {
+        toast({ title: "업로드 실패", description: result.message, variant: "destructive" });
+      }
+    });
+
+    // 같은 파일 재선택 가능하도록 초기화
+    e.target.value = "";
+  };
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">PSI 계획</h1>
-        <p className="mt-2 text-slate-500">
-          수요(Sales) · 공급(Purchase) · 재고(Inventory) 통합 계획표
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">PSI 계획</h1>
+          <p className="mt-2 text-slate-500">
+            수요(Sales) · 공급(Purchase) · 재고(Inventory) 통합 계획표
+          </p>
+        </div>
+        <div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            className="hidden"
+            onChange={handleFileUpload}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={isPending}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Upload className="mr-1 h-4 w-4" />
+            {isPending ? "업로드 중..." : "S&OP / 입고계획 업로드"}
+          </Button>
+        </div>
+      </div>
+
+      {/* 범례 */}
+      <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1">
+          <span className="inline-block w-3 h-3 rounded bg-blue-100 border border-blue-300" />
+          입고(실적)
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block w-3 h-3 rounded bg-orange-100 border border-orange-300" />
+          출고(실적)
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block w-3 h-3 rounded bg-purple-100 border border-purple-300" />
+          <em>계획/예측 (이탤릭)</em>
+        </span>
+        <span>S&OP = 공급계획 물량</span>
       </div>
 
       {/* 요약 카드 */}
@@ -105,7 +166,7 @@ export function PSIClient({ data }: PSIClientProps) {
             <div>
               <CardTitle>PSI 통합 테이블</CardTitle>
               <CardDescription>
-                {filteredProducts.length}개 SKU × {data.periods.length}개월
+                {filteredProducts.length}개 SKU × {data.periods.length}개월 · 4컬럼(S&OP/입고/출고/기말)
               </CardDescription>
             </div>
             <Badge variant="outline">{filteredProducts.length} / {totalSKU}</Badge>
