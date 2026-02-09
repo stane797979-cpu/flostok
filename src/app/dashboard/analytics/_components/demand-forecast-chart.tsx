@@ -5,7 +5,7 @@ import { Line, LineChart, CartesianGrid, XAxis, YAxis, ReferenceLine, ReferenceA
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from "@/components/ui/chart";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, TrendingUp, BarChart3, Target, AlertCircle, Check, ChevronsUpDown, Settings2, Sparkles, Info } from "lucide-react";
+import { Loader2, TrendingUp, BarChart3, Target, AlertCircle, Check, ChevronsUpDown, Settings2, Sparkles, Info, HelpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getDemandForecast } from "@/server/actions/analytics";
 import {
@@ -32,6 +32,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface ForecastData {
   productId: string;
@@ -331,74 +337,129 @@ export function DemandForecastChart() {
             </div>
 
             {selectionMode === "manual" && (
-              <div className="rounded-lg border bg-muted/30 p-3 space-y-3">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">예측 방법</Label>
-                    <Select value={manualMethod} onValueChange={setManualMethod}>
-                      <SelectTrigger className="h-8 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="SMA">단순이동평균 (SMA)</SelectItem>
-                        <SelectItem value="SES">지수평활법 (SES)</SelectItem>
-                        <SelectItem value="Holts">이중지수평활 (Holt&apos;s)</SelectItem>
-                      </SelectContent>
-                    </Select>
+              <TooltipProvider delayDuration={200}>
+                <div className="rounded-lg border bg-muted/30 p-3 space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-1">
+                        <Label className="text-xs">예측 방법</Label>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <HelpCircle className="h-3 w-3 text-muted-foreground cursor-help" />
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs text-xs leading-relaxed">
+                            <p className="font-semibold mb-1">예측 방법 비교</p>
+                            <p><strong>SMA</strong>: 최근 N개월 평균. 안정적 수요에 적합</p>
+                            <p><strong>SES</strong>: 최근 데이터에 더 높은 가중치. 변동 수요에 적합</p>
+                            <p><strong>Holt&apos;s</strong>: 수요 수준 + 추세(증감) 동시 반영. 지속적 성장/하락 시 적합</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                      <Select value={manualMethod} onValueChange={setManualMethod}>
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="SMA">단순이동평균 (SMA)</SelectItem>
+                          <SelectItem value="SES">지수평활법 (SES)</SelectItem>
+                          <SelectItem value="Holts">이중지수평활 (Holt&apos;s)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {manualMethod === "SMA" && (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1">
+                          <Label className="text-xs">이동 윈도우 크기</Label>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <HelpCircle className="h-3 w-3 text-muted-foreground cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-xs text-xs leading-relaxed">
+                              <p className="font-semibold mb-1">최근 몇 개월의 평균을 사용할지 설정</p>
+                              <p>예: 3 → 최근 3개월(100, 120, 140)의 평균 120을 예측값으로 사용</p>
+                              <p className="mt-1 text-muted-foreground">작을수록 최근 변화 민감, 클수록 안정적</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                        <Input
+                          type="number"
+                          min={2}
+                          max={12}
+                          value={manualWindowSize}
+                          onChange={(e) => setManualWindowSize(e.target.value)}
+                          className="h-8 text-xs"
+                          placeholder="3"
+                        />
+                      </div>
+                    )}
+
+                    {(manualMethod === "SES" || manualMethod === "Holts") && (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1">
+                          <Label className="text-xs">평활계수 (α)</Label>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <HelpCircle className="h-3 w-3 text-muted-foreground cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-xs text-xs leading-relaxed">
+                              <p className="font-semibold mb-1">최근 데이터를 얼마나 중시할지 설정</p>
+                              <p>예: 판매량 100→120→140일 때</p>
+                              <p>α=0.2 → 과거 비중 높음 → 예측 ~116</p>
+                              <p>α=0.8 → 최근 비중 높음 → 예측 ~136</p>
+                              <p className="mt-1 text-muted-foreground">안정 수요: 0.1~0.3 / 변동 수요: 0.4~0.6</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                        <Input
+                          type="number"
+                          min={0.01}
+                          max={0.99}
+                          step={0.05}
+                          value={manualAlpha}
+                          onChange={(e) => setManualAlpha(e.target.value)}
+                          className="h-8 text-xs"
+                          placeholder="0.3"
+                        />
+                      </div>
+                    )}
+
+                    {manualMethod === "Holts" && (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1">
+                          <Label className="text-xs">추세계수 (β)</Label>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <HelpCircle className="h-3 w-3 text-muted-foreground cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-xs text-xs leading-relaxed">
+                              <p className="font-semibold mb-1">추세 변화를 얼마나 빠르게 반영할지 설정</p>
+                              <p>예: 매월 +20개씩 증가하다 갑자기 +40으로 바뀌면</p>
+                              <p>β=0.1 → 천천히 반영 (기존 +20 유지 경향)</p>
+                              <p>β=0.5 → 빠르게 반영 (+40에 가까워짐)</p>
+                              <p className="mt-1 text-muted-foreground">안정 추세: 0.05~0.15 / 급변 추세: 0.2~0.5</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                        <Input
+                          type="number"
+                          min={0.01}
+                          max={0.99}
+                          step={0.05}
+                          value={manualBeta}
+                          onChange={(e) => setManualBeta(e.target.value)}
+                          className="h-8 text-xs"
+                          placeholder="0.1"
+                        />
+                      </div>
+                    )}
                   </div>
 
-                  {manualMethod === "SMA" && (
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">이동 윈도우 크기</Label>
-                      <Input
-                        type="number"
-                        min={2}
-                        max={12}
-                        value={manualWindowSize}
-                        onChange={(e) => setManualWindowSize(e.target.value)}
-                        className="h-8 text-xs"
-                        placeholder="3"
-                      />
-                    </div>
-                  )}
-
-                  {(manualMethod === "SES" || manualMethod === "Holts") && (
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">평활계수 (α)</Label>
-                      <Input
-                        type="number"
-                        min={0.01}
-                        max={0.99}
-                        step={0.05}
-                        value={manualAlpha}
-                        onChange={(e) => setManualAlpha(e.target.value)}
-                        className="h-8 text-xs"
-                        placeholder="0.3"
-                      />
-                    </div>
-                  )}
-
-                  {manualMethod === "Holts" && (
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">추세계수 (β)</Label>
-                      <Input
-                        type="number"
-                        min={0.01}
-                        max={0.99}
-                        step={0.05}
-                        value={manualBeta}
-                        onChange={(e) => setManualBeta(e.target.value)}
-                        className="h-8 text-xs"
-                        placeholder="0.1"
-                      />
-                    </div>
-                  )}
+                  <Button size="sm" onClick={handleManualApply} className="w-full h-8 text-xs">
+                    적용
+                  </Button>
                 </div>
-
-                <Button size="sm" onClick={handleManualApply} className="w-full h-8 text-xs">
-                  적용
-                </Button>
-              </div>
+              </TooltipProvider>
             )}
           </div>
         </CardContent>
