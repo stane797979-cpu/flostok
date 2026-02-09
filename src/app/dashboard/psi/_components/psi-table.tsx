@@ -22,20 +22,22 @@ function formatPeriodLabel(period: string): string {
   return `${year}.${parseInt(month)}월`;
 }
 
-function NumCell({ value, color }: { value: number; color?: string }) {
+function NumCell({ value, color, italic }: { value: number; color?: string; italic?: boolean }) {
   if (value === 0) return <span className="text-slate-300 text-[11px]">-</span>;
   return (
-    <span className={cn("tabular-nums text-[11px]", color)}>
+    <span className={cn("tabular-nums text-[11px]", color, italic && "italic")}>
       {value.toLocaleString()}
     </span>
   );
 }
 
-function StockCell({ value, safetyStock }: { value: number; safetyStock: number }) {
+function StockCell({ value, safetyStock, italic }: { value: number; safetyStock: number; italic?: boolean }) {
+  if (value === 0 && italic) return <span className="text-slate-300 text-[11px]">-</span>;
   return (
     <span
       className={cn(
         "tabular-nums text-[11px] font-medium",
+        italic && "italic",
         value === 0
           ? "text-red-600 font-bold"
           : value < safetyStock
@@ -47,6 +49,17 @@ function StockCell({ value, safetyStock }: { value: number; safetyStock: number 
     </span>
   );
 }
+
+/** 월별 7개 서브컬럼 정의 */
+const SUB_COLUMNS = [
+  { key: "sop", label: "공급계획", shortLabel: "S&OP" },
+  { key: "inboundPlan", label: "입고(계획)", shortLabel: "입고P" },
+  { key: "inboundActual", label: "입고(실적)", shortLabel: "입고A" },
+  { key: "outboundPlan", label: "출고(계획)", shortLabel: "출고P" },
+  { key: "outboundActual", label: "출고(실적)", shortLabel: "출고A" },
+  { key: "endingPlan", label: "기말(예상)", shortLabel: "기말P" },
+  { key: "endingActual", label: "기말(실적)", shortLabel: "기말A" },
+] as const;
 
 export function PSITable({ products, periods }: PSITableProps) {
   if (products.length === 0) {
@@ -79,10 +92,10 @@ export function PSITable({ products, periods }: PSITableProps) {
               <TableHead
                 key={period}
                 className={cn(
-                  "text-center border-r min-w-[220px] py-1",
+                  "text-center border-r py-1",
                   period === currentPeriod && "bg-blue-50 dark:bg-blue-950"
                 )}
-                colSpan={4}
+                colSpan={7}
               >
                 <span className="font-bold text-xs">{formatPeriodLabel(period)}</span>
               </TableHead>
@@ -92,30 +105,20 @@ export function PSITable({ products, periods }: PSITableProps) {
           <TableRow>
             {periods.map((period) => (
               <Fragment key={period}>
-                <TableHead className={cn(
-                  "text-center px-1 py-0.5 text-[10px] font-normal text-muted-foreground min-w-[55px]",
-                  period === currentPeriod && "bg-blue-50 dark:bg-blue-950"
-                )}>
-                  S&OP
-                </TableHead>
-                <TableHead className={cn(
-                  "text-center px-1 py-0.5 text-[10px] font-normal text-muted-foreground min-w-[55px]",
-                  period === currentPeriod && "bg-blue-50 dark:bg-blue-950"
-                )}>
-                  입고
-                </TableHead>
-                <TableHead className={cn(
-                  "text-center px-1 py-0.5 text-[10px] font-normal text-muted-foreground min-w-[55px]",
-                  period === currentPeriod && "bg-blue-50 dark:bg-blue-950"
-                )}>
-                  출고
-                </TableHead>
-                <TableHead className={cn(
-                  "text-center px-1 py-0.5 text-[10px] font-normal text-muted-foreground min-w-[55px] border-r",
-                  period === currentPeriod && "bg-blue-50 dark:bg-blue-950"
-                )}>
-                  기말
-                </TableHead>
+                {SUB_COLUMNS.map((col, idx) => (
+                  <TableHead
+                    key={`${period}-${col.key}`}
+                    className={cn(
+                      "text-center px-0.5 py-0.5 text-[9px] font-normal text-muted-foreground min-w-[44px] whitespace-nowrap",
+                      period === currentPeriod && "bg-blue-50 dark:bg-blue-950",
+                      idx === SUB_COLUMNS.length - 1 && "border-r",
+                      // 계획컬럼 배경
+                      (col.key === "sop" || col.key === "inboundPlan" || col.key === "outboundPlan" || col.key === "endingPlan") && "bg-purple-50/50 dark:bg-purple-950/30",
+                    )}
+                  >
+                    {col.shortLabel}
+                  </TableHead>
+                ))}
               </Fragment>
             ))}
           </TableRow>
@@ -163,53 +166,37 @@ export function PSITable({ products, periods }: PSITableProps) {
               {product.months.map((month) => {
                 const isCurrent = month.period === currentPeriod;
                 const bg = isCurrent ? "bg-blue-50/50 dark:bg-blue-950/50" : "";
-                // S&OP칸: S&OP 물량 있으면 표시, 없으면 입고계획 표시
-                const sopDisplay = month.sopQuantity || month.inboundPlan;
-                // 출고칸: 실적 있으면 실적, 없으면 예측출고
-                const outDisplay = month.outbound || month.forecastOutbound;
-                const isOutForecast = month.outbound === 0 && month.forecastOutbound > 0;
-                // 기말칸: 실적 있으면 실적, 없으면 말재고계획
-                const endDisplay = month.endingStock || month.plannedEndingStock;
-                const isEndPlan = month.endingStock === 0 && month.plannedEndingStock > 0;
-                // 입고칸: 실적 있으면 실적, 없으면 입고계획
-                const inbDisplay = month.inbound || month.inboundPlan;
-                const isInbPlan = month.inbound === 0 && month.inboundPlan > 0;
+                const planBg = "bg-purple-50/30 dark:bg-purple-950/20";
 
                 return (
                   <Fragment key={month.period}>
-                    {/* S&OP */}
-                    <TableCell className={cn("text-center p-0.5", bg)}>
-                      <NumCell value={sopDisplay} color="text-purple-600" />
+                    {/* S&OP (공급계획) */}
+                    <TableCell className={cn("text-center p-0.5", bg, planBg)}>
+                      <NumCell value={month.sopQuantity} color="text-purple-600" italic />
                     </TableCell>
-                    {/* 입고 (실적=파란, 계획=보라 이탤릭) */}
-                    <TableCell className={cn("text-center p-0.5", bg)}>
-                      {isInbPlan ? (
-                        <span className="text-purple-500 text-[11px] tabular-nums italic">
-                          {inbDisplay.toLocaleString()}
-                        </span>
-                      ) : (
-                        <NumCell value={inbDisplay} color="text-blue-600" />
-                      )}
+                    {/* 입고(계획) */}
+                    <TableCell className={cn("text-center p-0.5", bg, planBg)}>
+                      <NumCell value={month.inboundPlan} color="text-purple-500" italic />
                     </TableCell>
-                    {/* 출고 (실적=주황, 예측=보라 이탤릭) */}
+                    {/* 입고(실적) */}
                     <TableCell className={cn("text-center p-0.5", bg)}>
-                      {isOutForecast ? (
-                        <span className="text-purple-500 text-[11px] tabular-nums italic">
-                          {outDisplay.toLocaleString()}
-                        </span>
-                      ) : (
-                        <NumCell value={outDisplay} color="text-orange-600" />
-                      )}
+                      <NumCell value={month.inbound} color="text-blue-600" />
                     </TableCell>
-                    {/* 기말 (실적=검정, 계획=보라 이탤릭) */}
+                    {/* 출고(계획) */}
+                    <TableCell className={cn("text-center p-0.5", bg, planBg)}>
+                      <NumCell value={month.forecastOutbound} color="text-purple-500" italic />
+                    </TableCell>
+                    {/* 출고(실적) */}
+                    <TableCell className={cn("text-center p-0.5", bg)}>
+                      <NumCell value={month.outbound} color="text-orange-600" />
+                    </TableCell>
+                    {/* 기말(예상) */}
+                    <TableCell className={cn("text-center p-0.5", bg, planBg)}>
+                      <StockCell value={month.plannedEndingStock} safetyStock={product.safetyStock} italic />
+                    </TableCell>
+                    {/* 기말(실적) */}
                     <TableCell className={cn("text-center p-0.5 border-r", bg)}>
-                      {isEndPlan ? (
-                        <span className="text-purple-500 text-[11px] tabular-nums italic">
-                          {endDisplay.toLocaleString()}
-                        </span>
-                      ) : (
-                        <StockCell value={endDisplay} safetyStock={product.safetyStock} />
-                      )}
+                      <StockCell value={month.endingStock} safetyStock={product.safetyStock} />
                     </TableCell>
                   </Fragment>
                 );

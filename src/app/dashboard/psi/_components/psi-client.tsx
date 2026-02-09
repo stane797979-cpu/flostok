@@ -4,7 +4,7 @@ import { useState, useMemo, useRef, useTransition } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Upload } from "lucide-react";
+import { Upload, Download } from "lucide-react";
 import { PSIFilters } from "./psi-filters";
 import { PSITable } from "./psi-table";
 import { uploadPSIPlanExcel } from "@/server/actions/psi";
@@ -74,6 +74,45 @@ export function PSIClient({ data }: PSIClientProps) {
     e.target.value = "";
   };
 
+  const handleDownloadTemplate = () => {
+    import("xlsx").then((XLSX) => {
+      // 미래 6개월 기간 생성
+      const now = new Date();
+      const futurePeriods: string[] = [];
+      for (let i = 0; i <= 6; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+        futurePeriods.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+      }
+
+      // 헤더 생성: SKU + 각 기간별 S&OP/입고계획
+      const headers: string[] = ["SKU"];
+      for (const period of futurePeriods) {
+        headers.push(`${period} S&OP`);
+        headers.push(`${period} 입고계획`);
+      }
+
+      // 샘플 행
+      const sampleRow: (string | number)[] = ["SKU-001"];
+      for (let i = 0; i < futurePeriods.length; i++) {
+        sampleRow.push(100); // S&OP
+        sampleRow.push(80);  // 입고계획
+      }
+
+      const ws = XLSX.utils.aoa_to_sheet([headers, sampleRow]);
+
+      // 컬럼 너비 설정
+      const colWidths: Array<{ wch: number }> = [{ wch: 15 }];
+      for (let i = 0; i < futurePeriods.length * 2; i++) {
+        colWidths.push({ wch: 14 });
+      }
+      ws["!cols"] = colWidths;
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "입고계획양식");
+      XLSX.writeFile(wb, "PSI_입고계획_업로드_양식.xlsx");
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
@@ -83,7 +122,15 @@ export function PSIClient({ data }: PSIClientProps) {
             수요(Sales) · 공급(Purchase) · 재고(Inventory) 통합 계획표
           </p>
         </div>
-        <div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDownloadTemplate}
+          >
+            <Download className="mr-1 h-4 w-4" />
+            양식 다운로드
+          </Button>
           <input
             ref={fileInputRef}
             type="file"
@@ -115,9 +162,9 @@ export function PSIClient({ data }: PSIClientProps) {
         </span>
         <span className="flex items-center gap-1">
           <span className="inline-block w-3 h-3 rounded bg-purple-100 border border-purple-300" />
-          <em>계획/예측 (이탤릭)</em>
+          <em>계획/예측 (이탤릭, 보라 배경)</em>
         </span>
-        <span>S&OP = 공급계획 물량</span>
+        <span>P = 계획(Plan) · A = 실적(Actual)</span>
       </div>
 
       {/* 요약 카드 */}
@@ -166,7 +213,7 @@ export function PSIClient({ data }: PSIClientProps) {
             <div>
               <CardTitle>PSI 통합 테이블</CardTitle>
               <CardDescription>
-                {filteredProducts.length}개 SKU × {data.periods.length}개월 · 4컬럼(S&OP/입고/출고/기말)
+                {filteredProducts.length}개 SKU × {data.periods.length}개월 · 7컬럼(S&OP/입고P·A/출고P·A/기말P·A)
               </CardDescription>
             </div>
             <Badge variant="outline">{filteredProducts.length} / {totalSKU}</Badge>
