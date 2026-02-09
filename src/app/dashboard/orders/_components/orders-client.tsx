@@ -683,7 +683,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                   <CardTitle>발주 필요 품목</CardTitle>
                   <CardDescription>현재고가 발주점 이하인 품목 목록입니다</CardDescription>
                 </div>
-                <div>
+                <div className="flex gap-2">
                   <input
                     ref={orderUploadRef}
                     type="file"
@@ -691,6 +691,29 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                     className="hidden"
                     onChange={handleOrderExcelUpload}
                   />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      import("xlsx").then((XLSX) => {
+                        const headers = [
+                          ["SKU", "수량", "공급자명", "예상입고일", "B/L번호", "컨테이너번호", "메모"],
+                          ["SKU-001", 100, "공급자A", "2026-03-01", "BL12345", "CNTR001", "샘플 데이터"],
+                        ];
+                        const ws = XLSX.utils.aoa_to_sheet(headers);
+                        ws["!cols"] = [
+                          { wch: 15 }, { wch: 10 }, { wch: 15 },
+                          { wch: 14 }, { wch: 15 }, { wch: 15 }, { wch: 20 },
+                        ];
+                        const wb = XLSX.utils.book_new();
+                        XLSX.utils.book_append_sheet(wb, ws, "발주양식");
+                        XLSX.writeFile(wb, "발주_업로드_양식.xlsx");
+                      });
+                    }}
+                  >
+                    <Download className="mr-1 h-4 w-4" />
+                    양식 다운로드
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"
