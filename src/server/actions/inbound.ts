@@ -8,7 +8,7 @@ import {
   inventoryLots,
   products,
 } from "@/server/db/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { processInventoryTransaction } from "./inventory";
@@ -534,5 +534,118 @@ export async function getInboundRecords(options?: GetInboundRecordsOptions): Pro
     }
     console.error("입고 기록 조회 오류:", error);
     throw new Error("입고 기록 조회에 실패했습니다");
+  }
+}
+
+/**
+ * 일괄 입고확인 (전량 입고)
+ *
+ * 선택된 발주서들의 미입고 항목을 전량 입고 처리합니다.
+ */
+export async function bulkConfirmInbound(
+  orderIds: string[]
+): Promise<{
+  success: boolean;
+  processedCount: number;
+  errors: Array<{ orderId: string; orderNumber: string; error: string }>;
+}> {
+  const errors: Array<{ orderId: string; orderNumber: string; error: string }> = [];
+  let processedCount = 0;
+
+  try {
+    const user = await requireAuth();
+
+    if (orderIds.length === 0) {
+      return { success: false, processedCount: 0, errors: [{ orderId: "", orderNumber: "", error: "선택된 발주서가 없습니다" }] };
+    }
+
+    // 선택된 발주서 조회
+    const orders = await db
+      .select()
+      .from(purchaseOrders)
+      .where(
+        and(
+          eq(purchaseOrders.organizationId, user.organizationId),
+          inArray(purchaseOrders.id, orderIds)
+        )
+      );
+
+    const inboundCapableStatuses = ["ordered", "confirmed", "shipped", "partially_received"];
+
+    for (const order of orders) {
+      if (!inboundCapableStatuses.includes(order.status)) {
+        errors.push({
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          error: `현재 상태(${order.status})에서는 입고 처리할 수 없습니다`,
+        });
+        continue;
+      }
+
+      try {
+        // 해당 발주서의 항목 조회
+        const items = await db
+          .select()
+          .from(purchaseOrderItems)
+          .where(eq(purchaseOrderItems.purchaseOrderId, order.id));
+
+        // 미입고 항목 필터링
+        const pendingItems = items.filter(
+          (item) => (item.receivedQuantity ?? 0) < item.quantity
+        );
+
+        if (pendingItems.length === 0) {
+          errors.push({
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            error: "이미 전량 입고 완료된 발주서입니다",
+          });
+          continue;
+        }
+
+        // confirmInbound 호출용 데이터 구성
+        const inboundItems = pendingItems.map((item) => ({
+          orderItemId: item.id,
+          productId: item.productId,
+          expectedQuantity: item.quantity - (item.receivedQuantity ?? 0),
+          receivedQuantity: item.quantity - (item.receivedQuantity ?? 0),
+        }));
+
+        const result = await confirmInbound({
+          orderId: order.id,
+          items: inboundItems,
+          notes: "일괄 입고확인 처리",
+        });
+
+        if (result.success) {
+          processedCount++;
+        } else {
+          errors.push({
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            error: result.error || "입고 처리 실패",
+          });
+        }
+      } catch (err) {
+        errors.push({
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          error: "입고 처리 중 오류 발생",
+        });
+      }
+    }
+
+    return {
+      success: processedCount > 0,
+      processedCount,
+      errors,
+    };
+  } catch (error) {
+    console.error("일괄 입고확인 오류:", error);
+    return {
+      success: false,
+      processedCount: 0,
+      errors: [{ orderId: "", orderNumber: "", error: "일괄 입고확인 처리에 실패했습니다" }],
+    };
   }
 }

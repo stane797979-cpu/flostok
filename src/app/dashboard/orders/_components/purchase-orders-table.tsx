@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import {
   Table,
   TableBody,
@@ -41,27 +41,24 @@ type SortDirection = "asc" | "desc";
 const STATUS_ORDER = ["draft", "ordered", "pending_receipt", "received", "cancelled"];
 
 export function PurchaseOrdersTable({ orders, onViewClick, onDownloadClick, selectedIds, onSelectChange, className }: PurchaseOrdersTableProps) {
-  const cancellableStatuses: PurchaseOrderListItem["status"][] = ["draft", "ordered"];
-  const cancellableOrders = orders.filter((o) => cancellableStatuses.includes(o.status));
-  const allCancellableSelected = cancellableOrders.length > 0 && cancellableOrders.every((o) => selectedIds?.includes(o.id));
+  // 체크 가능한 상태: 취소/완료 제외 전부
+  const checkableStatuses: PurchaseOrderListItem["status"][] = ["draft", "ordered", "pending_receipt"];
+  const checkableOrders = orders.filter((o) => checkableStatuses.includes(o.status));
+  const allCheckableSelected = checkableOrders.length > 0 && checkableOrders.every((o) => selectedIds?.includes(o.id));
+
+  // Shift+클릭 범위 선택을 위한 lastCheckedIndex
+  const lastCheckedIndexRef = useRef<number>(-1);
 
   const handleSelectAll = (checked: boolean) => {
     if (!onSelectChange) return;
     if (checked) {
-      onSelectChange(cancellableOrders.map((o) => o.id));
+      onSelectChange(checkableOrders.map((o) => o.id));
     } else {
       onSelectChange([]);
     }
+    lastCheckedIndexRef.current = -1;
   };
 
-  const handleSelectOne = (orderId: string, checked: boolean) => {
-    if (!onSelectChange || !selectedIds) return;
-    if (checked) {
-      onSelectChange([...selectedIds, orderId]);
-    } else {
-      onSelectChange(selectedIds.filter((id) => id !== orderId));
-    }
-  };
   const [sortKey, setSortKey] = useState<SortKey>("orderDate");
   const [sortDir, setSortDir] = useState<SortDirection>("desc");
 
@@ -115,6 +112,30 @@ export function PurchaseOrdersTable({ orders, onViewClick, onDownloadClick, sele
     });
   }, [orders, sortKey, sortDir]);
 
+  // Shift+클릭: 범위 선택 (sorted 배열 참조 필요하므로 sorted 이후 정의)
+  const handleSelectOne = (orderId: string, checked: boolean, index: number, shiftKey: boolean) => {
+    if (!onSelectChange || !selectedIds) return;
+
+    if (shiftKey && lastCheckedIndexRef.current >= 0) {
+      const start = Math.min(lastCheckedIndexRef.current, index);
+      const end = Math.max(lastCheckedIndexRef.current, index);
+      const rangeIds = sorted
+        .slice(start, end + 1)
+        .filter((o) => checkableStatuses.includes(o.status))
+        .map((o) => o.id);
+
+      const newIds = Array.from(new Set([...selectedIds, ...rangeIds]));
+      onSelectChange(newIds);
+    } else {
+      if (checked) {
+        onSelectChange([...selectedIds, orderId]);
+      } else {
+        onSelectChange(selectedIds.filter((id) => id !== orderId));
+      }
+    }
+    lastCheckedIndexRef.current = index;
+  };
+
   const getStatusBadge = (status: PurchaseOrderListItem["status"]) => {
     switch (status) {
       case "draft":
@@ -165,9 +186,9 @@ export function PurchaseOrdersTable({ orders, onViewClick, onDownloadClick, sele
             {onSelectChange && (
               <TableHead className="w-[40px]">
                 <Checkbox
-                  checked={allCancellableSelected}
+                  checked={allCheckableSelected}
                   onCheckedChange={(checked) => handleSelectAll(!!checked)}
-                  aria-label="취소 가능 발주 전체 선택"
+                  aria-label="전체 선택"
                 />
               </TableHead>
             )}
@@ -196,16 +217,20 @@ export function PurchaseOrdersTable({ orders, onViewClick, onDownloadClick, sele
           </TableRow>
         </TableHeader>
         <TableBody>
-          {sorted.map((order) => {
-            const isCancellable = cancellableStatuses.includes(order.status);
+          {sorted.map((order, index) => {
+            const isCheckable = checkableStatuses.includes(order.status);
             return (
             <TableRow key={order.id}>
               {onSelectChange && (
                 <TableCell>
-                  {isCancellable ? (
+                  {isCheckable ? (
                     <Checkbox
                       checked={selectedIds?.includes(order.id) ?? false}
-                      onCheckedChange={(checked) => handleSelectOne(order.id, !!checked)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        const isCurrentlyChecked = selectedIds?.includes(order.id) ?? false;
+                        handleSelectOne(order.id, !isCurrentlyChecked, index, e.shiftKey);
+                      }}
                       aria-label={`${order.orderNumber} 선택`}
                     />
                   ) : (

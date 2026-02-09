@@ -1148,3 +1148,174 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
     };
   }
 }
+
+/**
+ * 발주 엑셀 업로드
+ *
+ * 엑셀 형식:
+ * SKU | 수량 | 공급자명 | 예상입고일 | B/L번호 | 컨테이너번호 | 메모
+ *
+ * 공급자가 같은 품목끼리 자동으로 묶어서 발주서를 생성합니다.
+ */
+export async function uploadPurchaseOrderExcel(
+  formData: FormData
+): Promise<{ success: boolean; message: string; createdCount: number }> {
+  try {
+    const user = await getCurrentUser();
+    const orgId = user?.organizationId || TEMP_ORG_ID;
+
+    const file = formData.get("file") as File;
+    if (!file) return { success: false, message: "파일이 없습니다", createdCount: 0 };
+
+    const { default: XLSX } = await import("xlsx");
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const workbook = XLSX.read(buffer, { type: "buffer" });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
+
+    if (rows.length === 0) return { success: false, message: "데이터가 없습니다", createdCount: 0 };
+
+    // 헤더 파싱
+    const headers = Object.keys(rows[0]);
+    const skuCol = headers.find((h) => ["sku", "SKU", "품번", "제품코드", "품목코드"].includes(h.trim()));
+    const qtyCol = headers.find((h) => ["수량", "qty", "Qty", "QTY", "발주수량", "주문수량"].includes(h.trim()));
+    const supplierCol = headers.find((h) => ["공급자", "공급자명", "supplier", "Supplier", "거래처", "업체명"].includes(h.trim()));
+
+    if (!skuCol) return { success: false, message: "SKU 컬럼을 찾을 수 없습니다 (SKU, 품번, 제품코드 중 하나 필요)", createdCount: 0 };
+    if (!qtyCol) return { success: false, message: "수량 컬럼을 찾을 수 없습니다 (수량, qty, 발주수량 중 하나 필요)", createdCount: 0 };
+
+    // 선택적 컬럼
+    const expectedDateCol = headers.find((h) => ["예상입고일", "입고일", "expectedDate", "ETA", "eta"].includes(h.trim()));
+    const blCol = headers.find((h) => ["B/L", "B/L번호", "BL", "bl_number", "선하증권"].includes(h.trim()));
+    const containerCol = headers.find((h) => ["컨테이너", "컨테이너번호", "CNTR", "container", "Container"].includes(h.trim()));
+    const notesCol = headers.find((h) => ["메모", "비고", "notes", "Notes", "memo"].includes(h.trim()));
+
+    // SKU → productId 매핑
+    const productList = await db
+      .select({ id: products.id, sku: products.sku })
+      .from(products)
+      .where(eq(products.organizationId, orgId));
+    const skuMap = new Map(productList.map((p) => [p.sku, p.id]));
+
+    // 공급자명 → supplierId 매핑
+    const supplierList = await db
+      .select({ id: suppliers.id, name: suppliers.name })
+      .from(suppliers)
+      .where(eq(suppliers.organizationId, orgId));
+    const supplierNameMap = new Map(supplierList.map((s) => [s.name, s.id]));
+
+    // 행 파싱 및 공급자별 그룹화
+    type ParsedItem = {
+      productId: string;
+      quantity: number;
+      supplierId: string;
+      expectedDate?: string;
+      blNumber?: string;
+      containerNumber?: string;
+      notes?: string;
+    };
+
+    const itemsBySupplier = new Map<string, ParsedItem[]>();
+    const skipped: string[] = [];
+
+    for (const row of rows) {
+      const sku = String(row[skuCol] || "").trim();
+      if (!sku) continue;
+
+      const productId = skuMap.get(sku);
+      if (!productId) {
+        skipped.push(sku);
+        continue;
+      }
+
+      const quantity = Number(row[qtyCol]) || 0;
+      if (quantity <= 0) continue;
+
+      // 공급자: 엑셀에 있으면 매칭, 없으면 첫 번째 공급자
+      let supplierId = "";
+      if (supplierCol && row[supplierCol]) {
+        const supplierName = String(row[supplierCol]).trim();
+        supplierId = supplierNameMap.get(supplierName) || "";
+      }
+      if (!supplierId) {
+        // 제품의 공급자 매핑에서 조회
+        const [mapping] = await db
+          .select({ supplierId: sql<string>`supplier_id` })
+          .from(sql`supplier_products`)
+          .where(sql`product_id = ${productId}`)
+          .limit(1);
+        supplierId = mapping?.supplierId || "";
+      }
+      if (!supplierId) {
+        skipped.push(`${sku} (공급자 미지정)`);
+        continue;
+      }
+
+      const item: ParsedItem = {
+        productId,
+        quantity,
+        supplierId,
+        expectedDate: expectedDateCol ? String(row[expectedDateCol] || "").trim() || undefined : undefined,
+        blNumber: blCol ? String(row[blCol] || "").trim() || undefined : undefined,
+        containerNumber: containerCol ? String(row[containerCol] || "").trim() || undefined : undefined,
+        notes: notesCol ? String(row[notesCol] || "").trim() || undefined : undefined,
+      };
+
+      if (!itemsBySupplier.has(supplierId)) itemsBySupplier.set(supplierId, []);
+      itemsBySupplier.get(supplierId)!.push(item);
+    }
+
+    if (itemsBySupplier.size === 0) {
+      return {
+        success: false,
+        message: skipped.length > 0
+          ? `발주 가능한 품목이 없습니다. 건너뛴 SKU: ${skipped.slice(0, 5).join(", ")}${skipped.length > 5 ? ` 외 ${skipped.length - 5}건` : ""}`
+          : "발주 가능한 품목이 없습니다",
+        createdCount: 0,
+      };
+    }
+
+    // 공급자별 발주서 생성
+    const createdItems = [];
+    for (const [supplierId, items] of itemsBySupplier.entries()) {
+      const bulkItems = items.map((item) => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        supplierId,
+      }));
+
+      // 메모에 B/L, 컨테이너 정보 포함
+      const noteParts: string[] = [];
+      const blNumbers = items.map((i) => i.blNumber).filter(Boolean);
+      const containerNumbers = items.map((i) => i.containerNumber).filter(Boolean);
+      const itemNotes = items.map((i) => i.notes).filter(Boolean);
+      if (blNumbers.length > 0) noteParts.push(`B/L: ${[...new Set(blNumbers)].join(", ")}`);
+      if (containerNumbers.length > 0) noteParts.push(`CNTR: ${[...new Set(containerNumbers)].join(", ")}`);
+      if (itemNotes.length > 0) noteParts.push(itemNotes.join("; "));
+
+      const result = await createBulkPurchaseOrders({
+        items: bulkItems,
+        notes: noteParts.length > 0 ? `[엑셀 업로드] ${noteParts.join(" | ")}` : "[엑셀 업로드]",
+      });
+
+      if (result.success) {
+        createdItems.push(...result.createdOrders);
+      }
+    }
+
+    revalidatePath("/dashboard/orders");
+
+    const skippedMsg = skipped.length > 0
+      ? ` (건너뛴 SKU: ${skipped.slice(0, 3).join(", ")}${skipped.length > 3 ? ` 외 ${skipped.length - 3}건` : ""})`
+      : "";
+
+    return {
+      success: true,
+      message: `${createdItems.length}건의 발주서가 생성되었습니다${skippedMsg}`,
+      createdCount: createdItems.length,
+    };
+  } catch (error) {
+    console.error("발주 엑셀 업로드 실패:", error);
+    return { success: false, message: "업로드 중 오류가 발생했습니다", createdCount: 0 };
+  }
+}

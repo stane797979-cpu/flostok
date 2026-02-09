@@ -19,8 +19,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Package, Calendar, Building2, FileText, Download, ChevronRight, XCircle } from "lucide-react";
+import { Package, Calendar, Building2, FileText, Download, ChevronRight, XCircle, Ship, Plus } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { getPurchaseOrderById, updatePurchaseOrderStatus } from "@/server/actions/purchase-orders";
+import { createImportShipment } from "@/server/actions/import-shipments";
 import { InboundDialog, type InboundDialogItem } from "./inbound-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { exportPurchaseOrderToExcel } from "@/server/actions/excel-export";
@@ -56,6 +59,18 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
   const [isLoading, setIsLoading] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [inboundDialogOpen, setInboundDialogOpen] = useState(false);
+  const [showShipmentForm, setShowShipmentForm] = useState(false);
+  const [isCreatingShipment, setIsCreatingShipment] = useState(false);
+  const [shipmentForm, setShipmentForm] = useState({
+    blNumber: "",
+    containerNumber: "",
+    invoiceNumber: "",
+    quantity: "",
+    unitPriceUsd: "",
+    etaDate: "",
+    warehouseEtaDate: "",
+    notes: "",
+  });
   const { toast } = useToast();
 
   // 발주서 데이터 로드
@@ -115,6 +130,45 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
       });
     } finally {
       setIsUpdatingStatus(false);
+    }
+  };
+
+  const handleCreateShipment = async () => {
+    if (!orderData || !orderData.items.length) return;
+
+    const qty = parseInt(shipmentForm.quantity) || 0;
+    if (qty <= 0) {
+      toast({ title: "수량 오류", description: "수량을 입력해주세요", variant: "destructive" });
+      return;
+    }
+
+    setIsCreatingShipment(true);
+    try {
+      // 첫 번째 항목의 productId 사용 (복수 품목인 경우 가장 첫 품목 기준)
+      const result = await createImportShipment({
+        productId: orderData.items[0].productId,
+        purchaseOrderId: orderId,
+        blNumber: shipmentForm.blNumber || undefined,
+        containerNumber: shipmentForm.containerNumber || undefined,
+        invoiceNumber: shipmentForm.invoiceNumber || undefined,
+        quantity: qty,
+        unitPriceUsd: shipmentForm.unitPriceUsd ? parseFloat(shipmentForm.unitPriceUsd) : undefined,
+        etaDate: shipmentForm.etaDate || undefined,
+        warehouseEtaDate: shipmentForm.warehouseEtaDate || undefined,
+        notes: shipmentForm.notes || undefined,
+      });
+
+      if (result.success) {
+        toast({ title: "등록 완료", description: result.message });
+        setShowShipmentForm(false);
+        setShipmentForm({ blNumber: "", containerNumber: "", invoiceNumber: "", quantity: "", unitPriceUsd: "", etaDate: "", warehouseEtaDate: "", notes: "" });
+      } else {
+        toast({ title: "등록 실패", description: result.message, variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "오류", description: "입항스케줄 등록 중 오류가 발생했습니다", variant: "destructive" });
+    } finally {
+      setIsCreatingShipment(false);
     }
   };
 
@@ -378,6 +432,120 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
                   </div>
                 </div>
               </div>
+
+              {/* 입항스케줄 등록 */}
+              {canReceive && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-semibold flex items-center gap-2">
+                      <Ship className="h-4 w-4" />
+                      입항스케줄
+                    </h4>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowShipmentForm(!showShipmentForm)}
+                    >
+                      <Plus className="mr-1 h-3 w-3" />
+                      {showShipmentForm ? "접기" : "등록"}
+                    </Button>
+                  </div>
+                  {showShipmentForm && (
+                    <div className="rounded-lg border p-4 space-y-3 bg-slate-50/50">
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <div>
+                          <Label className="text-xs">B/L 번호</Label>
+                          <Input
+                            placeholder="KOSU1234567"
+                            value={shipmentForm.blNumber}
+                            onChange={(e) => setShipmentForm((f) => ({ ...f, blNumber: e.target.value }))}
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">컨테이너 번호</Label>
+                          <Input
+                            placeholder="CNTR-001"
+                            value={shipmentForm.containerNumber}
+                            onChange={(e) => setShipmentForm((f) => ({ ...f, containerNumber: e.target.value }))}
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Invoice 번호</Label>
+                          <Input
+                            placeholder="INV-2025-001"
+                            value={shipmentForm.invoiceNumber}
+                            onChange={(e) => setShipmentForm((f) => ({ ...f, invoiceNumber: e.target.value }))}
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <div>
+                          <Label className="text-xs">수량</Label>
+                          <Input
+                            type="number"
+                            placeholder="0"
+                            value={shipmentForm.quantity}
+                            onChange={(e) => setShipmentForm((f) => ({ ...f, quantity: e.target.value }))}
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">단가 (USD)</Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={shipmentForm.unitPriceUsd}
+                            onChange={(e) => setShipmentForm((f) => ({ ...f, unitPriceUsd: e.target.value }))}
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">메모</Label>
+                          <Input
+                            placeholder="비고"
+                            value={shipmentForm.notes}
+                            onChange={(e) => setShipmentForm((f) => ({ ...f, notes: e.target.value }))}
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <Label className="text-xs">입항예정일 (ETA)</Label>
+                          <Input
+                            type="date"
+                            value={shipmentForm.etaDate}
+                            onChange={(e) => setShipmentForm((f) => ({ ...f, etaDate: e.target.value }))}
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">창고입고예정일</Label>
+                          <Input
+                            type="date"
+                            value={shipmentForm.warehouseEtaDate}
+                            onChange={(e) => setShipmentForm((f) => ({ ...f, warehouseEtaDate: e.target.value }))}
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-end">
+                        <Button
+                          size="sm"
+                          onClick={handleCreateShipment}
+                          disabled={isCreatingShipment}
+                        >
+                          {isCreatingShipment ? "등록 중..." : "입항스케줄 등록"}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* 상태 변경 + 액션 버튼 */}
               <div className="flex flex-wrap items-center justify-between gap-2">

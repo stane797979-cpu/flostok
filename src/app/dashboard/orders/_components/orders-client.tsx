@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, useTransition } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Download, Loader2, PackagePlus, XCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Loader2, PackagePlus, XCircle, PackageCheck, Upload } from "lucide-react";
 import { DeliveryComplianceTab } from "./delivery-compliance-tab";
 import { ImportShipmentTab } from "./import-shipment-tab";
 import type { DeliveryComplianceResult } from "@/server/services/scm/delivery-compliance";
@@ -29,9 +29,10 @@ import {
   getPurchaseOrders,
   getReorderItems,
   cancelBulkPurchaseOrders,
+  uploadPurchaseOrderExcel,
 } from "@/server/actions/purchase-orders";
 import { exportPurchaseOrderToExcel, exportInboundRecordsToExcel } from "@/server/actions/excel-export";
-import { getInboundRecords } from "@/server/actions/inbound";
+import { getInboundRecords, bulkConfirmInbound } from "@/server/actions/inbound";
 import type { ReorderItem as ServerReorderItem } from "@/server/services/scm/reorder-recommendation";
 
 /**
@@ -171,6 +172,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
   // 발주 현황 체크박스
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [isCancellingOrders, setIsCancellingOrders] = useState(false);
+  const [isConfirmingInbound, setIsConfirmingInbound] = useState(false);
 
   // 입고 현황 상태
   const [inboundMonth, setInboundMonth] = useState<Date>(() => new Date());
@@ -178,6 +180,10 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
   const [isLoadingInbound, setIsLoadingInbound] = useState(false);
   const [isDownloadingInbound, setIsDownloadingInbound] = useState(false);
   const [otherInboundOpen, setOtherInboundOpen] = useState(false);
+
+  // 발주 엑셀 업로드
+  const orderUploadRef = useRef<HTMLInputElement>(null);
+  const [isUploadingOrders, startUploadTransition] = useTransition();
 
   const { toast } = useToast();
 
@@ -496,6 +502,78 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
     }
   };
 
+  const handleOrderExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    startUploadTransition(async () => {
+      const result = await uploadPurchaseOrderExcel(formData);
+      if (result.success) {
+        toast({ title: "업로드 완료", description: result.message });
+        loadPurchaseOrders();
+        loadReorderItems();
+      } else {
+        toast({ title: "업로드 실패", description: result.message, variant: "destructive" });
+      }
+    });
+
+    e.target.value = "";
+  };
+
+  const handleBulkInbound = async () => {
+    if (selectedOrderIds.length === 0) return;
+
+    // 입고 가능한 상태의 발주만 필터
+    const inboundCapableStatuses = ["ordered", "pending_receipt"];
+    const inboundableIds = purchaseOrders
+      .filter((o) => selectedOrderIds.includes(o.id) && inboundCapableStatuses.includes(o.status))
+      .map((o) => o.id);
+
+    if (inboundableIds.length === 0) {
+      toast({
+        title: "입고 처리 불가",
+        description: "선택된 발주서 중 입고 가능한 발주서가 없습니다 (발주완료/입고대기 상태만 가능)",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsConfirmingInbound(true);
+    try {
+      const result = await bulkConfirmInbound(inboundableIds);
+
+      if (result.success) {
+        toast({
+          title: "일괄 입고 완료",
+          description: `${result.processedCount}건의 발주서가 전량 입고 처리되었습니다`,
+        });
+        setSelectedOrderIds([]);
+        loadPurchaseOrders();
+        loadReorderItems();
+      }
+
+      if (result.errors.length > 0) {
+        toast({
+          title: result.processedCount > 0 ? "일부 입고 실패" : "입고 실패",
+          description: result.errors[0]?.error || "입고 처리에 실패한 발주서가 있습니다",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("일괄 입고확인 오류:", error);
+      toast({
+        title: "오류",
+        description: "일괄 입고확인 처리 중 오류가 발생했습니다",
+        variant: "destructive",
+      });
+    } finally {
+      setIsConfirmingInbound(false);
+    }
+  };
+
   const handleApproveAutoReorders = async (ids: string[]) => {
     try {
       // 선택된 추천 목록에서 발주 데이터 추출
@@ -600,8 +678,30 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
 
           <Card>
             <CardHeader>
-              <CardTitle>발주 필요 품목</CardTitle>
-              <CardDescription>현재고가 발주점 이하인 품목 목록입니다</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>발주 필요 품목</CardTitle>
+                  <CardDescription>현재고가 발주점 이하인 품목 목록입니다</CardDescription>
+                </div>
+                <div>
+                  <input
+                    ref={orderUploadRef}
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    className="hidden"
+                    onChange={handleOrderExcelUpload}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={isUploadingOrders}
+                    onClick={() => orderUploadRef.current?.click()}
+                  >
+                    <Upload className="mr-1 h-4 w-4" />
+                    {isUploadingOrders ? "업로드 중..." : "발주 엑셀 업로드"}
+                  </Button>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               <ReorderItemsTable
@@ -644,19 +744,33 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                   <CardDescription>진행 중인 발주서 목록입니다</CardDescription>
                 </div>
                 {selectedOrderIds.length > 0 && (
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={handleBulkCancel}
-                    disabled={isCancellingOrders}
-                  >
-                    {isCancellingOrders ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <XCircle className="mr-2 h-4 w-4" />
-                    )}
-                    {selectedOrderIds.length}건 일괄 취소
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={handleBulkInbound}
+                      disabled={isConfirmingInbound || isCancellingOrders}
+                    >
+                      {isConfirmingInbound ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <PackageCheck className="mr-2 h-4 w-4" />
+                      )}
+                      {selectedOrderIds.length}건 일괄 입고확인
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={handleBulkCancel}
+                      disabled={isCancellingOrders || isConfirmingInbound}
+                    >
+                      {isCancellingOrders ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <XCircle className="mr-2 h-4 w-4" />
+                      )}
+                      {selectedOrderIds.length}건 일괄 취소
+                    </Button>
+                  </div>
                 )}
               </div>
             </CardHeader>
