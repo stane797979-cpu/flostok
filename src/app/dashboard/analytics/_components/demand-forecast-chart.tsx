@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { Line, LineChart, CartesianGrid, XAxis, YAxis, ReferenceLine, ReferenceArea } from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from "@/components/ui/chart";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Loader2, TrendingUp, BarChart3, Target, AlertCircle, Check, ChevronsUpDown } from "lucide-react";
+import { Loader2, TrendingUp, BarChart3, Target, AlertCircle, Check, ChevronsUpDown, Settings2, Sparkles, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getDemandForecast } from "@/server/actions/analytics";
 import {
@@ -20,6 +21,17 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 
 interface ForecastData {
   productId: string;
@@ -27,6 +39,17 @@ interface ForecastData {
   method: string;
   confidence: string;
   mape: number;
+  selectionReason: string;
+  seasonallyAdjusted: boolean;
+  isManual: boolean;
+  meta: {
+    abcGrade: string | null;
+    xyzGrade: string | null;
+    turnoverRate: number | null;
+    yoyGrowthRate: number | null;
+    isOverstock: boolean;
+    dataMonths: number;
+  };
   history: Array<{ month: string; value: number }>;
   predicted: Array<{ month: string; value: number }>;
 }
@@ -49,18 +72,58 @@ const CONFIDENCE_MAP: Record<string, { label: string; color: string }> = {
   low: { label: "낮음", color: "bg-red-100 text-red-700" },
 };
 
+const ABC_COLORS: Record<string, string> = {
+  A: "bg-red-100 text-red-700 border-red-200",
+  B: "bg-yellow-100 text-yellow-700 border-yellow-200",
+  C: "bg-slate-100 text-slate-600 border-slate-200",
+};
+
+const XYZ_COLORS: Record<string, string> = {
+  X: "bg-green-100 text-green-700 border-green-200",
+  Y: "bg-orange-100 text-orange-700 border-orange-200",
+  Z: "bg-purple-100 text-purple-700 border-purple-200",
+};
+
+const forecastChartConfig = {
+  history: { label: "과거 실적", color: "#3b82f6" },
+  predicted: { label: "수요 예측", color: "#f59e0b" },
+} satisfies ChartConfig;
+
 export function DemandForecastChart() {
   const [products, setProducts] = useState<ProductOption[]>([]);
   const [selectedProductId, setSelectedProductId] = useState<string>("");
   const [forecast, setForecast] = useState<ForecastData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [hoveredPoint, setHoveredPoint] = useState<number | null>(null);
   const [comboboxOpen, setComboboxOpen] = useState(false);
 
-  const loadForecast = useCallback(async (productId?: string) => {
+  // 수동/자동 선택 상태
+  const [selectionMode, setSelectionMode] = useState<"auto" | "manual">("auto");
+  const [manualMethod, setManualMethod] = useState<string>("SMA");
+  const [manualAlpha, setManualAlpha] = useState<string>("0.3");
+  const [manualBeta, setManualBeta] = useState<string>("0.1");
+  const [manualWindowSize, setManualWindowSize] = useState<string>("3");
+
+  const loadForecast = useCallback(async (
+    productId?: string,
+    mode?: "auto" | "manual",
+    method?: string,
+    params?: Record<string, number>
+  ) => {
     setIsLoading(true);
     try {
-      const result = await getDemandForecast(productId);
+      const options: {
+        productId?: string;
+        manualMethod?: "SMA" | "SES" | "Holts";
+        manualParams?: Record<string, number>;
+      } = {};
+
+      if (productId) options.productId = productId;
+      if (mode === "manual" && method) {
+        options.manualMethod = method as "SMA" | "SES" | "Holts";
+        options.manualParams = params;
+      }
+
+      const result = await getDemandForecast(options);
       setProducts(result.products);
       setForecast(result.forecast);
       if (result.forecast) {
@@ -79,19 +142,71 @@ export function DemandForecastChart() {
 
   const handleProductChange = (productId: string) => {
     setSelectedProductId(productId);
-    loadForecast(productId);
+    if (selectionMode === "manual") {
+      const params = buildManualParams();
+      loadForecast(productId, "manual", manualMethod, params);
+    } else {
+      loadForecast(productId);
+    }
   };
 
-  // 차트 데이터 통합 (과거 + 예측)
-  const chartData = useMemo(() => {
+  const buildManualParams = () => {
+    const params: Record<string, number> = {};
+    if (manualMethod === "SMA") {
+      params.windowSize = Number(manualWindowSize) || 3;
+    } else if (manualMethod === "SES") {
+      params.alpha = Number(manualAlpha) || 0.3;
+    } else if (manualMethod === "Holts") {
+      params.alpha = Number(manualAlpha) || 0.3;
+      params.beta = Number(manualBeta) || 0.1;
+    }
+    return params;
+  };
+
+  const handleModeChange = (mode: "auto" | "manual") => {
+    setSelectionMode(mode);
+    if (mode === "auto") {
+      loadForecast(selectedProductId || undefined);
+    }
+  };
+
+  const handleManualApply = () => {
+    const params = buildManualParams();
+    loadForecast(selectedProductId || undefined, "manual", manualMethod, params);
+  };
+
+  // Recharts용 데이터 변환
+  const rechartsData = useMemo(() => {
     if (!forecast) return [];
-    return [
-      ...forecast.history.map((h) => ({ month: h.month, value: h.value, type: "history" as const })),
-      ...forecast.predicted.map((p) => ({ month: p.month, value: p.value, type: "predicted" as const })),
-    ];
+
+    const historyCount = forecast.history.length;
+    const result: Array<{ month: string; history: number | null; predicted: number | null }> = [];
+
+    forecast.history.forEach((h) => {
+      result.push({ month: h.month, history: h.value, predicted: null });
+    });
+
+    if (result.length > 0 && forecast.predicted.length > 0) {
+      result[historyCount - 1].predicted = result[historyCount - 1].history;
+    }
+
+    forecast.predicted.forEach((p) => {
+      result.push({ month: p.month, history: null, predicted: p.value });
+    });
+
+    return result;
   }, [forecast]);
 
-  // 통계
+  const boundaryMonth = useMemo(() => {
+    if (!forecast || forecast.history.length === 0) return null;
+    return forecast.history[forecast.history.length - 1].month;
+  }, [forecast]);
+
+  const lastMonth = useMemo(() => {
+    if (!forecast || forecast.predicted.length === 0) return null;
+    return forecast.predicted[forecast.predicted.length - 1].month;
+  }, [forecast]);
+
   const stats = useMemo(() => {
     if (!forecast) return null;
     const historyValues = forecast.history.map((h) => h.value);
@@ -104,62 +219,6 @@ export function DemandForecastChart() {
     const trend = avgHistory > 0 ? ((avgPredicted - avgHistory) / avgHistory) * 100 : 0;
     return { avgHistory, avgPredicted, trend };
   }, [forecast]);
-
-  // SVG 차트 계산
-  const chart = useMemo(() => {
-    if (chartData.length === 0) return null;
-    const width = 800;
-    const height = 240;
-    const pad = { top: 16, right: 20, bottom: 36, left: 60 };
-    const innerW = width - pad.left - pad.right;
-    const innerH = height - pad.top - pad.bottom;
-
-    const values = chartData.map((d) => d.value);
-    const maxVal = Math.max(...values) * 1.15;
-    const minVal = Math.max(0, Math.min(...values) * 0.85);
-    const xDivisor = chartData.length > 1 ? chartData.length - 1 : 1;
-    const yRange = maxVal - minVal || 1; // 모든 값이 같을 때 0 나누기 방어
-
-    const xScale = (i: number) => pad.left + (i / xDivisor) * innerW;
-    const yScale = (v: number) =>
-      pad.top + innerH - ((v - minVal) / yRange) * innerH;
-
-    // 과거 실적 라인
-    const historyCount = forecast!.history.length;
-    const historyPath = chartData
-      .slice(0, historyCount)
-      .map((d, i) => `${i === 0 ? "M" : "L"} ${xScale(i)},${yScale(d.value)}`)
-      .join(" ");
-
-    // 예측 라인 (마지막 실적 포인트부터 시작)
-    const predictedPath = chartData
-      .slice(historyCount - 1)
-      .map((d, i) => {
-        const idx = historyCount - 1 + i;
-        return `${i === 0 ? "M" : "L"} ${xScale(idx)},${yScale(d.value)}`;
-      })
-      .join(" ");
-
-    // Y축 레이블
-    const yLabelCount = 5;
-    const yStep = yRange / (yLabelCount - 1);
-    const yLabels = Array.from({ length: yLabelCount }, (_, i) => {
-      const value = minVal + yStep * i;
-      return { value, y: yScale(value) };
-    });
-
-    // X축 레이블 (간격 조정)
-    const step = Math.max(1, Math.floor(chartData.length / 6));
-    const xLabels = chartData
-      .map((d, i) => ({ ...d, index: i }))
-      .filter((_, i) => i % step === 0 || i === chartData.length - 1);
-
-    return {
-      width, height, pad, xScale, yScale,
-      historyPath, predictedPath, historyCount,
-      yLabels, xLabels, maxVal, minVal,
-    };
-  }, [chartData, forecast]);
 
   if (isLoading) {
     return (
@@ -185,14 +244,14 @@ export function DemandForecastChart() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* 제품 선택 */}
+    <div className="space-y-4">
+      {/* 제품 선택 + 방법 선택 */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">제품 선택</CardTitle>
           <CardDescription>수요예측을 확인할 제품을 선택하세요</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <Popover open={comboboxOpen} onOpenChange={setComboboxOpen}>
             <PopoverTrigger asChild>
               <Button
@@ -242,6 +301,106 @@ export function DemandForecastChart() {
               </Command>
             </PopoverContent>
           </Popover>
+
+          <Separator />
+
+          {/* 자동/수동 방법 선택 */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Label className="text-sm font-medium">예측 방법</Label>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant={selectionMode === "auto" ? "default" : "outline"}
+                onClick={() => handleModeChange("auto")}
+                className="gap-1.5"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                자동 선택
+              </Button>
+              <Button
+                size="sm"
+                variant={selectionMode === "manual" ? "default" : "outline"}
+                onClick={() => handleModeChange("manual")}
+                className="gap-1.5"
+              >
+                <Settings2 className="h-3.5 w-3.5" />
+                수동 선택
+              </Button>
+            </div>
+
+            {selectionMode === "manual" && (
+              <div className="rounded-lg border bg-muted/30 p-3 space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">예측 방법</Label>
+                    <Select value={manualMethod} onValueChange={setManualMethod}>
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="SMA">단순이동평균 (SMA)</SelectItem>
+                        <SelectItem value="SES">지수평활법 (SES)</SelectItem>
+                        <SelectItem value="Holts">이중지수평활 (Holt&apos;s)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {manualMethod === "SMA" && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">이동 윈도우 크기</Label>
+                      <Input
+                        type="number"
+                        min={2}
+                        max={12}
+                        value={manualWindowSize}
+                        onChange={(e) => setManualWindowSize(e.target.value)}
+                        className="h-8 text-xs"
+                        placeholder="3"
+                      />
+                    </div>
+                  )}
+
+                  {(manualMethod === "SES" || manualMethod === "Holts") && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">평활계수 (α)</Label>
+                      <Input
+                        type="number"
+                        min={0.01}
+                        max={0.99}
+                        step={0.05}
+                        value={manualAlpha}
+                        onChange={(e) => setManualAlpha(e.target.value)}
+                        className="h-8 text-xs"
+                        placeholder="0.3"
+                      />
+                    </div>
+                  )}
+
+                  {manualMethod === "Holts" && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">추세계수 (β)</Label>
+                      <Input
+                        type="number"
+                        min={0.01}
+                        max={0.99}
+                        step={0.05}
+                        value={manualBeta}
+                        onChange={(e) => setManualBeta(e.target.value)}
+                        className="h-8 text-xs"
+                        placeholder="0.1"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <Button size="sm" onClick={handleManualApply} className="w-full h-8 text-xs">
+                  적용
+                </Button>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 
@@ -257,6 +416,66 @@ export function DemandForecastChart() {
         </Card>
       ) : (
         <>
+          {/* 선택 기준 카드 */}
+          <Card className="border-blue-100 bg-blue-50/30">
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <Info className="h-4 w-4 text-blue-600" />
+                <CardTitle className="text-sm text-blue-900">
+                  {forecast.isManual ? "수동 선택" : "자동 선택"} 기준
+                </CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {/* 제품 메타 배지 */}
+              <div className="flex flex-wrap gap-1.5">
+                {forecast.meta.abcGrade && (
+                  <Badge variant="outline" className={cn("text-xs", ABC_COLORS[forecast.meta.abcGrade])}>
+                    ABC: {forecast.meta.abcGrade}등급
+                  </Badge>
+                )}
+                {forecast.meta.xyzGrade && (
+                  <Badge variant="outline" className={cn("text-xs", XYZ_COLORS[forecast.meta.xyzGrade])}>
+                    XYZ: {forecast.meta.xyzGrade}등급
+                  </Badge>
+                )}
+                <Badge variant="outline" className="text-xs">
+                  데이터: {forecast.meta.dataMonths}개월
+                </Badge>
+                {forecast.meta.turnoverRate !== null && (
+                  <Badge variant="outline" className="text-xs">
+                    회전율: {forecast.meta.turnoverRate}회/년
+                  </Badge>
+                )}
+                {forecast.meta.yoyGrowthRate !== null && (
+                  <Badge variant="outline" className={cn(
+                    "text-xs",
+                    forecast.meta.yoyGrowthRate >= 0
+                      ? "bg-green-50 text-green-700 border-green-200"
+                      : "bg-red-50 text-red-700 border-red-200"
+                  )}>
+                    성장률: {forecast.meta.yoyGrowthRate >= 0 ? "+" : ""}{forecast.meta.yoyGrowthRate}%
+                  </Badge>
+                )}
+                {forecast.meta.isOverstock && (
+                  <Badge variant="outline" className="text-xs bg-violet-50 text-violet-700 border-violet-200">
+                    재고과다
+                  </Badge>
+                )}
+                {forecast.seasonallyAdjusted && (
+                  <Badge variant="outline" className="text-xs bg-cyan-50 text-cyan-700 border-cyan-200">
+                    계절조정
+                  </Badge>
+                )}
+              </div>
+
+              {/* 선택 사유 */}
+              <p className="text-xs text-blue-800 leading-relaxed">
+                {forecast.selectionReason}
+              </p>
+            </CardContent>
+          </Card>
+
           {/* 요약 카드 */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Card>
@@ -266,7 +485,9 @@ export function DemandForecastChart() {
               </CardHeader>
               <CardContent>
                 <div className="text-lg font-bold">{METHOD_LABELS[forecast.method] || forecast.method}</div>
-                <p className="mt-1 text-xs text-muted-foreground">자동 선택됨</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {forecast.isManual ? "수동 지정" : "자동 선택됨"}
+                </p>
               </CardContent>
             </Card>
 
@@ -317,7 +538,7 @@ export function DemandForecastChart() {
           </div>
 
           {/* 차트 */}
-          {chart && (
+          {rechartsData.length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle>수요예측 차트</CardTitle>
@@ -326,163 +547,69 @@ export function DemandForecastChart() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="relative w-full overflow-x-auto">
-                  <svg
-                    viewBox={`0 0 ${chart.width} ${chart.height}`}
-                    className="w-full"
-                  >
-                    {/* Y축 그리드 */}
-                    {chart.yLabels.map((label, i) => (
-                      <g key={i}>
-                        <line
-                          x1={chart.pad.left}
-                          y1={label.y}
-                          x2={chart.width - chart.pad.right}
-                          y2={label.y}
-                          stroke="#e5e7eb"
-                          strokeWidth="1"
-                          strokeDasharray="4 4"
-                        />
-                        <text
-                          x={chart.pad.left - 10}
-                          y={label.y}
-                          textAnchor="end"
-                          dominantBaseline="middle"
-                          className="fill-slate-500" fontSize="11"
-                        >
-                          {Math.round(label.value).toLocaleString("ko-KR")}
-                        </text>
-                      </g>
-                    ))}
-
-                    {/* 예측 영역 배경 */}
-                    <rect
-                      x={chart.xScale(chart.historyCount - 1)}
-                      y={chart.pad.top}
-                      width={chart.width - chart.pad.right - chart.xScale(chart.historyCount - 1)}
-                      height={chart.height - chart.pad.top - chart.pad.bottom}
-                      fill="#f0f9ff"
-                      opacity="0.5"
+                <ChartContainer config={forecastChartConfig} className="h-[180px] w-full">
+                  <LineChart data={rechartsData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                    <CartesianGrid strokeDasharray="4 4" vertical={false} />
+                    <XAxis
+                      dataKey="month"
+                      tickFormatter={(m) => m.slice(2).replace("-", "/")}
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={false}
                     />
-
-                    {/* 구분선 (과거/예측 경계) */}
-                    <line
-                      x1={chart.xScale(chart.historyCount - 1)}
-                      y1={chart.pad.top}
-                      x2={chart.xScale(chart.historyCount - 1)}
-                      y2={chart.height - chart.pad.bottom}
-                      stroke="#93c5fd"
-                      strokeWidth="1"
-                      strokeDasharray="6 3"
+                    <YAxis
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={false}
+                      width={56}
+                      tickFormatter={(v) => v.toLocaleString("ko-KR")}
                     />
-
-                    {/* 과거 실적 라인 */}
-                    <path d={chart.historyPath} stroke="#3b82f6" strokeWidth="2.5" fill="none" />
-
-                    {/* 예측 라인 */}
-                    <path
-                      d={chart.predictedPath}
-                      stroke="#f59e0b"
-                      strokeWidth="2.5"
-                      strokeDasharray="8 4"
-                      fill="none"
-                    />
-
-                    {/* 데이터 포인트 */}
-                    {chartData.map((point, index) => (
-                      <circle
-                        key={index}
-                        cx={chart.xScale(index)}
-                        cy={chart.yScale(point.value)}
-                        r={hoveredPoint === index ? 5 : 4}
-                        fill={point.type === "history" ? "#3b82f6" : "#f59e0b"}
-                        stroke="white"
-                        strokeWidth="2"
-                        className="cursor-pointer transition-all"
-                        onMouseEnter={() => setHoveredPoint(index)}
-                        onMouseLeave={() => setHoveredPoint(null)}
+                    {boundaryMonth && lastMonth && (
+                      <ReferenceArea
+                        x1={boundaryMonth}
+                        x2={lastMonth}
+                        fill="#f0f9ff"
+                        fillOpacity={0.5}
                       />
-                    ))}
-
-                    {/* X축 레이블 */}
-                    {chart.xLabels.map((label) => (
-                      <text
-                        key={label.index}
-                        x={chart.xScale(label.index)}
-                        y={chart.height - chart.pad.bottom + 20}
-                        textAnchor="middle"
-                        className="fill-slate-500" fontSize="11"
-                      >
-                        {label.month.slice(2).replace("-", "/")}
-                      </text>
-                    ))}
-
-                    {/* 호버 툴팁 */}
-                    {hoveredPoint !== null && chartData[hoveredPoint] && (
-                      <g>
-                        <rect
-                          x={chart.xScale(hoveredPoint) - 60}
-                          y={chart.yScale(chartData[hoveredPoint].value) - 45}
-                          width="120"
-                          height="38"
-                          rx="6"
-                          className="fill-slate-800"
-                          opacity="0.95"
-                        />
-                        <text
-                          x={chart.xScale(hoveredPoint)}
-                          y={chart.yScale(chartData[hoveredPoint].value) - 30}
-                          textAnchor="middle"
-                          className="fill-white font-medium" fontSize="10"
-                        >
-                          {chartData[hoveredPoint].month} ({chartData[hoveredPoint].type === "history" ? "실적" : "예측"})
-                        </text>
-                        <text
-                          x={chart.xScale(hoveredPoint)}
-                          y={chart.yScale(chartData[hoveredPoint].value) - 15}
-                          textAnchor="middle"
-                          className="fill-white font-bold" fontSize="10"
-                        >
-                          {chartData[hoveredPoint].value.toLocaleString("ko-KR")}개
-                        </text>
-                      </g>
                     )}
-
-                    {/* 범례 라벨 */}
-                    <text
-                      x={chart.xScale(Math.floor(chart.historyCount / 2))}
-                      y={chart.pad.top + 10}
-                      textAnchor="middle"
-                      className="fill-blue-600" fontSize="10"
-                    >
-                      과거 실적
-                    </text>
-                    <text
-                      x={chart.xScale(chart.historyCount + Math.floor((chartData.length - chart.historyCount) / 2))}
-                      y={chart.pad.top + 10}
-                      textAnchor="middle"
-                      className="fill-amber-600" fontSize="10"
-                    >
-                      수요 예측
-                    </text>
-                  </svg>
-                </div>
-
-                {/* 범례 */}
-                <div className="mt-4 flex items-center gap-6 border-t pt-4">
-                  <div className="flex items-center gap-2">
-                    <div className="h-0.5 w-6 bg-blue-500" />
-                    <span className="text-xs text-slate-600">과거 실적</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="h-0.5 w-6 border-b-2 border-dashed border-amber-500" />
-                    <span className="text-xs text-slate-600">수요 예측</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="h-3 w-3 rounded-sm bg-blue-50 ring-1 ring-blue-200" />
-                    <span className="text-xs text-slate-600">예측 구간</span>
-                  </div>
-                </div>
+                    {boundaryMonth && (
+                      <ReferenceLine
+                        x={boundaryMonth}
+                        stroke="#93c5fd"
+                        strokeDasharray="6 3"
+                      />
+                    )}
+                    <ChartTooltip
+                      content={
+                        <ChartTooltipContent
+                          labelFormatter={(label) => `${label}`}
+                          formatter={(value, name) => {
+                            const label = name === "history" ? "실적" : "예측";
+                            return [`${Number(value).toLocaleString("ko-KR")}개`, label];
+                          }}
+                        />
+                      }
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="history"
+                      stroke="var(--color-history)"
+                      strokeWidth={2.5}
+                      dot={{ r: 4 }}
+                      connectNulls={false}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="predicted"
+                      stroke="var(--color-predicted)"
+                      strokeWidth={2.5}
+                      strokeDasharray="8 4"
+                      dot={{ r: 4 }}
+                      connectNulls={false}
+                    />
+                    <ChartLegend content={<ChartLegendContent />} />
+                  </LineChart>
+                </ChartContainer>
               </CardContent>
             </Card>
           )}

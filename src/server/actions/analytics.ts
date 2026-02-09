@@ -9,7 +9,7 @@
 
 import { requireAuth } from './auth-helpers'
 import { db } from '@/server/db'
-import { products, salesRecords } from '@/server/db/schema'
+import { products, salesRecords, inventory } from '@/server/db/schema'
 import { eq, and, gte, sql } from 'drizzle-orm'
 import {
   performABCAnalysis,
@@ -20,8 +20,10 @@ import {
 } from '@/server/services/scm/abc-xyz-analysis'
 import {
   forecastDemand,
+  forecastDemandWithMethod,
   backtestForecast,
   type TimeSeriesDataPoint,
+  type ForecastMethodType,
 } from '@/server/services/scm/demand-forecast'
 
 /**
@@ -161,9 +163,16 @@ export async function getABCXYZAnalysis() {
 /**
  * 수요예측 데이터 조회
  * - 특정 제품 또는 전체 상위 제품의 과거 판매 이력 + 예측 결과 반환
- * - forecastDemand() 서비스 사용
+ * - forecastDemand() 서비스 사용 (자동 방법 선택)
+ * - 수동 방법 지정 시 forecastDemandWithMethod() 사용
  */
-export async function getDemandForecast(productId?: string): Promise<{
+export async function getDemandForecast(options?: {
+  productId?: string
+  /** 수동 방법 선택 시 */
+  manualMethod?: ForecastMethodType
+  /** 수동 파라미터 (α, β, windowSize 등) */
+  manualParams?: Record<string, number>
+}): Promise<{
   products: Array<{
     id: string
     sku: string
@@ -175,6 +184,18 @@ export async function getDemandForecast(productId?: string): Promise<{
     method: string
     confidence: string
     mape: number
+    selectionReason: string
+    seasonallyAdjusted: boolean
+    isManual: boolean
+    /** 제품 메타 정보 */
+    meta: {
+      abcGrade: string | null
+      xyzGrade: string | null
+      turnoverRate: number | null
+      yoyGrowthRate: number | null
+      isOverstock: boolean
+      dataMonths: number
+    }
     history: Array<{ month: string; value: number }>
     predicted: Array<{ month: string; value: number }>
   } | null
@@ -182,6 +203,9 @@ export async function getDemandForecast(productId?: string): Promise<{
   try {
     const user = await requireAuth()
     const orgId = user.organizationId
+    const productId = options?.productId
+    const manualMethod = options?.manualMethod
+    const manualParams = options?.manualParams
 
     // 1. 조직의 전체 제품 목록 조회
     const allProducts = await db
@@ -213,7 +237,42 @@ export async function getDemandForecast(productId?: string): Promise<{
       selectedProductId = topProduct[0].productId
     }
 
-    // 3. 선택된 제품의 최근 12개월 월별 판매량 조회
+    // 3. 제품 상세 정보 조회 (ABC, XYZ, 안전재고 등)
+    const productDetail = await db
+      .select({
+        id: products.id,
+        name: products.name,
+        abcGrade: products.abcGrade,
+        xyzGrade: products.xyzGrade,
+        safetyStock: products.safetyStock,
+      })
+      .from(products)
+      .where(eq(products.id, selectedProductId))
+      .limit(1)
+
+    if (productDetail.length === 0) {
+      return { products: allProducts, forecast: null }
+    }
+
+    const product = productDetail[0]
+
+    // 4. 현재 재고 조회 (과다재고 판정용)
+    const inventoryRow = await db
+      .select({ currentStock: inventory.currentStock })
+      .from(inventory)
+      .where(
+        and(
+          eq(inventory.organizationId, orgId),
+          eq(inventory.productId, selectedProductId)
+        )
+      )
+      .limit(1)
+
+    const currentStock = inventoryRow[0]?.currentStock ?? 0
+    const safetyStock = product.safetyStock ?? 0
+    const isOverstock = safetyStock > 0 && currentStock >= safetyStock * 3
+
+    // 5. 최근 12개월 월별 판매량 조회
     const twelveMonthsAgo = new Date()
     twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12)
     const startDate = twelveMonthsAgo.toISOString().split('T')[0]
@@ -234,34 +293,66 @@ export async function getDemandForecast(productId?: string): Promise<{
       .groupBy(sql`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`)
       .orderBy(sql`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`)
 
-    // 4. 판매 이력이 2개월 미만이면 예측 불가
     if (monthlySales.length < 2) {
       return { products: allProducts, forecast: null }
     }
 
-    // 5. TimeSeriesDataPoint 형식으로 변환 (각 월의 1일)
+    // 6. 회전율 계산 (연간 판매량 / 현재 재고)
+    const totalSalesQty = monthlySales.reduce((sum, r) => sum + Number(r.totalQuantity), 0)
+    const annualizedSales = (totalSalesQty / monthlySales.length) * 12
+    const turnoverRate = currentStock > 0 ? annualizedSales / currentStock : undefined
+
+    // 7. 전년 대비 성장률 계산 (6개월 이상 데이터 필요)
+    let yoyGrowthRate: number | undefined
+    if (monthlySales.length >= 6) {
+      const halfLen = Math.floor(monthlySales.length / 2)
+      const firstHalf = monthlySales.slice(0, halfLen)
+      const secondHalf = monthlySales.slice(halfLen)
+      const firstAvg = firstHalf.reduce((s, r) => s + Number(r.totalQuantity), 0) / firstHalf.length
+      const secondAvg = secondHalf.reduce((s, r) => s + Number(r.totalQuantity), 0) / secondHalf.length
+      if (firstAvg > 0) {
+        yoyGrowthRate = ((secondAvg - firstAvg) / firstAvg) * 100
+      }
+    }
+
+    // 8. TimeSeriesDataPoint 형식으로 변환
     const historyPoints: TimeSeriesDataPoint[] = monthlySales.map((row) => ({
       date: new Date(`${row.month}-01`),
       value: Number(row.totalQuantity),
     }))
-
-    // 6. forecastDemand 호출 (3개월 예측)
-    const forecastResult = forecastDemand({
-      history: historyPoints,
-      periods: 3,
-    })
-
-    // 7. backtestForecast로 정확도 계산 (숫자 배열 전달)
     const historyValues = historyPoints.map((h) => h.value)
+
+    // 9. 예측 실행 (자동 or 수동)
+    let forecastResult
+    const isManual = !!manualMethod
+
+    if (manualMethod) {
+      // 수동 방법 지정
+      forecastResult = forecastDemandWithMethod(historyValues, 3, manualMethod, manualParams)
+      forecastResult.selectionReason = `수동 선택: ${manualMethod}`
+    } else {
+      // 자동 방법 선택 (확장된 입력)
+      forecastResult = forecastDemand({
+        history: historyPoints,
+        periods: 3,
+        abcGrade: product.abcGrade as "A" | "B" | "C" | undefined,
+        xyzGrade: product.xyzGrade as "X" | "Y" | "Z" | undefined,
+        turnoverRate,
+        yoyGrowthRate,
+        isOverstock,
+      })
+    }
+
+    // 10. 백테스트 정확도
     const backtestResult = backtestForecast(historyValues, 3, forecastResult.method)
 
-    // 8. 제품 정보 조회
+    // 11. 제품 정보 확인
     const selectedProduct = allProducts.find((p) => p.id === selectedProductId)
     if (!selectedProduct) {
       return { products: allProducts, forecast: null }
     }
 
-    // 9. 예측 결과에 날짜 매핑 (마지막 이력 월 이후 3개월)
+    // 12. 예측 결과에 날짜 매핑
     const lastHistoryDate = historyPoints[historyPoints.length - 1].date
     const predictedMonths = forecastResult.forecast.map((value, i) => {
       const d = new Date(lastHistoryDate)
@@ -272,15 +363,25 @@ export async function getDemandForecast(productId?: string): Promise<{
       }
     })
 
-    // 10. 반환 데이터 구성
     return {
       products: allProducts,
       forecast: {
         productId: selectedProductId,
         productName: selectedProduct.name,
         method: forecastResult.method,
-        confidence: backtestResult.confidence,
-        mape: Math.round(backtestResult.mape * 10) / 10,
+        confidence: forecastResult.confidence ?? backtestResult.confidence,
+        mape: Math.round((forecastResult.mape ?? backtestResult.mape) * 10) / 10,
+        selectionReason: forecastResult.selectionReason ?? '자동 선택',
+        seasonallyAdjusted: forecastResult.seasonallyAdjusted ?? false,
+        isManual,
+        meta: {
+          abcGrade: product.abcGrade,
+          xyzGrade: product.xyzGrade,
+          turnoverRate: turnoverRate ? Math.round(turnoverRate * 10) / 10 : null,
+          yoyGrowthRate: yoyGrowthRate ? Math.round(yoyGrowthRate * 10) / 10 : null,
+          isOverstock,
+          dataMonths: monthlySales.length,
+        },
         history: historyPoints.map((h) => ({
           month: `${h.date.getFullYear()}-${String(h.date.getMonth() + 1).padStart(2, '0')}`,
           value: h.value,

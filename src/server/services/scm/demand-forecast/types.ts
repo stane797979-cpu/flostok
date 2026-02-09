@@ -2,7 +2,9 @@
  * 수요예측 타입 정의
  */
 
-import { XYZGrade } from "../abc-xyz-analysis";
+import { type ABCGrade, type XYZGrade } from "../abc-xyz-analysis";
+
+export type { ABCGrade };
 
 /**
  * 예측 방법 타입
@@ -30,6 +32,14 @@ export interface ForecastInput {
   periods: number;
   /** XYZ 등급 (선택) */
   xyzGrade?: XYZGrade;
+  /** ABC 등급 (선택) */
+  abcGrade?: ABCGrade;
+  /** 재고 회전율 (연간, 선택) */
+  turnoverRate?: number;
+  /** 전년 대비 매출 성장률 (%, 선택) */
+  yoyGrowthRate?: number;
+  /** 재고 과다 여부 (선택) */
+  isOverstock?: boolean;
 }
 
 /**
@@ -48,6 +58,10 @@ export interface ForecastResult {
   mae?: number;
   /** 신뢰도 등급 */
   confidence?: "high" | "medium" | "low";
+  /** 선택 사유 (자동 선택 시 왜 이 방법인지 설명) */
+  selectionReason?: string;
+  /** 계절 조정 적용 여부 */
+  seasonallyAdjusted?: boolean;
 }
 
 /**
@@ -70,6 +84,18 @@ export interface ForecastMetadata {
   dataMonths: number;
   /** XYZ 등급 */
   xyzGrade?: XYZGrade;
+  /** ABC 등급 */
+  abcGrade?: ABCGrade;
   /** 추세 존재 여부 */
   hasTrend?: boolean;
+  /** 재고 회전율 (연간) */
+  turnoverRate?: number;
+  /** 전년 대비 매출 성장률 (%) */
+  yoyGrowthRate?: number;
+  /** 재고 과다 여부 */
+  isOverstock?: boolean;
+  /** 유의미한 계절성 존재 여부 */
+  hasSeasonality?: boolean;
+  /** 월별 계절지수 (12개) */
+  seasonalIndices?: number[];
 }
