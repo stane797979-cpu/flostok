@@ -2,7 +2,7 @@
 
 import { db } from "@/server/db";
 import { stockoutRecords, products, inventory } from "@/server/db/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, isNull } from "drizzle-orm";
 import { getCurrentUser } from "./auth-helpers";
 import { revalidatePath } from "next/cache";
 
@@ -15,6 +15,7 @@ export interface StockoutRecordItem {
   baseStock: number;
   outboundQty: number;
   closingStock: number;
+  currentStock: number;
   isStockout: boolean;
   stockoutStartDate: string | null;
   stockoutEndDate: string | null;
@@ -34,13 +35,67 @@ export interface StockoutSummary {
 }
 
 /**
- * 결품 기록 조회 + 현재 품절 상태 제품 자동 감지
+ * 결품 기록 조회 + 현재 품절 자동 감지 + 정상화 자동 처리
+ *
+ * 동작 원리:
+ * 1. DB에서 진행 중 결품(endDate 없음) 조회
+ * 2. 해당 제품의 현재 재고 확인 → 재고 ≥ 1이면 자동 정상화 (endDate, durationDays 설정)
+ * 3. 현재 재고=0인데 기록 없는 제품 → 자동 감지하여 가상 기록 추가
+ * 4. 진행 중 결품은 durationDays = (오늘 - 시작일) 실시간 계산
  */
 export async function getStockoutData(): Promise<StockoutSummary> {
   const user = await getCurrentUser();
   const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
+  const today = new Date().toISOString().split("T")[0];
 
-  // 1. 기존 결품 기록 조회
+  // 1. 현재 재고 맵 (전체 제품)
+  const inventoryRows = await db
+    .select({
+      productId: inventory.productId,
+      currentStock: inventory.currentStock,
+    })
+    .from(inventory)
+    .where(eq(inventory.organizationId, orgId));
+  const stockMap = new Map(inventoryRows.map((r) => [r.productId, r.currentStock]));
+
+  // 2. 진행 중인 결품 기록 (endDate가 null) 중 재고가 1 이상인 것 → 자동 정상화
+  const activeRecords = await db
+    .select({
+      id: stockoutRecords.id,
+      productId: stockoutRecords.productId,
+      stockoutStartDate: stockoutRecords.stockoutStartDate,
+    })
+    .from(stockoutRecords)
+    .where(
+      and(
+        eq(stockoutRecords.organizationId, orgId),
+        eq(stockoutRecords.isStockout, true),
+        isNull(stockoutRecords.stockoutEndDate)
+      )
+    );
+
+  for (const record of activeRecords) {
+    const currentStock = stockMap.get(record.productId) ?? 0;
+    if (currentStock >= 1) {
+      // 재고 회복 → 자동 정상화
+      const startDate = record.stockoutStartDate ? new Date(record.stockoutStartDate) : new Date();
+      const endDate = new Date(today);
+      const duration = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+
+      await db
+        .update(stockoutRecords)
+        .set({
+          stockoutEndDate: today,
+          durationDays: duration,
+          closingStock: currentStock,
+          actionStatus: "normalized",
+          updatedAt: new Date(),
+        })
+        .where(eq(stockoutRecords.id, record.id));
+    }
+  }
+
+  // 3. 전체 결품 기록 조회 (정상화 반영 후)
   const existingRecords = await db
     .select({
       id: stockoutRecords.id,
@@ -65,8 +120,12 @@ export async function getStockoutData(): Promise<StockoutSummary> {
     .orderBy(desc(stockoutRecords.referenceDate))
     .limit(200);
 
-  // 2. 현재 품절 상태 제품 자동 감지 (기록에 없는 것들)
-  const currentStockout = await db
+  // 4. 현재 재고=0인데 기록 없는 제품 → 자동 감지
+  const recordedActiveProductIds = new Set(
+    existingRecords.filter((r) => r.isStockout && !r.stockoutEndDate).map((r) => r.productId)
+  );
+
+  const zeroStockProducts = await db
     .select({
       productId: inventory.productId,
       productName: products.name,
@@ -82,15 +141,8 @@ export async function getStockoutData(): Promise<StockoutSummary> {
       )
     );
 
-  // 기존 기록의 productId Set
-  const recordedProductIds = new Set(
-    existingRecords.filter((r) => r.isStockout && !r.stockoutEndDate).map((r) => r.productId)
-  );
-
-  // 아직 기록되지 않은 품절 제품을 가상 기록으로 추가
-  const today = new Date().toISOString().split("T")[0];
-  const autoDetected: StockoutRecordItem[] = currentStockout
-    .filter((item) => !recordedProductIds.has(item.productId))
+  const autoDetected: StockoutRecordItem[] = zeroStockProducts
+    .filter((item) => !recordedActiveProductIds.has(item.productId))
     .map((item) => ({
       id: `auto-${item.productId}`,
       productId: item.productId,
@@ -100,6 +152,7 @@ export async function getStockoutData(): Promise<StockoutSummary> {
       baseStock: 0,
       outboundQty: 0,
       closingStock: 0,
+      currentStock: 0,
       isStockout: true,
       stockoutStartDate: today,
       stockoutEndDate: null,
@@ -109,25 +162,39 @@ export async function getStockoutData(): Promise<StockoutSummary> {
       notes: null,
     }));
 
+  // 5. 전체 기록 통합 + 진행 중 결품 지속일 실시간 계산
   const allRecords: StockoutRecordItem[] = [
     ...autoDetected,
-    ...existingRecords.map((r) => ({
-      ...r,
-      productName: r.productName ?? "알 수 없음",
-      productSku: r.productSku ?? "-",
-      baseStock: r.baseStock ?? 0,
-      outboundQty: r.outboundQty ?? 0,
-      closingStock: r.closingStock ?? 0,
-    })),
+    ...existingRecords.map((r) => {
+      const currentStock = stockMap.get(r.productId) ?? 0;
+      let durationDays = r.durationDays;
+
+      // 진행 중인 결품 → 지속일 실시간 계산
+      if (r.isStockout && !r.stockoutEndDate && r.stockoutStartDate) {
+        const start = new Date(r.stockoutStartDate);
+        const now = new Date(today);
+        durationDays = Math.max(1, Math.ceil((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+      }
+
+      return {
+        ...r,
+        productName: r.productName ?? "알 수 없음",
+        productSku: r.productSku ?? "-",
+        baseStock: r.baseStock ?? 0,
+        outboundQty: r.outboundQty ?? 0,
+        closingStock: r.closingStock ?? 0,
+        currentStock,
+        durationDays,
+      };
+    }),
   ];
 
-  // 3. 총 제품 수
+  // 6. 통계
   const [{ count: totalProducts }] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(products)
     .where(eq(products.organizationId, orgId));
 
-  // 4. 결품 통계
   const activeStockouts = allRecords.filter((r) => r.isStockout && !r.stockoutEndDate);
   const stockoutCount = activeStockouts.length;
   const stockoutRate = totalProducts > 0 ? (stockoutCount / totalProducts) * 100 : 0;
@@ -140,7 +207,7 @@ export async function getStockoutData(): Promise<StockoutSummary> {
       ? durationsWithValues.reduce((a, b) => a + b, 0) / durationsWithValues.length
       : 0;
 
-  // 5. 원인 분포
+  // 7. 원인 분포
   const causeMap = new Map<string, number>();
   for (const r of allRecords) {
     if (r.cause) {

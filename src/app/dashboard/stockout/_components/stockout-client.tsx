@@ -11,6 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -18,10 +19,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { AlertOctagon, AlertTriangle, Clock, CheckCircle } from "lucide-react";
+import { AlertOctagon, Clock, CheckCircle, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { updateStockoutRecord } from "@/server/actions/stockout";
-import type { StockoutSummary, StockoutRecordItem } from "@/server/actions/stockout";
+import type { StockoutSummary } from "@/server/actions/stockout";
 import { cn } from "@/lib/utils";
 
 interface StockoutClientProps {
@@ -44,41 +45,10 @@ const ACTION_LABELS: Record<string, string> = {
   no_action: "미조치",
 };
 
-function ActionStatusBadge({ status }: { status: string | null }) {
-  switch (status) {
-    case "normalized":
-      return (
-        <Badge className="bg-green-500 hover:bg-green-600 text-xs">
-          <CheckCircle className="mr-1 h-3 w-3" />
-          정상화
-        </Badge>
-      );
-    case "inbound_waiting":
-      return (
-        <Badge className="bg-blue-500 hover:bg-blue-600 text-xs">
-          <Clock className="mr-1 h-3 w-3" />
-          입고대기
-        </Badge>
-      );
-    case "order_in_progress":
-      return (
-        <Badge className="bg-yellow-500 hover:bg-yellow-600 text-xs">
-          발주진행
-        </Badge>
-      );
-    default:
-      return (
-        <Badge variant="destructive" className="text-xs">
-          <AlertTriangle className="mr-1 h-3 w-3" />
-          미조치
-        </Badge>
-      );
-  }
-}
-
 export function StockoutClient({ data }: StockoutClientProps) {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
+  const [showNormalized, setShowNormalized] = useState(false);
 
   const handleCauseChange = (recordId: string, cause: string) => {
     startTransition(async () => {
@@ -101,6 +71,13 @@ export function StockoutClient({ data }: StockoutClientProps) {
       }
     });
   };
+
+  // 필터링: 정상화 완료 건 숨기기/보기
+  const filteredRecords = showNormalized
+    ? data.records
+    : data.records.filter((r) => r.actionStatus !== "normalized");
+
+  const normalizedCount = data.records.filter((r) => r.actionStatus === "normalized").length;
 
   return (
     <div className="space-y-6">
@@ -140,21 +117,14 @@ export function StockoutClient({ data }: StockoutClientProps) {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className={normalizedCount > 0 ? "border-green-200" : ""}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">주요 원인</CardTitle>
+            <CardTitle className="text-sm font-medium">정상화 완료</CardTitle>
+            <CheckCircle className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {data.causeDistribution.length > 0
-                ? CAUSE_LABELS[data.causeDistribution[0].cause] || data.causeDistribution[0].cause
-                : "-"}
-            </div>
-            {data.causeDistribution.length > 0 && (
-              <p className="text-xs text-muted-foreground">
-                {data.causeDistribution[0].count}건
-              </p>
-            )}
+            <div className="text-2xl font-bold text-green-600">{normalizedCount}건</div>
+            <p className="text-xs text-muted-foreground">재고 회복 확인됨</p>
           </CardContent>
         </Card>
       </div>
@@ -184,13 +154,41 @@ export function StockoutClient({ data }: StockoutClientProps) {
       {/* 결품 상세 테이블 */}
       <Card>
         <CardHeader>
-          <CardTitle>결품 상세 현황</CardTitle>
-          <CardDescription>
-            총 {data.records.length}건 (자동 감지 + 수동 기록)
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>결품 상세 현황</CardTitle>
+              <CardDescription>
+                {showNormalized
+                  ? `전체 ${data.records.length}건 (진행 ${data.stockoutCount} + 정상화 ${normalizedCount})`
+                  : `진행 중 ${filteredRecords.length}건`}
+                {normalizedCount > 0 && !showNormalized && (
+                  <span className="text-green-600"> · 정상화 {normalizedCount}건 숨김</span>
+                )}
+              </CardDescription>
+            </div>
+            {normalizedCount > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowNormalized(!showNormalized)}
+              >
+                {showNormalized ? (
+                  <>
+                    <EyeOff className="mr-1 h-4 w-4" />
+                    정상화 숨기기
+                  </>
+                ) : (
+                  <>
+                    <Eye className="mr-1 h-4 w-4" />
+                    정상화 보기
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
-          {data.records.length === 0 ? (
+          {filteredRecords.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <CheckCircle className="h-12 w-12 text-green-500/50 mb-4" />
               <h3 className="text-lg font-semibold text-muted-foreground">결품 없음</h3>
@@ -205,85 +203,112 @@ export function StockoutClient({ data }: StockoutClientProps) {
                   <TableRow>
                     <TableHead>SKU</TableHead>
                     <TableHead>제품명</TableHead>
-                    <TableHead className="text-center">기준일</TableHead>
-                    <TableHead className="text-center">기말재고</TableHead>
+                    <TableHead className="text-center">현재 재고</TableHead>
                     <TableHead className="text-center">결품시작</TableHead>
+                    <TableHead className="text-center">결품종료</TableHead>
                     <TableHead className="text-center">지속일수</TableHead>
                     <TableHead className="w-[140px]">원인</TableHead>
                     <TableHead className="w-[140px]">조치</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.records.map((record) => (
-                    <TableRow key={record.id}>
-                      <TableCell className="font-mono text-xs">{record.productSku}</TableCell>
-                      <TableCell className="max-w-[120px] truncate text-sm">{record.productName}</TableCell>
-                      <TableCell className="text-center text-xs">{record.referenceDate}</TableCell>
-                      <TableCell className="text-center">
-                        <span
-                          className={cn(
-                            "font-medium",
-                            record.closingStock === 0 ? "text-red-600" : ""
-                          )}
-                        >
-                          {record.closingStock}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-center text-xs">
-                        {record.stockoutStartDate || "-"}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {record.durationDays !== null ? (
-                          <Badge
-                            variant={record.durationDays >= 7 ? "destructive" : "outline"}
-                            className="text-xs"
+                  {filteredRecords.map((record) => {
+                    const isNormalized = record.actionStatus === "normalized";
+                    return (
+                      <TableRow
+                        key={record.id}
+                        className={cn(isNormalized && "opacity-60 bg-green-50/50")}
+                      >
+                        <TableCell className="font-mono text-xs">{record.productSku}</TableCell>
+                        <TableCell className="max-w-[120px] truncate text-sm">{record.productName}</TableCell>
+                        <TableCell className="text-center">
+                          <span
+                            className={cn(
+                              "font-bold tabular-nums",
+                              record.currentStock === 0 ? "text-red-600" : "text-green-600"
+                            )}
                           >
-                            {record.durationDays}일
-                          </Badge>
-                        ) : record.isStockout && !record.stockoutEndDate ? (
-                          <Badge variant="destructive" className="text-xs">진행중</Badge>
-                        ) : (
-                          "-"
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Select
-                          value={record.cause || ""}
-                          onValueChange={(v) => handleCauseChange(record.id, v)}
-                          disabled={isPending}
-                        >
-                          <SelectTrigger className="h-8 text-xs">
-                            <SelectValue placeholder="선택" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {Object.entries(CAUSE_LABELS).map(([key, label]) => (
-                              <SelectItem key={key} value={key} className="text-xs">
-                                {label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell>
-                        <Select
-                          value={record.actionStatus || "no_action"}
-                          onValueChange={(v) => handleActionChange(record.id, v)}
-                          disabled={isPending}
-                        >
-                          <SelectTrigger className="h-8 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {Object.entries(ACTION_LABELS).map(([key, label]) => (
-                              <SelectItem key={key} value={key} className="text-xs">
-                                {label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                            {record.currentStock}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-center text-xs">
+                          {record.stockoutStartDate || "-"}
+                        </TableCell>
+                        <TableCell className="text-center text-xs">
+                          {record.stockoutEndDate ? (
+                            <span className="text-green-600 font-medium">{record.stockoutEndDate}</span>
+                          ) : (
+                            "-"
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {isNormalized && record.durationDays !== null ? (
+                            <Badge variant="outline" className="text-xs border-green-300 text-green-700 bg-green-50">
+                              {record.durationDays}일 (해소)
+                            </Badge>
+                          ) : record.durationDays !== null ? (
+                            <Badge
+                              variant={record.durationDays >= 7 ? "destructive" : "outline"}
+                              className="text-xs"
+                            >
+                              {record.durationDays}일 진행중
+                            </Badge>
+                          ) : record.isStockout && !record.stockoutEndDate ? (
+                            <Badge variant="destructive" className="text-xs">
+                              1일 미만
+                            </Badge>
+                          ) : (
+                            "-"
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Select
+                            value={record.cause || ""}
+                            onValueChange={(v) => handleCauseChange(record.id, v)}
+                            disabled={isPending || isNormalized}
+                          >
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue placeholder="선택" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Object.entries(CAUSE_LABELS).map(([key, label]) => (
+                                <SelectItem key={key} value={key} className="text-xs">
+                                  {label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          {isNormalized ? (
+                            <Badge className="bg-green-500 hover:bg-green-600 text-xs">
+                              <CheckCircle className="mr-1 h-3 w-3" />
+                              정상화
+                            </Badge>
+                          ) : (
+                            <Select
+                              value={record.actionStatus || "no_action"}
+                              onValueChange={(v) => handleActionChange(record.id, v)}
+                              disabled={isPending}
+                            >
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {Object.entries(ACTION_LABELS)
+                                  .filter(([key]) => key !== "normalized")
+                                  .map(([key, label]) => (
+                                    <SelectItem key={key} value={key} className="text-xs">
+                                      {label}
+                                    </SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
