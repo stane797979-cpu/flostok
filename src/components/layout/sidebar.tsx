@@ -70,9 +70,12 @@ export function Sidebar({ className, userInfo }: SidebarProps) {
               collapsed ? (
                 <Separator className="my-2" />
               ) : (
-                <p className="px-3 pt-4 pb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                  {section.title}
-                </p>
+                <div className="flex items-center gap-1.5 px-3 pt-4 pb-1">
+                  <span className={cn("text-[8px]", section.color || "text-slate-400")}>●</span>
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                    {section.title}
+                  </span>
+                </div>
               )
             )}
             <div className="space-y-1">

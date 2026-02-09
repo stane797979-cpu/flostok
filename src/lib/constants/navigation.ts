@@ -29,6 +29,7 @@ export interface NavItem {
 
 export interface NavSection {
   title?: string;
+  color?: string; // 섹션 도트 색상 (Tailwind class)
   items: NavItem[];
 }
 
@@ -50,6 +51,7 @@ export const MAIN_SECTIONS: NavSection[] = [
   },
   {
     title: "계획",
+    color: "text-blue-500",
     items: [
       {
         title: "PSI 계획",
@@ -58,7 +60,7 @@ export const MAIN_SECTIONS: NavSection[] = [
         description: "수요·공급·재고 통합 계획표",
       },
       {
-        title: "재고 분석",
+        title: "수요·공급 분석",
         href: "/dashboard/analytics",
         icon: BarChart3,
         description: "ABC-XYZ·수요예측·회전율 분석",
@@ -67,6 +69,7 @@ export const MAIN_SECTIONS: NavSection[] = [
   },
   {
     title: "조달",
+    color: "text-emerald-500",
     items: [
       {
         title: "발주(입고)관리",
@@ -78,6 +81,7 @@ export const MAIN_SECTIONS: NavSection[] = [
   },
   {
     title: "실행",
+    color: "text-orange-500",
     items: [
       {
         title: "출고 관리",
@@ -95,6 +99,7 @@ export const MAIN_SECTIONS: NavSection[] = [
   },
   {
     title: "재고",
+    color: "text-violet-500",
     items: [
       {
         title: "재고 현황",
@@ -112,6 +117,7 @@ export const MAIN_SECTIONS: NavSection[] = [
   },
   {
     title: "관리",
+    color: "text-slate-400",
     items: [
       {
         title: "제품 관리",
@@ -135,6 +141,7 @@ export const MAIN_SECTIONS: NavSection[] = [
   },
   {
     title: "도구",
+    color: "text-slate-300",
     items: [
       {
         title: "AI 채팅",
