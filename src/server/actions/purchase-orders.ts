@@ -7,6 +7,7 @@ import {
   products,
   inventory,
   suppliers,
+  demandForecasts,
   type PurchaseOrder,
   type PurchaseOrderItem,
 } from "@/server/db/schema";
@@ -117,26 +118,72 @@ export async function getReorderItems(options?: {
     const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split("T")[0];
     const todayStr = new Date().toISOString().split("T")[0];
 
+    // 실적 기반 일평균 + 수요예측 기반 일평균을 병렬 조회
     const avgSalesMap = new Map<string, number>();
+    const forecastMap = new Map<string, { dailySales: number; method: string }>();
+
     if (productIds.length > 0) {
-      const salesData = await db
-        .select({
-          productId: salesRecords.productId,
-          totalQuantity: sql<number>`coalesce(sum(${salesRecords.quantity}), 0)`,
-        })
-        .from(salesRecords)
-        .where(
-          and(
-            eq(salesRecords.organizationId, orgId),
-            sql`${salesRecords.productId} IN ${productIds}`,
-            gte(salesRecords.date, thirtyDaysAgoStr),
-            lte(salesRecords.date, todayStr)
+      // 향후 3개월 예측 기간
+      const forecastStart = new Date();
+      forecastStart.setDate(1); // 이번 달 1일
+      const forecastEnd = new Date();
+      forecastEnd.setMonth(forecastEnd.getMonth() + 3);
+      const forecastStartStr = forecastStart.toISOString().split("T")[0];
+      const forecastEndStr = forecastEnd.toISOString().split("T")[0];
+
+      const [salesData, forecastData] = await Promise.all([
+        // 실적 기반: 최근 30일 판매량
+        db
+          .select({
+            productId: salesRecords.productId,
+            totalQuantity: sql<number>`coalesce(sum(${salesRecords.quantity}), 0)`,
+          })
+          .from(salesRecords)
+          .where(
+            and(
+              eq(salesRecords.organizationId, orgId),
+              sql`${salesRecords.productId} IN ${productIds}`,
+              gte(salesRecords.date, thirtyDaysAgoStr),
+              lte(salesRecords.date, todayStr)
+            )
           )
-        )
-        .groupBy(salesRecords.productId);
+          .groupBy(salesRecords.productId),
+
+        // 수요예측 기반: 향후 3개월 예측 월평균 → 일평균 환산
+        db
+          .select({
+            productId: demandForecasts.productId,
+            avgMonthlyForecast: sql<number>`coalesce(avg(${demandForecasts.forecastQuantity}), 0)`,
+            method: sql<string>`(array_agg(${demandForecasts.method} ORDER BY ${demandForecasts.updatedAt} DESC))[1]`,
+          })
+          .from(demandForecasts)
+          .where(
+            and(
+              eq(demandForecasts.organizationId, orgId),
+              sql`${demandForecasts.productId} IN ${productIds}`,
+              gte(demandForecasts.period, forecastStartStr),
+              lte(demandForecasts.period, forecastEndStr)
+            )
+          )
+          .groupBy(demandForecasts.productId),
+      ]);
 
       for (const row of salesData) {
         avgSalesMap.set(row.productId, Math.round((Number(row.totalQuantity) / 30) * 100) / 100);
+      }
+
+      // 수요예측: 월 평균 예측량 → 일평균 (÷30)
+      const methodLabelMap: Record<string, string> = {
+        sma_3: "SMA", sma_6: "SMA", ses: "SES", holt: "Holt's", wma: "WMA", holt_winters: "Holt-Winters",
+      };
+      for (const row of forecastData) {
+        const monthlyAvg = Number(row.avgMonthlyForecast);
+        if (monthlyAvg > 0) {
+          forecastMap.set(row.productId, {
+            dailySales: Math.round((monthlyAvg / 30) * 100) / 100,
+            method: methodLabelMap[row.method] || row.method,
+          });
+        }
       }
     }
 
@@ -144,6 +191,7 @@ export async function getReorderItems(options?: {
     const allReorderItems = reorderCandidates
       .map((row) => {
         const avgDailySales = avgSalesMap.get(row.product.id) || 0;
+        const forecast = forecastMap.get(row.product.id);
 
         const data: ProductReorderData = {
           productId: row.product.id,
@@ -162,6 +210,9 @@ export async function getReorderItems(options?: {
           supplierId: row.supplier?.id,
           supplierName: row.supplier?.name,
           supplyCoefficients,
+          // 수요예측 기반 일평균 (있으면 우선 사용)
+          forecastDailySales: forecast?.dailySales,
+          forecastMethod: forecast?.method,
         };
 
         return convertToReorderItem(data);

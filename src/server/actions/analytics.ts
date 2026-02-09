@@ -9,7 +9,7 @@
 
 import { requireAuth } from './auth-helpers'
 import { db } from '@/server/db'
-import { products, salesRecords, inventory } from '@/server/db/schema'
+import { products, salesRecords, inventory, demandForecasts } from '@/server/db/schema'
 import { eq, and, gte, sql } from 'drizzle-orm'
 import {
   performABCAnalysis,
@@ -371,6 +371,60 @@ export async function getDemandForecast(options?: {
       }
     })
 
+    // 13. 예측 결과를 demand_forecasts 테이블에 저장 (UPSERT)
+    // 발주 추천에서 이 데이터를 활용하여 예측 기반 일평균판매량 산출
+    const methodDbMap: Record<string, string> = {
+      SMA: 'sma_3',
+      SES: 'ses',
+      Holts: 'holt',
+    }
+    const dbMethod = methodDbMap[forecastResult.method] || 'sma_3'
+    const mapeValue = Math.round((forecastResult.mape ?? backtestResult.mape) * 10) / 10
+
+    try {
+      for (const pm of predictedMonths) {
+        const periodDate = `${pm.month}-01`
+        // 기존 예측이 있으면 업데이트, 없으면 삽입
+        const existing = await db
+          .select({ id: demandForecasts.id })
+          .from(demandForecasts)
+          .where(
+            and(
+              eq(demandForecasts.organizationId, orgId),
+              eq(demandForecasts.productId, selectedProductId),
+              eq(demandForecasts.period, periodDate)
+            )
+          )
+          .limit(1)
+
+        if (existing.length > 0) {
+          await db
+            .update(demandForecasts)
+            .set({
+              method: dbMethod as typeof demandForecasts.method.enumValues[number],
+              forecastQuantity: pm.value,
+              mape: String(mapeValue),
+              notes: isManual ? `수동 선택: ${forecastResult.method}` : `자동 선택: ${forecastResult.method}`,
+              updatedAt: new Date(),
+            })
+            .where(eq(demandForecasts.id, existing[0].id))
+        } else {
+          await db.insert(demandForecasts).values({
+            organizationId: orgId,
+            productId: selectedProductId,
+            period: periodDate,
+            method: dbMethod as typeof demandForecasts.method.enumValues[number],
+            forecastQuantity: pm.value,
+            mape: String(mapeValue),
+            notes: isManual ? `수동 선택: ${forecastResult.method}` : `자동 선택: ${forecastResult.method}`,
+          })
+        }
+      }
+    } catch (saveError) {
+      // 저장 실패해도 예측 결과는 반환 (저장은 부수효과)
+      console.error('수요예측 결과 DB 저장 오류:', saveError)
+    }
+
     return {
       products: allProducts,
       forecast: {
@@ -378,7 +432,7 @@ export async function getDemandForecast(options?: {
         productName: selectedProduct.name,
         method: forecastResult.method,
         confidence: forecastResult.confidence ?? backtestResult.confidence,
-        mape: Math.round((forecastResult.mape ?? backtestResult.mape) * 10) / 10,
+        mape: mapeValue,
         selectionReason: forecastResult.selectionReason ?? '자동 선택',
         seasonallyAdjusted: forecastResult.seasonallyAdjusted ?? false,
         isManual,

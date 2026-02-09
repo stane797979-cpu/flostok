@@ -12,8 +12,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ShoppingCart, ShoppingBag, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { ShoppingCart, ShoppingBag, ArrowUpDown, ArrowUp, ArrowDown, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export interface ReorderItem {
   productId: string;
@@ -28,6 +34,10 @@ export interface ReorderItem {
   supplierId?: string;
   supplierName?: string;
   leadTime: number;
+  /** 수요예측 기반 여부 */
+  forecastBased?: boolean;
+  /** 예측 방법 */
+  forecastMethod?: string;
 }
 
 interface ReorderItemsTableProps {
@@ -310,8 +320,22 @@ export function ReorderItemsTable({
                 <TableCell className="text-right">{item.safetyStock}</TableCell>
                 <TableCell className="text-right">{item.reorderPoint}</TableCell>
                 <TableCell className="text-right">{item.daysOfInventory.toFixed(1)}일</TableCell>
-                <TableCell className="text-right font-semibold text-blue-600">
-                  {item.recommendedQty}
+                <TableCell className="text-right">
+                  <div className="flex items-center justify-end gap-1">
+                    {item.forecastBased && (
+                      <TooltipProvider delayDuration={200}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Sparkles className="h-3.5 w-3.5 text-violet-500" />
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="text-xs">
+                            수요예측({item.forecastMethod}) 기반 추천
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                    <span className="font-semibold text-blue-600">{item.recommendedQty}</span>
+                  </div>
                 </TableCell>
                 <TableCell className="text-sm text-slate-600">{item.supplierName || "-"}</TableCell>
                 <TableCell className="text-right">

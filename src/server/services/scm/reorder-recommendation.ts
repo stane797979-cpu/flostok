@@ -21,6 +21,10 @@ export interface ReorderItem {
   recommendedQty: number;
   urgencyLevel: number; // 0-3
   status: "out_of_stock" | "critical" | "shortage" | "caution";
+  /** 수요예측 기반 여부 (true: 예측값 사용, false: 30일 실적 평균) */
+  forecastBased?: boolean;
+  /** 예측 방법 (forecastBased=true일 때) */
+  forecastMethod?: string;
   supplier?: {
     id: string;
     name: string;
@@ -46,6 +50,10 @@ export interface ProductReorderData {
   supplierName?: string;
   /** 조직 설정의 공급물량 보정계수 */
   supplyCoefficients?: SupplyAdjustmentCoefficients;
+  /** 수요예측 기반 일평균판매량 (있으면 avgDailySales 대신 사용) */
+  forecastDailySales?: number;
+  /** 예측 방법 */
+  forecastMethod?: string;
 }
 
 /**
@@ -99,6 +107,10 @@ export function convertToReorderItem(data: ProductReorderData): ReorderItem | nu
   // 추천 수량 계산
   const recommendedQty = calculateRecommendedQuantity(data);
 
+  // 수요예측값이 있으면 사용, 없으면 실적 기반
+  const effectiveDailySales = data.forecastDailySales ?? avgDailySales;
+  const isForecastBased = data.forecastDailySales !== undefined && data.forecastDailySales > 0;
+
   return {
     productId: data.productId,
     sku: data.sku,
@@ -106,11 +118,15 @@ export function convertToReorderItem(data: ProductReorderData): ReorderItem | nu
     currentStock,
     safetyStock,
     reorderPoint,
-    avgDailySales,
-    daysOfStock,
+    avgDailySales: effectiveDailySales,
+    daysOfStock: isForecastBased
+      ? calculateDaysOfStock(currentStock, effectiveDailySales, safetyStock)
+      : daysOfStock,
     recommendedQty,
     urgencyLevel: statusResult.urgencyLevel,
     status: statusResult.key as "out_of_stock" | "critical" | "shortage" | "caution",
+    forecastBased: isForecastBased,
+    forecastMethod: isForecastBased ? data.forecastMethod : undefined,
     supplier:
       data.supplierId && data.supplierName
         ? {
@@ -133,6 +149,9 @@ export function convertToReorderItem(data: ProductReorderData): ReorderItem | nu
 export function calculateRecommendedQuantity(data: ProductReorderData): number {
   const { currentStock, safetyStock, avgDailySales, moq, costPrice } = data;
 
+  // 수요예측값이 있으면 우선 사용, 없으면 실적 기반
+  const baseDailySales = data.forecastDailySales ?? avgDailySales;
+
   // ABC-XYZ 보정계수 조회
   const coefficient = getSupplyCoefficient(
     data.supplyCoefficients,
@@ -141,7 +160,7 @@ export function calculateRecommendedQuantity(data: ProductReorderData): number {
   );
 
   // 연간 수요 추정 (보정계수 적용)
-  const adjustedDailySales = avgDailySales * coefficient;
+  const adjustedDailySales = baseDailySales * coefficient;
   const annualDemand = adjustedDailySales * 365;
 
   // EOQ 계산 (연간 수요가 충분한 경우)
