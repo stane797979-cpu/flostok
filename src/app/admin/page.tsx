@@ -52,7 +52,7 @@ export default async function AdminDashboardPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">시스템 대시보드</h1>
-        <p className="mt-2 text-slate-500">FlowStok 전체 시스템 현황</p>
+        <p className="mt-2 text-slate-500">Stock & Logis 전체 시스템 현황</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">

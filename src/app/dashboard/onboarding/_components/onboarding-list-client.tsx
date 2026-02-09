@@ -91,7 +91,7 @@ export function OnboardingListClient({ initialSessions }: OnboardingListClientPr
         <div>
           <h1 className="text-3xl font-bold tracking-tight">데이터 온보딩</h1>
           <p className="text-slate-500 mt-2">
-            고객사 데이터를 FlowStok으로 가져오기
+            고객사 데이터를 Stock & Logis로 가져오기
           </p>
         </div>
         <Button onClick={() => router.push('/dashboard/onboarding/new')}>

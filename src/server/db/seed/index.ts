@@ -58,7 +58,7 @@ async function seed() {
     await db.insert(users).values({
       authId: "dev-auth-id",
       organizationId: SYSTEM_ORG_ID,
-      email: "admin@flowstok.com",
+      email: "admin@stocklogis.com",
       name: "슈퍼관리자",
       role: "admin",
       isSuperadmin: true,

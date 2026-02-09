@@ -1,5 +1,3 @@
-import Link from "next/link";
-import { Eye, MoreHorizontal } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -9,15 +7,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { getAllOrganizations } from "@/server/actions/admin";
 import { cn } from "@/lib/utils";
+import { OrganizationActions } from "./_components/organization-actions";
 
 const planColors: Record<string, string> = {
   free: "bg-slate-100 text-slate-700 border-slate-300",
@@ -92,21 +84,7 @@ export default async function OrganizationsPage() {
                   {new Date(org.createdAt).toLocaleDateString("ko-KR")}
                 </TableCell>
                 <TableCell>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem asChild>
-                        <Link href={`/admin/organizations/${org.id}`}>
-                          <Eye className="mr-2 h-4 w-4" />
-                          상세 보기
-                        </Link>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <OrganizationActions orgId={org.id} />
                 </TableCell>
               </TableRow>
             ))}

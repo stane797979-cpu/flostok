@@ -18,6 +18,7 @@ export const FIELD_DEFINITIONS: Record<OnboardingDataType, FlowStokField[]> = {
       aliases: [
         "SKU", "sku", "품목코드", "제품코드", "상품코드", "품번",
         "Item Code", "Product Code", "ItemCode", "ProductCode",
+        "자재코드", "자재번호", "물품코드", "바코드", "관리번호",
       ],
     },
     {
@@ -28,7 +29,7 @@ export const FIELD_DEFINITIONS: Record<OnboardingDataType, FlowStokField[]> = {
       type: "text",
       aliases: [
         "제품명", "name", "상품명", "품명", "Name", "Product Name",
-        "품목명", "ProductName",
+        "품목명", "ProductName", "자재명", "물품명", "아이템명",
       ],
     },
     {
@@ -37,7 +38,10 @@ export const FIELD_DEFINITIONS: Record<OnboardingDataType, FlowStokField[]> = {
       description: "제품 분류",
       required: false,
       type: "text",
-      aliases: ["카테고리", "category", "분류", "Category", "품목분류", "그룹"],
+      aliases: [
+        "카테고리", "category", "분류", "Category", "품목분류", "그룹",
+        "품목구분", "품목그룹", "자재 구분", "자재구분", "상품분류", "규격",
+      ],
     },
     {
       dbField: "unit",
@@ -80,7 +84,7 @@ export const FIELD_DEFINITIONS: Record<OnboardingDataType, FlowStokField[]> = {
       type: "number",
       aliases: [
         "재고수량", "currentStock", "현재고", "재고", "수량",
-        "Stock", "Qty", "보유수량",
+        "Stock", "Qty", "보유수량", "현재고량", "잔고", "잔량",
       ],
     },
     {
@@ -89,7 +93,10 @@ export const FIELD_DEFINITIONS: Record<OnboardingDataType, FlowStokField[]> = {
       description: "최소 유지 재고 수량",
       required: false,
       type: "number",
-      aliases: ["안전재고", "safetyStock", "SafetyStock", "최소재고", "SS"],
+      aliases: [
+        "안전재고", "safetyStock", "SafetyStock", "최소재고", "SS",
+        "적정재고", "적정재고량", "기준재고", "최소보유량",
+      ],
       defaultValue: 0,
     },
     {
@@ -121,6 +128,7 @@ export const FIELD_DEFINITIONS: Record<OnboardingDataType, FlowStokField[]> = {
       type: "text",
       aliases: [
         "SKU", "sku", "품목코드", "제품코드", "상품코드", "품번",
+        "자재코드", "관리번호",
       ],
     },
     {
@@ -131,7 +139,7 @@ export const FIELD_DEFINITIONS: Record<OnboardingDataType, FlowStokField[]> = {
       type: "date",
       aliases: [
         "날짜", "date", "판매일", "출고일", "일자", "Date",
-        "거래일", "거래일자",
+        "거래일", "거래일자", "판매일자", "출고일자", "매출일",
       ],
     },
     {
@@ -191,6 +199,7 @@ export const FIELD_DEFINITIONS: Record<OnboardingDataType, FlowStokField[]> = {
       type: "text",
       aliases: [
         "SKU", "sku", "품목코드", "제품코드", "상품코드", "품번",
+        "자재코드", "관리번호",
       ],
     },
     {
@@ -201,7 +210,7 @@ export const FIELD_DEFINITIONS: Record<OnboardingDataType, FlowStokField[]> = {
       type: "number",
       aliases: [
         "현재고", "currentStock", "재고수량", "재고", "수량",
-        "Stock", "Qty", "보유수량",
+        "Stock", "Qty", "보유수량", "현재고량", "잔고", "잔량",
       ],
     },
     {
@@ -232,6 +241,7 @@ export const FIELD_DEFINITIONS: Record<OnboardingDataType, FlowStokField[]> = {
       type: "text",
       aliases: [
         "적치위치", "location", "위치", "Location", "창고", "보관위치",
+        "보관장소", "로케이션",
       ],
     },
   ],
@@ -315,6 +325,7 @@ export const FIELD_DEFINITIONS: Record<OnboardingDataType, FlowStokField[]> = {
       type: "number",
       aliases: [
         "평균리드타임", "avgLeadTime", "리드타임", "LeadTime", "LT", "납기일수",
+        "납품리드타임", "납품소요일", "조달기간",
       ],
       defaultValue: 7,
     },
@@ -339,6 +350,7 @@ export const FIELD_DEFINITIONS: Record<OnboardingDataType, FlowStokField[]> = {
       type: "text",
       aliases: [
         "SKU", "sku", "품목코드", "제품코드", "상품코드", "품번",
+        "자재코드", "관리번호",
       ],
     },
     {
@@ -349,6 +361,7 @@ export const FIELD_DEFINITIONS: Record<OnboardingDataType, FlowStokField[]> = {
       type: "date",
       aliases: [
         "입고일", "date", "날짜", "Date", "입고일자", "수입일",
+        "일자", "입하일", "도착일",
       ],
     },
     {
@@ -391,6 +404,7 @@ export const FIELD_DEFINITIONS: Record<OnboardingDataType, FlowStokField[]> = {
       type: "text",
       aliases: [
         "적치위치", "location", "위치", "Location", "창고", "보관위치",
+        "보관장소", "입고장소", "로케이션",
       ],
     },
     {

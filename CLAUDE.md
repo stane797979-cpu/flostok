@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 프로젝트 개요
 
-FlowStok - AI 기반 재고 관리 및 자동 발주 추천 시스템.
+Stock & Logis - AI 기반 재고 관리 및 자동 발주 추천 시스템.
 Next.js 15 + Supabase + Drizzle 기반의 풀스택 SaaS 애플리케이션.
 
 - 언어: 모든 UI, 에러 메시지, 도메인 용어가 한국어. 코드 수정 시 반드시 한국어 유지.
@@ -34,7 +34,7 @@ npm run db:studio    # Drizzle Studio
 - **인증**: Supabase Auth (카카오, 구글)
 - **결제**: PortOne + 토스페이먼츠 (Stripe 한국 미지원, 사용 금지)
 - **캐싱**: Upstash Redis — 추후 추가
-- **배포**: Vercel (프론트 + Edge) + Railway (백그라운드 잡)
+- **배포**: Railway (프론트 + 백그라운드 잡)
 
 ## 디렉토리 구조
 
@@ -132,6 +132,11 @@ Supabase, GitHub, Sentry, PostHog, Upstash, Playwright, Memory, Sequential Think
 
 ### Hooks (`.claude/settings.json`)
 - TypeScript/TSX 파일 작성/수정 시 자동 ESLint 포맷팅
+
+### UI 변경 시 검증 (필수)
+- UI/레이아웃/스타일 변경 후 반드시 **Playwright로 직접 페이지를 열어 시각적 검증**한다
+- `npx playwright test` 또는 Playwright MCP를 활용하여 스크린샷 촬영 후 확인
+- "변경했습니다"만으로 끝내지 말고, 실제 렌더링 결과를 눈으로 확인한 뒤 보고
 
 ## 작업 관리
 

@@ -1,6 +1,6 @@
 # Code Reviewer Memory
 
-## FlowStok 프로젝트 리뷰 패턴
+## Stock & Logis 프로젝트 리뷰 패턴
 
 ### 자주 발견되는 문제 패턴
 1. **fire-and-forget async 호출 시 `.catch()` 누락** - `checkAndCreateInventoryAlert` 등 Promise 반환 함수를 await 없이 호출할 때 `.catch()` 체인 필요

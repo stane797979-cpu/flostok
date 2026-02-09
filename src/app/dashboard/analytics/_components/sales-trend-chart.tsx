@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { Button } from "@/components/ui/button";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -20,6 +22,10 @@ interface SalesTrendChartProps {
 
 type Period = "7" | "30" | "90";
 
+const salesChartConfig = {
+  sales: { label: "판매액", color: "#3b82f6" },
+} satisfies ChartConfig;
+
 // Mock 데이터 생성 함수
 function generateMockSalesData(days: number): SalesTrendDataPoint[] {
   const data: SalesTrendDataPoint[] = [];
@@ -29,16 +35,13 @@ function generateMockSalesData(days: number): SalesTrendDataPoint[] {
     const date = new Date(today);
     date.setDate(date.getDate() - i);
 
-    // 기본 트렌드 + 랜덤 변동성 + 주말 효과
     const dayOfWeek = date.getDay();
     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
     const weekendFactor = isWeekend ? 0.7 : 1.0;
-
-    // 성장 트렌드 추가 (최근으로 갈수록 증가)
     const trendFactor = 1 + ((days - i) / days) * 0.3;
 
     const baseSales = 5000000;
-    const randomVariation = 0.8 + Math.random() * 0.4; // 0.8 ~ 1.2
+    const randomVariation = 0.8 + Math.random() * 0.4;
     const sales = Math.round(baseSales * trendFactor * weekendFactor * randomVariation);
 
     const baseQuantity = 150;
@@ -81,7 +84,6 @@ function formatCurrency(value: number): string {
 
 export function SalesTrendChart({ className, data: _data }: SalesTrendChartProps) {
   const [period, setPeriod] = useState<Period>("30");
-  const [hoveredPoint, setHoveredPoint] = useState<number | null>(null);
 
   // 데이터 생성
   const data = useMemo(() => generateMockSalesData(Number(period)), [period]);
@@ -93,7 +95,6 @@ export function SalesTrendChart({ className, data: _data }: SalesTrendChartProps
     const avgDailySales = totalSales / data.length;
     const avgDailyQuantity = totalQuantity / data.length;
 
-    // 전기 대비 증감률 계산 (첫 30% vs 마지막 30%)
     const compareLength = Math.floor(data.length * 0.3);
     const previousPeriodSales =
       data.slice(0, compareLength).reduce((sum, item) => sum + item.sales, 0) / compareLength;
@@ -101,7 +102,6 @@ export function SalesTrendChart({ className, data: _data }: SalesTrendChartProps
       data.slice(-compareLength).reduce((sum, item) => sum + item.sales, 0) / compareLength;
     const growthRate = ((currentPeriodSales - previousPeriodSales) / previousPeriodSales) * 100;
 
-    // 최고/최저 판매일
     const maxSalesDay = data.reduce((max, item) => (item.sales > max.sales ? item : max), data[0]);
     const minSalesDay = data.reduce((min, item) => (item.sales < min.sales ? item : min), data[0]);
 
@@ -116,85 +116,15 @@ export function SalesTrendChart({ className, data: _data }: SalesTrendChartProps
     };
   }, [data]);
 
-  // 차트 렌더링을 위한 계산
-  const chartConfig = useMemo(() => {
-    const maxSales = Math.max(...data.map((d) => d.sales));
-    const minSales = Math.min(...data.map((d) => d.sales));
-
-    // Y축 범위 설정 (최소값에서 10% 여유, 최대값에서 10% 여유)
-    const range = maxSales - minSales;
-    const yMin = Math.max(0, minSales - range * 0.1);
-    const yMax = maxSales + range * 0.1;
-
-    return { yMin, yMax, maxSales, minSales };
-  }, [data]);
-
-  // SVG 좌표 계산 함수들
-  const { xScale, yScale, linePath, areaPath, xLabels, yLabels, chartWidth, chartHeight, padding } =
-    useMemo((): {
-      xScale: (index: number) => number;
-      yScale: (value: number) => number;
-      linePath: string;
-      areaPath: string;
-      xLabels: { index: number; date: string; sales: number; quantity: number }[];
-      yLabels: { value: number; y: number }[];
-      chartWidth: number;
-      chartHeight: number;
-      padding: { top: number; right: number; bottom: number; left: number };
-    } => {
-      const width = 800;
-      const height = 240;
-      const pad = { top: 16, right: 20, bottom: 36, left: 60 };
-      const innerWidth = width - pad.left - pad.right;
-      const innerHeight = height - pad.top - pad.bottom;
-      const xScaleFunc = (index: number) => pad.left + (index / (data.length - 1)) * innerWidth;
-      const yScaleFunc = (value: number) =>
-        pad.top +
-        innerHeight -
-        ((value - chartConfig.yMin) / (chartConfig.yMax - chartConfig.yMin)) * innerHeight;
-
-    // 라인 차트 경로 생성
-    const line = data
-      .map((point, index) => {
-        const x = xScaleFunc(index);
-        const y = yScaleFunc(point.sales);
-        return `${index === 0 ? "M" : "L"} ${x},${y}`;
-      })
-      .join(" ");
-
-    // 그라데이션 영역 경로 생성
-    const area = `${line} L ${xScaleFunc(data.length - 1)},${yScaleFunc(chartConfig.yMin)} L ${xScaleFunc(0)},${yScaleFunc(chartConfig.yMin)} Z`;
-
-    // X축 레이블 선택 (간격 조정)
-    const labelCount = period === "7" ? data.length : period === "30" ? 6 : 9;
-    const step = Math.floor(data.length / (labelCount - 1));
-    const xLabelData = data
-      .map((d, i) => ({ ...d, index: i }))
-      .filter((_, i) => i % step === 0 || i === data.length - 1);
-
-    // Y축 레이블 생성
-    const yLabelCount = 5;
-    const yStep = (chartConfig.yMax - chartConfig.yMin) / (yLabelCount - 1);
-    const yLabelData = Array.from({ length: yLabelCount }, (_, i) => {
-      const value = chartConfig.yMin + yStep * i;
-      return { value, y: yScaleFunc(value) };
-    });
-
-      return {
-        xScale: xScaleFunc,
-        yScale: yScaleFunc,
-        linePath: line,
-        areaPath: area,
-        xLabels: xLabelData,
-        yLabels: yLabelData,
-        chartWidth: width,
-        chartHeight: height,
-        padding: pad,
-      };
-    }, [data, chartConfig, period]);
+  // X축 tick 간격 계산
+  const tickInterval = useMemo(() => {
+    if (period === "7") return 0; // 모두 표시
+    if (period === "30") return Math.floor(data.length / 6);
+    return Math.floor(data.length / 9);
+  }, [period, data.length]);
 
   return (
-    <div className={cn("space-y-6", className)}>
+    <div className={cn("space-y-4", className)}>
       {/* 요약 카드 */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
@@ -294,122 +224,50 @@ export function SalesTrendChart({ className, data: _data }: SalesTrendChartProps
           </div>
         </CardHeader>
         <CardContent>
-          <div className="relative w-full overflow-x-auto">
-            <svg
-              viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-              className="w-full"
-              style={{ minWidth: "600px" }}
-            >
-              {/* 그리드 라인 (Y축) */}
-              {yLabels.map((label, i) => (
-                <g key={i}>
-                  <line
-                    x1={padding.left}
-                    y1={label.y}
-                    x2={chartWidth - padding.right}
-                    y2={label.y}
-                    stroke="#e5e7eb"
-                    strokeWidth="1"
-                    strokeDasharray="4 4"
-                  />
-                  <text
-                    x={padding.left - 10}
-                    y={label.y}
-                    textAnchor="end"
-                    dominantBaseline="middle"
-                    className="fill-slate-500" fontSize="11"
-                  >
-                    {formatCurrency(label.value)}
-                  </text>
-                </g>
-              ))}
-
-              {/* 그라데이션 정의 */}
+          <ChartContainer config={salesChartConfig} className="h-[180px] w-full">
+            <AreaChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
               <defs>
-                <linearGradient id="salesGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.3" />
-                  <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.05" />
+                <linearGradient id="salesFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--color-sales)" stopOpacity={0.3} />
+                  <stop offset="100%" stopColor="var(--color-sales)" stopOpacity={0.05} />
                 </linearGradient>
               </defs>
-
-              {/* 영역 차트 */}
-              <path d={areaPath} fill="url(#salesGradient)" />
-
-              {/* 라인 차트 */}
-              <path d={linePath} stroke="#3b82f6" strokeWidth="2.5" fill="none" />
-
-              {/* 데이터 포인트 */}
-              {data.map((point, index) => (
-                <circle
-                  key={index}
-                  cx={xScale(index)}
-                  cy={yScale(point.sales)}
-                  r={hoveredPoint === index ? 5 : 3}
-                  fill="#3b82f6"
-                  stroke="white"
-                  strokeWidth="2"
-                  className="cursor-pointer transition-all"
-                  onMouseEnter={() => setHoveredPoint(index)}
-                  onMouseLeave={() => setHoveredPoint(null)}
-                />
-              ))}
-
-              {/* X축 레이블 */}
-              {xLabels.map((label) => (
-                <text
-                  key={label.index}
-                  x={xScale(label.index)}
-                  y={chartHeight - padding.bottom + 20}
-                  textAnchor="middle"
-                  className="fill-slate-500" fontSize="11"
-                >
-                  {formatDate(label.date, period)}
-                </text>
-              ))}
-
-              {/* 호버 툴팁 */}
-              {hoveredPoint !== null && (
-                <g>
-                  <rect
-                    x={xScale(hoveredPoint) - 70}
-                    y={yScale(data[hoveredPoint].sales) - 50}
-                    width="140"
-                    height="45"
-                    rx="6"
-                    className="fill-slate-800"
-                    opacity="0.95"
+              <CartesianGrid strokeDasharray="4 4" vertical={false} />
+              <XAxis
+                dataKey="date"
+                tickFormatter={(d) => formatDate(d, period)}
+                fontSize={11}
+                tickLine={false}
+                axisLine={false}
+                interval={tickInterval}
+              />
+              <YAxis
+                tickFormatter={formatCurrency}
+                fontSize={11}
+                tickLine={false}
+                axisLine={false}
+                width={56}
+              />
+              <ChartTooltip
+                content={
+                  <ChartTooltipContent
+                    labelFormatter={(label) => formatDate(label as string, period)}
+                    formatter={(value) => [`${Number(value).toLocaleString("ko-KR")}원`, "판매액"]}
                   />
-                  <text
-                    x={xScale(hoveredPoint)}
-                    y={yScale(data[hoveredPoint].sales) - 35}
-                    textAnchor="middle"
-                    className="fill-white font-medium" fontSize="10"
-                  >
-                    {formatDate(data[hoveredPoint].date, period)}
-                  </text>
-                  <text
-                    x={xScale(hoveredPoint)}
-                    y={yScale(data[hoveredPoint].sales) - 20}
-                    textAnchor="middle"
-                    className="fill-white font-bold" fontSize="10"
-                  >
-                    {data[hoveredPoint].sales.toLocaleString("ko-KR")}원
-                  </text>
-                  <text
-                    x={xScale(hoveredPoint)}
-                    y={yScale(data[hoveredPoint].sales) - 8}
-                    textAnchor="middle"
-                    className="fill-white" fontSize="10"
-                  >
-                    {data[hoveredPoint].quantity.toLocaleString("ko-KR")}개
-                  </text>
-                </g>
-              )}
-            </svg>
-          </div>
+                }
+              />
+              <Area
+                type="monotone"
+                dataKey="sales"
+                stroke="var(--color-sales)"
+                fill="url(#salesFill)"
+                strokeWidth={2}
+              />
+            </AreaChart>
+          </ChartContainer>
 
           {/* 범례 및 통계 */}
-          <div className="mt-6 grid gap-4 border-t pt-4 md:grid-cols-2">
+          <div className="mt-4 grid gap-4 border-t pt-3 md:grid-cols-2">
             <div>
               <div className="text-sm font-medium">최고 판매일</div>
               <div className="text-muted-foreground mt-1 text-xs">

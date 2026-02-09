@@ -126,6 +126,40 @@
 
 ---
 
+## Phase 9: PSI 엑셀 기반 미구현/부분구현 기능 (10개)
+
+> 계획서: `.claude/plans/quizzical-questing-hoare.md`
+
+### Phase 9-1: 기반 구축
+
+- [x] **9.1** DB 마이그레이션 — 새 테이블 4개 + PO 컬럼 3개 (`M`)
+  - `grade_history`, `stockout_records`, `import_shipments`, `kpi_monthly_snapshots`
+  - `purchase_orders`에 `requested_date`, `first_receipt_date`, `second_receipt_date` 추가
+- [x] **9.2** 공급물량 보정계수 (`S`)
+  - `SupplyAdjustmentCoefficients` 타입 + 기본값 (AX=1.0 ~ CZ=0.65)
+  - 설정 UI 3×3 매트릭스 편집
+  - `calculateRecommendedQuantity()`에 보정계수 적용
+
+### Phase 9-2: 분석/KPI 강화
+
+- [ ] **9.3** 회전율관리 — Mock→실DB + TOP5 느림/빠름 (`M`)
+- [ ] **9.4** 수요변동성관리 — 등급변동 추적 + 리스크 분석 (`M`)
+- [ ] **9.5** 실출고율 관리 — Forecast vs 실적 비교 (`M`)
+- [ ] **9.6** 통합지표 강화 — KPI 월별추이 + 코멘트 (`M`)
+
+### Phase 9-3: 운영 기능
+
+- [ ] **9.7** 납기준수관리 — 리드타임 비교 + 납기준수율 (`M`)
+- [ ] **9.8** 대시보드 강화 — TOP10 + 회전율TOP5 + 미니매트릭스 (`M`)
+- [ ] **9.9** 입항스케줄 — B/L, CNTR, 금액, 예정일 관리 (`M`)
+- [ ] **9.10** 결품관리 — 자동감지 + 원인추정 + 조치 (`L`)
+
+### Phase 9-4: PSI 통합
+
+- [ ] **9.11** PSI 메인 — 통합 계획표 (`XL`)
+
+---
+
 ## 진행률 요약
 
 | Phase | 완료 | 전체 | 진행률 |
@@ -138,7 +172,8 @@
 | Phase 6 | 12 | 12 | 100% |
 | Phase 7 | 7 | 7 | 100% |
 | Phase 8 | 11 | 11 | 100% |
-| **전체** | **80** | **80** | **100%** |
+| Phase 9 | 2 | 11 | 18% |
+| **전체** | **82** | **91** | **90%** |
 
 
 > 마지막 업데이트: 2026-02-08

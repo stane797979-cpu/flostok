@@ -11,6 +11,10 @@ import {
   onboardingSessions,
   onboardingFiles,
   columnMappingProfiles,
+  suppliers,
+  products,
+  inventory,
+  inboundRecords,
 } from "@/server/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { requireAuth } from "./auth-helpers";
@@ -481,8 +485,27 @@ export async function executeImport(
           deductInventory: false,
         });
         break;
+      case "suppliers":
+        importResult = await importSupplierRows(
+          user.organizationId,
+          transformResult,
+          duplicateHandling
+        );
+        break;
+      case "inventory":
+        importResult = await importInventoryRows(
+          user.organizationId,
+          transformResult,
+          duplicateHandling
+        );
+        break;
+      case "inbound":
+        importResult = await importInboundRows(
+          user.organizationId,
+          transformResult
+        );
+        break;
       default:
-        // inventory, suppliers, inbound는 변환 결과만 사용 (향후 전용 임포트 서비스 추가)
         importResult = {
           success: transformResult.successCount > 0,
           data: transformResult.rows,
@@ -662,4 +685,242 @@ export async function deleteMappingProfile(profileId: string) {
       error: error instanceof Error ? error.message : "프로필 삭제 실패",
     };
   }
+}
+
+// ── 온보딩 임포트 헬퍼 (suppliers / inventory / inbound) ──
+
+interface TransformResult {
+  rows: Record<string, unknown>[];
+  errors: { row: number; column?: string; value?: unknown; message: string }[];
+  totalRows: number;
+  successCount: number;
+  errorCount: number;
+}
+
+/** 공급자 데이터 임포트 */
+async function importSupplierRows(
+  organizationId: string,
+  result: TransformResult,
+  duplicateHandling: "skip" | "update" | "error"
+) {
+  const errors: { row: number; column?: string; value?: unknown; message: string }[] = [...result.errors];
+  let successCount = 0;
+  const imported: Record<string, unknown>[] = [];
+
+  for (let i = 0; i < result.rows.length; i++) {
+    const row = result.rows[i];
+    const name = String(row.name || "").trim();
+    if (!name) {
+      errors.push({ row: i + 2, column: "name", message: "공급자명이 비어있습니다" });
+      continue;
+    }
+
+    try {
+      const existing = await db.query.suppliers.findFirst({
+        where: and(
+          eq(suppliers.organizationId, organizationId),
+          eq(suppliers.name, name)
+        ),
+      });
+
+      if (existing) {
+        if (duplicateHandling === "skip") continue;
+        if (duplicateHandling === "error") {
+          errors.push({ row: i + 2, column: "name", value: name, message: `중복 공급자: ${name}` });
+          continue;
+        }
+        // update
+        await db.update(suppliers).set({
+          code: row.code ? String(row.code) : existing.code,
+          businessNumber: row.businessNumber ? String(row.businessNumber) : existing.businessNumber,
+          contactName: row.contactName ? String(row.contactName) : existing.contactName,
+          contactEmail: row.contactEmail ? String(row.contactEmail) : existing.contactEmail,
+          contactPhone: row.contactPhone ? String(row.contactPhone) : existing.contactPhone,
+          address: row.address ? String(row.address) : existing.address,
+          paymentTerms: row.paymentTerms ? String(row.paymentTerms) : existing.paymentTerms,
+          avgLeadTime: row.avgLeadTime ? Number(row.avgLeadTime) : existing.avgLeadTime,
+          updatedAt: new Date(),
+        }).where(eq(suppliers.id, existing.id));
+      } else {
+        await db.insert(suppliers).values({
+          organizationId,
+          name,
+          code: row.code ? String(row.code) : null,
+          businessNumber: row.businessNumber ? String(row.businessNumber) : null,
+          contactName: row.contactName ? String(row.contactName) : null,
+          contactEmail: row.contactEmail ? String(row.contactEmail) : null,
+          contactPhone: row.contactPhone ? String(row.contactPhone) : null,
+          address: row.address ? String(row.address) : null,
+          paymentTerms: row.paymentTerms ? String(row.paymentTerms) : null,
+          avgLeadTime: row.avgLeadTime ? Number(row.avgLeadTime) : 7,
+        });
+      }
+      successCount++;
+      imported.push(row);
+    } catch (err) {
+      errors.push({ row: i + 2, message: `DB 저장 실패: ${err instanceof Error ? err.message : "알 수 없는 오류"}` });
+    }
+  }
+
+  return {
+    success: successCount > 0,
+    data: imported,
+    errors,
+    totalRows: result.totalRows,
+    successCount,
+    errorCount: errors.length,
+  };
+}
+
+/** 재고 데이터 임포트 (SKU 기반으로 기존 inventory 레코드 업데이트) */
+async function importInventoryRows(
+  organizationId: string,
+  result: TransformResult,
+  duplicateHandling: "skip" | "update" | "error"
+) {
+  const errors: { row: number; column?: string; value?: unknown; message: string }[] = [...result.errors];
+  let successCount = 0;
+  const imported: Record<string, unknown>[] = [];
+
+  for (let i = 0; i < result.rows.length; i++) {
+    const row = result.rows[i];
+    const sku = String(row.sku || "").trim();
+    if (!sku) {
+      errors.push({ row: i + 2, column: "sku", message: "SKU가 비어있습니다" });
+      continue;
+    }
+
+    try {
+      // SKU로 제품 찾기
+      const product = await db.query.products.findFirst({
+        where: and(
+          eq(products.organizationId, organizationId),
+          eq(products.sku, sku)
+        ),
+      });
+
+      if (!product) {
+        errors.push({ row: i + 2, column: "sku", value: sku, message: `제품을 찾을 수 없음: ${sku}` });
+        continue;
+      }
+
+      const currentStock = Number(row.currentStock) || 0;
+      const availableStock = row.availableStock != null ? Number(row.availableStock) : currentStock;
+      const reservedStock = row.reservedStock != null ? Number(row.reservedStock) : 0;
+      const location = row.location ? String(row.location) : null;
+
+      // 기존 재고 레코드 확인
+      const existing = await db.query.inventory.findFirst({
+        where: and(
+          eq(inventory.organizationId, organizationId),
+          eq(inventory.productId, product.id)
+        ),
+      });
+
+      if (existing) {
+        if (duplicateHandling === "skip") continue;
+        if (duplicateHandling === "error") {
+          errors.push({ row: i + 2, column: "sku", value: sku, message: `재고 레코드 이미 존재: ${sku}` });
+          continue;
+        }
+        // update
+        await db.update(inventory).set({
+          currentStock,
+          availableStock,
+          reservedStock,
+          location: location || existing.location,
+          updatedAt: new Date(),
+          lastUpdatedAt: new Date(),
+        }).where(eq(inventory.id, existing.id));
+      } else {
+        await db.insert(inventory).values({
+          organizationId,
+          productId: product.id,
+          currentStock,
+          availableStock,
+          reservedStock,
+          location,
+        });
+      }
+      successCount++;
+      imported.push(row);
+    } catch (err) {
+      errors.push({ row: i + 2, message: `DB 저장 실패: ${err instanceof Error ? err.message : "알 수 없는 오류"}` });
+    }
+  }
+
+  return {
+    success: successCount > 0,
+    data: imported,
+    errors,
+    totalRows: result.totalRows,
+    successCount,
+    errorCount: errors.length,
+  };
+}
+
+/** 입고 데이터 임포트 */
+async function importInboundRows(
+  organizationId: string,
+  result: TransformResult
+) {
+  const errors: { row: number; column?: string; value?: unknown; message: string }[] = [...result.errors];
+  let successCount = 0;
+  const imported: Record<string, unknown>[] = [];
+
+  for (let i = 0; i < result.rows.length; i++) {
+    const row = result.rows[i];
+    const sku = String(row.sku || "").trim();
+    if (!sku) {
+      errors.push({ row: i + 2, column: "sku", message: "SKU가 비어있습니다" });
+      continue;
+    }
+
+    try {
+      // SKU로 제품 찾기
+      const product = await db.query.products.findFirst({
+        where: and(
+          eq(products.organizationId, organizationId),
+          eq(products.sku, sku)
+        ),
+      });
+
+      if (!product) {
+        errors.push({ row: i + 2, column: "sku", value: sku, message: `제품을 찾을 수 없음: ${sku}` });
+        continue;
+      }
+
+      const dateStr = String(row.date || "");
+      const receivedQty = Number(row.receivedQuantity) || 0;
+      if (receivedQty <= 0) {
+        errors.push({ row: i + 2, column: "receivedQuantity", message: "입고수량이 0 이하입니다" });
+        continue;
+      }
+
+      await db.insert(inboundRecords).values({
+        organizationId,
+        productId: product.id,
+        date: dateStr || new Date().toISOString().split("T")[0],
+        receivedQuantity: receivedQty,
+        expectedQuantity: row.expectedQuantity ? Number(row.expectedQuantity) : null,
+        lotNumber: row.lotNumber ? String(row.lotNumber) : null,
+        location: row.location ? String(row.location) : null,
+        notes: row.notes ? String(row.notes) : null,
+      });
+
+      successCount++;
+      imported.push(row);
+    } catch (err) {
+      errors.push({ row: i + 2, message: `DB 저장 실패: ${err instanceof Error ? err.message : "알 수 없는 오류"}` });
+    }
+  }
+
+  return {
+    success: successCount > 0,
+    data: imported,
+    errors,
+    totalRows: result.totalRows,
+    successCount,
+    errorCount: errors.length,
+  };
 }
