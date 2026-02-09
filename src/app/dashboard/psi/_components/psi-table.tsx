@@ -18,8 +18,8 @@ interface PSITableProps {
 }
 
 function formatPeriodLabel(period: string): string {
-  const [, month] = period.split("-");
-  return `${parseInt(month)}월`;
+  const [year, month] = period.split("-");
+  return `${year}.${parseInt(month)}월`;
 }
 
 function StockCell({ value, safetyStock }: { value: number; safetyStock: number }) {
@@ -59,7 +59,8 @@ export function PSITable({ products, periods }: PSITableProps) {
           <TableRow>
             <TableHead className="sticky left-0 z-20 bg-white dark:bg-slate-950 min-w-[60px]">SKU</TableHead>
             <TableHead className="sticky left-[60px] z-20 bg-white dark:bg-slate-950 min-w-[100px]">제품명</TableHead>
-            <TableHead className="text-center min-w-[50px]">등급</TableHead>
+            <TableHead className="text-center min-w-[40px]">ABC</TableHead>
+            <TableHead className="text-center min-w-[40px]">XYZ</TableHead>
             <TableHead className="text-center min-w-[60px]">현재고</TableHead>
             {periods.map((period) => (
               <TableHead
@@ -92,9 +93,28 @@ export function PSITable({ products, periods }: PSITableProps) {
                 {product.productName}
               </TableCell>
               <TableCell className="text-center">
-                {product.abcGrade && product.xyzGrade ? (
-                  <Badge variant="outline" className="font-mono text-[10px] px-1">
-                    {product.abcGrade}{product.xyzGrade}
+                {product.abcGrade ? (
+                  <Badge variant="outline" className={cn(
+                    "font-mono text-[10px] px-1",
+                    product.abcGrade === "A" && "border-red-300 text-red-700 bg-red-50",
+                    product.abcGrade === "B" && "border-yellow-300 text-yellow-700 bg-yellow-50",
+                    product.abcGrade === "C" && "border-slate-300 text-slate-600 bg-slate-50",
+                  )}>
+                    {product.abcGrade}
+                  </Badge>
+                ) : (
+                  <span className="text-muted-foreground text-xs">-</span>
+                )}
+              </TableCell>
+              <TableCell className="text-center">
+                {product.xyzGrade ? (
+                  <Badge variant="outline" className={cn(
+                    "font-mono text-[10px] px-1",
+                    product.xyzGrade === "X" && "border-green-300 text-green-700 bg-green-50",
+                    product.xyzGrade === "Y" && "border-blue-300 text-blue-700 bg-blue-50",
+                    product.xyzGrade === "Z" && "border-purple-300 text-purple-700 bg-purple-50",
+                  )}>
+                    {product.xyzGrade}
                   </Badge>
                 ) : (
                   <span className="text-muted-foreground text-xs">-</span>
