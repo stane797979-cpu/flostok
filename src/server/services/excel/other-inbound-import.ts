@@ -4,8 +4,8 @@
 
 import * as XLSX from "xlsx";
 import { db } from "@/server/db";
-import { products } from "@/server/db/schema";
-import { eq, and } from "drizzle-orm";
+import { products, inboundRecords } from "@/server/db/schema";
+import { eq, and, isNull, desc } from "drizzle-orm";
 import { parseExcelBuffer, sheetToJson, parseNumber } from "./parser";
 import { createOtherInbound } from "@/server/actions/inbound";
 
@@ -161,46 +161,69 @@ export async function importOtherInboundData(params: {
 }
 
 /**
- * 기타 입고 Excel 템플릿 생성
+ * 기타 입고 Excel 템플릿 생성 (기존 입고 기록 포함)
  */
-export function createOtherInboundTemplate(): ArrayBuffer {
+export async function createOtherInboundTemplate(organizationId: string): Promise<ArrayBuffer> {
   const wb = XLSX.utils.book_new();
 
-  const data = [
-    {
-      SKU: "SKU-A001",
-      "입고유형": "반품",
-      "수량": 10,
-      "적치위치": "A-01-02",
-      "LOT번호": "",
-      "유통기한": "",
-      "비고": "고객 반품",
-    },
-    {
-      SKU: "SKU-A002",
-      "입고유형": "조정",
-      "수량": 5,
-      "적치위치": "",
-      "LOT번호": "",
-      "유통기한": "",
-      "비고": "재고 실사 차이 조정",
-    },
-    {
-      SKU: "SKU-A003",
-      "입고유형": "이동",
-      "수량": 20,
-      "적치위치": "B-03-01",
-      "LOT번호": "",
-      "유통기한": "",
-      "비고": "타 창고에서 이동",
-    },
-  ];
+  // DB에서 기존 기타입고 기록 조회 (purchaseOrderId가 null인 것 = 기타입고)
+  const existingRecords = await db
+    .select({
+      sku: products.sku,
+      date: inboundRecords.date,
+      receivedQuantity: inboundRecords.receivedQuantity,
+      location: inboundRecords.location,
+      lotNumber: inboundRecords.lotNumber,
+      expiryDate: inboundRecords.expiryDate,
+      notes: inboundRecords.notes,
+    })
+    .from(inboundRecords)
+    .innerJoin(products, eq(inboundRecords.productId, products.id))
+    .where(
+      and(
+        eq(inboundRecords.organizationId, organizationId),
+        isNull(inboundRecords.purchaseOrderId)
+      )
+    )
+    .orderBy(desc(inboundRecords.date))
+    .limit(200);
+
+  let data: Array<Record<string, string | number>>;
+
+  if (existingRecords.length > 0) {
+    // 기존 데이터를 양식에 포함
+    data = existingRecords.map((r) => ({
+      SKU: r.sku,
+      "입고일": r.date,
+      "입고유형": "",
+      "수량": r.receivedQuantity,
+      "적치위치": r.location || "",
+      "LOT번호": r.lotNumber || "",
+      "유통기한": r.expiryDate || "",
+      "비고": r.notes || "",
+    }));
+  } else {
+    // 데이터가 없으면 예시 행 제공
+    data = [
+      {
+        SKU: "SKU-A001",
+        "입고일": "",
+        "입고유형": "반품",
+        "수량": 10,
+        "적치위치": "A-01-02",
+        "LOT번호": "",
+        "유통기한": "",
+        "비고": "고객 반품",
+      },
+    ];
+  }
 
   const ws = XLSX.utils.json_to_sheet(data);
 
   // 열 너비 설정
   ws["!cols"] = [
     { wch: 14 }, // SKU
+    { wch: 12 }, // 입고일
     { wch: 12 }, // 입고유형
     { wch: 8 },  // 수량
     { wch: 12 }, // 적치위치
@@ -214,6 +237,7 @@ export function createOtherInboundTemplate(): ArrayBuffer {
   // 안내 시트
   const guideData = [
     { "컬럼명": "SKU", "필수여부": "필수", "설명": "제품 SKU 코드" },
+    { "컬럼명": "입고일", "필수여부": "선택", "설명": "입고일 (YYYY-MM-DD, 미입력시 오늘)" },
     { "컬럼명": "입고유형", "필수여부": "필수", "설명": "반품 / 조정 / 이동" },
     { "컬럼명": "수량", "필수여부": "필수", "설명": "입고 수량 (양수)" },
     { "컬럼명": "적치위치", "필수여부": "선택", "설명": "창고 위치 (예: A-01-02)" },

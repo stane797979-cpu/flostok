@@ -21,7 +21,8 @@ export async function getOtherInboundTemplate(): Promise<{
   error?: string;
 }> {
   try {
-    const buffer = createOtherInboundTemplate();
+    const user = await requireAuth();
+    const buffer = await createOtherInboundTemplate(user.organizationId);
     const bytes = new Uint8Array(buffer);
     let binary = "";
     for (let i = 0; i < bytes.length; i++) {
