@@ -501,6 +501,7 @@ export async function getInboundRecords(options?: GetInboundRecordsOptions): Pro
     productName: string;
     productSku: string;
     date: string;
+    scheduledDate: string | null;
     expectedQuantity: number | null;
     receivedQuantity: number;
     acceptedQuantity: number | null;
@@ -544,6 +545,7 @@ export async function getInboundRecords(options?: GetInboundRecordsOptions): Pro
           },
           order: {
             orderNumber: purchaseOrders.orderNumber,
+            expectedDate: purchaseOrders.expectedDate,
           },
         })
         .from(inboundRecords)
@@ -568,6 +570,7 @@ export async function getInboundRecords(options?: GetInboundRecordsOptions): Pro
         productName: row.product.name,
         productSku: row.product.sku,
         date: row.record.date,
+        scheduledDate: row.order?.expectedDate || null,
         expectedQuantity: row.record.expectedQuantity,
         receivedQuantity: row.record.receivedQuantity,
         acceptedQuantity: row.record.acceptedQuantity,

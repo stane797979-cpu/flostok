@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { ArrowUpDown, ArrowUp, ArrowDown, Pencil, Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { updateInboundRecordDate } from "@/server/actions/inbound";
+import { updatePurchaseOrderExpectedDate } from "@/server/actions/purchase-orders";
 import { useToast } from "@/hooks/use-toast";
 
 export interface InboundRecord {
@@ -25,6 +26,7 @@ export interface InboundRecord {
   productName: string;
   productSku: string;
   date: string;
+  scheduledDate: string | null;
   expectedQuantity: number | null;
   receivedQuantity: number;
   acceptedQuantity: number | null;
@@ -61,6 +63,7 @@ interface InboundRecordsTableProps {
 
 type SortField =
   | "date"
+  | "scheduledDate"
   | "orderNumber"
   | "productSku"
   | "productName"
@@ -116,6 +119,10 @@ export function InboundRecordsTable({ records, className }: InboundRecordsTableP
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
   const [editDate, setEditDate] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  // 입고예정일(스케줄) 편집
+  const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
+  const [editScheduleDate, setEditScheduleDate] = useState("");
+  const [isSavingSchedule, setIsSavingSchedule] = useState(false);
   const { toast } = useToast();
 
   const handleEditDate = (recordId: string, currentDate: string) => {
@@ -144,6 +151,35 @@ export function InboundRecordsTable({ records, className }: InboundRecordsTableP
       toast({ title: "오류 발생", description: "입고일 변경에 실패했습니다", variant: "destructive" });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleEditSchedule = (recordId: string, currentDate: string) => {
+    setEditingScheduleId(recordId);
+    setEditScheduleDate(currentDate);
+  };
+
+  const handleCancelSchedule = () => {
+    setEditingScheduleId(null);
+    setEditScheduleDate("");
+  };
+
+  const handleSaveSchedule = async (orderId: string) => {
+    if (!editingScheduleId || !editScheduleDate || !orderId) return;
+    setIsSavingSchedule(true);
+    try {
+      const result = await updatePurchaseOrderExpectedDate(orderId, editScheduleDate);
+      if (result.success) {
+        toast({ title: "입고예정일이 변경되었습니다" });
+        setEditingScheduleId(null);
+        setEditScheduleDate("");
+      } else {
+        toast({ title: "변경 실패", description: result.error, variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "오류 발생", description: "입고예정일 변경에 실패했습니다", variant: "destructive" });
+    } finally {
+      setIsSavingSchedule(false);
     }
   };
 
@@ -208,6 +244,15 @@ export function InboundRecordsTable({ records, className }: InboundRecordsTableP
               >
                 입고일
                 <SortIcon field="date" sortField={sortField} sortDirection={sortDirection} />
+              </button>
+            </TableHead>
+            <TableHead className="whitespace-nowrap">
+              <button
+                onClick={() => handleSort("scheduledDate")}
+                className="flex items-center gap-1 hover:text-slate-900"
+              >
+                입고예정일
+                <SortIcon field="scheduledDate" sortField={sortField} sortDirection={sortDirection} />
               </button>
             </TableHead>
             <TableHead className="whitespace-nowrap">
@@ -321,6 +366,55 @@ export function InboundRecordsTable({ records, className }: InboundRecordsTableP
                       <Pencil className="h-3 w-3 text-slate-400" />
                     </Button>
                   </div>
+                )}
+              </TableCell>
+              <TableCell className="whitespace-nowrap text-sm">
+                {record.scheduledDate ? (
+                  editingScheduleId === record.id ? (
+                    <div className="flex items-center gap-1">
+                      <Input
+                        type="date"
+                        value={editScheduleDate}
+                        onChange={(e) => setEditScheduleDate(e.target.value)}
+                        className="h-7 w-36 text-sm"
+                        disabled={isSavingSchedule}
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => record.purchaseOrderId && handleSaveSchedule(record.purchaseOrderId)}
+                        disabled={isSavingSchedule}
+                      >
+                        <Check className="h-3.5 w-3.5 text-green-600" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={handleCancelSchedule}
+                        disabled={isSavingSchedule}
+                      >
+                        <X className="h-3.5 w-3.5 text-slate-400" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="group flex items-center gap-1">
+                      <span className="text-blue-600">{record.scheduledDate}</span>
+                      {record.purchaseOrderId && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => handleEditSchedule(record.id, record.scheduledDate!)}
+                        >
+                          <Pencil className="h-3 w-3 text-slate-400" />
+                        </Button>
+                      )}
+                    </div>
+                  )
+                ) : (
+                  <span className="text-slate-400">-</span>
                 )}
               </TableCell>
               <TableCell className="whitespace-nowrap font-mono text-xs">
