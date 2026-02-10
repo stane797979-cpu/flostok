@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -9,10 +9,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -20,9 +22,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { processInventoryTransaction } from "@/server/actions/inventory";
+import { processInventoryTransaction, getInventoryHistory } from "@/server/actions/inventory";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
+import { Loader2, History } from "lucide-react";
+import type { InventoryHistory } from "@/server/db/schema";
+
+function changeTypeLabel(changeType: string): string {
+  const labels: Record<string, string> = {
+    INBOUND: "입고",
+    OUTBOUND: "출고",
+    INBOUND_ADJUSTMENT: "조정 입고",
+    OUTBOUND_ADJUSTMENT: "조정 출고",
+    SALE: "판매",
+    RETURN: "반품",
+  };
+  return labels[changeType] || changeType;
+}
 
 export interface AdjustmentTarget {
   productId: string;
@@ -49,7 +64,17 @@ export function InventoryAdjustmentDialog({
   const [location, setLocation] = useState("");
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [historyRecords, setHistoryRecords] = useState<InventoryHistory[]>([]);
   const { toast } = useToast();
+
+  // 다이얼로그 열릴 때 이력 로드
+  useEffect(() => {
+    if (open && target) {
+      getInventoryHistory({ productId: target.productId, limit: 10 })
+        .then((result) => setHistoryRecords(result.records))
+        .catch(() => setHistoryRecords([]));
+    }
+  }, [open, target]);
 
   const quantityNum = Number(quantity) || 0;
   const expectedStock =
@@ -203,6 +228,49 @@ export function InventoryAdjustmentDialog({
             />
           </div>
         </div>
+
+        {/* 변경 이력 */}
+        {historyRecords.length > 0 && (
+          <>
+            <Separator />
+            <div className="space-y-2">
+              <h4 className="flex items-center gap-1.5 text-sm font-semibold">
+                <History className="h-3.5 w-3.5" />
+                최근 변경 이력
+              </h4>
+              <div className="max-h-40 overflow-y-auto rounded-md border">
+                <div className="divide-y text-xs">
+                  {historyRecords.map((h) => (
+                    <div key={h.id} className="flex items-center gap-2 px-3 py-2">
+                      <Badge
+                        variant="outline"
+                        className={
+                          h.changeAmount > 0
+                            ? "text-[10px] border-green-200 text-green-700"
+                            : "text-[10px] border-red-200 text-red-700"
+                        }
+                      >
+                        {h.changeAmount > 0 ? "+" : ""}{h.changeAmount}
+                      </Badge>
+                      <span className="text-slate-500">
+                        {h.stockBefore} → {h.stockAfter}
+                      </span>
+                      <span className="flex-1 truncate text-slate-400">
+                        {h.notes || changeTypeLabel(h.changeType)}
+                      </span>
+                      <span className="flex-shrink-0 text-slate-400">
+                        {new Date(h.createdAt).toLocaleDateString("ko-KR", {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </>
+        )}
 
         <DialogFooter>
           <Button variant="outline" onClick={handleClose}>
