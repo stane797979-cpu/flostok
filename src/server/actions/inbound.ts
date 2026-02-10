@@ -227,9 +227,9 @@ export async function confirmInbound(input: ConfirmInboundInput): Promise<{
       description: `입고 확인 처리`,
     });
 
-    revalidatePath("/orders");
-    revalidatePath(`/orders/${validated.orderId}`);
-    revalidatePath("/inventory");
+    revalidatePath("/dashboard/orders");
+    revalidatePath("/dashboard/inventory");
+    revalidatePath("/dashboard/psi");
 
     return {
       success: true,
@@ -408,6 +408,7 @@ export async function createOtherInbound(input: OtherInboundInput): Promise<{
 
     revalidatePath("/dashboard/orders");
     revalidatePath("/dashboard/inventory");
+    revalidatePath("/dashboard/psi");
 
     return { success: true, recordId: record.id };
   } catch (error) {
