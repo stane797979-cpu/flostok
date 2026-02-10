@@ -372,13 +372,20 @@ export async function uploadPSIPlanExcel(
 
 export type SOPMethod = "match_outbound" | "safety_stock" | "target_days" | "forecast" | "by_order_method";
 
+export interface ByOrderMethodOptions {
+  fixedQuantityMethod: SOPMethod;
+  fixedPeriodMethod: SOPMethod;
+  targetDays?: number;
+}
+
 /**
  * SCM 가이드 수량 자동 산출
  * S&OP 합의 출고예상량 기반으로 SCM(공급 가이드) 수량을 산출하여 psi_plans에 저장
  */
 export async function generateSOPQuantities(
   method: SOPMethod,
-  targetDays?: number
+  targetDays?: number,
+  byOrderMethodOptions?: ByOrderMethodOptions
 ): Promise<{ success: boolean; message: string; updatedCount: number }> {
   try {
     const user = await getCurrentUser();
@@ -475,59 +482,40 @@ export async function generateSOPQuantities(
       const safetyStock = safetyStockMap.get(product.id) ?? 0;
       let runningStock = currentStock;
 
+      // 산출 방식별 수량 계산 헬퍼
+      const calcSopQty = (m: SOPMethod, days?: number): number => {
+        switch (m) {
+          case "match_outbound":
+            return outPlan;
+          case "safety_stock":
+            return Math.max(0, outPlan + safetyStock - runningStock);
+          case "target_days": {
+            const d = days || targetDays || 30;
+            const dailyOutbound = outPlan / 30;
+            const tgtStock = Math.max(dailyOutbound * d, safetyStock);
+            return Math.max(0, outPlan + tgtStock - runningStock);
+          }
+          case "forecast":
+            return forecastMap.get(product.id)?.get(period) || outPlan;
+          default:
+            return Math.max(0, outPlan + safetyStock - runningStock);
+        }
+      };
+
       for (const period of futurePeriods) {
         const outPlan = outPlanMap.get(product.id)?.get(period) || 0;
         let sopQty = 0;
 
-        switch (method) {
-          case "match_outbound":
-            // S&OP = 출고P (1:1 매칭)
-            sopQty = outPlan;
-            break;
-
-          case "safety_stock":
-            // S&OP = max(0, 출고P + 안전재고 - 기초재고)
-            sopQty = Math.max(0, outPlan + safetyStock - runningStock);
-            break;
-
-          case "target_days": {
-            // S&OP = max(0, 출고P + max(일평균출고P × 목표일수, 안전재고) - 기초재고)
-            const days = targetDays || 30;
-            const dailyOutbound = outPlan / 30; // 월간 → 일평균
-            const targetStock = Math.max(dailyOutbound * days, safetyStock);
-            sopQty = Math.max(0, outPlan + targetStock - runningStock);
-            break;
-          }
-
-          case "forecast":
-            // S&OP = 수요예측값
-            sopQty = forecastMap.get(product.id)?.get(period) || outPlan;
-            break;
-
-          case "by_order_method": {
-            const om = product.orderMethod;
-            if (om === "fixed_quantity") {
-              // EOQ 기반: 기초재고가 발주점 이하일 때만 EOQ만큼 공급
-              const rp = product.reorderPoint ?? 0;
-              if (runningStock <= rp && outPlan > 0) {
-                const annualDemand = outPlan * 12;
-                const costPr = product.costPrice ?? 10000;
-                const holdingCost = costPr * 0.25;
-                const { eoq } = calculateEOQ({ annualDemand, orderingCost: 10000, holdingCostPerUnit: holdingCost > 0 ? holdingCost : 2500 });
-                sopQty = Math.max(eoq, outPlan); // 최소한 출고계획만큼은 공급
-              } else {
-                sopQty = Math.max(0, outPlan - runningStock + safetyStock);
-              }
-            } else if (om === "fixed_period") {
-              // 정기발주: 목표재고까지 보충
-              const target = product.targetStock ?? (safetyStock * 2);
-              sopQty = Math.max(0, target - runningStock + outPlan);
-            } else {
-              // 미설정: 안전재고 보충 폴백
-              sopQty = Math.max(0, outPlan + safetyStock - runningStock);
-            }
-            break;
-          }
+        if (method === "by_order_method") {
+          const om = product.orderMethod;
+          const subMethod = om === "fixed_quantity"
+            ? byOrderMethodOptions?.fixedQuantityMethod ?? "safety_stock"
+            : om === "fixed_period"
+            ? byOrderMethodOptions?.fixedPeriodMethod ?? "safety_stock"
+            : "safety_stock";
+          sopQty = calcSopQty(subMethod, byOrderMethodOptions?.targetDays);
+        } else {
+          sopQty = calcSopQty(method);
         }
 
         sopQty = Math.round(sopQty);
@@ -578,9 +566,16 @@ export async function generateSOPQuantities(
       by_order_method: "발주방식별 자동",
     };
 
+    let methodDesc = methodLabels[method];
+    if (method === "by_order_method" && byOrderMethodOptions) {
+      const qLabel = methodLabels[byOrderMethodOptions.fixedQuantityMethod] || "안전재고 보충";
+      const pLabel = methodLabels[byOrderMethodOptions.fixedPeriodMethod] || "안전재고 보충";
+      methodDesc = `발주방식별 (정량: ${qLabel}, 정기: ${pLabel})`;
+    }
+
     return {
       success: true,
-      message: `${methodLabels[method]} 방식으로 ${updatedCount}건의 S&OP 수량이 산출되었습니다`,
+      message: `${methodDesc} 방식으로 ${updatedCount}건의 S&OP 수량이 산출되었습니다`,
       updatedCount,
     };
   } catch (error) {

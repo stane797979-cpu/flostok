@@ -15,6 +15,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Upload, Download, Calculator } from "lucide-react";
 import { PSIFilters } from "./psi-filters";
 import { PSITable } from "./psi-table";
@@ -60,8 +67,10 @@ export function PSIClient({ data }: PSIClientProps) {
   const [abcFilter, setAbcFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [isPending, startTransition] = useTransition();
-  const [sopMethod, setSopMethod] = useState<SOPMethod>("safety_stock");
+  const [sopMethod, setSopMethod] = useState<SOPMethod>("by_order_method");
   const [targetDays, setTargetDays] = useState(30);
+  const [fixedQtySubMethod, setFixedQtySubMethod] = useState<SOPMethod>("safety_stock");
+  const [fixedPeriodSubMethod, setFixedPeriodSubMethod] = useState<SOPMethod>("target_days");
   const [sopDialogOpen, setSopDialogOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -166,7 +175,12 @@ export function PSIClient({ data }: PSIClientProps) {
     startTransition(async () => {
       const result = await generateSOPQuantities(
         sopMethod,
-        sopMethod === "target_days" ? targetDays : undefined
+        sopMethod === "target_days" ? targetDays : undefined,
+        sopMethod === "by_order_method" ? {
+          fixedQuantityMethod: fixedQtySubMethod,
+          fixedPeriodMethod: fixedPeriodSubMethod,
+          targetDays,
+        } : undefined
       );
       if (result.success) {
         toast({ title: "SCM 가이드 산출 완료", description: result.message });
@@ -244,6 +258,63 @@ export function PSIClient({ data }: PSIClientProps) {
                       className="w-20 h-8"
                     />
                     <span className="text-sm text-muted-foreground">일</span>
+                  </div>
+                )}
+
+                {sopMethod === "by_order_method" && (
+                  <div className="space-y-3 pl-7 border-l-2 border-purple-200 ml-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium flex items-center gap-1.5">
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 border-blue-300 text-blue-700 bg-blue-50">정량</Badge>
+                        정량발주 제품 산출방식
+                      </Label>
+                      <Select value={fixedQtySubMethod} onValueChange={(v) => setFixedQtySubMethod(v as SOPMethod)}>
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="match_outbound">출고계획 동일</SelectItem>
+                          <SelectItem value="safety_stock">안전재고 보충</SelectItem>
+                          <SelectItem value="target_days">목표재고일수</SelectItem>
+                          <SelectItem value="forecast">수요예측 연동</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium flex items-center gap-1.5">
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 border-green-300 text-green-700 bg-green-50">정기</Badge>
+                        정기발주 제품 산출방식
+                      </Label>
+                      <Select value={fixedPeriodSubMethod} onValueChange={(v) => setFixedPeriodSubMethod(v as SOPMethod)}>
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="match_outbound">출고계획 동일</SelectItem>
+                          <SelectItem value="safety_stock">안전재고 보충</SelectItem>
+                          <SelectItem value="target_days">목표재고일수</SelectItem>
+                          <SelectItem value="forecast">수요예측 연동</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {(fixedQtySubMethod === "target_days" || fixedPeriodSubMethod === "target_days") && (
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="sub-target-days" className="text-xs whitespace-nowrap">
+                          목표 재고일수
+                        </Label>
+                        <Input
+                          id="sub-target-days"
+                          type="number"
+                          min={1}
+                          max={365}
+                          value={targetDays}
+                          onChange={(e) => setTargetDays(Number(e.target.value) || 30)}
+                          className="w-20 h-8"
+                        />
+                        <span className="text-xs text-muted-foreground">일</span>
+                      </div>
+                    )}
+                    <p className="text-[10px] text-muted-foreground">미설정 제품은 안전재고 보충 적용</p>
                   </div>
                 )}
               </div>
