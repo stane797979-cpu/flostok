@@ -3,6 +3,8 @@ import { PSIClient } from "./_components/psi-client";
 import { Card, CardContent } from "@/components/ui/card";
 import { FileSpreadsheet } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 export default async function PSIPage() {
   let data;
   try {
