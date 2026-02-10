@@ -220,90 +220,94 @@ export function PSIClient({ data }: PSIClientProps) {
               </DialogHeader>
               <div className="space-y-3 py-4">
                 {SOP_METHODS.map((m) => (
-                  <label
-                    key={m.value}
-                    className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
-                      sopMethod === m.value
-                        ? "border-purple-500 bg-purple-50 dark:bg-purple-950/30"
-                        : "border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="sop-method"
-                      value={m.value}
-                      checked={sopMethod === m.value}
-                      onChange={() => setSopMethod(m.value)}
-                      className="mt-1"
-                    />
-                    <div>
-                      <div className="font-medium text-sm">{m.label}</div>
-                      <div className="text-xs text-muted-foreground mt-0.5">{m.description}</div>
-                    </div>
-                  </label>
-                ))}
+                  <div key={m.value}>
+                    <label
+                      className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
+                        sopMethod === m.value
+                          ? "border-purple-500 bg-purple-50 dark:bg-purple-950/30"
+                          : "border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="sop-method"
+                        value={m.value}
+                        checked={sopMethod === m.value}
+                        onChange={() => setSopMethod(m.value)}
+                        className="mt-1"
+                      />
+                      <div>
+                        <div className="font-medium text-sm">{m.label}</div>
+                        <div className="text-xs text-muted-foreground mt-0.5">{m.description}</div>
+                      </div>
+                    </label>
 
-                {sopMethod === "target_days" && (
-                  <div className="flex items-center gap-2 pl-7">
-                    <Label htmlFor="target-days" className="text-sm whitespace-nowrap">
-                      목표 재고일수
-                    </Label>
-                    <Input
-                      id="target-days"
-                      type="number"
-                      min={1}
-                      max={365}
-                      value={targetDays}
-                      onChange={(e) => setTargetDays(Number(e.target.value) || 30)}
-                      className="w-20 h-8"
-                    />
-                    <span className="text-sm text-muted-foreground">일</span>
-                  </div>
-                )}
+                    {/* 발주방식별 자동 → 정량/정기 서브메서드 (바로 아래 표시) */}
+                    {m.value === "by_order_method" && sopMethod === "by_order_method" && (
+                      <div className="space-y-3 pl-7 border-l-2 border-purple-200 ml-3 mt-2">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium flex items-center gap-1.5">
+                            <Badge variant="outline" className="text-[9px] px-1 py-0 border-blue-300 text-blue-700 bg-blue-50">정량</Badge>
+                            정량발주 제품 산출방식
+                          </Label>
+                          <Select value={fixedQtySubMethod} onValueChange={(v) => setFixedQtySubMethod(v as SOPMethod)}>
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="match_outbound">출고계획 동일</SelectItem>
+                              <SelectItem value="safety_stock">안전재고 보충</SelectItem>
+                              <SelectItem value="target_days">목표재고일수</SelectItem>
+                              <SelectItem value="forecast">수요예측 연동</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium flex items-center gap-1.5">
+                            <Badge variant="outline" className="text-[9px] px-1 py-0 border-green-300 text-green-700 bg-green-50">정기</Badge>
+                            정기발주 제품 산출방식
+                          </Label>
+                          <Select value={fixedPeriodSubMethod} onValueChange={(v) => setFixedPeriodSubMethod(v as SOPMethod)}>
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="match_outbound">출고계획 동일</SelectItem>
+                              <SelectItem value="safety_stock">안전재고 보충</SelectItem>
+                              <SelectItem value="target_days">목표재고일수</SelectItem>
+                              <SelectItem value="forecast">수요예측 연동</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {(fixedQtySubMethod === "target_days" || fixedPeriodSubMethod === "target_days") && (
+                          <div className="flex items-center gap-2">
+                            <Label htmlFor="sub-target-days" className="text-xs whitespace-nowrap">
+                              목표 재고일수
+                            </Label>
+                            <Input
+                              id="sub-target-days"
+                              type="number"
+                              min={1}
+                              max={365}
+                              value={targetDays}
+                              onChange={(e) => setTargetDays(Number(e.target.value) || 30)}
+                              className="w-20 h-8"
+                            />
+                            <span className="text-xs text-muted-foreground">일</span>
+                          </div>
+                        )}
+                        <p className="text-[10px] text-muted-foreground">미설정 제품은 안전재고 보충 적용</p>
+                      </div>
+                    )}
 
-                {sopMethod === "by_order_method" && (
-                  <div className="space-y-3 pl-7 border-l-2 border-purple-200 ml-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium flex items-center gap-1.5">
-                        <Badge variant="outline" className="text-[9px] px-1 py-0 border-blue-300 text-blue-700 bg-blue-50">정량</Badge>
-                        정량발주 제품 산출방식
-                      </Label>
-                      <Select value={fixedQtySubMethod} onValueChange={(v) => setFixedQtySubMethod(v as SOPMethod)}>
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="match_outbound">출고계획 동일</SelectItem>
-                          <SelectItem value="safety_stock">안전재고 보충</SelectItem>
-                          <SelectItem value="target_days">목표재고일수</SelectItem>
-                          <SelectItem value="forecast">수요예측 연동</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium flex items-center gap-1.5">
-                        <Badge variant="outline" className="text-[9px] px-1 py-0 border-green-300 text-green-700 bg-green-50">정기</Badge>
-                        정기발주 제품 산출방식
-                      </Label>
-                      <Select value={fixedPeriodSubMethod} onValueChange={(v) => setFixedPeriodSubMethod(v as SOPMethod)}>
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="match_outbound">출고계획 동일</SelectItem>
-                          <SelectItem value="safety_stock">안전재고 보충</SelectItem>
-                          <SelectItem value="target_days">목표재고일수</SelectItem>
-                          <SelectItem value="forecast">수요예측 연동</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    {(fixedQtySubMethod === "target_days" || fixedPeriodSubMethod === "target_days") && (
-                      <div className="flex items-center gap-2">
-                        <Label htmlFor="sub-target-days" className="text-xs whitespace-nowrap">
+                    {/* 목표재고일수 → 일수 입력 (바로 아래 표시) */}
+                    {m.value === "target_days" && sopMethod === "target_days" && (
+                      <div className="flex items-center gap-2 pl-7 mt-2">
+                        <Label htmlFor="target-days" className="text-sm whitespace-nowrap">
                           목표 재고일수
                         </Label>
                         <Input
-                          id="sub-target-days"
+                          id="target-days"
                           type="number"
                           min={1}
                           max={365}
@@ -311,12 +315,11 @@ export function PSIClient({ data }: PSIClientProps) {
                           onChange={(e) => setTargetDays(Number(e.target.value) || 30)}
                           className="w-20 h-8"
                         />
-                        <span className="text-xs text-muted-foreground">일</span>
+                        <span className="text-sm text-muted-foreground">일</span>
                       </div>
                     )}
-                    <p className="text-[10px] text-muted-foreground">미설정 제품은 안전재고 보충 적용</p>
                   </div>
-                )}
+                ))}
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setSopDialogOpen(false)}>

@@ -8,6 +8,7 @@ import {
   inventory,
   suppliers,
   demandForecasts,
+  importShipments,
   type PurchaseOrder,
   type PurchaseOrderItem,
 } from "@/server/db/schema";
@@ -718,7 +719,7 @@ export async function getPurchaseOrders(options?: {
 }
 
 /**
- * 발주서 상세 조회
+ * 발주서 상세 조회 (입항스케줄 정보 포함)
  */
 export async function getPurchaseOrderById(orderId: string): Promise<
   | (PurchaseOrder & {
@@ -726,6 +727,7 @@ export async function getPurchaseOrderById(orderId: string): Promise<
       items: (PurchaseOrderItem & {
         product: { sku: string; name: string; unit: string | null };
       })[];
+      shipmentEta?: string | null; // 입항스케줄 기반 예상입고일 (warehouseEtaDate 우선, etaDate 폴백)
     })
   | null
 > {
@@ -745,19 +747,35 @@ export async function getPurchaseOrderById(orderId: string): Promise<
 
   if (!orderData) return null;
 
-  const items = await db
-    .select({
-      item: purchaseOrderItems,
-      product: {
-        sku: products.sku,
-        name: products.name,
-        unit: products.unit,
-      },
-    })
-    .from(purchaseOrderItems)
-    .innerJoin(products, eq(purchaseOrderItems.productId, products.id))
-    .where(eq(purchaseOrderItems.purchaseOrderId, orderId))
-    .orderBy(asc(purchaseOrderItems.createdAt));
+  // 발주 항목 + 입항스케줄 최신 예상일 병렬 조회
+  const [items, shipments] = await Promise.all([
+    db
+      .select({
+        item: purchaseOrderItems,
+        product: {
+          sku: products.sku,
+          name: products.name,
+          unit: products.unit,
+        },
+      })
+      .from(purchaseOrderItems)
+      .innerJoin(products, eq(purchaseOrderItems.productId, products.id))
+      .where(eq(purchaseOrderItems.purchaseOrderId, orderId))
+      .orderBy(asc(purchaseOrderItems.createdAt)),
+    db
+      .select({
+        warehouseEtaDate: importShipments.warehouseEtaDate,
+        etaDate: importShipments.etaDate,
+      })
+      .from(importShipments)
+      .where(eq(importShipments.purchaseOrderId, orderId))
+      .orderBy(desc(importShipments.createdAt))
+      .limit(1),
+  ]);
+
+  // 입항스케줄에서 예상입고일 추출 (warehouseEtaDate 우선, etaDate 폴백)
+  const latestShipment = shipments[0];
+  const shipmentEta = latestShipment?.warehouseEtaDate || latestShipment?.etaDate || null;
 
   return {
     ...orderData.order,
@@ -766,7 +784,57 @@ export async function getPurchaseOrderById(orderId: string): Promise<
       ...row.item,
       product: row.product,
     })),
+    shipmentEta,
   };
+}
+
+/**
+ * 발주서 예상입고일 변경
+ */
+export async function updatePurchaseOrderExpectedDate(
+  orderId: string,
+  expectedDate: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!expectedDate || !/^\d{4}-\d{2}-\d{2}$/.test(expectedDate)) {
+      return { success: false, error: "유효한 날짜 형식이 아닙니다 (YYYY-MM-DD)" };
+    }
+
+    const user = await getCurrentUser();
+    const orgId = user?.organizationId || TEMP_ORG_ID;
+
+    const [order] = await db
+      .select({ id: purchaseOrders.id })
+      .from(purchaseOrders)
+      .where(and(eq(purchaseOrders.id, orderId), eq(purchaseOrders.organizationId, orgId)))
+      .limit(1);
+
+    if (!order) {
+      return { success: false, error: "발주서를 찾을 수 없습니다" };
+    }
+
+    await db
+      .update(purchaseOrders)
+      .set({ expectedDate, updatedAt: new Date() })
+      .where(eq(purchaseOrders.id, orderId));
+
+    revalidatePath("/dashboard/orders");
+
+    if (user) {
+      logActivity({
+        user,
+        action: "UPDATE",
+        entityType: "purchase_order",
+        entityId: orderId,
+        description: `예상입고일 변경: ${expectedDate}`,
+      }).catch(console.error);
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error("예상입고일 변경 오류:", error);
+    return { success: false, error: "예상입고일 변경에 실패했습니다" };
+  }
 }
 
 /**

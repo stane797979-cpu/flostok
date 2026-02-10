@@ -19,10 +19,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Package, Calendar, Building2, FileText, Download, ChevronRight, XCircle, Ship, Plus } from "lucide-react";
+import { Package, Calendar, Building2, FileText, Download, ChevronRight, XCircle, Ship, Plus, Pencil, Check, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getPurchaseOrderById, updatePurchaseOrderStatus } from "@/server/actions/purchase-orders";
+import { getPurchaseOrderById, updatePurchaseOrderStatus, updatePurchaseOrderExpectedDate } from "@/server/actions/purchase-orders";
 import { createImportShipment } from "@/server/actions/import-shipments";
 import { InboundDialog, type InboundDialogItem } from "./inbound-dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -71,6 +71,9 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
     warehouseEtaDate: "",
     notes: "",
   });
+  const [isEditingExpectedDate, setIsEditingExpectedDate] = useState(false);
+  const [editExpectedDate, setEditExpectedDate] = useState("");
+  const [isSavingExpectedDate, setIsSavingExpectedDate] = useState(false);
   const { toast } = useToast();
 
   // 발주서 데이터 로드
@@ -169,6 +172,32 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
       toast({ title: "오류", description: "입항스케줄 등록 중 오류가 발생했습니다", variant: "destructive" });
     } finally {
       setIsCreatingShipment(false);
+    }
+  };
+
+  const handleEditExpectedDate = () => {
+    const displayDate = orderData?.shipmentEta || orderData?.expectedDate || "";
+    setEditExpectedDate(displayDate);
+    setIsEditingExpectedDate(true);
+  };
+
+  const handleSaveExpectedDate = async () => {
+    if (!editExpectedDate) return;
+    setIsSavingExpectedDate(true);
+    try {
+      const result = await updatePurchaseOrderExpectedDate(orderId, editExpectedDate);
+      if (result.success) {
+        toast({ title: "변경 완료", description: "예상입고일이 변경되었습니다" });
+        setIsEditingExpectedDate(false);
+        loadOrderData();
+        onStatusChange?.();
+      } else {
+        toast({ title: "변경 실패", description: result.error || "변경에 실패했습니다", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "오류", description: "예상입고일 변경 중 오류가 발생했습니다", variant: "destructive" });
+    } finally {
+      setIsSavingExpectedDate(false);
     }
   };
 
@@ -331,11 +360,60 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
 
                   <div className="flex items-start gap-3">
                     <Calendar className="mt-1 h-5 w-5 text-slate-400" />
-                    <div>
+                    <div className="flex-1">
                       <p className="text-sm font-medium text-slate-500">예상입고일</p>
-                      <p className="mt-1 font-semibold">
-                        {orderData.expectedDate ? formatDate(orderData.expectedDate) : "미정"}
-                      </p>
+                      {isEditingExpectedDate ? (
+                        <div className="mt-1 flex items-center gap-1.5">
+                          <Input
+                            type="date"
+                            value={editExpectedDate}
+                            onChange={(e) => setEditExpectedDate(e.target.value)}
+                            className="h-8 w-40 text-sm"
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={handleSaveExpectedDate}
+                            disabled={isSavingExpectedDate}
+                          >
+                            <Check className="h-3.5 w-3.5 text-green-600" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => setIsEditingExpectedDate(false)}
+                          >
+                            <X className="h-3.5 w-3.5 text-slate-400" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="mt-1 flex items-center gap-1.5">
+                          <p className="font-semibold">
+                            {orderData.shipmentEta
+                              ? formatDate(orderData.shipmentEta)
+                              : orderData.expectedDate
+                                ? formatDate(orderData.expectedDate)
+                                : "미정"}
+                          </p>
+                          {orderData.shipmentEta && orderData.expectedDate && orderData.shipmentEta !== orderData.expectedDate && (
+                            <Badge variant="outline" className="text-[10px] text-blue-600 border-blue-200">
+                              입항스케줄
+                            </Badge>
+                          )}
+                          {canReceive && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={handleEditExpectedDate}
+                            >
+                              <Pencil className="h-3 w-3 text-slate-400" />
+                            </Button>
+                          )}
+                        </div>
+                      )}
                       {orderData.actualDate && (
                         <p className="mt-1 text-sm text-green-600">
                           실제: {formatDate(orderData.actualDate)}

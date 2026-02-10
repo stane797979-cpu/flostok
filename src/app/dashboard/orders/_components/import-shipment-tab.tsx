@@ -10,11 +10,21 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Ship, Loader2 } from "lucide-react";
-import { getImportShipments, type ImportShipmentItem } from "@/server/actions/import-shipments";
-import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Ship, Loader2, PackageCheck } from "lucide-react";
+import { getImportShipments, confirmShipmentInbound, type ImportShipmentItem } from "@/server/actions/import-shipments";
+import { useToast } from "@/hooks/use-toast";
 
 function ShipmentStatusBadge({ item }: { item: ImportShipmentItem }) {
   if (item.warehouseActualDate) {
@@ -65,6 +75,15 @@ function ShipmentStatusBadge({ item }: { item: ImportShipmentItem }) {
 export function ImportShipmentTab() {
   const [items, setItems] = useState<ImportShipmentItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [inboundDialog, setInboundDialog] = useState<ImportShipmentItem | null>(null);
+  const [inboundForm, setInboundForm] = useState({
+    actualDate: new Date().toISOString().split("T")[0],
+    receivedQuantity: "",
+    location: "",
+    notes: "",
+  });
+  const [isProcessing, setIsProcessing] = useState(false);
+  const { toast } = useToast();
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -82,11 +101,52 @@ export function ImportShipmentTab() {
     loadData();
   }, [loadData]);
 
+  const handleOpenInbound = (item: ImportShipmentItem) => {
+    setInboundDialog(item);
+    setInboundForm({
+      actualDate: new Date().toISOString().split("T")[0],
+      receivedQuantity: String(item.quantity),
+      location: "",
+      notes: "",
+    });
+  };
+
+  const handleConfirmInbound = async () => {
+    if (!inboundDialog) return;
+    const qty = parseInt(inboundForm.receivedQuantity) || 0;
+    if (qty <= 0) {
+      toast({ title: "수량 오류", description: "입고 수량을 입력해주세요", variant: "destructive" });
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const result = await confirmShipmentInbound({
+        shipmentId: inboundDialog.id,
+        actualDate: inboundForm.actualDate || undefined,
+        receivedQuantity: qty,
+        location: inboundForm.location || undefined,
+        notes: inboundForm.notes || undefined,
+      });
+
+      if (result.success) {
+        toast({ title: "입고 처리 완료", description: result.message });
+        setInboundDialog(null);
+        loadData();
+      } else {
+        toast({ title: "입고 처리 실패", description: result.message, variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "오류", description: "입고 처리 중 오류가 발생했습니다", variant: "destructive" });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   // 요약 통계
   const totalCount = items.length;
   const inTransit = items.filter((i) => !i.ataDate && i.etaDate).length;
   const arrivedNotStored = items.filter((i) => i.ataDate && !i.warehouseActualDate).length;
-  const completed = items.filter((i) => i.warehouseActualDate).length;
   const totalAmount = items.reduce((sum, i) => {
     return sum + (i.invoiceAmountUsd ? parseFloat(i.invoiceAmountUsd) : 0);
   }, 0);
@@ -159,7 +219,7 @@ export function ImportShipmentTab() {
       <Card>
         <CardHeader>
           <CardTitle>입항스케줄 상세</CardTitle>
-          <CardDescription>B/L, 컨테이너, 수량, 금액 및 일정 현황</CardDescription>
+          <CardDescription>B/L, 컨테이너, 수량, 금액 및 일정 현황 · 입고처리 시 재고 자동 반영</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -177,6 +237,7 @@ export function ImportShipmentTab() {
                   <TableHead className="text-center">입항실제</TableHead>
                   <TableHead className="text-center">창고입고예정</TableHead>
                   <TableHead className="text-center">창고입고실제</TableHead>
+                  <TableHead className="text-center w-[90px]">액션</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -213,6 +274,21 @@ export function ImportShipmentTab() {
                     <TableCell className="text-center text-xs">
                       {item.warehouseActualDate || "-"}
                     </TableCell>
+                    <TableCell className="text-center">
+                      {item.warehouseActualDate ? (
+                        <Badge variant="outline" className="text-[10px] text-green-600">완료</Badge>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => handleOpenInbound(item)}
+                        >
+                          <PackageCheck className="mr-1 h-3 w-3" />
+                          입고
+                        </Button>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -220,6 +296,89 @@ export function ImportShipmentTab() {
           </div>
         </CardContent>
       </Card>
+
+      {/* 입고 처리 다이얼로그 */}
+      <Dialog open={!!inboundDialog} onOpenChange={(open) => !open && setInboundDialog(null)}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>입항스케줄 입고 처리</DialogTitle>
+            <DialogDescription>
+              {inboundDialog && (
+                <>
+                  {inboundDialog.productName} ({inboundDialog.productSku})
+                  {inboundDialog.blNumber && ` · B/L: ${inboundDialog.blNumber}`}
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-lg border bg-slate-50 p-3 text-sm space-y-1">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">스케줄 수량</span>
+                <span className="font-semibold">{inboundDialog?.quantity.toLocaleString()}개</span>
+              </div>
+              {inboundDialog?.orderNumber && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">발주번호</span>
+                  <span className="font-mono text-xs">{inboundDialog.orderNumber}</span>
+                </div>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs">입고일</Label>
+              <Input
+                type="date"
+                value={inboundForm.actualDate}
+                onChange={(e) => setInboundForm((f) => ({ ...f, actualDate: e.target.value }))}
+                className="h-8 text-sm"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs">입고 수량</Label>
+              <Input
+                type="number"
+                min="1"
+                value={inboundForm.receivedQuantity}
+                onChange={(e) => setInboundForm((f) => ({ ...f, receivedQuantity: e.target.value }))}
+                className="h-8 text-sm"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs">적치 위치 (선택)</Label>
+              <Input
+                placeholder="예: A-01-02"
+                value={inboundForm.location}
+                onChange={(e) => setInboundForm((f) => ({ ...f, location: e.target.value }))}
+                className="h-8 text-sm"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs">메모 (선택)</Label>
+              <Input
+                placeholder="입고 메모"
+                value={inboundForm.notes}
+                onChange={(e) => setInboundForm((f) => ({ ...f, notes: e.target.value }))}
+                className="h-8 text-sm"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInboundDialog(null)}>
+              취소
+            </Button>
+            <Button onClick={handleConfirmInbound} disabled={isProcessing}>
+              {isProcessing ? (
+                <>
+                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                  처리 중...
+                </>
+              ) : (
+                "입고 처리"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
