@@ -9,17 +9,18 @@ import {
   generatePeriods,
   type PSIResult,
 } from "@/server/services/scm/psi-aggregation";
+import { calculateEOQ } from "@/server/services/scm/eoq";
 import { revalidatePath } from "next/cache";
 import * as XLSX from "xlsx";
 
 /**
- * PSI 데이터 조회 (13개월: 과거6 + 현재 + 미래6)
+ * PSI 데이터 조회 (8개월: 전월1 + 현재 + 미래6)
  */
 export async function getPSIData(): Promise<PSIResult> {
   const user = await getCurrentUser();
   const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
 
-  const periods = generatePeriods(6, 6);
+  const periods = generatePeriods(1, 6);
   const firstPeriod = periods[0]; // YYYY-MM
   const lastPeriod = periods[periods.length - 1];
   const startDate = `${firstPeriod}-01`;
@@ -37,6 +38,7 @@ export async function getPSIData(): Promise<PSIResult> {
         abcGrade: products.abcGrade,
         xyzGrade: products.xyzGrade,
         safetyStock: products.safetyStock,
+        orderMethod: products.orderMethod,
       })
       .from(products)
       .where(eq(products.organizationId, orgId)),
@@ -202,6 +204,7 @@ export async function getPSIData(): Promise<PSIResult> {
       xyzGrade: p.xyzGrade,
       currentStock: inventoryMap.get(p.id) ?? 0,
       safetyStock: p.safetyStock ?? 0,
+      orderMethod: p.orderMethod,
     })),
     outboundByMonth,
     inboundByMonth,
@@ -215,8 +218,9 @@ export async function getPSIData(): Promise<PSIResult> {
 }
 
 /**
- * S&OP 물량 + 입고계획 엑셀 업로드
- * 엑셀 형식: SKU | 2025-08 S&OP | 2025-08 입고계획 | 2025-09 S&OP | ...
+ * SCM/S&OP 물량 엑셀 업로드
+ * 엑셀 형식: SKU | 2025-08 SCM | 2025-08 S&OP | 2025-09 SCM | ...
+ * SCM = AI 가이드 공급수량, S&OP = 회의 합의 출고예상량
  */
 export async function uploadPSIPlanExcel(
   formData: FormData
@@ -242,31 +246,36 @@ export async function uploadPSIPlanExcel(
       .where(eq(products.organizationId, orgId));
     const skuMap = new Map(productList.map((p) => [p.sku, p.id]));
 
-    // 컬럼 헤더 파싱: "2025-08 S&OP", "2025-08 입고계획" 형태
+    // 컬럼 헤더 파싱: "2025-08 출고계획", "2025-08 SCM" 형태
     const headers = Object.keys(rows[0]);
     const skuCol = headers.find((h) =>
       ["sku", "SKU", "품번", "제품코드"].includes(h.trim())
     );
     if (!skuCol) return { success: false, message: "SKU 컬럼을 찾을 수 없습니다 (SKU, 품번, 제품코드 중 하나 필요)", importedCount: 0 };
 
-    // 월별 S&OP/출고계획 컬럼 파싱
+    // 발주방식 컬럼 감지
+    const orderMethodCol = headers.find((h) =>
+      ["발주방식", "발주구분", "orderMethod", "order_method"].includes(h.trim())
+    );
+
+    // 월별 SCM/출고계획 컬럼 파싱
     const planColumns: Array<{ header: string; period: string; type: "sop" | "inbound_plan" | "outbound_plan" }> = [];
     for (const h of headers) {
       if (h === skuCol) continue;
       const trimmed = h.trim();
 
-      // "2025-08 S&OP" 또는 "2025.8 S&OP" 형태
-      const sopMatch = trimmed.match(/^(\d{4})[.-](\d{1,2})\s*(S&OP|SOP|공급계획|sop)/i);
-      if (sopMatch) {
-        const period = `${sopMatch[1]}-${sopMatch[2].padStart(2, "0")}`;
+      // "2025-08 SCM" 또는 하위호환 "공급계획/SOP" 형태 → SCM 가이드 (sop_quantity)
+      const scmMatch = trimmed.match(/^(\d{4})[.-](\d{1,2})\s*(SCM|공급계획|SOP|sop)$/i);
+      if (scmMatch) {
+        const period = `${scmMatch[1]}-${scmMatch[2].padStart(2, "0")}`;
         planColumns.push({ header: h, period, type: "sop" });
         continue;
       }
 
-      // "2025-08 출고계획" 또는 "2025.8 출고" 형태
-      const outMatch = trimmed.match(/^(\d{4})[.-](\d{1,2})\s*(출고계획|출고|outbound|OBP)/i);
-      if (outMatch) {
-        const period = `${outMatch[1]}-${outMatch[2].padStart(2, "0")}`;
+      // "2025-08 출고계획" 또는 하위호환 "S&OP/출고예상/출고" → 출고계획 수량 (outbound_plan)
+      const sopMatch = trimmed.match(/^(\d{4})[.-](\d{1,2})\s*(S&OP|출고계획|출고예상|출고|outbound|OBP)/i);
+      if (sopMatch) {
+        const period = `${sopMatch[1]}-${sopMatch[2].padStart(2, "0")}`;
         planColumns.push({ header: h, period, type: "outbound_plan" });
         continue;
       }
@@ -283,7 +292,7 @@ export async function uploadPSIPlanExcel(
     if (planColumns.length === 0) {
       return {
         success: false,
-        message: "계획 컬럼을 찾을 수 없습니다. 형식: 'YYYY-MM S&OP', 'YYYY-MM 출고계획'",
+        message: "계획 컬럼을 찾을 수 없습니다. 형식: 'YYYY-MM SCM', 'YYYY-MM 출고계획'",
         importedCount: 0,
       };
     }
@@ -296,6 +305,18 @@ export async function uploadPSIPlanExcel(
 
       const productId = skuMap.get(sku);
       if (!productId) continue;
+
+      // 발주방식 업데이트 (행에 발주방식 데이터가 있으면)
+      if (orderMethodCol) {
+        const methodValue = String(row[orderMethodCol] || "").trim();
+        let dbValue: "fixed_quantity" | "fixed_period" | null = null;
+        if (methodValue === "정량" || methodValue === "fixed_quantity" || methodValue === "Q") dbValue = "fixed_quantity";
+        else if (methodValue === "정기" || methodValue === "fixed_period" || methodValue === "P") dbValue = "fixed_period";
+
+        if (dbValue && productId) {
+          await db.update(products).set({ orderMethod: dbValue, updatedAt: new Date() }).where(eq(products.id, productId));
+        }
+      }
 
       for (const col of planColumns) {
         const value = Number(row[col.header]) || 0;
@@ -349,11 +370,11 @@ export async function uploadPSIPlanExcel(
   }
 }
 
-export type SOPMethod = "match_outbound" | "safety_stock" | "target_days" | "forecast";
+export type SOPMethod = "match_outbound" | "safety_stock" | "target_days" | "forecast" | "by_order_method";
 
 /**
- * S&OP 수량 자동 산출
- * 출고계획(outboundPlan) 기반으로 S&OP(공급계획) 수량을 산출하여 psi_plans에 저장
+ * SCM 가이드 수량 자동 산출
+ * S&OP 합의 출고예상량 기반으로 SCM(공급 가이드) 수량을 산출하여 psi_plans에 저장
  */
 export async function generateSOPQuantities(
   method: SOPMethod,
@@ -376,9 +397,16 @@ export async function generateSOPQuantities(
 
     // 병렬 데이터 로드
     const [productRows, inventoryRows, planRows, forecastRows] = await Promise.all([
-      // 제품 목록 (안전재고 포함)
+      // 제품 목록 (안전재고, 발주방식, 단가, 목표재고, 발주점 포함)
       db
-        .select({ id: products.id, safetyStock: products.safetyStock })
+        .select({
+          id: products.id,
+          safetyStock: products.safetyStock,
+          orderMethod: products.orderMethod,
+          costPrice: products.costPrice,
+          targetStock: products.targetStock,
+          reorderPoint: products.reorderPoint
+        })
         .from(products)
         .where(eq(products.organizationId, orgId)),
 
@@ -475,6 +503,31 @@ export async function generateSOPQuantities(
             // S&OP = 수요예측값
             sopQty = forecastMap.get(product.id)?.get(period) || outPlan;
             break;
+
+          case "by_order_method": {
+            const om = product.orderMethod;
+            if (om === "fixed_quantity") {
+              // EOQ 기반: 기초재고가 발주점 이하일 때만 EOQ만큼 공급
+              const rp = product.reorderPoint ?? 0;
+              if (runningStock <= rp && outPlan > 0) {
+                const annualDemand = outPlan * 12;
+                const costPr = product.costPrice ?? 10000;
+                const holdingCost = costPr * 0.25;
+                const { eoq } = calculateEOQ({ annualDemand, orderingCost: 10000, holdingCostPerUnit: holdingCost > 0 ? holdingCost : 2500 });
+                sopQty = Math.max(eoq, outPlan); // 최소한 출고계획만큼은 공급
+              } else {
+                sopQty = Math.max(0, outPlan - runningStock + safetyStock);
+              }
+            } else if (om === "fixed_period") {
+              // 정기발주: 목표재고까지 보충
+              const target = product.targetStock ?? (safetyStock * 2);
+              sopQty = Math.max(0, target - runningStock + outPlan);
+            } else {
+              // 미설정: 안전재고 보충 폴백
+              sopQty = Math.max(0, outPlan + safetyStock - runningStock);
+            }
+            break;
+          }
         }
 
         sopQty = Math.round(sopQty);
@@ -522,6 +575,7 @@ export async function generateSOPQuantities(
       safety_stock: "안전재고 보충",
       target_days: `목표재고일수(${targetDays || 30}일)`,
       forecast: "수요예측 연동",
+      by_order_method: "발주방식별 자동",
     };
 
     return {

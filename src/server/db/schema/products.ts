@@ -14,6 +14,7 @@ import { suppliers } from "./suppliers";
 export const abcGradeEnum = pgEnum("abc_grade", ["A", "B", "C"]);
 export const xyzGradeEnum = pgEnum("xyz_grade", ["X", "Y", "Z"]);
 export const fmrGradeEnum = pgEnum("fmr_grade", ["F", "M", "R"]);
+export const orderMethodEnum = pgEnum("order_method", ["fixed_quantity", "fixed_period"]);
 
 // 제품/SKU
 export const products = pgTable("products", {
@@ -34,6 +35,7 @@ export const products = pgTable("products", {
   xyzGrade: xyzGradeEnum("xyz_grade"),
   fmrGrade: fmrGradeEnum("fmr_grade"),
   // 발주 관련
+  orderMethod: orderMethodEnum("order_method"), // 정량발주(fixed_quantity) / 정기발주(fixed_period)
   moq: integer("moq").default(1), // 최소발주수량
   leadTime: integer("lead_time").default(7), // 리드타임 (일)
   leadTimeStddev: numeric("lead_time_stddev", { precision: 5, scale: 2 }), // 리드타임 표준편차

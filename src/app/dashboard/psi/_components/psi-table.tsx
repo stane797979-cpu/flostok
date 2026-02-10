@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import {
   Table,
   TableBody,
@@ -10,6 +11,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import type { PSIProductRow } from "@/server/services/scm/psi-aggregation";
 
 interface PSITableProps {
@@ -17,9 +19,26 @@ interface PSITableProps {
   periods: string[];
 }
 
+type SortField = "sku" | "productName" | "abcGrade" | "xyzGrade" | "orderMethod" | "currentStock";
+type SortDirection = "asc" | "desc" | null;
+
 function formatPeriodLabel(period: string): string {
   const [year, month] = period.split("-");
   return `${year}.${parseInt(month)}월`;
+}
+
+function SortIcon({ field, currentField, currentDirection }: {
+  field: SortField;
+  currentField: SortField | null;
+  currentDirection: SortDirection;
+}) {
+  if (field !== currentField || currentDirection === null) {
+    return <ArrowUpDown className="ml-0.5 h-3 w-3 text-muted-foreground/40" />;
+  }
+  if (currentDirection === "asc") {
+    return <ArrowUp className="ml-0.5 h-3 w-3 text-primary" />;
+  }
+  return <ArrowDown className="ml-0.5 h-3 w-3 text-primary" />;
 }
 
 function NumCell({ value, color, italic }: { value: number; color?: string; italic?: boolean }) {
@@ -52,7 +71,7 @@ function StockCell({ value, safetyStock, italic }: { value: number; safetyStock:
 
 /** 월별 7개 서브컬럼 정의 */
 const SUB_COLUMNS = [
-  { key: "sop", label: "공급계획", shortLabel: "S&OP" },
+  { key: "sop", label: "SCM 가이드", shortLabel: "SCM" },
   { key: "inboundPlan", label: "입고(계획)", shortLabel: "입고P" },
   { key: "inboundActual", label: "입고(실적)", shortLabel: "입고A" },
   { key: "outboundPlan", label: "출고(계획)", shortLabel: "출고P" },
@@ -61,7 +80,65 @@ const SUB_COLUMNS = [
   { key: "endingActual", label: "기말(실적)", shortLabel: "기말A" },
 ] as const;
 
+const GRADE_ORDER: Record<string, number> = { A: 1, B: 2, C: 3, X: 1, Y: 2, Z: 3 };
+const ORDER_METHOD_ORDER: Record<string, number> = { fixed_quantity: 1, fixed_period: 2 };
+
 export function PSITable({ products, periods }: PSITableProps) {
+  const [sortField, setSortField] = useState<SortField | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>(null);
+
+  const handleSort = (field: SortField) => {
+    if (sortField !== field) {
+      setSortField(field);
+      setSortDirection("asc");
+    } else if (sortDirection === "asc") {
+      setSortDirection("desc");
+    } else {
+      setSortField(null);
+      setSortDirection(null);
+    }
+  };
+
+  const sortedProducts = useMemo(() => {
+    if (!sortField || !sortDirection) return products;
+
+    return [...products].sort((a, b) => {
+      let cmp = 0;
+
+      switch (sortField) {
+        case "sku":
+          cmp = a.sku.localeCompare(b.sku, "ko");
+          break;
+        case "productName":
+          cmp = a.productName.localeCompare(b.productName, "ko");
+          break;
+        case "abcGrade": {
+          const aG = a.abcGrade ? GRADE_ORDER[a.abcGrade] ?? 99 : 99;
+          const bG = b.abcGrade ? GRADE_ORDER[b.abcGrade] ?? 99 : 99;
+          cmp = aG - bG;
+          break;
+        }
+        case "xyzGrade": {
+          const aG = a.xyzGrade ? GRADE_ORDER[a.xyzGrade] ?? 99 : 99;
+          const bG = b.xyzGrade ? GRADE_ORDER[b.xyzGrade] ?? 99 : 99;
+          cmp = aG - bG;
+          break;
+        }
+        case "orderMethod": {
+          const aO = a.orderMethod ? ORDER_METHOD_ORDER[a.orderMethod] ?? 99 : 99;
+          const bO = b.orderMethod ? ORDER_METHOD_ORDER[b.orderMethod] ?? 99 : 99;
+          cmp = aO - bO;
+          break;
+        }
+        case "currentStock":
+          cmp = a.currentStock - b.currentStock;
+          break;
+      }
+
+      return sortDirection === "asc" ? cmp : -cmp;
+    });
+  }, [products, sortField, sortDirection]);
+
   if (products.length === 0) {
     return (
       <div className="flex items-center justify-center py-16 text-muted-foreground">
@@ -80,14 +157,59 @@ export function PSITable({ products, periods }: PSITableProps) {
           {/* 1행: 기본정보 + 월 레이블 */}
           <TableRow>
             <TableHead rowSpan={2} className="sticky left-0 z-20 bg-white dark:bg-slate-950 min-w-[70px] border-r">
-              SKU
+              <button
+                className="flex items-center hover:text-foreground transition-colors"
+                onClick={() => handleSort("sku")}
+              >
+                SKU
+                <SortIcon field="sku" currentField={sortField} currentDirection={sortDirection} />
+              </button>
             </TableHead>
             <TableHead rowSpan={2} className="sticky left-[70px] z-20 bg-white dark:bg-slate-950 min-w-[90px] border-r">
-              제품명
+              <button
+                className="flex items-center hover:text-foreground transition-colors"
+                onClick={() => handleSort("productName")}
+              >
+                제품명
+                <SortIcon field="productName" currentField={sortField} currentDirection={sortDirection} />
+              </button>
             </TableHead>
-            <TableHead rowSpan={2} className="text-center min-w-[32px] border-r">ABC</TableHead>
-            <TableHead rowSpan={2} className="text-center min-w-[32px] border-r">XYZ</TableHead>
-            <TableHead rowSpan={2} className="text-center min-w-[50px] border-r">현재고</TableHead>
+            <TableHead rowSpan={2} className="text-center min-w-[32px] border-r">
+              <button
+                className="flex items-center justify-center w-full hover:text-foreground transition-colors"
+                onClick={() => handleSort("abcGrade")}
+              >
+                ABC
+                <SortIcon field="abcGrade" currentField={sortField} currentDirection={sortDirection} />
+              </button>
+            </TableHead>
+            <TableHead rowSpan={2} className="text-center min-w-[32px] border-r">
+              <button
+                className="flex items-center justify-center w-full hover:text-foreground transition-colors"
+                onClick={() => handleSort("xyzGrade")}
+              >
+                XYZ
+                <SortIcon field="xyzGrade" currentField={sortField} currentDirection={sortDirection} />
+              </button>
+            </TableHead>
+            <TableHead rowSpan={2} className="text-center min-w-[32px] border-r">
+              <button
+                className="flex items-center justify-center w-full hover:text-foreground transition-colors"
+                onClick={() => handleSort("orderMethod")}
+              >
+                발주
+                <SortIcon field="orderMethod" currentField={sortField} currentDirection={sortDirection} />
+              </button>
+            </TableHead>
+            <TableHead rowSpan={2} className="text-center min-w-[50px] border-r">
+              <button
+                className="flex items-center justify-center w-full hover:text-foreground transition-colors"
+                onClick={() => handleSort("currentStock")}
+              >
+                현재고
+                <SortIcon field="currentStock" currentField={sortField} currentDirection={sortDirection} />
+              </button>
+            </TableHead>
             {periods.map((period) => (
               <TableHead
                 key={period}
@@ -124,7 +246,7 @@ export function PSITable({ products, periods }: PSITableProps) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {products.map((product) => (
+          {sortedProducts.map((product) => (
             <TableRow key={product.productId} className="hover:bg-slate-50 dark:hover:bg-slate-900">
               <TableCell className="sticky left-0 z-10 bg-white dark:bg-slate-950 font-mono text-[10px] whitespace-nowrap border-r">
                 {product.sku}
@@ -161,6 +283,19 @@ export function PSITable({ products, periods }: PSITableProps) {
                 )}
               </TableCell>
               <TableCell className="text-center border-r">
+                {product.orderMethod ? (
+                  <Badge variant="outline" className={cn(
+                    "font-mono text-[9px] px-0.5 py-0",
+                    product.orderMethod === "fixed_quantity" && "border-blue-300 text-blue-700 bg-blue-50",
+                    product.orderMethod === "fixed_period" && "border-green-300 text-green-700 bg-green-50",
+                  )}>
+                    {product.orderMethod === "fixed_quantity" ? "정량" : "정기"}
+                  </Badge>
+                ) : (
+                  <span className="text-muted-foreground text-[10px]">-</span>
+                )}
+              </TableCell>
+              <TableCell className="text-center border-r">
                 <StockCell value={product.currentStock} safetyStock={product.safetyStock} />
               </TableCell>
               {product.months.map((month) => {
@@ -170,7 +305,7 @@ export function PSITable({ products, periods }: PSITableProps) {
 
                 return (
                   <Fragment key={month.period}>
-                    {/* S&OP (공급계획) */}
+                    {/* SCM (AI 가이드 수량) */}
                     <TableCell className={cn("text-center p-0.5", bg, planBg)}>
                       <NumCell value={month.sopQuantity} color="text-purple-600" italic />
                     </TableCell>

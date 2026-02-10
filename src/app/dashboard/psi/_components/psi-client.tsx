@@ -29,24 +29,29 @@ interface PSIClientProps {
 
 const SOP_METHODS: Array<{ value: SOPMethod; label: string; description: string }> = [
   {
+    value: "by_order_method",
+    label: "발주방식별 자동",
+    description: "제품별 설정(정량/정기)에 따라 자동으로 다른 공식 적용. 미설정 시 안전재고 보충.",
+  },
+  {
     value: "match_outbound",
     label: "출고계획 동일",
-    description: "S&OP = 출고P (출고할 만큼 공급)",
+    description: "SCM = 출고계획 수량 (출고예상량 만큼 공급)",
   },
   {
     value: "safety_stock",
     label: "안전재고 보충",
-    description: "S&OP = max(0, 출고P + 안전재고 - 기초재고)",
+    description: "SCM = max(0, 출고P + 안전재고 - 기초재고)",
   },
   {
     value: "target_days",
     label: "목표재고일수",
-    description: "S&OP = max(0, 출고P + max(일평균출고×목표일수, 안전재고) - 기초재고)",
+    description: "SCM = max(0, 출고P + max(일평균출고×목표일수, 안전재고) - 기초재고)",
   },
   {
     value: "forecast",
     label: "수요예측 연동",
-    description: "S&OP = 수요예측 시스템 데이터 활용",
+    description: "SCM = AI 수요예측 데이터 활용",
   },
 ];
 
@@ -121,16 +126,19 @@ export function PSIClient({ data }: PSIClientProps) {
       const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
       const futurePeriods = data.periods.filter((p) => p >= currentPeriod);
 
-      // 헤더 생성: SKU + 각 기간별 S&OP/출고계획
-      const headers: string[] = ["SKU"];
+      // 헤더 생성: SKU + 발주방식 + 각 기간별 SCM/출고계획
+      const headers: string[] = ["SKU", "발주방식"];
       for (const period of futurePeriods) {
-        headers.push(`${period} S&OP`);
+        headers.push(`${period} SCM`);
         headers.push(`${period} 출고계획`);
       }
 
       // 기존 데이터를 포함한 행 생성
       const rows: (string | number)[][] = data.products.map((product) => {
-        const row: (string | number)[] = [product.sku];
+        const omLabel = product.orderMethod === "fixed_quantity" ? "정량"
+          : product.orderMethod === "fixed_period" ? "정기"
+          : "";
+        const row: (string | number)[] = [product.sku, omLabel];
         for (const period of futurePeriods) {
           const month = product.months.find((m) => m.period === period);
           row.push(month?.sopQuantity || 0);
@@ -142,7 +150,7 @@ export function PSIClient({ data }: PSIClientProps) {
       const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
 
       // 컬럼 너비 설정
-      const colWidths: Array<{ wch: number }> = [{ wch: 15 }];
+      const colWidths: Array<{ wch: number }> = [{ wch: 15 }, { wch: 10 }];
       for (let i = 0; i < futurePeriods.length * 2; i++) {
         colWidths.push({ wch: 14 });
       }
@@ -161,11 +169,11 @@ export function PSIClient({ data }: PSIClientProps) {
         sopMethod === "target_days" ? targetDays : undefined
       );
       if (result.success) {
-        toast({ title: "S&OP 산출 완료", description: result.message });
+        toast({ title: "SCM 가이드 산출 완료", description: result.message });
         setSopDialogOpen(false);
         router.refresh();
       } else {
-        toast({ title: "S&OP 산출 실패", description: result.message, variant: "destructive" });
+        toast({ title: "SCM 가이드 산출 실패", description: result.message, variant: "destructive" });
       }
     });
   };
@@ -185,15 +193,15 @@ export function PSIClient({ data }: PSIClientProps) {
             <DialogTrigger asChild>
               <Button variant="outline" size="sm">
                 <Calculator className="mr-1 h-4 w-4" />
-                S&OP 자동 산출
+                SCM 가이드 산출
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[420px]">
               <DialogHeader>
-                <DialogTitle>S&OP 공급계획 자동 산출</DialogTitle>
+                <DialogTitle>SCM 가이드 수량 자동 산출</DialogTitle>
                 <DialogDescription>
-                  출고계획(출고P) 기반으로 S&OP 수량을 자동 산출합니다.
-                  미래 7개월분이 일괄 생성됩니다.
+                  출고계획 수량 기반으로 SCM 공급 가이드 수량을 자동 산출합니다.
+                  미래 6개월분이 일괄 생성됩니다.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-3 py-4">
@@ -244,7 +252,7 @@ export function PSIClient({ data }: PSIClientProps) {
                   취소
                 </Button>
                 <Button onClick={handleGenerateSOP} disabled={isPending}>
-                  {isPending ? "산출 중..." : "S&OP 산출"}
+                  {isPending ? "산출 중..." : "SCM 산출"}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -256,7 +264,7 @@ export function PSIClient({ data }: PSIClientProps) {
             onClick={handleDownloadTemplate}
           >
             <Download className="mr-1 h-4 w-4" />
-            데이터 내보내기
+            양식 다운로드
           </Button>
           <input
             ref={fileInputRef}
@@ -272,7 +280,7 @@ export function PSIClient({ data }: PSIClientProps) {
             onClick={() => fileInputRef.current?.click()}
           >
             <Upload className="mr-1 h-4 w-4" />
-            {isPending ? "업로드 중..." : "데이터 업로드"}
+            {isPending ? "업로드 중..." : "출고계획 업로드"}
           </Button>
         </div>
       </div>
@@ -291,7 +299,15 @@ export function PSIClient({ data }: PSIClientProps) {
           <span className="inline-block w-3 h-3 rounded bg-purple-100 border border-purple-300" />
           <em>계획/예측 (이탤릭, 보라 배경)</em>
         </span>
-        <span>P = 계획(Plan) · A = 실적(Actual)</span>
+        <span className="flex items-center gap-1">
+          <Badge variant="outline" className="text-[9px] px-1 py-0 border-blue-300 text-blue-700 bg-blue-50">정량</Badge>
+          정량발주
+        </span>
+        <span className="flex items-center gap-1">
+          <Badge variant="outline" className="text-[9px] px-1 py-0 border-green-300 text-green-700 bg-green-50">정기</Badge>
+          정기발주
+        </span>
+        <span>SCM = AI가이드 · P = 계획 · A = 실적</span>
       </div>
 
       {/* 요약 카드 */}
@@ -340,7 +356,7 @@ export function PSIClient({ data }: PSIClientProps) {
             <div>
               <CardTitle>PSI 통합 테이블</CardTitle>
               <CardDescription>
-                {filteredProducts.length}개 SKU × {data.periods.length}개월 · 7컬럼(S&OP/입고P·A/출고P·A/기말P·A)
+                {filteredProducts.length}개 SKU × {data.periods.length}개월 · 발주방식 + 7컬럼(SCM/입고P·A/출고P·A/기말P·A)
               </CardDescription>
             </div>
             <Badge variant="outline">{filteredProducts.length} / {totalSKU}</Badge>

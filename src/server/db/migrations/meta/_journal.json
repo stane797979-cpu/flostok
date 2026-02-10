@@ -43,6 +43,13 @@
       "when": 1770690156283,
       "tag": "0005_dusty_umar",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1770702477918,
+      "tag": "0006_opposite_colossus",
+      "breakpoints": true
     }
   ]
 }

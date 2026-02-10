@@ -37,6 +37,7 @@ export interface PSIProductRow {
   xyzGrade: string | null;
   currentStock: number;
   safetyStock: number;
+  orderMethod: string | null;
   months: PSIMonthData[];
 }
 
@@ -76,6 +77,7 @@ export function aggregatePSI(input: {
     xyzGrade: string | null;
     currentStock: number;
     safetyStock: number;
+    orderMethod: string | null;
   }>;
   /** 월별 출고실적 { productId -> { YYYY-MM -> qty } } (from inventory_history) */
   outboundByMonth: Map<string, Map<string, number>>;
@@ -185,6 +187,7 @@ export function aggregatePSI(input: {
       xyzGrade: product.xyzGrade,
       currentStock: product.currentStock,
       safetyStock: product.safetyStock,
+      orderMethod: product.orderMethod,
       months: monthData,
     });
   }
