@@ -10,13 +10,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { ArrowUpDown, ArrowUp, ArrowDown, Pencil, Check, X } from "lucide-react";
+import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { updateInboundRecordDate } from "@/server/actions/inbound";
-import { updatePurchaseOrderExpectedDate } from "@/server/actions/purchase-orders";
-import { useToast } from "@/hooks/use-toast";
 
 export interface InboundRecord {
   id: string;
@@ -116,72 +111,6 @@ const qualityBadge = (result: string | null) => {
 export function InboundRecordsTable({ records, className }: InboundRecordsTableProps) {
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
-  const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
-  const [editDate, setEditDate] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-  // 입고예정일(스케줄) 편집
-  const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
-  const [editScheduleDate, setEditScheduleDate] = useState("");
-  const [isSavingSchedule, setIsSavingSchedule] = useState(false);
-  const { toast } = useToast();
-
-  const handleEditDate = (recordId: string, currentDate: string) => {
-    setEditingRecordId(recordId);
-    setEditDate(currentDate);
-  };
-
-  const handleCancelEdit = () => {
-    setEditingRecordId(null);
-    setEditDate("");
-  };
-
-  const handleSaveDate = async () => {
-    if (!editingRecordId || !editDate) return;
-    setIsSaving(true);
-    try {
-      const result = await updateInboundRecordDate(editingRecordId, editDate);
-      if (result.success) {
-        toast({ title: "입고일이 변경되었습니다" });
-        setEditingRecordId(null);
-        setEditDate("");
-      } else {
-        toast({ title: "변경 실패", description: result.error, variant: "destructive" });
-      }
-    } catch {
-      toast({ title: "오류 발생", description: "입고일 변경에 실패했습니다", variant: "destructive" });
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleEditSchedule = (recordId: string, currentDate: string) => {
-    setEditingScheduleId(recordId);
-    setEditScheduleDate(currentDate);
-  };
-
-  const handleCancelSchedule = () => {
-    setEditingScheduleId(null);
-    setEditScheduleDate("");
-  };
-
-  const handleSaveSchedule = async (orderId: string) => {
-    if (!editingScheduleId || !editScheduleDate || !orderId) return;
-    setIsSavingSchedule(true);
-    try {
-      const result = await updatePurchaseOrderExpectedDate(orderId, editScheduleDate);
-      if (result.success) {
-        toast({ title: "입고예정일이 변경되었습니다" });
-        setEditingScheduleId(null);
-        setEditScheduleDate("");
-      } else {
-        toast({ title: "변경 실패", description: result.error, variant: "destructive" });
-      }
-    } catch {
-      toast({ title: "오류 발생", description: "입고예정일 변경에 실패했습니다", variant: "destructive" });
-    } finally {
-      setIsSavingSchedule(false);
-    }
-  };
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -325,94 +254,10 @@ export function InboundRecordsTable({ records, className }: InboundRecordsTableP
         <TableBody>
           {sortedRecords.map((record) => (
             <TableRow key={record.id}>
-              <TableCell className="whitespace-nowrap text-sm">
-                {editingRecordId === record.id ? (
-                  <div className="flex items-center gap-1">
-                    <Input
-                      type="date"
-                      value={editDate}
-                      onChange={(e) => setEditDate(e.target.value)}
-                      className="h-7 w-36 text-sm"
-                      disabled={isSaving}
-                    />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      onClick={handleSaveDate}
-                      disabled={isSaving}
-                    >
-                      <Check className="h-3.5 w-3.5 text-green-600" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      onClick={handleCancelEdit}
-                      disabled={isSaving}
-                    >
-                      <X className="h-3.5 w-3.5 text-slate-400" />
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="group flex items-center gap-1">
-                    <span>{record.date}</span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={() => handleEditDate(record.id, record.date)}
-                    >
-                      <Pencil className="h-3 w-3 text-slate-400" />
-                    </Button>
-                  </div>
-                )}
-              </TableCell>
+              <TableCell className="whitespace-nowrap text-sm">{record.date}</TableCell>
               <TableCell className="whitespace-nowrap text-sm">
                 {record.scheduledDate ? (
-                  editingScheduleId === record.id ? (
-                    <div className="flex items-center gap-1">
-                      <Input
-                        type="date"
-                        value={editScheduleDate}
-                        onChange={(e) => setEditScheduleDate(e.target.value)}
-                        className="h-7 w-36 text-sm"
-                        disabled={isSavingSchedule}
-                      />
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        onClick={() => record.purchaseOrderId && handleSaveSchedule(record.purchaseOrderId)}
-                        disabled={isSavingSchedule}
-                      >
-                        <Check className="h-3.5 w-3.5 text-green-600" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        onClick={handleCancelSchedule}
-                        disabled={isSavingSchedule}
-                      >
-                        <X className="h-3.5 w-3.5 text-slate-400" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="group flex items-center gap-1">
-                      <span className="text-blue-600">{record.scheduledDate}</span>
-                      {record.purchaseOrderId && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={() => handleEditSchedule(record.id, record.scheduledDate!)}
-                        >
-                          <Pencil className="h-3 w-3 text-slate-400" />
-                        </Button>
-                      )}
-                    </div>
-                  )
+                  <span className="text-blue-600">{record.scheduledDate}</span>
                 ) : (
                   <span className="text-slate-400">-</span>
                 )}

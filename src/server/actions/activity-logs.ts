@@ -67,6 +67,28 @@ export async function getActivityLogs(options?: {
 }
 
 /**
+ * 특정 엔티티의 변경 이력 조회
+ */
+export async function getEntityActivityLogs(
+  entityId: string,
+  limit: number = 20
+): Promise<ActivityLog[]> {
+  const user = await requireAuth();
+
+  return db
+    .select()
+    .from(activityLogs)
+    .where(
+      and(
+        eq(activityLogs.organizationId, user.organizationId),
+        eq(activityLogs.entityId, entityId)
+      )
+    )
+    .orderBy(desc(activityLogs.createdAt))
+    .limit(limit);
+}
+
+/**
  * 대시보드용 최근 활동 조회
  */
 export async function getRecentActivities(

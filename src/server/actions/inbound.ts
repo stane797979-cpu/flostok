@@ -450,7 +450,7 @@ export async function updateInboundRecordDate(
 
     await db
       .update(inboundRecords)
-      .set({ date: newDate, updatedAt: new Date() })
+      .set({ date: newDate })
       .where(eq(inboundRecords.id, recordId));
 
     await logActivity({

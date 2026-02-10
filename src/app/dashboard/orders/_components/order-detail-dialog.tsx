@@ -19,11 +19,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Package, Calendar, Building2, FileText, Download, ChevronRight, XCircle, Ship, Plus, Pencil, Check, X } from "lucide-react";
+import { Package, Calendar, Building2, FileText, Download, ChevronRight, XCircle, Ship, Plus, Pencil, Check, X, History, Clock } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getPurchaseOrderById, updatePurchaseOrderStatus, updatePurchaseOrderExpectedDate } from "@/server/actions/purchase-orders";
 import { createImportShipment } from "@/server/actions/import-shipments";
+import { getInboundRecords } from "@/server/actions/inbound";
+import { updateInboundRecordDate } from "@/server/actions/inbound";
+import { getEntityActivityLogs } from "@/server/actions/activity-logs";
+import type { ActivityLog } from "@/server/actions/activity-logs";
 import { InboundDialog, type InboundDialogItem } from "./inbound-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { exportPurchaseOrderToExcel } from "@/server/actions/excel-export";
@@ -74,6 +78,19 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
   const [isEditingExpectedDate, setIsEditingExpectedDate] = useState(false);
   const [editExpectedDate, setEditExpectedDate] = useState("");
   const [isSavingExpectedDate, setIsSavingExpectedDate] = useState(false);
+  // 입고 기록 + 변경 이력
+  const [inboundRecordsList, setInboundRecordsList] = useState<Array<{
+    id: string;
+    date: string;
+    productName: string;
+    productSku: string;
+    receivedQuantity: number;
+    qualityResult: string | null;
+  }>>([]);
+  const [activityLogsList, setActivityLogsList] = useState<ActivityLog[]>([]);
+  const [editingInboundId, setEditingInboundId] = useState<string | null>(null);
+  const [editInboundDate, setEditInboundDate] = useState("");
+  const [isSavingInboundDate, setIsSavingInboundDate] = useState(false);
   const { toast } = useToast();
 
   // 발주서 데이터 로드
@@ -87,8 +104,23 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
   const loadOrderData = async () => {
     setIsLoading(true);
     try {
-      const data = await getPurchaseOrderById(orderId);
+      const [data, inboundResult, logs] = await Promise.all([
+        getPurchaseOrderById(orderId),
+        getInboundRecords({ orderId, limit: 100 }),
+        getEntityActivityLogs(orderId, 30),
+      ]);
       setOrderData(data);
+      setInboundRecordsList(
+        inboundResult.records.map((r) => ({
+          id: r.id,
+          date: r.date,
+          productName: r.productName,
+          productSku: r.productSku,
+          receivedQuantity: r.receivedQuantity,
+          qualityResult: r.qualityResult,
+        }))
+      );
+      setActivityLogsList(logs);
     } catch (error) {
       console.error("발주서 조회 오류:", error);
       toast({
@@ -198,6 +230,31 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
       toast({ title: "오류", description: "예상입고일 변경 중 오류가 발생했습니다", variant: "destructive" });
     } finally {
       setIsSavingExpectedDate(false);
+    }
+  };
+
+  const handleEditInboundDate = (recordId: string, currentDate: string) => {
+    setEditingInboundId(recordId);
+    setEditInboundDate(currentDate);
+  };
+
+  const handleSaveInboundDate = async (recordId: string) => {
+    if (!editInboundDate) return;
+    setIsSavingInboundDate(true);
+    try {
+      const result = await updateInboundRecordDate(recordId, editInboundDate);
+      if (result.success) {
+        toast({ title: "변경 완료", description: "입고일이 변경되었습니다" });
+        setEditingInboundId(null);
+        loadOrderData();
+        onStatusChange?.();
+      } else {
+        toast({ title: "변경 실패", description: result.error || "변경에 실패했습니다", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "오류", description: "입고일 변경 중 오류가 발생했습니다", variant: "destructive" });
+    } finally {
+      setIsSavingInboundDate(false);
     }
   };
 
@@ -622,6 +679,130 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* 입고 기록 */}
+              {inboundRecordsList.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="font-semibold flex items-center gap-2">
+                    <Package className="h-4 w-4" />
+                    입고 기록
+                  </h4>
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="whitespace-nowrap">입고일</TableHead>
+                          <TableHead className="whitespace-nowrap">SKU</TableHead>
+                          <TableHead className="whitespace-nowrap">제품명</TableHead>
+                          <TableHead className="whitespace-nowrap text-right">수량</TableHead>
+                          <TableHead className="whitespace-nowrap">품질</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {inboundRecordsList.map((rec) => (
+                          <TableRow key={rec.id}>
+                            <TableCell className="whitespace-nowrap">
+                              {editingInboundId === rec.id ? (
+                                <div className="flex items-center gap-1">
+                                  <Input
+                                    type="date"
+                                    value={editInboundDate}
+                                    onChange={(e) => setEditInboundDate(e.target.value)}
+                                    className="h-7 w-36 text-sm"
+                                  />
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    onClick={() => handleSaveInboundDate(rec.id)}
+                                    disabled={isSavingInboundDate}
+                                  >
+                                    <Check className="h-3 w-3 text-green-600" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    onClick={() => setEditingInboundId(null)}
+                                  >
+                                    <X className="h-3 w-3 text-slate-400" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1 group">
+                                  <span className="text-sm">{rec.date}</span>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    onClick={() => handleEditInboundDate(rec.id, rec.date)}
+                                  >
+                                    <Pencil className="h-3 w-3 text-slate-400" />
+                                  </Button>
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap font-mono text-xs">{rec.productSku}</TableCell>
+                            <TableCell className="whitespace-nowrap text-sm">{rec.productName}</TableCell>
+                            <TableCell className="whitespace-nowrap text-right font-semibold">{rec.receivedQuantity}</TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              {rec.qualityResult === "pass" ? (
+                                <Badge className="bg-green-600">합격</Badge>
+                              ) : rec.qualityResult === "fail" ? (
+                                <Badge variant="destructive">불합격</Badge>
+                              ) : rec.qualityResult === "partial" ? (
+                                <Badge variant="destructive" className="bg-orange-600">부분합격</Badge>
+                              ) : rec.qualityResult === "pending" ? (
+                                <Badge variant="secondary">검수대기</Badge>
+                              ) : (
+                                <Badge variant="outline">-</Badge>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+
+              {/* 변경 이력 */}
+              {activityLogsList.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="font-semibold flex items-center gap-2">
+                    <History className="h-4 w-4" />
+                    변경 이력
+                  </h4>
+                  <div className="max-h-48 overflow-y-auto rounded-md border">
+                    <div className="divide-y">
+                      {activityLogsList.map((log) => (
+                        <div key={log.id} className="flex items-start gap-3 px-4 py-2.5">
+                          <Clock className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-slate-400" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm text-slate-700">{log.description}</p>
+                            <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-400">
+                              <span>{log.userName || "시스템"}</span>
+                              <span>·</span>
+                              <span>
+                                {new Date(log.createdAt).toLocaleString("ko-KR", {
+                                  month: "short",
+                                  day: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </span>
+                              <span>·</span>
+                              <Badge variant="outline" className="text-[10px] px-1 py-0">
+                                {log.action}
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
 
