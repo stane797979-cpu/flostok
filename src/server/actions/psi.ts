@@ -463,10 +463,10 @@ export async function generateSOPQuantities(
             break;
 
           case "target_days": {
-            // S&OP = max(0, 출고P + 일평균출고P × 목표일수 - 기초재고)
+            // S&OP = max(0, 출고P + max(일평균출고P × 목표일수, 안전재고) - 기초재고)
             const days = targetDays || 30;
             const dailyOutbound = outPlan / 30; // 월간 → 일평균
-            const targetStock = dailyOutbound * days;
+            const targetStock = Math.max(dailyOutbound * days, safetyStock);
             sopQty = Math.max(0, outPlan + targetStock - runningStock);
             break;
           }

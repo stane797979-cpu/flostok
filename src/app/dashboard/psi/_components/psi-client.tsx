@@ -41,7 +41,7 @@ const SOP_METHODS: Array<{ value: SOPMethod; label: string; description: string 
   {
     value: "target_days",
     label: "목표재고일수",
-    description: "S&OP = max(0, 출고P + 일평균출고 × 목표일수 - 기초재고)",
+    description: "S&OP = max(0, 출고P + max(일평균출고×목표일수, 안전재고) - 기초재고)",
   },
   {
     value: "forecast",
@@ -116,13 +116,10 @@ export function PSIClient({ data }: PSIClientProps) {
 
   const handleDownloadTemplate = () => {
     import("xlsx").then((XLSX) => {
-      // 미래 6개월 기간 생성
+      // 미래 기간 추출 (현재월 포함)
       const now = new Date();
-      const futurePeriods: string[] = [];
-      for (let i = 0; i <= 6; i++) {
-        const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-        futurePeriods.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
-      }
+      const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+      const futurePeriods = data.periods.filter((p) => p >= currentPeriod);
 
       // 헤더 생성: SKU + 각 기간별 S&OP/출고계획
       const headers: string[] = ["SKU"];
@@ -131,14 +128,18 @@ export function PSIClient({ data }: PSIClientProps) {
         headers.push(`${period} 출고계획`);
       }
 
-      // 샘플 행
-      const sampleRow: (string | number)[] = ["SKU-001"];
-      for (let i = 0; i < futurePeriods.length; i++) {
-        sampleRow.push(100); // S&OP
-        sampleRow.push(80);  // 출고계획
-      }
+      // 기존 데이터를 포함한 행 생성
+      const rows: (string | number)[][] = data.products.map((product) => {
+        const row: (string | number)[] = [product.sku];
+        for (const period of futurePeriods) {
+          const month = product.months.find((m) => m.period === period);
+          row.push(month?.sopQuantity || 0);
+          row.push(month?.outboundPlan || 0);
+        }
+        return row;
+      });
 
-      const ws = XLSX.utils.aoa_to_sheet([headers, sampleRow]);
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
 
       // 컬럼 너비 설정
       const colWidths: Array<{ wch: number }> = [{ wch: 15 }];
@@ -148,8 +149,8 @@ export function PSIClient({ data }: PSIClientProps) {
       ws["!cols"] = colWidths;
 
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "PSI계획양식");
-      XLSX.writeFile(wb, "PSI_계획_업로드_양식.xlsx");
+      XLSX.utils.book_append_sheet(wb, ws, "PSI계획");
+      XLSX.writeFile(wb, "PSI_계획_데이터.xlsx");
     });
   };
 
@@ -255,7 +256,7 @@ export function PSIClient({ data }: PSIClientProps) {
             onClick={handleDownloadTemplate}
           >
             <Download className="mr-1 h-4 w-4" />
-            양식 다운로드
+            데이터 내보내기
           </Button>
           <input
             ref={fileInputRef}
@@ -271,7 +272,7 @@ export function PSIClient({ data }: PSIClientProps) {
             onClick={() => fileInputRef.current?.click()}
           >
             <Upload className="mr-1 h-4 w-4" />
-            {isPending ? "업로드 중..." : "S&OP / 출고계획 업로드"}
+            {isPending ? "업로드 중..." : "데이터 업로드"}
           </Button>
         </div>
       </div>

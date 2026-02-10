@@ -35,7 +35,7 @@ export interface NavSection {
 
 /**
  * 메인 네비게이션 — SCM 프로세스 흐름 순서
- * 계획 → 조달 → 실행 → 재고 → 관리 → 도구
+ * 계획 → 구매(입고) → 출고 → 재고 → 관리 → 도구
  */
 export const MAIN_SECTIONS: NavSection[] = [
   {
@@ -68,7 +68,7 @@ export const MAIN_SECTIONS: NavSection[] = [
     ],
   },
   {
-    title: "조달",
+    title: "구매(입고)",
     color: "text-emerald-500",
     items: [
       {
@@ -80,7 +80,7 @@ export const MAIN_SECTIONS: NavSection[] = [
     ],
   },
   {
-    title: "실행",
+    title: "출고",
     color: "text-orange-500",
     items: [
       {
@@ -88,12 +88,6 @@ export const MAIN_SECTIONS: NavSection[] = [
         href: "/dashboard/outbound",
         icon: Truck,
         description: "출고 등록 및 처리",
-      },
-      {
-        title: "수불관리",
-        href: "/dashboard/movement",
-        icon: FileSpreadsheet,
-        description: "재고 수불부 조회 및 다운로드",
       },
     ],
   },
@@ -119,6 +113,12 @@ export const MAIN_SECTIONS: NavSection[] = [
     title: "관리",
     color: "text-slate-400",
     items: [
+      {
+        title: "수불관리",
+        href: "/dashboard/movement",
+        icon: FileSpreadsheet,
+        description: "재고 수불부 조회 및 다운로드",
+      },
       {
         title: "제품 관리",
         href: "/dashboard/products",
