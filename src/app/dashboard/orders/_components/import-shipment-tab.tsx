@@ -22,8 +22,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Ship, Loader2, PackageCheck } from "lucide-react";
-import { getImportShipments, confirmShipmentInbound, type ImportShipmentItem } from "@/server/actions/import-shipments";
+import { Ship, Loader2, PackageCheck, Pencil, Check, X } from "lucide-react";
+import { getImportShipments, confirmShipmentInbound, updateImportShipment, type ImportShipmentItem } from "@/server/actions/import-shipments";
 import { useToast } from "@/hooks/use-toast";
 
 function ShipmentStatusBadge({ item }: { item: ImportShipmentItem }) {
@@ -83,6 +83,8 @@ export function ImportShipmentTab() {
     notes: "",
   });
   const [isProcessing, setIsProcessing] = useState(false);
+  const [editingDate, setEditingDate] = useState<{ id: string; field: "etaDate" | "warehouseEtaDate"; value: string } | null>(null);
+  const [isSavingDate, setIsSavingDate] = useState(false);
   const { toast } = useToast();
 
   const loadData = useCallback(async () => {
@@ -142,6 +144,33 @@ export function ImportShipmentTab() {
       setIsProcessing(false);
     }
   };
+
+  const handleEditDate = (id: string, field: "etaDate" | "warehouseEtaDate", currentValue: string | null) => {
+    setEditingDate({ id, field, value: currentValue || "" });
+  };
+
+  const handleSaveDate = async () => {
+    if (!editingDate) return;
+    setIsSavingDate(true);
+    try {
+      const result = await updateImportShipment(editingDate.id, {
+        [editingDate.field]: editingDate.value || undefined,
+      });
+      if (result.success) {
+        toast({ title: "날짜가 변경되었습니다", description: "발주서 예상입고일도 자동 동기화됩니다" });
+        setEditingDate(null);
+        loadData();
+      } else {
+        toast({ title: "변경 실패", description: result.message, variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "오류", description: "날짜 변경에 실패했습니다", variant: "destructive" });
+    } finally {
+      setIsSavingDate(false);
+    }
+  };
+
+  const handleCancelDate = () => setEditingDate(null);
 
   // 요약 통계
   const totalCount = items.length;
@@ -266,11 +295,71 @@ export function ImportShipmentTab() {
                         ? `$${parseFloat(item.invoiceAmountUsd).toLocaleString("en-US", { minimumFractionDigits: 0 })}`
                         : "-"}
                     </TableCell>
-                    <TableCell className="text-center text-xs">{item.etaDate || "-"}</TableCell>
+                    <TableCell className="text-center text-xs">
+                      {editingDate?.id === item.id && editingDate.field === "etaDate" ? (
+                        <div className="flex items-center gap-0.5 justify-center">
+                          <Input
+                            type="date"
+                            value={editingDate.value}
+                            onChange={(e) => setEditingDate({ ...editingDate, value: e.target.value })}
+                            className="h-6 w-32 text-xs"
+                            disabled={isSavingDate}
+                          />
+                          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={handleSaveDate} disabled={isSavingDate}>
+                            <Check className="h-3 w-3 text-green-600" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={handleCancelDate} disabled={isSavingDate}>
+                            <X className="h-3 w-3 text-slate-400" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="group inline-flex items-center gap-0.5">
+                          <span>{item.etaDate || "-"}</span>
+                          {!item.warehouseActualDate && (
+                            <button
+                              className="opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={() => handleEditDate(item.id, "etaDate", item.etaDate)}
+                            >
+                              <Pencil className="h-3 w-3 text-slate-400" />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell className="text-center text-xs">
                       {item.ataDate || "-"}
                     </TableCell>
-                    <TableCell className="text-center text-xs">{item.warehouseEtaDate || "-"}</TableCell>
+                    <TableCell className="text-center text-xs">
+                      {editingDate?.id === item.id && editingDate.field === "warehouseEtaDate" ? (
+                        <div className="flex items-center gap-0.5 justify-center">
+                          <Input
+                            type="date"
+                            value={editingDate.value}
+                            onChange={(e) => setEditingDate({ ...editingDate, value: e.target.value })}
+                            className="h-6 w-32 text-xs"
+                            disabled={isSavingDate}
+                          />
+                          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={handleSaveDate} disabled={isSavingDate}>
+                            <Check className="h-3 w-3 text-green-600" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={handleCancelDate} disabled={isSavingDate}>
+                            <X className="h-3 w-3 text-slate-400" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="group inline-flex items-center gap-0.5">
+                          <span>{item.warehouseEtaDate || "-"}</span>
+                          {!item.warehouseActualDate && (
+                            <button
+                              className="opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={() => handleEditDate(item.id, "warehouseEtaDate", item.warehouseEtaDate)}
+                            >
+                              <Pencil className="h-3 w-3 text-slate-400" />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell className="text-center text-xs">
                       {item.warehouseActualDate || "-"}
                     </TableCell>

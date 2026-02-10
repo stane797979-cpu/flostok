@@ -420,6 +420,59 @@ export async function createOtherInbound(input: OtherInboundInput): Promise<{
 }
 
 /**
+ * 입고 기록 날짜 변경
+ */
+export async function updateInboundRecordDate(
+  recordId: string,
+  newDate: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const user = await requireAuth();
+
+    if (!newDate || !/^\d{4}-\d{2}-\d{2}$/.test(newDate)) {
+      return { success: false, error: "유효한 날짜 형식이 아닙니다 (YYYY-MM-DD)" };
+    }
+
+    const [record] = await db
+      .select({ id: inboundRecords.id, date: inboundRecords.date })
+      .from(inboundRecords)
+      .where(
+        and(
+          eq(inboundRecords.id, recordId),
+          eq(inboundRecords.organizationId, user.organizationId)
+        )
+      )
+      .limit(1);
+
+    if (!record) {
+      return { success: false, error: "입고 기록을 찾을 수 없습니다" };
+    }
+
+    await db
+      .update(inboundRecords)
+      .set({ date: newDate, updatedAt: new Date() })
+      .where(eq(inboundRecords.id, recordId));
+
+    await logActivity({
+      user,
+      action: "UPDATE",
+      entityType: "inbound_record",
+      entityId: recordId,
+      description: `입고일 변경: ${record.date} → ${newDate}`,
+    });
+
+    revalidatePath("/dashboard/orders");
+    revalidatePath("/dashboard/inventory");
+    revalidatePath("/dashboard/psi");
+
+    return { success: true };
+  } catch (error) {
+    console.error("입고일 변경 오류:", error);
+    return { success: false, error: "입고일 변경에 실패했습니다" };
+  }
+}
+
+/**
  * 입고 기록 조회 스키마
  */
 const getInboundRecordsSchema = z.object({
