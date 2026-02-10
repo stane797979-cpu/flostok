@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, useMemo, useRef, useTransition } from
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { ChevronLeft, ChevronRight, Download, Loader2, PackagePlus, XCircle, PackageCheck, Upload } from "lucide-react";
 import { DeliveryComplianceTab } from "./delivery-compliance-tab";
 import { ImportShipmentTab } from "./import-shipment-tab";
@@ -175,6 +177,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [isCancellingOrders, setIsCancellingOrders] = useState(false);
   const [isConfirmingInbound, setIsConfirmingInbound] = useState(false);
+  const [hideReceived, setHideReceived] = useState(false);
 
   // 입고 현황 상태
   const [inboundMonth, setInboundMonth] = useState<Date>(() => new Date());
@@ -764,9 +767,21 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>발주 현황</CardTitle>
-                  <CardDescription>진행 중인 발주서 목록입니다</CardDescription>
+                <div className="flex items-center gap-4">
+                  <div>
+                    <CardTitle>발주 현황</CardTitle>
+                    <CardDescription>진행 중인 발주서 목록입니다</CardDescription>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Checkbox
+                      id="hide-received"
+                      checked={hideReceived}
+                      onCheckedChange={(checked) => setHideReceived(!!checked)}
+                    />
+                    <Label htmlFor="hide-received" className="text-xs text-slate-500 cursor-pointer">
+                      입고완료 숨기기
+                    </Label>
+                  </div>
                 </div>
                 {selectedOrderIds.length > 0 && (
                   <div className="flex gap-2">
@@ -806,7 +821,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                 </div>
               ) : (
                 <PurchaseOrdersTable
-                  orders={purchaseOrders}
+                  orders={hideReceived ? purchaseOrders.filter((o) => o.status !== "received") : purchaseOrders}
                   onViewClick={handleViewOrder}
                   onDownloadClick={handleDownloadOrder}
                   selectedIds={selectedOrderIds}
