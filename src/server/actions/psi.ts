@@ -348,3 +348,189 @@ export async function uploadPSIPlanExcel(
     return { success: false, message: "업로드 중 오류가 발생했습니다", importedCount: 0 };
   }
 }
+
+export type SOPMethod = "match_outbound" | "safety_stock" | "target_days" | "forecast";
+
+/**
+ * S&OP 수량 자동 산출
+ * 출고계획(outboundPlan) 기반으로 S&OP(공급계획) 수량을 산출하여 psi_plans에 저장
+ */
+export async function generateSOPQuantities(
+  method: SOPMethod,
+  targetDays?: number
+): Promise<{ success: boolean; message: string; updatedCount: number }> {
+  try {
+    const user = await getCurrentUser();
+    const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
+
+    // 미래 6개월 기간 생성
+    const now = new Date();
+    const futurePeriods: string[] = [];
+    for (let i = 0; i <= 6; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      futurePeriods.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+    }
+
+    const startDate = `${futurePeriods[0]}-01`;
+    const endDate = `${futurePeriods[futurePeriods.length - 1]}-31`;
+
+    // 병렬 데이터 로드
+    const [productRows, inventoryRows, planRows, forecastRows] = await Promise.all([
+      // 제품 목록 (안전재고 포함)
+      db
+        .select({ id: products.id, safetyStock: products.safetyStock })
+        .from(products)
+        .where(eq(products.organizationId, orgId)),
+
+      // 현재 재고
+      db
+        .select({ productId: inventory.productId, currentStock: inventory.currentStock })
+        .from(inventory)
+        .where(eq(inventory.organizationId, orgId)),
+
+      // 출고계획 (psi_plans)
+      db
+        .select({
+          id: psiPlans.id,
+          productId: psiPlans.productId,
+          month: sql<string>`to_char(${psiPlans.period}::date, 'YYYY-MM')`.as("month"),
+          period: psiPlans.period,
+          outboundPlanQuantity: psiPlans.outboundPlanQuantity,
+        })
+        .from(psiPlans)
+        .where(
+          and(
+            eq(psiPlans.organizationId, orgId),
+            gte(psiPlans.period, startDate),
+            lte(psiPlans.period, endDate)
+          )
+        ),
+
+      // 수요예측 (forecast 방식용)
+      db
+        .select({
+          productId: demandForecasts.productId,
+          month: sql<string>`to_char(${demandForecasts.period}::date, 'YYYY-MM')`.as("month"),
+          forecastQty: demandForecasts.forecastQuantity,
+        })
+        .from(demandForecasts)
+        .where(
+          and(
+            eq(demandForecasts.organizationId, orgId),
+            gte(demandForecasts.period, startDate),
+            lte(demandForecasts.period, endDate)
+          )
+        ),
+    ]);
+
+    const inventoryMap = new Map(inventoryRows.map((r) => [r.productId, r.currentStock]));
+    const safetyStockMap = new Map(productRows.map((p) => [p.id, p.safetyStock ?? 0]));
+
+    // 출고계획 Map: productId -> { month -> qty }
+    const outPlanMap = new Map<string, Map<string, number>>();
+    for (const row of planRows) {
+      if (!outPlanMap.has(row.productId)) outPlanMap.set(row.productId, new Map());
+      outPlanMap.get(row.productId)!.set(row.month, row.outboundPlanQuantity);
+    }
+
+    // 수요예측 Map: productId -> { month -> qty }
+    const forecastMap = new Map<string, Map<string, number>>();
+    for (const row of forecastRows) {
+      if (!forecastMap.has(row.productId)) forecastMap.set(row.productId, new Map());
+      forecastMap.get(row.productId)!.set(row.month, row.forecastQty);
+    }
+
+    let updatedCount = 0;
+
+    for (const product of productRows) {
+      const currentStock = inventoryMap.get(product.id) ?? 0;
+      const safetyStock = safetyStockMap.get(product.id) ?? 0;
+      let runningStock = currentStock;
+
+      for (const period of futurePeriods) {
+        const outPlan = outPlanMap.get(product.id)?.get(period) || 0;
+        let sopQty = 0;
+
+        switch (method) {
+          case "match_outbound":
+            // S&OP = 출고P (1:1 매칭)
+            sopQty = outPlan;
+            break;
+
+          case "safety_stock":
+            // S&OP = max(0, 출고P + 안전재고 - 기초재고)
+            sopQty = Math.max(0, outPlan + safetyStock - runningStock);
+            break;
+
+          case "target_days": {
+            // S&OP = max(0, 출고P + 일평균출고P × 목표일수 - 기초재고)
+            const days = targetDays || 30;
+            const dailyOutbound = outPlan / 30; // 월간 → 일평균
+            const targetStock = dailyOutbound * days;
+            sopQty = Math.max(0, outPlan + targetStock - runningStock);
+            break;
+          }
+
+          case "forecast":
+            // S&OP = 수요예측값
+            sopQty = forecastMap.get(product.id)?.get(period) || outPlan;
+            break;
+        }
+
+        sopQty = Math.round(sopQty);
+
+        if (sopQty > 0) {
+          const periodDate = `${period}-01`;
+
+          // upsert
+          const existing = await db
+            .select({ id: psiPlans.id })
+            .from(psiPlans)
+            .where(
+              and(
+                eq(psiPlans.organizationId, orgId),
+                eq(psiPlans.productId, product.id),
+                eq(psiPlans.period, periodDate)
+              )
+            )
+            .limit(1);
+
+          if (existing.length > 0) {
+            await db.update(psiPlans)
+              .set({ sopQuantity: sopQty, updatedAt: new Date() })
+              .where(eq(psiPlans.id, existing[0].id));
+          } else {
+            await db.insert(psiPlans).values({
+              organizationId: orgId,
+              productId: product.id,
+              period: periodDate,
+              sopQuantity: sopQty,
+            });
+          }
+          updatedCount++;
+        }
+
+        // 다음 달 기초재고 = 현재 기초재고 + S&OP(공급) - 출고P
+        runningStock = Math.max(0, runningStock + sopQty - outPlan);
+      }
+    }
+
+    revalidatePath("/dashboard/psi");
+
+    const methodLabels: Record<SOPMethod, string> = {
+      match_outbound: "출고계획 동일",
+      safety_stock: "안전재고 보충",
+      target_days: `목표재고일수(${targetDays || 30}일)`,
+      forecast: "수요예측 연동",
+    };
+
+    return {
+      success: true,
+      message: `${methodLabels[method]} 방식으로 ${updatedCount}건의 S&OP 수량이 산출되었습니다`,
+      updatedCount,
+    };
+  } catch (error) {
+    console.error("S&OP 자동 산출 실패:", error);
+    return { success: false, message: "S&OP 산출 중 오류가 발생했습니다", updatedCount: 0 };
+  }
+}

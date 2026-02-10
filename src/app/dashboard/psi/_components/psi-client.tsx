@@ -4,24 +4,63 @@ import { useState, useMemo, useRef, useTransition } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Upload, Download } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Upload, Download, Calculator } from "lucide-react";
 import { PSIFilters } from "./psi-filters";
 import { PSITable } from "./psi-table";
-import { uploadPSIPlanExcel } from "@/server/actions/psi";
+import { uploadPSIPlanExcel, generateSOPQuantities, type SOPMethod } from "@/server/actions/psi";
 import { useToast } from "@/hooks/use-toast";
+import { useRouter } from "next/navigation";
 import type { PSIResult } from "@/server/services/scm/psi-aggregation";
 
 interface PSIClientProps {
   data: PSIResult;
 }
 
+const SOP_METHODS: Array<{ value: SOPMethod; label: string; description: string }> = [
+  {
+    value: "match_outbound",
+    label: "출고계획 동일",
+    description: "S&OP = 출고P (출고할 만큼 공급)",
+  },
+  {
+    value: "safety_stock",
+    label: "안전재고 보충",
+    description: "S&OP = max(0, 출고P + 안전재고 - 기초재고)",
+  },
+  {
+    value: "target_days",
+    label: "목표재고일수",
+    description: "S&OP = max(0, 출고P + 일평균출고 × 목표일수 - 기초재고)",
+  },
+  {
+    value: "forecast",
+    label: "수요예측 연동",
+    description: "S&OP = 수요예측 시스템 데이터 활용",
+  },
+];
+
 export function PSIClient({ data }: PSIClientProps) {
   const [search, setSearch] = useState("");
   const [abcFilter, setAbcFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [isPending, startTransition] = useTransition();
+  const [sopMethod, setSopMethod] = useState<SOPMethod>("safety_stock");
+  const [targetDays, setTargetDays] = useState(30);
+  const [sopDialogOpen, setSopDialogOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const router = useRouter();
 
   // 카테고리 목록 추출
   const categories = useMemo(() => {
@@ -65,6 +104,7 @@ export function PSIClient({ data }: PSIClientProps) {
       const result = await uploadPSIPlanExcel(formData);
       if (result.success) {
         toast({ title: "업로드 완료", description: result.message });
+        router.refresh();
       } else {
         toast({ title: "업로드 실패", description: result.message, variant: "destructive" });
       }
@@ -95,7 +135,7 @@ export function PSIClient({ data }: PSIClientProps) {
       const sampleRow: (string | number)[] = ["SKU-001"];
       for (let i = 0; i < futurePeriods.length; i++) {
         sampleRow.push(100); // S&OP
-        sampleRow.push(80);  // 입고계획
+        sampleRow.push(80);  // 출고계획
       }
 
       const ws = XLSX.utils.aoa_to_sheet([headers, sampleRow]);
@@ -113,6 +153,22 @@ export function PSIClient({ data }: PSIClientProps) {
     });
   };
 
+  const handleGenerateSOP = () => {
+    startTransition(async () => {
+      const result = await generateSOPQuantities(
+        sopMethod,
+        sopMethod === "target_days" ? targetDays : undefined
+      );
+      if (result.success) {
+        toast({ title: "S&OP 산출 완료", description: result.message });
+        setSopDialogOpen(false);
+        router.refresh();
+      } else {
+        toast({ title: "S&OP 산출 실패", description: result.message, variant: "destructive" });
+      }
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
@@ -123,6 +179,76 @@ export function PSIClient({ data }: PSIClientProps) {
           </p>
         </div>
         <div className="flex gap-2">
+          {/* S&OP 자동 산출 */}
+          <Dialog open={sopDialogOpen} onOpenChange={setSopDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Calculator className="mr-1 h-4 w-4" />
+                S&OP 자동 산출
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[420px]">
+              <DialogHeader>
+                <DialogTitle>S&OP 공급계획 자동 산출</DialogTitle>
+                <DialogDescription>
+                  출고계획(출고P) 기반으로 S&OP 수량을 자동 산출합니다.
+                  미래 7개월분이 일괄 생성됩니다.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3 py-4">
+                {SOP_METHODS.map((m) => (
+                  <label
+                    key={m.value}
+                    className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
+                      sopMethod === m.value
+                        ? "border-purple-500 bg-purple-50 dark:bg-purple-950/30"
+                        : "border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="sop-method"
+                      value={m.value}
+                      checked={sopMethod === m.value}
+                      onChange={() => setSopMethod(m.value)}
+                      className="mt-1"
+                    />
+                    <div>
+                      <div className="font-medium text-sm">{m.label}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">{m.description}</div>
+                    </div>
+                  </label>
+                ))}
+
+                {sopMethod === "target_days" && (
+                  <div className="flex items-center gap-2 pl-7">
+                    <Label htmlFor="target-days" className="text-sm whitespace-nowrap">
+                      목표 재고일수
+                    </Label>
+                    <Input
+                      id="target-days"
+                      type="number"
+                      min={1}
+                      max={365}
+                      value={targetDays}
+                      onChange={(e) => setTargetDays(Number(e.target.value) || 30)}
+                      className="w-20 h-8"
+                    />
+                    <span className="text-sm text-muted-foreground">일</span>
+                  </div>
+                )}
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setSopDialogOpen(false)}>
+                  취소
+                </Button>
+                <Button onClick={handleGenerateSOP} disabled={isPending}>
+                  {isPending ? "산출 중..." : "S&OP 산출"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
           <Button
             variant="outline"
             size="sm"
