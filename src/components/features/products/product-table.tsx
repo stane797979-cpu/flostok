@@ -22,7 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import { type Product } from "@/server/db/schema";
 
-type SortField = "sku" | "name" | "category" | "safetyStock" | "status" | "abcGrade" | "xyzGrade";
+type SortField = "sku" | "name" | "category" | "safetyStock" | "status" | "abcXyzGrade";
 type SortOrder = "asc" | "desc";
 
 interface ProductWithStatus extends Product {
@@ -67,30 +67,35 @@ export function ProductTable({ products = [], onView, onEdit, onDelete, onBulkDe
     }
   };
 
+  const ABC_XYZ_ORDER: Record<string, number> = {
+    AX: 1, AY: 2, AZ: 3, BX: 4, BY: 5, BZ: 6, CX: 7, CY: 8, CZ: 9,
+  };
+
+  const getAbcXyzOrder = (p: ProductWithStatus) => {
+    if (!p.abcGrade || !p.xyzGrade) return 99;
+    return ABC_XYZ_ORDER[`${p.abcGrade}${p.xyzGrade}`] ?? 99;
+  };
+
   const sortedProducts = [...products].sort((a, b) => {
     if (!sortField) return 0;
 
-    let aValue: string | number;
-    let bValue: string | number;
+    let cmp = 0;
 
     if (sortField === "status") {
-      aValue = a.status.label;
-      bValue = b.status.label;
-    } else if (sortField === "abcGrade" || sortField === "xyzGrade") {
-      aValue = a[sortField] || "Z";
-      bValue = b[sortField] || "Z";
+      cmp = a.status.label.localeCompare(b.status.label);
+    } else if (sortField === "abcXyzGrade") {
+      cmp = getAbcXyzOrder(a) - getAbcXyzOrder(b);
     } else {
-      aValue = (a[sortField as keyof typeof a] as string | number) || "";
-      bValue = (b[sortField as keyof typeof b] as string | number) || "";
+      const aValue = (a[sortField as keyof typeof a] as string | number) || "";
+      const bValue = (b[sortField as keyof typeof b] as string | number) || "";
+      if (typeof aValue === "string" && typeof bValue === "string") {
+        cmp = aValue.localeCompare(bValue);
+      } else {
+        cmp = Number(aValue) - Number(bValue);
+      }
     }
 
-    if (typeof aValue === "string" && typeof bValue === "string") {
-      return sortOrder === "asc" ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
-    }
-
-    const numA = Number(aValue);
-    const numB = Number(bValue);
-    return sortOrder === "asc" ? numA - numB : numB - numA;
+    return sortOrder === "asc" ? cmp : -cmp;
   });
 
   const handleSelectAll = (checked: boolean) => {
@@ -220,26 +225,15 @@ export function ProductTable({ products = [], onView, onEdit, onDelete, onBulkDe
                 </Button>
               </TableHead>
               <TableHead>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-auto p-0 font-medium hover:bg-transparent"
-                    onClick={() => handleSort("abcGrade")}
-                  >
-                    ABC
-                    <SortIcon field="abcGrade" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-auto p-0 font-medium hover:bg-transparent"
-                    onClick={() => handleSort("xyzGrade")}
-                  >
-                    XYZ
-                    <SortIcon field="xyzGrade" />
-                  </Button>
-                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-auto p-0 font-medium hover:bg-transparent"
+                  onClick={() => handleSort("abcXyzGrade")}
+                >
+                  등급
+                  <SortIcon field="abcXyzGrade" />
+                </Button>
               </TableHead>
               <TableHead className="w-[50px]"></TableHead>
             </TableRow>
@@ -279,29 +273,21 @@ export function ProductTable({ products = [], onView, onEdit, onDelete, onBulkDe
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  <div className="flex gap-1">
-                    {isNewProduct(product) ? (
-                      <Badge className="bg-blue-500 text-white border-blue-600 font-bold text-xs">
-                        NEW
-                      </Badge>
-                    ) : (
-                      <>
-                        {product.abcGrade && (
-                          <Badge variant="outline" className="font-mono">
-                            {product.abcGrade}
-                          </Badge>
-                        )}
-                        {product.xyzGrade && (
-                          <Badge variant="outline" className="font-mono">
-                            {product.xyzGrade}
-                          </Badge>
-                        )}
-                        {!product.abcGrade && !product.xyzGrade && (
-                          <span className="text-slate-400">-</span>
-                        )}
-                      </>
-                    )}
-                  </div>
+                  {isNewProduct(product) ? (
+                    <Badge className="bg-blue-500 text-white border-blue-600 font-bold text-xs">
+                      NEW
+                    </Badge>
+                  ) : product.abcGrade && product.xyzGrade ? (
+                    <Badge variant="outline" className="font-mono">
+                      {product.abcGrade}{product.xyzGrade}
+                    </Badge>
+                  ) : product.abcGrade || product.xyzGrade ? (
+                    <Badge variant="outline" className="font-mono text-slate-400">
+                      {product.abcGrade || "?"}{product.xyzGrade || "?"}
+                    </Badge>
+                  ) : (
+                    <span className="text-slate-400">-</span>
+                  )}
                 </TableCell>
                 <TableCell>
                   <DropdownMenu>

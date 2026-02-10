@@ -116,6 +116,8 @@ export async function getInventoryList(options?: {
           name: products.name,
           safetyStock: products.safetyStock,
           reorderPoint: products.reorderPoint,
+          abcGrade: products.abcGrade,
+          xyzGrade: products.xyzGrade,
         },
       })
       .from(inventory)

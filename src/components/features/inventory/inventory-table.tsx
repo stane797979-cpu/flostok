@@ -35,6 +35,8 @@ export interface InventoryItem {
     name: string;
     safetyStock: number | null;
     reorderPoint: number | null;
+    abcGrade: "A" | "B" | "C" | null;
+    xyzGrade: "X" | "Y" | "Z" | null;
   };
 }
 
@@ -43,7 +45,11 @@ interface InventoryTableProps {
   onAdjust: (item: InventoryItem) => void;
 }
 
-type SortKey = "sku" | "name" | "status" | "currentStock" | "safetyStock" | "reorderPoint" | "daysOfInventory" | "location";
+type SortKey = "sku" | "name" | "status" | "abcXyzGrade" | "currentStock" | "safetyStock" | "reorderPoint" | "daysOfInventory" | "location";
+
+const ABC_XYZ_ORDER: Record<string, number> = {
+  AX: 1, AY: 2, AZ: 3, BX: 4, BY: 5, BZ: 6, CX: 7, CY: 8, CZ: 9,
+};
 type SortDirection = "asc" | "desc";
 
 const STATUS_ORDER = [
@@ -99,6 +105,11 @@ export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
           const statusA = getInventoryStatus(a.currentStock, a.product.safetyStock ?? 0, a.product.reorderPoint ?? 0);
           const statusB = getInventoryStatus(b.currentStock, b.product.safetyStock ?? 0, b.product.reorderPoint ?? 0);
           return dir * (STATUS_ORDER.indexOf(statusA.key) - STATUS_ORDER.indexOf(statusB.key));
+        }
+        case "abcXyzGrade": {
+          const aKey = a.product.abcGrade && a.product.xyzGrade ? `${a.product.abcGrade}${a.product.xyzGrade}` : null;
+          const bKey = b.product.abcGrade && b.product.xyzGrade ? `${b.product.abcGrade}${b.product.xyzGrade}` : null;
+          return dir * ((aKey ? ABC_XYZ_ORDER[aKey] ?? 99 : 99) - (bKey ? ABC_XYZ_ORDER[bKey] ?? 99 : 99));
         }
         case "currentStock":
           return dir * (a.currentStock - b.currentStock);
@@ -174,6 +185,9 @@ export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
               <TableHead className={sortableHeadClass} onClick={() => handleSort("status")}>
                 <div className="flex items-center gap-0.5">상태 <span className="text-[10px] text-primary-600">{sortLabel("status")}</span><SortIcon columnKey="status" /></div>
               </TableHead>
+              <TableHead className={sortableHeadClass} onClick={() => handleSort("abcXyzGrade")}>
+                <div className="flex items-center gap-0.5">등급 <span className="text-[10px] text-primary-600">{sortLabel("abcXyzGrade")}</span><SortIcon columnKey="abcXyzGrade" /></div>
+              </TableHead>
               <TableHead className={cn("text-right", sortableHeadClass)} onClick={() => handleSort("currentStock")}>
                 <div className="flex items-center justify-end gap-0.5">현재고 <span className="text-[10px] text-primary-600">{sortLabel("currentStock")}</span><SortIcon columnKey="currentStock" /></div>
               </TableHead>
@@ -195,7 +209,7 @@ export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
           <TableBody>
             {sorted.length === 0 && (
               <TableRow>
-                <TableCell colSpan={10} className="h-24 text-center text-slate-500">
+                <TableCell colSpan={11} className="h-24 text-center text-slate-500">
                   재고 데이터가 없습니다
                 </TableCell>
               </TableRow>
@@ -236,6 +250,15 @@ export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
                     >
                       {status.label}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {item.product.abcGrade && item.product.xyzGrade ? (
+                      <Badge variant="outline" className="font-mono">
+                        {item.product.abcGrade}{item.product.xyzGrade}
+                      </Badge>
+                    ) : (
+                      <span className="text-slate-400">-</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-right font-mono">
                     {item.currentStock.toLocaleString()}

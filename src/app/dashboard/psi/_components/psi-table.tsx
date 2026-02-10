@@ -19,7 +19,7 @@ interface PSITableProps {
   periods: string[];
 }
 
-type SortField = "sku" | "productName" | "abcGrade" | "xyzGrade" | "orderMethod" | "currentStock";
+type SortField = "sku" | "productName" | "abcXyzGrade" | "orderMethod" | "currentStock";
 type SortDirection = "asc" | "desc" | null;
 
 function formatPeriodLabel(period: string): string {
@@ -80,7 +80,9 @@ const SUB_COLUMNS = [
   { key: "endingActual", label: "기말(실적)", shortLabel: "기말A" },
 ] as const;
 
-const GRADE_ORDER: Record<string, number> = { A: 1, B: 2, C: 3, X: 1, Y: 2, Z: 3 };
+const ABC_XYZ_ORDER: Record<string, number> = {
+  AX: 1, AY: 2, AZ: 3, BX: 4, BY: 5, BZ: 6, CX: 7, CY: 8, CZ: 9,
+};
 const ORDER_METHOD_ORDER: Record<string, number> = { fixed_quantity: 1, fixed_period: 2 };
 
 export function PSITable({ products, periods }: PSITableProps) {
@@ -112,16 +114,10 @@ export function PSITable({ products, periods }: PSITableProps) {
         case "productName":
           cmp = a.productName.localeCompare(b.productName, "ko");
           break;
-        case "abcGrade": {
-          const aG = a.abcGrade ? GRADE_ORDER[a.abcGrade] ?? 99 : 99;
-          const bG = b.abcGrade ? GRADE_ORDER[b.abcGrade] ?? 99 : 99;
-          cmp = aG - bG;
-          break;
-        }
-        case "xyzGrade": {
-          const aG = a.xyzGrade ? GRADE_ORDER[a.xyzGrade] ?? 99 : 99;
-          const bG = b.xyzGrade ? GRADE_ORDER[b.xyzGrade] ?? 99 : 99;
-          cmp = aG - bG;
+        case "abcXyzGrade": {
+          const aKey = a.abcGrade && a.xyzGrade ? `${a.abcGrade}${a.xyzGrade}` : null;
+          const bKey = b.abcGrade && b.xyzGrade ? `${b.abcGrade}${b.xyzGrade}` : null;
+          cmp = (aKey ? ABC_XYZ_ORDER[aKey] ?? 99 : 99) - (bKey ? ABC_XYZ_ORDER[bKey] ?? 99 : 99);
           break;
         }
         case "orderMethod": {
@@ -174,22 +170,13 @@ export function PSITable({ products, periods }: PSITableProps) {
                 <SortIcon field="productName" currentField={sortField} currentDirection={sortDirection} />
               </button>
             </TableHead>
-            <TableHead rowSpan={2} className="text-center min-w-[32px] border-r">
+            <TableHead rowSpan={2} className="text-center min-w-[36px] border-r">
               <button
                 className="flex items-center justify-center w-full hover:text-foreground transition-colors"
-                onClick={() => handleSort("abcGrade")}
+                onClick={() => handleSort("abcXyzGrade")}
               >
-                ABC
-                <SortIcon field="abcGrade" currentField={sortField} currentDirection={sortDirection} />
-              </button>
-            </TableHead>
-            <TableHead rowSpan={2} className="text-center min-w-[32px] border-r">
-              <button
-                className="flex items-center justify-center w-full hover:text-foreground transition-colors"
-                onClick={() => handleSort("xyzGrade")}
-              >
-                XYZ
-                <SortIcon field="xyzGrade" currentField={sortField} currentDirection={sortDirection} />
+                등급
+                <SortIcon field="abcXyzGrade" currentField={sortField} currentDirection={sortDirection} />
               </button>
             </TableHead>
             <TableHead rowSpan={2} className="text-center min-w-[32px] border-r">
@@ -255,28 +242,14 @@ export function PSITable({ products, periods }: PSITableProps) {
                 {product.productName}
               </TableCell>
               <TableCell className="text-center border-r">
-                {product.abcGrade ? (
+                {product.abcGrade && product.xyzGrade ? (
                   <Badge variant="outline" className={cn(
                     "font-mono text-[9px] px-0.5 py-0",
                     product.abcGrade === "A" && "border-red-300 text-red-700 bg-red-50",
                     product.abcGrade === "B" && "border-yellow-300 text-yellow-700 bg-yellow-50",
                     product.abcGrade === "C" && "border-slate-300 text-slate-600 bg-slate-50",
                   )}>
-                    {product.abcGrade}
-                  </Badge>
-                ) : (
-                  <span className="text-muted-foreground text-[10px]">-</span>
-                )}
-              </TableCell>
-              <TableCell className="text-center border-r">
-                {product.xyzGrade ? (
-                  <Badge variant="outline" className={cn(
-                    "font-mono text-[9px] px-0.5 py-0",
-                    product.xyzGrade === "X" && "border-green-300 text-green-700 bg-green-50",
-                    product.xyzGrade === "Y" && "border-blue-300 text-blue-700 bg-blue-50",
-                    product.xyzGrade === "Z" && "border-purple-300 text-purple-700 bg-purple-50",
-                  )}>
-                    {product.xyzGrade}
+                    {product.abcGrade}{product.xyzGrade}
                   </Badge>
                 ) : (
                   <span className="text-muted-foreground text-[10px]">-</span>

@@ -16,7 +16,14 @@ export default async function InventoryPage() {
       availableStock: item.availableStock,
       daysOfInventory: item.daysOfInventory,
       location: item.location,
-      product: item.product,
+      product: {
+        sku: item.product.sku,
+        name: item.product.name,
+        safetyStock: item.product.safetyStock,
+        reorderPoint: item.product.reorderPoint,
+        abcGrade: item.product.abcGrade,
+        xyzGrade: item.product.xyzGrade,
+      },
     }));
 
     // 통계 계산
