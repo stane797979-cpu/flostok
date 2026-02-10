@@ -483,7 +483,7 @@ export async function generateSOPQuantities(
       let runningStock = currentStock;
 
       // 산출 방식별 수량 계산 헬퍼
-      const calcSopQty = (m: SOPMethod, days?: number): number => {
+      const calcSopQty = (m: SOPMethod, outPlan: number, period: string, days?: number): number => {
         switch (m) {
           case "match_outbound":
             return outPlan;
@@ -513,9 +513,9 @@ export async function generateSOPQuantities(
             : om === "fixed_period"
             ? byOrderMethodOptions?.fixedPeriodMethod ?? "safety_stock"
             : "safety_stock";
-          sopQty = calcSopQty(subMethod, byOrderMethodOptions?.targetDays);
+          sopQty = calcSopQty(subMethod, outPlan, period, byOrderMethodOptions?.targetDays);
         } else {
-          sopQty = calcSopQty(method);
+          sopQty = calcSopQty(method, outPlan, period);
         }
 
         sopQty = Math.round(sopQty);
