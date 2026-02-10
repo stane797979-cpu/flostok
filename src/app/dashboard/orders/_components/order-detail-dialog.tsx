@@ -25,7 +25,6 @@ import { Label } from "@/components/ui/label";
 import { getPurchaseOrderById, updatePurchaseOrderStatus, updatePurchaseOrderExpectedDate } from "@/server/actions/purchase-orders";
 import { createImportShipment } from "@/server/actions/import-shipments";
 import { getInboundRecords } from "@/server/actions/inbound";
-import { updateInboundRecordDate } from "@/server/actions/inbound";
 import { getEntityActivityLogs } from "@/server/actions/activity-logs";
 import type { ActivityLog } from "@/server/actions/activity-logs";
 import { InboundDialog, type InboundDialogItem } from "./inbound-dialog";
@@ -88,9 +87,6 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
     qualityResult: string | null;
   }>>([]);
   const [activityLogsList, setActivityLogsList] = useState<ActivityLog[]>([]);
-  const [editingInboundId, setEditingInboundId] = useState<string | null>(null);
-  const [editInboundDate, setEditInboundDate] = useState("");
-  const [isSavingInboundDate, setIsSavingInboundDate] = useState(false);
   const { toast } = useToast();
 
   // 발주서 데이터 로드
@@ -230,31 +226,6 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
       toast({ title: "오류", description: "예상입고일 변경 중 오류가 발생했습니다", variant: "destructive" });
     } finally {
       setIsSavingExpectedDate(false);
-    }
-  };
-
-  const handleEditInboundDate = (recordId: string, currentDate: string) => {
-    setEditingInboundId(recordId);
-    setEditInboundDate(currentDate);
-  };
-
-  const handleSaveInboundDate = async (recordId: string) => {
-    if (!editInboundDate) return;
-    setIsSavingInboundDate(true);
-    try {
-      const result = await updateInboundRecordDate(recordId, editInboundDate);
-      if (result.success) {
-        toast({ title: "변경 완료", description: "입고일이 변경되었습니다" });
-        setEditingInboundId(null);
-        loadOrderData();
-        onStatusChange?.();
-      } else {
-        toast({ title: "변경 실패", description: result.error || "변경에 실패했습니다", variant: "destructive" });
-      }
-    } catch {
-      toast({ title: "오류", description: "입고일 변경 중 오류가 발생했습니다", variant: "destructive" });
-    } finally {
-      setIsSavingInboundDate(false);
     }
   };
 
@@ -703,46 +674,8 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
                       <TableBody>
                         {inboundRecordsList.map((rec) => (
                           <TableRow key={rec.id}>
-                            <TableCell className="whitespace-nowrap">
-                              {editingInboundId === rec.id ? (
-                                <div className="flex items-center gap-1">
-                                  <Input
-                                    type="date"
-                                    value={editInboundDate}
-                                    onChange={(e) => setEditInboundDate(e.target.value)}
-                                    className="h-7 w-36 text-sm"
-                                  />
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6"
-                                    onClick={() => handleSaveInboundDate(rec.id)}
-                                    disabled={isSavingInboundDate}
-                                  >
-                                    <Check className="h-3 w-3 text-green-600" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6"
-                                    onClick={() => setEditingInboundId(null)}
-                                  >
-                                    <X className="h-3 w-3 text-slate-400" />
-                                  </Button>
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-1 group">
-                                  <span className="text-sm">{rec.date}</span>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    onClick={() => handleEditInboundDate(rec.id, rec.date)}
-                                  >
-                                    <Pencil className="h-3 w-3 text-slate-400" />
-                                  </Button>
-                                </div>
-                              )}
+                            <TableCell className="whitespace-nowrap text-sm">
+                              {rec.date}
                             </TableCell>
                             <TableCell className="whitespace-nowrap font-mono text-xs">{rec.productSku}</TableCell>
                             <TableCell className="whitespace-nowrap text-sm">{rec.productName}</TableCell>
