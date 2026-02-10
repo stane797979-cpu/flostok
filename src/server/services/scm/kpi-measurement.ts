@@ -20,6 +20,44 @@ import { eq, sql, and, gte, lte, inArray } from "drizzle-orm";
 import type { KPIMetrics } from "./kpi-improvement";
 
 /**
+ * KPI 필터 옵션 (ABC-XYZ 등급 또는 제품 ID 기반)
+ */
+export interface KPIFilterOptions {
+  abcGrade?: "A" | "B" | "C";
+  xyzGrade?: "X" | "Y" | "Z";
+  productIds?: string[];
+}
+
+/**
+ * 필터 조건에 해당하는 제품 ID 목록 조회
+ * null 반환 = 필터 없음(전체), 빈 배열 = 해당 제품 없음
+ */
+async function resolveFilteredProductIds(
+  organizationId: string,
+  filters?: KPIFilterOptions
+): Promise<string[] | null> {
+  if (!filters) return null;
+  const { abcGrade, xyzGrade, productIds } = filters;
+  if (!abcGrade && !xyzGrade && (!productIds || productIds.length === 0)) {
+    return null;
+  }
+
+  const conditions = [eq(products.organizationId, organizationId)];
+  if (abcGrade) conditions.push(eq(products.abcGrade, abcGrade));
+  if (xyzGrade) conditions.push(eq(products.xyzGrade, xyzGrade));
+  if (productIds && productIds.length > 0) {
+    conditions.push(inArray(products.id, productIds));
+  }
+
+  const result = await db
+    .select({ id: products.id })
+    .from(products)
+    .where(and(...conditions));
+
+  return result.map((r) => r.id);
+}
+
+/**
  * 월별 KPI 트렌드 데이터
  */
 export interface KPITrend {
@@ -31,13 +69,34 @@ export interface KPITrend {
 }
 
 /**
- * 조직의 실제 KPI 측정 (5개 병렬 쿼리)
+ * 조직의 실제 KPI 측정 (5개 병렬 쿼리, 제품 필터 지원)
  */
-export async function measureKPIMetrics(organizationId: string): Promise<KPIMetrics> {
+export async function measureKPIMetrics(
+  organizationId: string,
+  filters?: KPIFilterOptions
+): Promise<KPIMetrics> {
   try {
     const oneYearAgo = new Date();
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
     const oneYearAgoStr = oneYearAgo.toISOString().split("T")[0];
+
+    // 필터된 제품 ID 목록 조회
+    const filteredIds = await resolveFilteredProductIds(organizationId, filters);
+    if (filteredIds !== null && filteredIds.length === 0) {
+      return {
+        inventoryTurnoverRate: 0, averageInventoryDays: 999, inventoryAccuracy: 95.0,
+        stockoutRate: 0, onTimeOrderRate: 0, averageLeadTime: 0, orderFulfillmentRate: 0,
+      };
+    }
+
+    // 제품 필터 조건 헬퍼
+    const productFilter = (col: typeof salesRecords.productId) =>
+      filteredIds ? [inArray(col, filteredIds)] : [];
+
+    // 발주서 필터 (purchaseOrders에는 productId가 없으므로 서브쿼리 사용)
+    const orderProductFilter = filteredIds
+      ? [sql`${purchaseOrders.id} IN (SELECT DISTINCT ${purchaseOrderItems.purchaseOrderId} FROM ${purchaseOrderItems} WHERE ${inArray(purchaseOrderItems.productId, filteredIds)})`]
+      : [];
 
     // 5개 쿼리 병렬 실행
     const [salesData, inventoryData, stockoutData, orderData, fulfillmentData] = await Promise.all([
@@ -48,7 +107,11 @@ export async function measureKPIMetrics(organizationId: string): Promise<KPIMetr
         })
         .from(salesRecords)
         .leftJoin(products, eq(salesRecords.productId, products.id))
-        .where(and(eq(salesRecords.organizationId, organizationId), gte(salesRecords.date, oneYearAgoStr))),
+        .where(and(
+          eq(salesRecords.organizationId, organizationId),
+          gte(salesRecords.date, oneYearAgoStr),
+          ...productFilter(salesRecords.productId),
+        )),
 
       // 2) 평균 재고금액
       db
@@ -56,7 +119,10 @@ export async function measureKPIMetrics(organizationId: string): Promise<KPIMetr
           avgValue: sql<number>`COALESCE(AVG(${inventory.inventoryValue}), 0)`,
         })
         .from(inventory)
-        .where(eq(inventory.organizationId, organizationId)),
+        .where(and(
+          eq(inventory.organizationId, organizationId),
+          ...productFilter(inventory.productId),
+        )),
 
       // 3) 품절률 (단일 쿼리로 총수 + 품절수)
       db
@@ -65,7 +131,10 @@ export async function measureKPIMetrics(organizationId: string): Promise<KPIMetr
           stockoutCount: sql<number>`COUNT(*) FILTER (WHERE ${inventory.status} = 'out_of_stock')`,
         })
         .from(inventory)
-        .where(eq(inventory.organizationId, organizationId)),
+        .where(and(
+          eq(inventory.organizationId, organizationId),
+          ...productFilter(inventory.productId),
+        )),
 
       // 4) 적시발주율 + 평균 리드타임 (완료 발주 한번에)
       db
@@ -78,7 +147,8 @@ export async function measureKPIMetrics(organizationId: string): Promise<KPIMetr
         .where(
           and(
             eq(purchaseOrders.organizationId, organizationId),
-            inArray(purchaseOrders.status, ["received", "completed"])
+            inArray(purchaseOrders.status, ["received", "completed"]),
+            ...orderProductFilter,
           )
         ),
 
@@ -93,7 +163,8 @@ export async function measureKPIMetrics(organizationId: string): Promise<KPIMetr
         .where(
           and(
             eq(purchaseOrders.organizationId, organizationId),
-            inArray(purchaseOrders.status, ["received", "completed"])
+            inArray(purchaseOrders.status, ["received", "completed"]),
+            ...productFilter(purchaseOrderItems.productId),
           )
         ),
     ]);
@@ -157,7 +228,8 @@ export async function measureKPIMetrics(organizationId: string): Promise<KPIMetr
  */
 export async function getKPITrendData(
   organizationId: string,
-  months: number = 6
+  months: number = 6,
+  filters?: KPIFilterOptions
 ): Promise<KPITrend[]> {
   try {
     const now = new Date();
@@ -171,6 +243,20 @@ export async function getKPITrendData(
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       monthList.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
     }
+
+    // 필터된 제품 ID 목록 조회
+    const filteredIds = await resolveFilteredProductIds(organizationId, filters);
+    if (filteredIds !== null && filteredIds.length === 0) {
+      return monthList.map((month) => ({
+        month, inventoryTurnoverRate: 0, stockoutRate: 0, onTimeOrderRate: 0, orderFulfillmentRate: 0,
+      }));
+    }
+
+    const productFilter = (col: typeof salesRecords.productId) =>
+      filteredIds ? [inArray(col, filteredIds)] : [];
+    const orderProductFilter = filteredIds
+      ? [sql`${purchaseOrders.id} IN (SELECT DISTINCT ${purchaseOrderItems.purchaseOrderId} FROM ${purchaseOrderItems} WHERE ${inArray(purchaseOrderItems.productId, filteredIds)})`]
+      : [];
 
     // 현재 평균 재고금액 (월별 스냅샷이 없으므로 공통 사용)
     // 4개 GROUP BY 쿼리 + 1개 재고 쿼리 병렬 실행
@@ -187,7 +273,8 @@ export async function getKPITrendData(
           and(
             eq(salesRecords.organizationId, organizationId),
             gte(salesRecords.date, startDateStr),
-            lte(salesRecords.date, endDateStr)
+            lte(salesRecords.date, endDateStr),
+            ...productFilter(salesRecords.productId),
           )
         )
         .groupBy(sql`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`)
@@ -207,7 +294,8 @@ export async function getKPITrendData(
             inArray(purchaseOrders.status, ["received", "completed"]),
             sql`${purchaseOrders.actualDate} IS NOT NULL`,
             gte(purchaseOrders.actualDate, startDateStr),
-            lte(purchaseOrders.actualDate, endDateStr)
+            lte(purchaseOrders.actualDate, endDateStr),
+            ...orderProductFilter,
           )
         )
         .groupBy(sql`TO_CHAR(${purchaseOrders.actualDate}::date, 'YYYY-MM')`)
@@ -228,7 +316,8 @@ export async function getKPITrendData(
             inArray(purchaseOrders.status, ["received", "completed"]),
             sql`${purchaseOrders.actualDate} IS NOT NULL`,
             gte(purchaseOrders.actualDate, startDateStr),
-            lte(purchaseOrders.actualDate, endDateStr)
+            lte(purchaseOrders.actualDate, endDateStr),
+            ...productFilter(purchaseOrderItems.productId),
           )
         )
         .groupBy(sql`TO_CHAR(${purchaseOrders.actualDate}::date, 'YYYY-MM')`)
@@ -240,7 +329,10 @@ export async function getKPITrendData(
           avgValue: sql<number>`COALESCE(AVG(${inventory.inventoryValue}), 0)`,
         })
         .from(inventory)
-        .where(eq(inventory.organizationId, organizationId))
+        .where(and(
+          eq(inventory.organizationId, organizationId),
+          ...productFilter(inventory.productId),
+        ))
         .execute(),
 
       // 5) 현재 품절률 (스냅샷 — 모든 월에 동일)
@@ -250,7 +342,10 @@ export async function getKPITrendData(
           stockoutCount: sql<number>`COUNT(*) FILTER (WHERE ${inventory.status} = 'out_of_stock')`,
         })
         .from(inventory)
-        .where(eq(inventory.organizationId, organizationId))
+        .where(and(
+          eq(inventory.organizationId, organizationId),
+          ...productFilter(inventory.productId),
+        ))
         .execute(),
     ]);
 

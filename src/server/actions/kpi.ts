@@ -8,7 +8,9 @@
 import { requireAuth } from "./auth-helpers";
 import { measureKPIMetrics, getKPITrendData } from "@/server/services/scm/kpi-measurement";
 import type { KPIMetrics } from "@/server/services/scm/kpi-improvement";
-import type { KPITrend } from "@/server/services/scm/kpi-measurement";
+import type { KPITrend, KPIFilterOptions } from "@/server/services/scm/kpi-measurement";
+
+export type { KPIFilterOptions };
 
 /** KPI 대시보드용 전체 데이터 */
 export interface KPIDashboardData {
@@ -30,14 +32,17 @@ const DEFAULT_TARGETS: KPIMetrics = {
 
 /**
  * KPI 대시보드 데이터 조회
+ * @param filters - ABC/XYZ 등급 또는 제품 ID 필터 (선택)
  * @returns KPI 실측값, 트렌드, 목표값
  */
-export async function getKPIDashboardData(): Promise<KPIDashboardData> {
+export async function getKPIDashboardData(
+  filters?: KPIFilterOptions
+): Promise<KPIDashboardData> {
   const user = await requireAuth();
 
   const [metrics, trends] = await Promise.all([
-    measureKPIMetrics(user.organizationId),
-    getKPITrendData(user.organizationId, 6),
+    measureKPIMetrics(user.organizationId, filters),
+    getKPITrendData(user.organizationId, 6, filters),
   ]);
 
   return {
