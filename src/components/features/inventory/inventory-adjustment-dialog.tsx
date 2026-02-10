@@ -238,24 +238,24 @@ export function InventoryAdjustmentDialog({
                 <History className="h-3.5 w-3.5" />
                 최근 변경 이력
               </h4>
-              <div className="max-h-40 overflow-y-auto rounded-md border">
+              <div className="max-h-40 overflow-y-auto overflow-x-hidden rounded-md border">
                 <div className="divide-y text-xs">
                   {historyRecords.map((h) => (
-                    <div key={h.id} className="flex items-center gap-2 px-3 py-2">
+                    <div key={h.id} className="flex items-center gap-2 px-3 py-2 min-w-0">
                       <Badge
                         variant="outline"
                         className={
                           h.changeAmount > 0
-                            ? "text-[10px] border-green-200 text-green-700"
-                            : "text-[10px] border-red-200 text-red-700"
+                            ? "text-[10px] border-green-200 text-green-700 flex-shrink-0"
+                            : "text-[10px] border-red-200 text-red-700 flex-shrink-0"
                         }
                       >
                         {h.changeAmount > 0 ? "+" : ""}{h.changeAmount}
                       </Badge>
-                      <span className="text-slate-500">
+                      <span className="flex-shrink-0 text-slate-500">
                         {h.stockBefore} → {h.stockAfter}
                       </span>
-                      <span className="flex-1 truncate text-slate-400">
+                      <span className="min-w-0 flex-1 truncate text-slate-400">
                         {h.notes || changeTypeLabel(h.changeType)}
                       </span>
                       <span className="flex-shrink-0 text-slate-400">
