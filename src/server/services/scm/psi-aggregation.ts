@@ -22,9 +22,9 @@ export interface PSIMonthData {
   sopQuantity: number;
   /** 입고계획 */
   inboundPlan: number;
-  /** 예측출고 = forecast 또는 manualForecast */
-  forecastOutbound: number;
-  /** 말재고계획 = 기초 + 입고계획 - 예측출고 */
+  /** 출고계획 (수동 엑셀 업로드) */
+  outboundPlan: number;
+  /** 말재고계획 = 기초 + 입고계획 - 출고계획 */
   plannedEndingStock: number;
 }
 
@@ -77,21 +77,23 @@ export function aggregatePSI(input: {
     currentStock: number;
     safetyStock: number;
   }>;
-  /** 월별 판매량 { productId -> { YYYY-MM -> qty } } */
-  salesByMonth: Map<string, Map<string, number>>;
-  /** 월별 입고량 { productId -> { YYYY-MM -> qty } } */
+  /** 월별 출고실적 { productId -> { YYYY-MM -> qty } } (from inventory_history) */
+  outboundByMonth: Map<string, Map<string, number>>;
+  /** 월별 입고실적 { productId -> { YYYY-MM -> qty } } */
   inboundByMonth: Map<string, Map<string, number>>;
-  /** 월별 예측량 { productId -> { YYYY-MM -> qty } } */
+  /** 월별 예측량 { productId -> { YYYY-MM -> qty } } (참고용) */
   forecastByMonth: Map<string, Map<string, number>>;
-  /** 월별 수동F/C { productId -> { YYYY-MM -> qty } } */
+  /** 월별 수동F/C { productId -> { YYYY-MM -> qty } } (참고용) */
   manualForecastByMonth: Map<string, Map<string, number>>;
   /** 월별 S&OP 물량 { productId -> { YYYY-MM -> qty } } */
   sopByMonth: Map<string, Map<string, number>>;
-  /** 월별 입고계획 { productId -> { YYYY-MM -> qty } } */
+  /** 월별 입고계획 { productId -> { YYYY-MM -> qty } } (from purchase_orders) */
   inboundPlanByMonth: Map<string, Map<string, number>>;
+  /** 월별 출고계획 { productId -> { YYYY-MM -> qty } } (수동 엑셀 업로드) */
+  outboundPlanByMonth: Map<string, Map<string, number>>;
   periods: string[];
 }): PSIResult {
-  const { products, salesByMonth, inboundByMonth, forecastByMonth, manualForecastByMonth, sopByMonth, inboundPlanByMonth, periods } = input;
+  const { products, outboundByMonth, inboundByMonth, forecastByMonth, manualForecastByMonth, sopByMonth, inboundPlanByMonth, outboundPlanByMonth, periods } = input;
 
   const rows: PSIProductRow[] = [];
 
@@ -115,32 +117,30 @@ export function aggregatePSI(input: {
     const midIdx = currentPeriodIdx >= 0 ? currentPeriodIdx : Math.floor(periods.length / 2);
     for (let i = midIdx - 1; i >= 0; i--) {
       const period = periods[i + 1];
-      const sales = salesByMonth.get(product.id)?.get(period) || 0;
+      const outbound = outboundByMonth.get(product.id)?.get(period) || 0;
       const inbound = inboundByMonth.get(product.id)?.get(period) || 0;
       // 이전 기말 = 이번달 기말 + 이번달 출고 - 이번달 입고
-      pastStocks[i] = Math.max(0, pastStocks[i + 1] + sales - inbound);
+      pastStocks[i] = Math.max(0, pastStocks[i + 1] + outbound - inbound);
     }
 
-    // 미래 예측 (현재 → 미래)
+    // 미래 예측 (현재 → 미래): 출고계획 기반
     for (let i = midIdx + 1; i < periods.length; i++) {
       const period = periods[i];
-      const forecast = (manualForecastByMonth.get(product.id)?.get(period)
-        ?? forecastByMonth.get(product.id)?.get(period)) || 0;
-      const inbound = inboundByMonth.get(product.id)?.get(period) || 0;
-      pastStocks[i] = Math.max(0, pastStocks[i - 1] - forecast + inbound);
+      const outPlan = outboundPlanByMonth.get(product.id)?.get(period) || 0;
+      const inbPlan = inboundPlanByMonth.get(product.id)?.get(period) || 0;
+      pastStocks[i] = Math.max(0, pastStocks[i - 1] - outPlan + inbPlan);
     }
 
-    // 말재고계획 계산용 (입고계획 기반 기초재고 역전파)
+    // 말재고계획 계산용 (입고계획 + 출고계획 기반)
     const plannedStocks: number[] = new Array(periods.length).fill(0);
     plannedStocks[midIdx] = runningStock;
 
-    // 미래 말재고계획 (현재 → 미래): 기초 + 입고계획 - 예측출고
+    // 미래 말재고계획 (현재 → 미래): 기초 + 입고계획 - 출고계획
     for (let i = midIdx + 1; i < periods.length; i++) {
       const period = periods[i];
-      const forecastOut = (manualForecastByMonth.get(product.id)?.get(period)
-        ?? forecastByMonth.get(product.id)?.get(period)) || 0;
+      const outPlan = outboundPlanByMonth.get(product.id)?.get(period) || 0;
       const inbPlan = inboundPlanByMonth.get(product.id)?.get(period) || 0;
-      plannedStocks[i] = Math.max(0, plannedStocks[i - 1] + inbPlan - forecastOut);
+      plannedStocks[i] = Math.max(0, plannedStocks[i - 1] + inbPlan - outPlan);
     }
     // 과거는 실적과 동일
     for (let i = midIdx - 1; i >= 0; i--) {
@@ -150,13 +150,13 @@ export function aggregatePSI(input: {
     // 월별 데이터 생성
     for (let i = 0; i < periods.length; i++) {
       const period = periods[i];
-      const sales = salesByMonth.get(product.id)?.get(period) || 0;
+      const outboundActual = outboundByMonth.get(product.id)?.get(period) || 0;
       const inbound = inboundByMonth.get(product.id)?.get(period) || 0;
       const forecast = forecastByMonth.get(product.id)?.get(period) ?? null;
       const manualFC = manualForecastByMonth.get(product.id)?.get(period) ?? null;
       const sopQty = sopByMonth.get(product.id)?.get(period) || 0;
       const inbPlan = inboundPlanByMonth.get(product.id)?.get(period) || 0;
-      const forecastOut = (manualFC ?? forecast) || 0;
+      const outPlan = outboundPlanByMonth.get(product.id)?.get(period) || 0;
 
       const beginningStock = i === 0 ? pastStocks[0] : pastStocks[i - 1];
       const endingStock = pastStocks[i];
@@ -165,13 +165,13 @@ export function aggregatePSI(input: {
         period,
         beginningStock: Math.round(beginningStock),
         inbound,
-        outbound: sales,
+        outbound: outboundActual,
         endingStock: Math.round(endingStock),
         forecast,
         manualForecast: manualFC,
         sopQuantity: sopQty,
         inboundPlan: inbPlan,
-        forecastOutbound: forecastOut,
+        outboundPlan: outPlan,
         plannedEndingStock: Math.round(plannedStocks[i]),
       });
     }

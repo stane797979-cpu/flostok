@@ -30,6 +30,8 @@ export const psiPlans = pgTable(
     sopQuantity: integer("sop_quantity").default(0).notNull(),
     /** 입고계획 수량 */
     inboundPlanQuantity: integer("inbound_plan_quantity").default(0).notNull(),
+    /** 출고계획 수량 (수동 엑셀 업로드) */
+    outboundPlanQuantity: integer("outbound_plan_quantity").default(0).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },

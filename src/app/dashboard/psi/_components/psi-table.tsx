@@ -184,7 +184,7 @@ export function PSITable({ products, periods }: PSITableProps) {
                     </TableCell>
                     {/* 출고(계획) */}
                     <TableCell className={cn("text-center p-0.5", bg, planBg)}>
-                      <NumCell value={month.forecastOutbound} color="text-purple-500" italic />
+                      <NumCell value={month.outboundPlan} color="text-purple-500" italic />
                     </TableCell>
                     {/* 출고(실적) */}
                     <TableCell className={cn("text-center p-0.5", bg)}>

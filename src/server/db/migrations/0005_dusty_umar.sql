@@ -1,0 +1,1 @@
+ALTER TABLE "psi_plans" ADD COLUMN "outbound_plan_quantity" integer DEFAULT 0 NOT NULL;

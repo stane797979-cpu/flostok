@@ -84,11 +84,11 @@ export function PSIClient({ data }: PSIClientProps) {
         futurePeriods.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
       }
 
-      // 헤더 생성: SKU + 각 기간별 S&OP/입고계획
+      // 헤더 생성: SKU + 각 기간별 S&OP/출고계획
       const headers: string[] = ["SKU"];
       for (const period of futurePeriods) {
         headers.push(`${period} S&OP`);
-        headers.push(`${period} 입고계획`);
+        headers.push(`${period} 출고계획`);
       }
 
       // 샘플 행
@@ -108,8 +108,8 @@ export function PSIClient({ data }: PSIClientProps) {
       ws["!cols"] = colWidths;
 
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "입고계획양식");
-      XLSX.writeFile(wb, "PSI_입고계획_업로드_양식.xlsx");
+      XLSX.utils.book_append_sheet(wb, ws, "PSI계획양식");
+      XLSX.writeFile(wb, "PSI_계획_업로드_양식.xlsx");
     });
   };
 
@@ -145,7 +145,7 @@ export function PSIClient({ data }: PSIClientProps) {
             onClick={() => fileInputRef.current?.click()}
           >
             <Upload className="mr-1 h-4 w-4" />
-            {isPending ? "업로드 중..." : "S&OP / 입고계획 업로드"}
+            {isPending ? "업로드 중..." : "S&OP / 출고계획 업로드"}
           </Button>
         </div>
       </div>

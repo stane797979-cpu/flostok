@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/server/db";
-import { products, inventory, salesRecords, inboundRecords, demandForecasts, psiPlans } from "@/server/db/schema";
+import { products, inventory, inboundRecords, demandForecasts, psiPlans, purchaseOrders, purchaseOrderItems, inventoryHistory } from "@/server/db/schema";
 import { eq, and, gte, lte, sql } from "drizzle-orm";
 import { getCurrentUser } from "./auth-helpers";
 import {
@@ -26,7 +26,7 @@ export async function getPSIData(): Promise<PSIResult> {
   const endDate = `${lastPeriod}-31`;
 
   // 병렬 데이터 로드
-  const [productRows, inventoryRows, salesRows, inboundRows, forecastRows, planRows] = await Promise.all([
+  const [productRows, inventoryRows, outboundRows, inboundRows, forecastRows, planRows, poInboundPlanRows] = await Promise.all([
     // 제품 목록
     db
       .select({
@@ -50,24 +50,25 @@ export async function getPSIData(): Promise<PSIResult> {
       .from(inventory)
       .where(eq(inventory.organizationId, orgId)),
 
-    // 판매 기록 (월별 집계)
+    // 출고 실적 (월별 집계 — inventory_history에서 changeAmount < 0)
     db
       .select({
-        productId: salesRecords.productId,
-        month: sql<string>`to_char(${salesRecords.date}::date, 'YYYY-MM')`.as("month"),
-        totalQty: sql<number>`sum(${salesRecords.quantity})::int`.as("total_qty"),
+        productId: inventoryHistory.productId,
+        month: sql<string>`to_char(${inventoryHistory.date}::date, 'YYYY-MM')`.as("month"),
+        totalQty: sql<number>`sum(abs(${inventoryHistory.changeAmount}))::int`.as("total_qty"),
       })
-      .from(salesRecords)
+      .from(inventoryHistory)
       .where(
         and(
-          eq(salesRecords.organizationId, orgId),
-          gte(salesRecords.date, startDate),
-          lte(salesRecords.date, endDate)
+          eq(inventoryHistory.organizationId, orgId),
+          sql`${inventoryHistory.changeAmount} < 0`,
+          gte(inventoryHistory.date, startDate),
+          lte(inventoryHistory.date, endDate)
         )
       )
-      .groupBy(salesRecords.productId, sql`to_char(${salesRecords.date}::date, 'YYYY-MM')`),
+      .groupBy(inventoryHistory.productId, sql`to_char(${inventoryHistory.date}::date, 'YYYY-MM')`),
 
-    // 입고 기록 (월별 집계)
+    // 입고 실적 (월별 집계)
     db
       .select({
         productId: inboundRecords.productId,
@@ -84,7 +85,7 @@ export async function getPSIData(): Promise<PSIResult> {
       )
       .groupBy(inboundRecords.productId, sql`to_char(${inboundRecords.date}::date, 'YYYY-MM')`),
 
-    // 수요 예측 (월별)
+    // 수요 예측 (참고용)
     db
       .select({
         productId: demandForecasts.productId,
@@ -101,13 +102,14 @@ export async function getPSIData(): Promise<PSIResult> {
         )
       ),
 
-    // PSI 계획 데이터 (S&OP + 입고계획)
+    // PSI 계획 데이터 (S&OP + 출고계획)
     db
       .select({
         productId: psiPlans.productId,
         month: sql<string>`to_char(${psiPlans.period}::date, 'YYYY-MM')`.as("month"),
         sopQuantity: psiPlans.sopQuantity,
         inboundPlanQuantity: psiPlans.inboundPlanQuantity,
+        outboundPlanQuantity: psiPlans.outboundPlanQuantity,
       })
       .from(psiPlans)
       .where(
@@ -117,23 +119,49 @@ export async function getPSIData(): Promise<PSIResult> {
           lte(psiPlans.period, endDate)
         )
       ),
+
+    // 입고 계획 (발주서 expectedDate 기준 월별 발주수량 합산)
+    db
+      .select({
+        productId: purchaseOrderItems.productId,
+        month: sql<string>`to_char(${purchaseOrders.expectedDate}::date, 'YYYY-MM')`.as("month"),
+        totalQty: sql<number>`sum(${purchaseOrderItems.quantity})::int`.as("total_qty"),
+      })
+      .from(purchaseOrders)
+      .innerJoin(
+        purchaseOrderItems,
+        eq(purchaseOrderItems.purchaseOrderId, purchaseOrders.id)
+      )
+      .where(
+        and(
+          eq(purchaseOrders.organizationId, orgId),
+          sql`${purchaseOrders.expectedDate} IS NOT NULL`,
+          sql`${purchaseOrders.status} != 'cancelled'`,
+          gte(purchaseOrders.expectedDate, startDate),
+          lte(purchaseOrders.expectedDate, endDate)
+        )
+      )
+      .groupBy(purchaseOrderItems.productId, sql`to_char(${purchaseOrders.expectedDate}::date, 'YYYY-MM')`),
   ]);
 
   // Map 형태로 변환
   const inventoryMap = new Map(inventoryRows.map((r) => [r.productId, r.currentStock]));
 
-  const salesByMonth = new Map<string, Map<string, number>>();
-  for (const row of salesRows) {
-    if (!salesByMonth.has(row.productId)) salesByMonth.set(row.productId, new Map());
-    salesByMonth.get(row.productId)!.set(row.month, row.totalQty);
+  // 출고실적 (inventory_history 기반)
+  const outboundByMonth = new Map<string, Map<string, number>>();
+  for (const row of outboundRows) {
+    if (!outboundByMonth.has(row.productId)) outboundByMonth.set(row.productId, new Map());
+    outboundByMonth.get(row.productId)!.set(row.month, row.totalQty);
   }
 
+  // 입고실적
   const inboundByMonth = new Map<string, Map<string, number>>();
   for (const row of inboundRows) {
     if (!inboundByMonth.has(row.productId)) inboundByMonth.set(row.productId, new Map());
     inboundByMonth.get(row.productId)!.set(row.month, row.totalQty);
   }
 
+  // 수요예측 (참고용)
   const forecastByMonth = new Map<string, Map<string, number>>();
   const manualForecastByMonth = new Map<string, Map<string, number>>();
   for (const row of forecastRows) {
@@ -142,17 +170,25 @@ export async function getPSIData(): Promise<PSIResult> {
     targetMap.get(row.productId)!.set(row.month, row.forecastQty);
   }
 
+  // S&OP + 출고계획 (psi_plans 기반)
   const sopByMonth = new Map<string, Map<string, number>>();
-  const inboundPlanByMonth = new Map<string, Map<string, number>>();
+  const outboundPlanByMonth = new Map<string, Map<string, number>>();
   for (const row of planRows) {
     if (row.sopQuantity > 0) {
       if (!sopByMonth.has(row.productId)) sopByMonth.set(row.productId, new Map());
       sopByMonth.get(row.productId)!.set(row.month, row.sopQuantity);
     }
-    if (row.inboundPlanQuantity > 0) {
-      if (!inboundPlanByMonth.has(row.productId)) inboundPlanByMonth.set(row.productId, new Map());
-      inboundPlanByMonth.get(row.productId)!.set(row.month, row.inboundPlanQuantity);
+    if (row.outboundPlanQuantity > 0) {
+      if (!outboundPlanByMonth.has(row.productId)) outboundPlanByMonth.set(row.productId, new Map());
+      outboundPlanByMonth.get(row.productId)!.set(row.month, row.outboundPlanQuantity);
     }
+  }
+
+  // 입고계획 (발주 시스템 기반)
+  const inboundPlanByMonth = new Map<string, Map<string, number>>();
+  for (const row of poInboundPlanRows) {
+    if (!inboundPlanByMonth.has(row.productId)) inboundPlanByMonth.set(row.productId, new Map());
+    inboundPlanByMonth.get(row.productId)!.set(row.month, row.totalQty);
   }
 
   // 집계 수행
@@ -167,12 +203,13 @@ export async function getPSIData(): Promise<PSIResult> {
       currentStock: inventoryMap.get(p.id) ?? 0,
       safetyStock: p.safetyStock ?? 0,
     })),
-    salesByMonth,
+    outboundByMonth,
     inboundByMonth,
     forecastByMonth,
     manualForecastByMonth,
     sopByMonth,
     inboundPlanByMonth,
+    outboundPlanByMonth,
     periods,
   });
 }
@@ -212,8 +249,8 @@ export async function uploadPSIPlanExcel(
     );
     if (!skuCol) return { success: false, message: "SKU 컬럼을 찾을 수 없습니다 (SKU, 품번, 제품코드 중 하나 필요)", importedCount: 0 };
 
-    // 월별 S&OP/입고계획 컬럼 파싱
-    const planColumns: Array<{ header: string; period: string; type: "sop" | "inbound_plan" }> = [];
+    // 월별 S&OP/출고계획 컬럼 파싱
+    const planColumns: Array<{ header: string; period: string; type: "sop" | "inbound_plan" | "outbound_plan" }> = [];
     for (const h of headers) {
       if (h === skuCol) continue;
       const trimmed = h.trim();
@@ -226,7 +263,15 @@ export async function uploadPSIPlanExcel(
         continue;
       }
 
-      // "2025-08 입고계획" 또는 "2025.8 입고계획" 형태
+      // "2025-08 출고계획" 또는 "2025.8 출고" 형태
+      const outMatch = trimmed.match(/^(\d{4})[.-](\d{1,2})\s*(출고계획|출고|outbound|OBP)/i);
+      if (outMatch) {
+        const period = `${outMatch[1]}-${outMatch[2].padStart(2, "0")}`;
+        planColumns.push({ header: h, period, type: "outbound_plan" });
+        continue;
+      }
+
+      // "2025-08 입고계획" 또는 "2025.8 입고계획" 형태 (하위 호환)
       const inbMatch = trimmed.match(/^(\d{4})[.-](\d{1,2})\s*(입고계획|입고|inbound|IBP)/i);
       if (inbMatch) {
         const period = `${inbMatch[1]}-${inbMatch[2].padStart(2, "0")}`;
@@ -238,7 +283,7 @@ export async function uploadPSIPlanExcel(
     if (planColumns.length === 0) {
       return {
         success: false,
-        message: "계획 컬럼을 찾을 수 없습니다. 형식: 'YYYY-MM S&OP', 'YYYY-MM 입고계획'",
+        message: "계획 컬럼을 찾을 수 없습니다. 형식: 'YYYY-MM S&OP', 'YYYY-MM 출고계획'",
         importedCount: 0,
       };
     }
@@ -274,6 +319,7 @@ export async function uploadPSIPlanExcel(
         if (existing.length > 0) {
           const updateData: Record<string, unknown> = { updatedAt: new Date() };
           if (col.type === "sop") updateData.sopQuantity = value;
+          else if (col.type === "outbound_plan") updateData.outboundPlanQuantity = value;
           else updateData.inboundPlanQuantity = value;
 
           await db.update(psiPlans).set(updateData).where(eq(psiPlans.id, existing[0].id));
@@ -284,6 +330,7 @@ export async function uploadPSIPlanExcel(
             period: periodDate,
             sopQuantity: col.type === "sop" ? value : 0,
             inboundPlanQuantity: col.type === "inbound_plan" ? value : 0,
+            outboundPlanQuantity: col.type === "outbound_plan" ? value : 0,
           });
         }
         importedCount++;
