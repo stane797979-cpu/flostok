@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import {
   Table,
   TableBody,
@@ -9,6 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface InboundRecord {
@@ -53,6 +55,38 @@ interface InboundRecordsTableProps {
   className?: string;
 }
 
+type SortField =
+  | "date"
+  | "orderNumber"
+  | "productSku"
+  | "productName"
+  | "receivedQuantity"
+  | "acceptedQuantity"
+  | "qualityResult"
+  | "expiryDate";
+type SortDirection = "asc" | "desc" | null;
+
+function SortIcon({
+  field,
+  sortField,
+  sortDirection,
+}: {
+  field: SortField;
+  sortField: SortField;
+  sortDirection: SortDirection;
+}) {
+  if (sortField !== field) {
+    return <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />;
+  }
+  if (sortDirection === "asc") {
+    return <ArrowUp className="h-3.5 w-3.5 text-slate-900" />;
+  }
+  if (sortDirection === "desc") {
+    return <ArrowDown className="h-3.5 w-3.5 text-slate-900" />;
+  }
+  return <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />;
+}
+
 const qualityBadge = (result: string | null) => {
   switch (result) {
     case "pass":
@@ -73,6 +107,50 @@ const qualityBadge = (result: string | null) => {
 };
 
 export function InboundRecordsTable({ records, className }: InboundRecordsTableProps) {
+  const [sortField, setSortField] = useState<SortField>("date");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      if (sortDirection === "asc") {
+        setSortDirection("desc");
+      } else if (sortDirection === "desc") {
+        setSortDirection(null);
+      } else {
+        setSortDirection("asc");
+      }
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
+
+  const sortedRecords = useMemo(() => {
+    if (!sortDirection) return records;
+
+    return [...records].sort((a, b) => {
+      const aVal = a[sortField];
+      const bVal = b[sortField];
+
+      // null 처리: null은 맨 뒤로
+      if (aVal == null && bVal == null) return 0;
+      if (aVal == null) return 1;
+      if (bVal == null) return -1;
+
+      // 문자열 비교
+      if (typeof aVal === "string" && typeof bVal === "string") {
+        return sortDirection === "asc"
+          ? aVal.localeCompare(bVal, "ko")
+          : bVal.localeCompare(aVal, "ko");
+      }
+
+      // 숫자 비교
+      const aNum = Number(aVal);
+      const bNum = Number(bVal);
+      return sortDirection === "asc" ? aNum - bNum : bNum - aNum;
+    });
+  }, [records, sortField, sortDirection]);
+
   if (records.length === 0) {
     return (
       <div className="flex h-48 items-center justify-center text-slate-400">
@@ -86,20 +164,84 @@ export function InboundRecordsTable({ records, className }: InboundRecordsTableP
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="whitespace-nowrap">입고일</TableHead>
-            <TableHead className="whitespace-nowrap">발주번호</TableHead>
-            <TableHead className="whitespace-nowrap">SKU</TableHead>
-            <TableHead className="whitespace-nowrap">제품명</TableHead>
-            <TableHead className="whitespace-nowrap text-right">입고수량</TableHead>
-            <TableHead className="whitespace-nowrap text-right">합격수량</TableHead>
-            <TableHead className="whitespace-nowrap">품질결과</TableHead>
+            <TableHead className="whitespace-nowrap">
+              <button
+                onClick={() => handleSort("date")}
+                className="flex items-center gap-1 hover:text-slate-900"
+              >
+                입고일
+                <SortIcon field="date" sortField={sortField} sortDirection={sortDirection} />
+              </button>
+            </TableHead>
+            <TableHead className="whitespace-nowrap">
+              <button
+                onClick={() => handleSort("orderNumber")}
+                className="flex items-center gap-1 hover:text-slate-900"
+              >
+                발주번호
+                <SortIcon field="orderNumber" sortField={sortField} sortDirection={sortDirection} />
+              </button>
+            </TableHead>
+            <TableHead className="whitespace-nowrap">
+              <button
+                onClick={() => handleSort("productSku")}
+                className="flex items-center gap-1 hover:text-slate-900"
+              >
+                SKU
+                <SortIcon field="productSku" sortField={sortField} sortDirection={sortDirection} />
+              </button>
+            </TableHead>
+            <TableHead className="whitespace-nowrap">
+              <button
+                onClick={() => handleSort("productName")}
+                className="flex items-center gap-1 hover:text-slate-900"
+              >
+                제품명
+                <SortIcon field="productName" sortField={sortField} sortDirection={sortDirection} />
+              </button>
+            </TableHead>
+            <TableHead className="whitespace-nowrap text-right">
+              <button
+                onClick={() => handleSort("receivedQuantity")}
+                className="ml-auto flex items-center gap-1 hover:text-slate-900"
+              >
+                입고수량
+                <SortIcon field="receivedQuantity" sortField={sortField} sortDirection={sortDirection} />
+              </button>
+            </TableHead>
+            <TableHead className="whitespace-nowrap text-right">
+              <button
+                onClick={() => handleSort("acceptedQuantity")}
+                className="ml-auto flex items-center gap-1 hover:text-slate-900"
+              >
+                합격수량
+                <SortIcon field="acceptedQuantity" sortField={sortField} sortDirection={sortDirection} />
+              </button>
+            </TableHead>
+            <TableHead className="whitespace-nowrap">
+              <button
+                onClick={() => handleSort("qualityResult")}
+                className="flex items-center gap-1 hover:text-slate-900"
+              >
+                품질결과
+                <SortIcon field="qualityResult" sortField={sortField} sortDirection={sortDirection} />
+              </button>
+            </TableHead>
             <TableHead className="whitespace-nowrap">적치위치</TableHead>
             <TableHead className="whitespace-nowrap">LOT번호</TableHead>
-            <TableHead className="whitespace-nowrap">유통기한</TableHead>
+            <TableHead className="whitespace-nowrap">
+              <button
+                onClick={() => handleSort("expiryDate")}
+                className="flex items-center gap-1 hover:text-slate-900"
+              >
+                유통기한
+                <SortIcon field="expiryDate" sortField={sortField} sortDirection={sortDirection} />
+              </button>
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {records.map((record) => (
+          {sortedRecords.map((record) => (
             <TableRow key={record.id}>
               <TableCell className="whitespace-nowrap text-sm">{record.date}</TableCell>
               <TableCell className="whitespace-nowrap font-mono text-xs">

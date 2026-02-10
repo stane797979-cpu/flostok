@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { AlertOctagon, Clock, CheckCircle, Eye, EyeOff } from "lucide-react";
+import { AlertOctagon, Clock, CheckCircle, Eye, EyeOff, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { updateStockoutRecord } from "@/server/actions/stockout";
 import type { StockoutSummary } from "@/server/actions/stockout";
@@ -27,6 +27,28 @@ import { cn } from "@/lib/utils";
 
 interface StockoutClientProps {
   data: StockoutSummary;
+}
+
+type SortField = "productSku" | "productName" | "currentStock" | "stockoutStartDate" | "stockoutEndDate" | "durationDays";
+type SortDirection = "asc" | "desc" | null;
+
+interface SortIconProps {
+  field: SortField;
+  currentField: SortField | null;
+  direction: SortDirection;
+}
+
+function SortIcon({ field, currentField, direction }: SortIconProps) {
+  if (currentField !== field) {
+    return <ArrowUpDown className="ml-1 h-3.5 w-3.5 text-slate-400" />;
+  }
+  if (direction === "asc") {
+    return <ArrowUp className="ml-1 h-3.5 w-3.5 text-slate-700" />;
+  }
+  if (direction === "desc") {
+    return <ArrowDown className="ml-1 h-3.5 w-3.5 text-slate-700" />;
+  }
+  return <ArrowUpDown className="ml-1 h-3.5 w-3.5 text-slate-400" />;
 }
 
 const CAUSE_LABELS: Record<string, string> = {
@@ -49,6 +71,8 @@ export function StockoutClient({ data }: StockoutClientProps) {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [showNormalized, setShowNormalized] = useState(false);
+  const [sortField, setSortField] = useState<SortField | null>("stockoutStartDate");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
   const handleCauseChange = (recordId: string, cause: string) => {
     startTransition(async () => {
@@ -72,10 +96,79 @@ export function StockoutClient({ data }: StockoutClientProps) {
     });
   };
 
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      // 3-state toggle: asc → desc → null
+      if (sortDirection === "asc") {
+        setSortDirection("desc");
+      } else if (sortDirection === "desc") {
+        setSortField(null);
+        setSortDirection(null);
+      } else {
+        setSortDirection("asc");
+      }
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
+
   // 필터링: 정상화 완료 건 숨기기/보기
   const filteredRecords = showNormalized
     ? data.records
     : data.records.filter((r) => r.actionStatus !== "normalized");
+
+  // 정렬
+  const sortedRecords = useMemo(() => {
+    if (!sortField || !sortDirection) return filteredRecords;
+
+    return [...filteredRecords].sort((a, b) => {
+      let aVal: string | number | null = null;
+      let bVal: string | number | null = null;
+
+      switch (sortField) {
+        case "productSku":
+          aVal = a.productSku;
+          bVal = b.productSku;
+          break;
+        case "productName":
+          aVal = a.productName;
+          bVal = b.productName;
+          break;
+        case "currentStock":
+          aVal = a.currentStock;
+          bVal = b.currentStock;
+          break;
+        case "stockoutStartDate":
+          aVal = a.stockoutStartDate;
+          bVal = b.stockoutStartDate;
+          break;
+        case "stockoutEndDate":
+          aVal = a.stockoutEndDate;
+          bVal = b.stockoutEndDate;
+          break;
+        case "durationDays":
+          aVal = a.durationDays;
+          bVal = b.durationDays;
+          break;
+      }
+
+      // null은 맨 뒤로
+      if (aVal === null && bVal === null) return 0;
+      if (aVal === null) return 1;
+      if (bVal === null) return -1;
+
+      // 정렬
+      if (typeof aVal === "string" && typeof bVal === "string") {
+        const cmp = aVal.localeCompare(bVal, "ko");
+        return sortDirection === "asc" ? cmp : -cmp;
+      }
+      if (typeof aVal === "number" && typeof bVal === "number") {
+        return sortDirection === "asc" ? aVal - bVal : bVal - aVal;
+      }
+      return 0;
+    });
+  }, [filteredRecords, sortField, sortDirection]);
 
   const normalizedCount = data.records.filter((r) => r.actionStatus === "normalized").length;
 
@@ -201,18 +294,66 @@ export function StockoutClient({ data }: StockoutClientProps) {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>SKU</TableHead>
-                    <TableHead>제품명</TableHead>
-                    <TableHead className="text-center">현재 재고</TableHead>
-                    <TableHead className="text-center">결품시작</TableHead>
-                    <TableHead className="text-center">결품종료</TableHead>
-                    <TableHead className="text-center">지속일수</TableHead>
+                    <TableHead>
+                      <button
+                        onClick={() => handleSort("productSku")}
+                        className="flex items-center font-medium hover:text-slate-900 transition-colors"
+                      >
+                        SKU
+                        <SortIcon field="productSku" currentField={sortField} direction={sortDirection} />
+                      </button>
+                    </TableHead>
+                    <TableHead>
+                      <button
+                        onClick={() => handleSort("productName")}
+                        className="flex items-center font-medium hover:text-slate-900 transition-colors"
+                      >
+                        제품명
+                        <SortIcon field="productName" currentField={sortField} direction={sortDirection} />
+                      </button>
+                    </TableHead>
+                    <TableHead className="text-center">
+                      <button
+                        onClick={() => handleSort("currentStock")}
+                        className="flex items-center justify-center w-full font-medium hover:text-slate-900 transition-colors"
+                      >
+                        현재 재고
+                        <SortIcon field="currentStock" currentField={sortField} direction={sortDirection} />
+                      </button>
+                    </TableHead>
+                    <TableHead className="text-center">
+                      <button
+                        onClick={() => handleSort("stockoutStartDate")}
+                        className="flex items-center justify-center w-full font-medium hover:text-slate-900 transition-colors"
+                      >
+                        결품시작
+                        <SortIcon field="stockoutStartDate" currentField={sortField} direction={sortDirection} />
+                      </button>
+                    </TableHead>
+                    <TableHead className="text-center">
+                      <button
+                        onClick={() => handleSort("stockoutEndDate")}
+                        className="flex items-center justify-center w-full font-medium hover:text-slate-900 transition-colors"
+                      >
+                        결품종료
+                        <SortIcon field="stockoutEndDate" currentField={sortField} direction={sortDirection} />
+                      </button>
+                    </TableHead>
+                    <TableHead className="text-center">
+                      <button
+                        onClick={() => handleSort("durationDays")}
+                        className="flex items-center justify-center w-full font-medium hover:text-slate-900 transition-colors"
+                      >
+                        지속일수
+                        <SortIcon field="durationDays" currentField={sortField} direction={sortDirection} />
+                      </button>
+                    </TableHead>
                     <TableHead className="w-[140px]">원인</TableHead>
                     <TableHead className="w-[140px]">조치</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredRecords.map((record) => {
+                  {sortedRecords.map((record) => {
                     const isNormalized = record.actionStatus === "normalized";
                     return (
                       <TableRow

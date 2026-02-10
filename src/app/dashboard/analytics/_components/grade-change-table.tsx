@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -10,11 +11,46 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ArrowUp, ArrowDown, Minus, Sparkles, AlertTriangle, TrendingDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ArrowUp, ArrowDown, ArrowUpDown, Minus, Sparkles, AlertTriangle, TrendingDown } from "lucide-react";
 import type { GradeChangeResult } from "@/server/actions/grade-change";
 
 interface GradeChangeTableProps {
   data: GradeChangeResult | null;
+}
+
+type SortField = "sku" | "name" | "prevGrade" | "currentGrade" | "changeType" | "riskLevel";
+type SortDirection = "asc" | "desc" | null;
+
+const CHANGE_ORDER: Record<string, number> = {
+  upgrade: 0,
+  new: 1,
+  downgrade: 2,
+};
+
+const RISK_ORDER: Record<string, number> = {
+  high: 0,
+  medium: 1,
+  low: 2,
+};
+
+interface SortIconProps {
+  field: SortField;
+  currentField: SortField | null;
+  currentDirection: SortDirection;
+}
+
+function SortIcon({ field, currentField, currentDirection }: SortIconProps) {
+  if (currentField !== field) {
+    return <ArrowUpDown className="ml-1 h-3.5 w-3.5" />;
+  }
+  if (currentDirection === "asc") {
+    return <ArrowUp className="ml-1 h-3.5 w-3.5" />;
+  }
+  if (currentDirection === "desc") {
+    return <ArrowDown className="ml-1 h-3.5 w-3.5" />;
+  }
+  return <ArrowUpDown className="ml-1 h-3.5 w-3.5" />;
 }
 
 function ChangeTypeBadge({ type }: { type: string }) {
@@ -75,6 +111,71 @@ function RiskBadge({ level }: { level: string }) {
 }
 
 export function GradeChangeTable({ data }: GradeChangeTableProps) {
+  const [sortField, setSortField] = useState<SortField>("sku");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      // 3-state toggle: asc → desc → null
+      if (sortDirection === "asc") {
+        setSortDirection("desc");
+      } else if (sortDirection === "desc") {
+        setSortDirection(null);
+        setSortField("sku");
+      }
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
+
+  const sortedChanges = useMemo(() => {
+    if (!data || data.changes.length === 0) return [];
+    if (!sortDirection) return data.changes;
+
+    const changes = [...data.changes];
+    changes.sort((a, b) => {
+      let comparison = 0;
+
+      switch (sortField) {
+        case "sku":
+          comparison = a.sku.localeCompare(b.sku, "ko");
+          break;
+        case "name":
+          comparison = a.name.localeCompare(b.name, "ko");
+          break;
+        case "prevGrade":
+          if (!a.prevGrade && !b.prevGrade) comparison = 0;
+          else if (!a.prevGrade) comparison = 1;
+          else if (!b.prevGrade) comparison = -1;
+          else comparison = a.prevGrade.localeCompare(b.prevGrade, "ko");
+          break;
+        case "currentGrade":
+          if (!a.currentGrade && !b.currentGrade) comparison = 0;
+          else if (!a.currentGrade) comparison = 1;
+          else if (!b.currentGrade) comparison = -1;
+          else comparison = a.currentGrade.localeCompare(b.currentGrade, "ko");
+          break;
+        case "changeType": {
+          const orderA = CHANGE_ORDER[a.changeType] ?? 3;
+          const orderB = CHANGE_ORDER[b.changeType] ?? 3;
+          comparison = orderA - orderB;
+          break;
+        }
+        case "riskLevel": {
+          const orderA = RISK_ORDER[a.riskLevel] ?? 3;
+          const orderB = RISK_ORDER[b.riskLevel] ?? 3;
+          comparison = orderA - orderB;
+          break;
+        }
+      }
+
+      return sortDirection === "asc" ? comparison : -comparison;
+    });
+
+    return changes;
+  }, [data, sortField, sortDirection]);
+
   if (!data || data.changes.length === 0) {
     return (
       <Card className="border-dashed">
@@ -136,18 +237,78 @@ export function GradeChangeTable({ data }: GradeChangeTableProps) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>SKU</TableHead>
-                <TableHead>제품명</TableHead>
-                <TableHead className="text-center">이전 등급</TableHead>
-                <TableHead className="text-center">현재 등급</TableHead>
-                <TableHead className="text-center">변동</TableHead>
-                <TableHead className="text-center">리스크</TableHead>
+                <TableHead>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 hover:bg-muted"
+                    onClick={() => handleSort("sku")}
+                  >
+                    SKU
+                    <SortIcon field="sku" currentField={sortField} currentDirection={sortDirection} />
+                  </Button>
+                </TableHead>
+                <TableHead>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 hover:bg-muted"
+                    onClick={() => handleSort("name")}
+                  >
+                    제품명
+                    <SortIcon field="name" currentField={sortField} currentDirection={sortDirection} />
+                  </Button>
+                </TableHead>
+                <TableHead className="text-center">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 hover:bg-muted"
+                    onClick={() => handleSort("prevGrade")}
+                  >
+                    이전 등급
+                    <SortIcon field="prevGrade" currentField={sortField} currentDirection={sortDirection} />
+                  </Button>
+                </TableHead>
+                <TableHead className="text-center">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 hover:bg-muted"
+                    onClick={() => handleSort("currentGrade")}
+                  >
+                    현재 등급
+                    <SortIcon field="currentGrade" currentField={sortField} currentDirection={sortDirection} />
+                  </Button>
+                </TableHead>
+                <TableHead className="text-center">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 hover:bg-muted"
+                    onClick={() => handleSort("changeType")}
+                  >
+                    변동
+                    <SortIcon field="changeType" currentField={sortField} currentDirection={sortDirection} />
+                  </Button>
+                </TableHead>
+                <TableHead className="text-center">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 hover:bg-muted"
+                    onClick={() => handleSort("riskLevel")}
+                  >
+                    리스크
+                    <SortIcon field="riskLevel" currentField={sortField} currentDirection={sortDirection} />
+                  </Button>
+                </TableHead>
                 <TableHead>관리신호</TableHead>
                 <TableHead>실행방안</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.changes.map((item) => (
+              {sortedChanges.map((item) => (
                 <TableRow key={item.productId}>
                   <TableCell className="font-medium text-xs">{item.sku}</TableCell>
                   <TableCell className="max-w-[120px] truncate">{item.name}</TableCell>

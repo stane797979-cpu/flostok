@@ -18,8 +18,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Target, TrendingUp, TrendingDown, BarChart3 } from "lucide-react";
+import { Target, TrendingUp, TrendingDown, BarChart3, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import type { FulfillmentRateSummary } from "@/server/actions/fulfillment-rate";
+
+type SortField = "sku" | "name" | "period" | "forecastQty" | "actualQty" | "diff" | "fulfillmentRate";
+type SortDirection = "asc" | "desc" | null;
 
 interface FulfillmentRateTableProps {
   data: FulfillmentRateSummary | null;
@@ -46,14 +49,89 @@ function RateBadge({ rate }: { rate: number }) {
   return <Badge variant="destructive">{rate}%</Badge>;
 }
 
+function SortIcon({ field, currentField, direction }: { field: SortField; currentField: SortField | null; direction: SortDirection }) {
+  if (currentField !== field) {
+    return <ArrowUpDown className="ml-1 h-3.5 w-3.5" />;
+  }
+  if (direction === "asc") {
+    return <ArrowUp className="ml-1 h-3.5 w-3.5" />;
+  }
+  if (direction === "desc") {
+    return <ArrowDown className="ml-1 h-3.5 w-3.5" />;
+  }
+  return <ArrowUpDown className="ml-1 h-3.5 w-3.5" />;
+}
+
 export function FulfillmentRateTable({ data }: FulfillmentRateTableProps) {
   const [selectedPeriod, setSelectedPeriod] = useState<string>("all");
+  const [sortField, setSortField] = useState<SortField | null>("sku");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
   const filteredItems = useMemo(() => {
     if (!data) return [];
     if (selectedPeriod === "all") return data.items;
     return data.items.filter((i) => i.period === selectedPeriod);
   }, [data, selectedPeriod]);
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      // 3-state toggle: asc → desc → null
+      if (sortDirection === "asc") {
+        setSortDirection("desc");
+      } else if (sortDirection === "desc") {
+        setSortField(null);
+        setSortDirection(null);
+      }
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
+
+  const sortedItems = useMemo(() => {
+    if (!sortField || !sortDirection) return filteredItems;
+
+    return [...filteredItems].sort((a, b) => {
+      let compareA: string | number;
+      let compareB: string | number;
+
+      if (sortField === "sku") {
+        compareA = a.sku;
+        compareB = b.sku;
+      } else if (sortField === "name") {
+        compareA = a.name;
+        compareB = b.name;
+      } else if (sortField === "period") {
+        compareA = a.period;
+        compareB = b.period;
+      } else if (sortField === "forecastQty") {
+        compareA = a.forecastQty;
+        compareB = b.forecastQty;
+      } else if (sortField === "actualQty") {
+        compareA = a.actualQty;
+        compareB = b.actualQty;
+      } else if (sortField === "diff") {
+        compareA = a.actualQty - a.forecastQty;
+        compareB = b.actualQty - b.forecastQty;
+      } else if (sortField === "fulfillmentRate") {
+        compareA = a.fulfillmentRate;
+        compareB = b.fulfillmentRate;
+      } else {
+        return 0;
+      }
+
+      // 한국어 문자열 비교
+      if (typeof compareA === "string" && typeof compareB === "string") {
+        const result = compareA.localeCompare(compareB, "ko");
+        return sortDirection === "asc" ? result : -result;
+      }
+
+      // 숫자 비교
+      if (compareA < compareB) return sortDirection === "asc" ? -1 : 1;
+      if (compareA > compareB) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [filteredItems, sortField, sortDirection]);
 
   if (!data || data.items.length === 0) {
     return (
@@ -134,17 +212,73 @@ export function FulfillmentRateTable({ data }: FulfillmentRateTableProps) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>SKU</TableHead>
-                <TableHead>제품명</TableHead>
-                <TableHead className="text-center">기간</TableHead>
-                <TableHead className="text-right">예측수량</TableHead>
-                <TableHead className="text-right">실출고량</TableHead>
-                <TableHead className="text-right">차이</TableHead>
-                <TableHead className="text-center">출고율</TableHead>
+                <TableHead>
+                  <button
+                    onClick={() => handleSort("sku")}
+                    className="flex items-center hover:text-foreground transition-colors"
+                  >
+                    SKU
+                    <SortIcon field="sku" currentField={sortField} direction={sortDirection} />
+                  </button>
+                </TableHead>
+                <TableHead>
+                  <button
+                    onClick={() => handleSort("name")}
+                    className="flex items-center hover:text-foreground transition-colors"
+                  >
+                    제품명
+                    <SortIcon field="name" currentField={sortField} direction={sortDirection} />
+                  </button>
+                </TableHead>
+                <TableHead className="text-center">
+                  <button
+                    onClick={() => handleSort("period")}
+                    className="flex items-center mx-auto hover:text-foreground transition-colors"
+                  >
+                    기간
+                    <SortIcon field="period" currentField={sortField} direction={sortDirection} />
+                  </button>
+                </TableHead>
+                <TableHead className="text-right">
+                  <button
+                    onClick={() => handleSort("forecastQty")}
+                    className="flex items-center ml-auto hover:text-foreground transition-colors"
+                  >
+                    예측수량
+                    <SortIcon field="forecastQty" currentField={sortField} direction={sortDirection} />
+                  </button>
+                </TableHead>
+                <TableHead className="text-right">
+                  <button
+                    onClick={() => handleSort("actualQty")}
+                    className="flex items-center ml-auto hover:text-foreground transition-colors"
+                  >
+                    실출고량
+                    <SortIcon field="actualQty" currentField={sortField} direction={sortDirection} />
+                  </button>
+                </TableHead>
+                <TableHead className="text-right">
+                  <button
+                    onClick={() => handleSort("diff")}
+                    className="flex items-center ml-auto hover:text-foreground transition-colors"
+                  >
+                    차이
+                    <SortIcon field="diff" currentField={sortField} direction={sortDirection} />
+                  </button>
+                </TableHead>
+                <TableHead className="text-center">
+                  <button
+                    onClick={() => handleSort("fulfillmentRate")}
+                    className="flex items-center mx-auto hover:text-foreground transition-colors"
+                  >
+                    출고율
+                    <SortIcon field="fulfillmentRate" currentField={sortField} direction={sortDirection} />
+                  </button>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredItems.map((item, idx) => (
+              {sortedItems.map((item, idx) => (
                 <TableRow key={`${item.productId}-${item.period}-${idx}`}>
                   <TableCell className="font-medium text-xs">{item.sku}</TableCell>
                   <TableCell className="max-w-[120px] truncate">{item.name}</TableCell>

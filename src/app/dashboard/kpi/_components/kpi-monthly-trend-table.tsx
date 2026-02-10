@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -14,13 +14,32 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Save, MessageSquare, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { Save, MessageSquare, TrendingUp, TrendingDown, Minus, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { updateKpiComment } from "@/server/actions/kpi-snapshots";
 import type { KpiSnapshot } from "@/server/actions/kpi-snapshots";
 import { cn } from "@/lib/utils";
 
 interface KpiMonthlyTrendTableProps {
   snapshots: KpiSnapshot[];
+}
+
+type SortField = "period" | "turnoverRate" | "stockoutRate" | "onTimeDeliveryRate" | "fulfillmentRate" | "actualShipmentRate";
+type SortDirection = "asc" | "desc" | null;
+
+interface SortIconProps {
+  field: SortField;
+  currentField: SortField | null;
+  currentDirection: SortDirection;
+}
+
+function SortIcon({ field, currentField, currentDirection }: SortIconProps) {
+  if (field !== currentField || currentDirection === null) {
+    return <ArrowUpDown className="ml-1 h-3.5 w-3.5 text-muted-foreground/40" />;
+  }
+  if (currentDirection === "asc") {
+    return <ArrowUp className="ml-1 h-3.5 w-3.5 text-primary" />;
+  }
+  return <ArrowDown className="ml-1 h-3.5 w-3.5 text-primary" />;
 }
 
 function formatRate(value: number | null): string {
@@ -65,6 +84,51 @@ export function KpiMonthlyTrendTable({ snapshots }: KpiMonthlyTrendTableProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
   const [isPending, startTransition] = useTransition();
+
+  // 정렬 state - 기본: period desc
+  const [sortField, setSortField] = useState<SortField | null>("period");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+
+  // 정렬 핸들러 (3-state toggle: asc → desc → null)
+  const handleSort = (field: SortField) => {
+    if (sortField !== field) {
+      setSortField(field);
+      setSortDirection("asc");
+    } else if (sortDirection === "asc") {
+      setSortDirection("desc");
+    } else {
+      setSortField(null);
+      setSortDirection(null);
+    }
+  };
+
+  // 정렬된 스냅샷
+  const sortedSnapshots = useMemo(() => {
+    if (!sortField || !sortDirection) return snapshots;
+
+    return [...snapshots].sort((a, b) => {
+      const aVal = a[sortField];
+      const bVal = b[sortField];
+
+      // null은 맨 뒤로
+      if (aVal === null && bVal === null) return 0;
+      if (aVal === null) return 1;
+      if (bVal === null) return -1;
+
+      // string (period)
+      if (typeof aVal === "string" && typeof bVal === "string") {
+        const cmp = aVal.localeCompare(bVal, "ko");
+        return sortDirection === "asc" ? cmp : -cmp;
+      }
+
+      // number
+      if (typeof aVal === "number" && typeof bVal === "number") {
+        return sortDirection === "asc" ? aVal - bVal : bVal - aVal;
+      }
+
+      return 0;
+    });
+  }, [snapshots, sortField, sortDirection]);
 
   const handleSaveComment = (snapshotId: string) => {
     startTransition(async () => {
@@ -115,18 +179,66 @@ export function KpiMonthlyTrendTable({ snapshots }: KpiMonthlyTrendTableProps) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[100px]">기간</TableHead>
-                <TableHead className="text-center">재고회전율</TableHead>
-                <TableHead className="text-center">품절률</TableHead>
-                <TableHead className="text-center">납기준수율</TableHead>
-                <TableHead className="text-center">발주충족률</TableHead>
-                <TableHead className="text-center">실출고율</TableHead>
+                <TableHead className="w-[100px]">
+                  <button
+                    className="flex items-center justify-start hover:text-foreground transition-colors"
+                    onClick={() => handleSort("period")}
+                  >
+                    기간
+                    <SortIcon field="period" currentField={sortField} currentDirection={sortDirection} />
+                  </button>
+                </TableHead>
+                <TableHead className="text-center">
+                  <button
+                    className="flex items-center justify-center w-full hover:text-foreground transition-colors"
+                    onClick={() => handleSort("turnoverRate")}
+                  >
+                    재고회전율
+                    <SortIcon field="turnoverRate" currentField={sortField} currentDirection={sortDirection} />
+                  </button>
+                </TableHead>
+                <TableHead className="text-center">
+                  <button
+                    className="flex items-center justify-center w-full hover:text-foreground transition-colors"
+                    onClick={() => handleSort("stockoutRate")}
+                  >
+                    품절률
+                    <SortIcon field="stockoutRate" currentField={sortField} currentDirection={sortDirection} />
+                  </button>
+                </TableHead>
+                <TableHead className="text-center">
+                  <button
+                    className="flex items-center justify-center w-full hover:text-foreground transition-colors"
+                    onClick={() => handleSort("onTimeDeliveryRate")}
+                  >
+                    납기준수율
+                    <SortIcon field="onTimeDeliveryRate" currentField={sortField} currentDirection={sortDirection} />
+                  </button>
+                </TableHead>
+                <TableHead className="text-center">
+                  <button
+                    className="flex items-center justify-center w-full hover:text-foreground transition-colors"
+                    onClick={() => handleSort("fulfillmentRate")}
+                  >
+                    발주충족률
+                    <SortIcon field="fulfillmentRate" currentField={sortField} currentDirection={sortDirection} />
+                  </button>
+                </TableHead>
+                <TableHead className="text-center">
+                  <button
+                    className="flex items-center justify-center w-full hover:text-foreground transition-colors"
+                    onClick={() => handleSort("actualShipmentRate")}
+                  >
+                    실출고율
+                    <SortIcon field="actualShipmentRate" currentField={sortField} currentDirection={sortDirection} />
+                  </button>
+                </TableHead>
                 <TableHead className="min-w-[200px]">코멘트</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {snapshots.map((snap, idx) => {
-                const prev = idx > 0 ? snapshots[idx - 1] : null;
+              {sortedSnapshots.map((snap, idx) => {
+                const prev = idx > 0 ? sortedSnapshots[idx - 1] : null;
                 const isEditing = editingId === snap.id;
 
                 return (
