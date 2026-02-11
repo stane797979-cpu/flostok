@@ -26,7 +26,7 @@ export function CtaSection() {
           <Button
             size="lg"
             variant="outline"
-            className="border-white text-white hover:bg-white/10"
+            className="border-white bg-transparent text-white hover:bg-white/10"
             asChild
           >
             <Link href="/solution">{CTA.ctaSecondary}</Link>
