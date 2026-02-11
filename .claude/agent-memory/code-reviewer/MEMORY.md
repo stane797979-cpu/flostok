@@ -21,3 +21,9 @@
 ### 재고 변동 타입
 - `InventoryChangeTypeKey`: INBOUND_PURCHASE, INBOUND_RETURN, INBOUND_ADJUSTMENT, INBOUND_TRANSFER, OUTBOUND_SALE, OUTBOUND_DISPOSAL, OUTBOUND_ADJUSTMENT, OUTBOUND_TRANSFER, OUTBOUND_SAMPLE, OUTBOUND_LOSS, OUTBOUND_RETURN
 - 출고 다이얼로그에서 OUTBOUND_ADJUSTMENT 누락 발견 (2026-02-08)
+
+### xlsx 동적 import 변환 패턴 (2026-02-11)
+- lazy 초기화: `let _xlsx | null = null; async function getXLSX()` 패턴 사용 중
+- `require("xlsx")` 잔존: `product-import.ts:createProductTemplate`, `sales-import.ts:createSalesTemplate` - 빌드 실패 원인
+- barrel `index.ts`가 `export *`로 re-export하면 tree-shaking 실패 가능성 있음
+- 동적 import된 async 함수 호출부에서 await 누락 주의

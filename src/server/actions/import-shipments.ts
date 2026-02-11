@@ -11,7 +11,7 @@ import {
 } from "@/server/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { getCurrentUser, requireAuth } from "./auth-helpers";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { processInventoryTransaction } from "./inventory";
 import { logActivity } from "@/server/services/activity-log";
 
@@ -417,6 +417,7 @@ export async function confirmShipmentInbound(data: {
     revalidatePath("/dashboard/orders");
     revalidatePath("/dashboard/inventory");
     revalidatePath("/dashboard/psi");
+    revalidateTag(`psi-${user.organizationId}`);
 
     return {
       success: true,

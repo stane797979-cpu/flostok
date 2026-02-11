@@ -3,7 +3,7 @@
 import { db } from "@/server/db";
 import { salesRecords, products, type SalesRecord } from "@/server/db/schema";
 import { eq, and, desc, asc, sql, gte, lte } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 import { processInventoryTransaction } from "./inventory";
 import { requireAuth } from "./auth-helpers";
@@ -172,6 +172,7 @@ export async function createSalesRecord(
     });
 
     revalidatePath("/analytics");
+    revalidateTag(`analytics-${user.organizationId}`);
     return { success: true, record: newRecord };
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -210,6 +211,7 @@ export async function deleteSalesRecord(id: string): Promise<{ success: boolean;
     });
 
     revalidatePath("/analytics");
+    revalidateTag(`analytics-${user.organizationId}`);
     return { success: true };
   } catch (error) {
     console.error("판매 기록 삭제 오류:", error);
