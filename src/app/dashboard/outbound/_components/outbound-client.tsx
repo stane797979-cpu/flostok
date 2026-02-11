@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useState, useCallback, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,7 +42,6 @@ interface OutboundClientProps {
 }
 
 export function OutboundClient({ initialTab = "records" }: OutboundClientProps) {
-  const [activeTab, setActiveTab] = useState(initialTab);
 
   // 출고 현황 상태
   const [outboundMonth, setOutboundMonth] = useState<Date>(() => new Date());
@@ -193,24 +191,28 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
     }
   }, [deleteTarget, outboundMonth, loadOutboundRecords, toast]);
 
+  // 출고현황 탭이면 초기 로드
+  useEffect(() => {
+    if (initialTab === "records") {
+      loadOutboundRecords(outboundMonth);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const pageTitle = initialTab === "upload" ? "출고 업로드" : "출고 현황";
+  const pageDescription = initialTab === "upload"
+    ? "판매(출고) 데이터를 엑셀로 업로드하세요"
+    : "월별 출고 기록을 확인하고 재고 수불부를 다운로드하세요";
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">출고 관리</h1>
-        <p className="mt-2 text-slate-500">출고 데이터를 업로드하고 월별 출고 현황을 확인하세요</p>
+        <h1 className="text-3xl font-bold tracking-tight">{pageTitle}</h1>
+        <p className="mt-2 text-slate-500">{pageDescription}</p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="upload">출고 업로드</TabsTrigger>
-          <TabsTrigger value="records" onClick={() => loadOutboundRecords(outboundMonth)}>
-            출고 현황
-          </TabsTrigger>
-        </TabsList>
-
-        {/* 출고 업로드 탭 */}
-        <TabsContent value="upload" className="space-y-4">
-          <Card>
+      {initialTab === "upload" && (
+        <Card>
             <CardHeader>
               <CardTitle>판매/출고 데이터 업로드</CardTitle>
               <CardDescription>
@@ -234,12 +236,11 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
                 </Button>
               </div>
             </CardContent>
-          </Card>
-        </TabsContent>
+        </Card>
+      )}
 
-        {/* 출고 현황 탭 */}
-        <TabsContent value="records" className="space-y-4">
-          <Card>
+      {initialTab === "records" && (
+        <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
@@ -300,9 +301,8 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
                 </>
               )}
             </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+        </Card>
+      )}
 
       {/* 엑셀 임포트 다이얼로그 (기존 재사용) */}
       <ExcelImportDialog

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef, useTransition } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -299,10 +298,15 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
     }
   }, [inboundMonth, toast]);
 
-  // 초기 로드
+  // 초기 로드 (탭에 따라 필요한 데이터만 로드)
   useEffect(() => {
-    loadPurchaseOrders();
-  }, [loadPurchaseOrders]);
+    if (initialTab === "orders") {
+      loadPurchaseOrders();
+    } else if (initialTab === "inbound") {
+      loadInboundRecords(inboundMonth);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 긴급도별 카운트
   const urgentCount = reorderItems.filter((item) => item.urgencyLevel <= 1).length;
@@ -655,26 +659,27 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
     }
   };
 
+  // 페이지 제목 매핑
+  const pageTitles: Record<string, { title: string; description: string }> = {
+    reorder: { title: "발주 필요", description: "재고 상태를 확인하고 발주를 진행하세요" },
+    "auto-reorder": { title: "자동발주", description: "AI가 분석한 자동 발주 추천 목록입니다" },
+    orders: { title: "발주 현황", description: "진행 중인 발주서 목록을 확인하세요" },
+    inbound: { title: "입고 현황", description: "월별 입고 기록을 확인하세요" },
+    delivery: { title: "납기분석", description: "납기 준수율과 공급자 성과를 분석하세요" },
+    "import-shipment": { title: "입항스케줄", description: "수입 화물 입항 일정을 관리하세요" },
+  };
+
+  const currentPage = pageTitles[initialTab] || pageTitles.reorder;
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">발주 관리</h1>
-        <p className="mt-2 text-slate-500">재고 상태를 확인하고 발주를 진행하세요</p>
+        <h1 className="text-3xl font-bold tracking-tight">{currentPage.title}</h1>
+        <p className="mt-2 text-slate-500">{currentPage.description}</p>
       </div>
 
-      <Tabs defaultValue={initialTab} className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="reorder">발주 필요</TabsTrigger>
-          <TabsTrigger value="auto-reorder">자동발주</TabsTrigger>
-          <TabsTrigger value="orders">발주 현황</TabsTrigger>
-          <TabsTrigger value="inbound" onClick={() => loadInboundRecords(inboundMonth)}>
-            입고 현황
-          </TabsTrigger>
-          <TabsTrigger value="delivery">납기분석</TabsTrigger>
-          <TabsTrigger value="import-shipment">입항스케줄</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="reorder" className="space-y-4">
+      {initialTab === "reorder" && (
+        <div className="space-y-4">
           <ReorderSummary
             urgentCount={urgentCount}
             lowCount={lowCount}
@@ -741,9 +746,11 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
               />
             </CardContent>
           </Card>
-        </TabsContent>
+        </div>
+      )}
 
-        <TabsContent value="auto-reorder" className="space-y-4">
+      {initialTab === "auto-reorder" && (
+        <div className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle>자동 발주 추천</CardTitle>
@@ -761,9 +768,11 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
               />
             </CardContent>
           </Card>
-        </TabsContent>
+        </div>
+      )}
 
-        <TabsContent value="orders" className="space-y-4">
+      {initialTab === "orders" && (
+        <div className="space-y-4">
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -830,9 +839,11 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
               )}
             </CardContent>
           </Card>
-        </TabsContent>
+        </div>
+      )}
 
-        <TabsContent value="inbound" className="space-y-4">
+      {initialTab === "inbound" && (
+        <div className="space-y-4">
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -889,16 +900,16 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
               )}
             </CardContent>
           </Card>
-        </TabsContent>
+        </div>
+      )}
 
-        <TabsContent value="delivery" className="space-y-4">
-          <DeliveryComplianceTab data={deliveryComplianceData} />
-        </TabsContent>
+      {initialTab === "delivery" && (
+        <DeliveryComplianceTab data={deliveryComplianceData} />
+      )}
 
-        <TabsContent value="import-shipment" className="space-y-4">
-          <ImportShipmentTab />
-        </TabsContent>
-      </Tabs>
+      {initialTab === "import-shipment" && (
+        <ImportShipmentTab />
+      )}
 
       <OrderDialog
         open={orderDialogOpen}
