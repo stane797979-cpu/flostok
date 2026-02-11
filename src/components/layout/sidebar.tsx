@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Package, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NavItem } from "./nav-item";
-import { MAIN_SECTIONS, BOTTOM_NAV } from "@/lib/constants/navigation";
+import { MAIN_SECTIONS, BOTTOM_NAV, type NavSection } from "@/lib/constants/navigation";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
@@ -17,6 +17,7 @@ interface SidebarProps {
     role: string;
     orgName: string;
     isSuperadmin?: boolean;
+    allowedMenus?: string[];
   };
 }
 
@@ -36,6 +37,24 @@ export function Sidebar({ className, userInfo }: SidebarProps) {
     "/orders": 5,
     "/alerts": 2,
   };
+
+  // 권한 기반 메뉴 필터링
+  const filteredSections = useMemo(() => {
+    const allowedMenus = userInfo?.allowedMenus;
+    const isAllAllowed = !allowedMenus || allowedMenus.includes("*");
+
+    if (isAllAllowed) return MAIN_SECTIONS;
+
+    return MAIN_SECTIONS
+      .map((section) => ({
+        ...section,
+        items: section.items.filter((item) => {
+          if (!item.menuKey) return true; // menuKey 없으면 항상 표시
+          return allowedMenus.includes(item.menuKey);
+        }),
+      }))
+      .filter((section) => section.items.length > 0);
+  }, [userInfo?.allowedMenus]);
 
   return (
     <aside
@@ -62,9 +81,9 @@ export function Sidebar({ className, userInfo }: SidebarProps) {
         </Link>
       </div>
 
-      {/* 메인 네비게이션 — SCM 프로세스 순서 섹션 */}
+      {/* 메인 네비게이션 — SCM 프로세스 순서 섹션 (권한 필터링 적용) */}
       <nav className="flex-1 overflow-y-auto p-3">
-        {MAIN_SECTIONS.map((section, idx) => (
+        {filteredSections.map((section, idx) => (
           <div key={idx}>
             {section.title && (
               collapsed ? (

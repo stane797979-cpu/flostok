@@ -18,6 +18,7 @@ import { ChevronLeft, ChevronRight, Download, Loader2, PackageMinus, Upload } fr
 import { OutboundRecordsTable } from "./outbound-records-table";
 import { OutboundEditDialog } from "./outbound-edit-dialog";
 import { OutboundRegisterDialog } from "./outbound-register-dialog";
+import { OutboundRequestDialog } from "./outbound-request-dialog";
 import { ExcelImportDialog } from "@/components/features/excel/excel-import-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { getOutboundRecords, deleteOutboundRecord, type OutboundRecord } from "@/server/actions/outbound";
@@ -50,6 +51,7 @@ export function OutboundClient() {
   // 출고 업로드/등록 상태
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [registerDialogOpen, setRegisterDialogOpen] = useState(false);
+  const [requestDialogOpen, setRequestDialogOpen] = useState(false);
 
   // 수정/삭제 상태
   const [editRecord, setEditRecord] = useState<OutboundRecord | null>(null);
@@ -257,6 +259,14 @@ export function OutboundClient() {
                   <Button
                     variant="outline"
                     size="sm"
+                    onClick={() => setRequestDialogOpen(true)}
+                  >
+                    <PackageMinus className="mr-2 h-4 w-4" />
+                    출고 요청
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => setRegisterDialogOpen(true)}
                   >
                     <PackageMinus className="mr-2 h-4 w-4" />
@@ -313,6 +323,18 @@ export function OutboundClient() {
             description: "판매 데이터가 성공적으로 업로드되었습니다",
           });
           loadOutboundRecords(outboundMonth);
+        }}
+      />
+
+      {/* 출고 요청 다이얼로그 */}
+      <OutboundRequestDialog
+        open={requestDialogOpen}
+        onOpenChange={setRequestDialogOpen}
+        onSuccess={() => {
+          toast({
+            title: "출고 요청 생성 완료",
+            description: "출고 요청이 생성되었습니다. 창고에서 확인 후 처리됩니다.",
+          });
         }}
       />
 

@@ -22,7 +22,7 @@ export interface OrganizationUser {
   email: string
   name: string | null
   avatarUrl: string | null
-  role: 'admin' | 'manager' | 'viewer'
+  role: 'admin' | 'manager' | 'viewer' | 'warehouse'
   createdAt: Date
   updatedAt: Date
 }
@@ -129,7 +129,7 @@ export async function getOrganizationUsersAction(
 export async function updateUserRoleAction(
   userId: string,
   organizationId: string,
-  newRole: 'admin' | 'manager' | 'viewer'
+  newRole: 'admin' | 'manager' | 'viewer' | 'warehouse'
 ): Promise<ActionResponse<void>> {
   try {
     // 사용자가 해당 조직에 속하는지 확인
@@ -220,7 +220,7 @@ export async function removeUserAction(
 export async function inviteUserAction(
   organizationId: string,
   email: string,
-  role: 'admin' | 'manager' | 'viewer'
+  role: 'admin' | 'manager' | 'viewer' | 'warehouse'
 ): Promise<ActionResponse<void>> {
   try {
     // 이메일 중복 확인

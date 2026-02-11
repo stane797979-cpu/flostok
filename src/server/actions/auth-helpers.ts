@@ -17,7 +17,7 @@ export type AuthUser = {
   email: string
   name: string | null
   avatarUrl: string | null
-  role: 'admin' | 'manager' | 'viewer'
+  role: 'admin' | 'manager' | 'viewer' | 'warehouse'
   isSuperadmin: boolean
   createdAt: Date
   updatedAt: Date
@@ -127,8 +127,21 @@ export async function requireAdmin(): Promise<AuthUser> {
  */
 export async function requireManagerOrAbove(): Promise<AuthUser> {
   const user = await requireAuth()
-  if (user.role === 'viewer') {
+  if (user.role === 'viewer' || user.role === 'warehouse') {
     throw new Error('매니저 이상 권한이 필요합니다')
+  }
+  return user
+}
+
+/**
+ * 창고 이상 권한 확인 (warehouse, manager, admin)
+ * @returns 사용자 정보
+ * @throws Error 권한 부족 시
+ */
+export async function requireWarehouseOrAbove(): Promise<AuthUser> {
+  const user = await requireAuth()
+  if (user.role === 'viewer') {
+    throw new Error('창고 이상 권한이 필요합니다')
   }
   return user
 }
