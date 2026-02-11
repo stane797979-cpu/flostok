@@ -17,7 +17,6 @@ import {
 import { ChevronLeft, ChevronRight, Download, Loader2, PackageMinus, Upload } from "lucide-react";
 import { OutboundRecordsTable } from "./outbound-records-table";
 import { OutboundEditDialog } from "./outbound-edit-dialog";
-import { OutboundRegisterDialog } from "./outbound-register-dialog";
 import { OutboundRequestDialog } from "./outbound-request-dialog";
 import { ExcelImportDialog } from "@/components/features/excel/excel-import-dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -52,9 +51,8 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
   const [isLoadingRecords, setIsLoadingRecords] = useState(false);
   const [isDownloadingMovement, setIsDownloadingMovement] = useState(false);
 
-  // 출고 업로드/등록 상태
+  // 출고 업로드/요청 상태
   const [importDialogOpen, setImportDialogOpen] = useState(false);
-  const [registerDialogOpen, setRegisterDialogOpen] = useState(false);
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
 
   // 수정/삭제 상태
@@ -271,14 +269,6 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setRegisterDialogOpen(true)}
-                  >
-                    <PackageMinus className="mr-2 h-4 w-4" />
-                    출고 등록
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
                     onClick={handleDownloadMovement}
                     disabled={isDownloadingMovement}
                   >
@@ -340,13 +330,6 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
             description: "출고 요청이 생성되었습니다. 창고에서 확인 후 처리됩니다.",
           });
         }}
-      />
-
-      {/* 출고 직접 등록 다이얼로그 */}
-      <OutboundRegisterDialog
-        open={registerDialogOpen}
-        onOpenChange={setRegisterDialogOpen}
-        onSuccess={() => loadOutboundRecords(outboundMonth)}
       />
 
       {/* 출고 수정 다이얼로그 */}
