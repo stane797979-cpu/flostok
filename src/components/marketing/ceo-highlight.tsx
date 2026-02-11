@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Image from "next/image";
 import { ArrowRight, Quote } from "lucide-react";
 import { CEO_HIGHLIGHT } from "@/lib/constants/homepage-data";
 
@@ -20,14 +19,10 @@ export function CeoHighlight() {
           {/* 프로필 이미지 영역 */}
           <div className="flex justify-center">
             <div className="relative">
-              <div className="h-48 w-48 overflow-hidden rounded-full ring-4 ring-primary-100 sm:h-64 sm:w-64">
-                <Image
-                  src="/ceo-profile.png"
-                  alt={CEO_HIGHLIGHT.name}
-                  width={256}
-                  height={256}
-                  className="h-full w-full object-cover object-[center_35%]"
-                />
+              <div className="flex h-48 w-48 items-center justify-center rounded-full bg-gradient-to-br from-primary-100 to-primary-200 sm:h-64 sm:w-64">
+                <span className="text-5xl font-bold text-primary-600 sm:text-7xl">
+                  {CEO_HIGHLIGHT.name[0]}
+                </span>
               </div>
               <div className="absolute -bottom-2 -right-2 rounded-full bg-white px-4 py-2 shadow-lg">
                 <span className="text-sm font-semibold text-gray-900">
