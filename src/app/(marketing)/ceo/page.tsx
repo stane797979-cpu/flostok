@@ -30,7 +30,7 @@ export default function CeoPage() {
                 alt={CEO_HIGHLIGHT.name}
                 width={160}
                 height={160}
-                className="h-full w-full object-cover"
+                className="h-full w-full object-cover object-[center_30%]"
               />
             </div>
             <div className="text-center lg:text-left">

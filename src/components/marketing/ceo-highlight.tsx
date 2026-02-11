@@ -26,7 +26,7 @@ export function CeoHighlight() {
                   alt={CEO_HIGHLIGHT.name}
                   width={256}
                   height={256}
-                  className="h-full w-full object-cover"
+                  className="h-full w-full object-cover object-[center_30%]"
                 />
               </div>
               <div className="absolute -bottom-2 -right-2 rounded-full bg-white px-4 py-2 shadow-lg">
