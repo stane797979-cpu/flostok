@@ -1,5 +1,5 @@
 import { getKPIDashboardData } from "@/server/actions/kpi";
-import { getKpiSnapshots } from "@/server/actions/kpi-snapshots";
+import { getKpiSnapshots, ensureKpiSnapshots } from "@/server/actions/kpi-snapshots";
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertCircle } from "lucide-react";
 import { KpiTabsClient } from "./_components/kpi-tabs-client";
@@ -33,6 +33,12 @@ export default async function KPIPage() {
   }
 
   const { metrics, trends, targets } = data;
+
+  // 스냅샷이 없으면 trends 데이터로 자동 생성
+  if (snapshots.length === 0 && trends.length > 0) {
+    await ensureKpiSnapshots(trends);
+    snapshots = await getKpiSnapshots();
+  }
 
   return (
     <div className="space-y-6">

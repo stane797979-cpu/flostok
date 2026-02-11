@@ -5,6 +5,7 @@ import { kpiMonthlySnapshots } from "@/server/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { getCurrentUser } from "./auth-helpers";
 import { revalidatePath } from "next/cache";
+import type { KPITrend } from "@/server/services/scm/kpi-measurement";
 
 export interface KpiSnapshot {
   id: string;
@@ -127,5 +128,43 @@ export async function updateKpiComment(
   } catch (error) {
     console.error("코멘트 저장 실패:", error);
     return { success: false, message: "저장 중 오류가 발생했습니다" };
+  }
+}
+
+/**
+ * KPI 트렌드 데이터로 스냅샷 자동 생성 (upsert)
+ * 페이지 로드 시 호출하여 빈 스냅샷을 채움
+ */
+export async function ensureKpiSnapshots(trends: KPITrend[]): Promise<void> {
+  try {
+    const user = await getCurrentUser();
+    const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
+
+    for (const trend of trends) {
+      const [existing] = await db
+        .select({ id: kpiMonthlySnapshots.id })
+        .from(kpiMonthlySnapshots)
+        .where(
+          and(
+            eq(kpiMonthlySnapshots.organizationId, orgId),
+            eq(kpiMonthlySnapshots.period, trend.month)
+          )
+        )
+        .limit(1);
+
+      if (existing) continue;
+
+      await db.insert(kpiMonthlySnapshots).values({
+        organizationId: orgId,
+        period: trend.month,
+        turnoverRate: trend.inventoryTurnoverRate.toFixed(1),
+        stockoutRate: trend.stockoutRate.toFixed(1),
+        onTimeDeliveryRate: trend.onTimeOrderRate.toFixed(1),
+        fulfillmentRate: trend.orderFulfillmentRate.toFixed(1),
+        actualShipmentRate: null,
+      });
+    }
+  } catch (error) {
+    console.error("KPI 스냅샷 자동 생성 실패:", error);
   }
 }

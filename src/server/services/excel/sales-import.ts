@@ -16,6 +16,12 @@ import type { ExcelImportResult, ExcelImportError, SalesRecordExcelRow } from ".
 import { processInventoryTransaction } from "@/server/actions/inventory";
 import type { InventoryChangeTypeKey } from "@/server/services/inventory/types";
 
+let _xlsx: typeof import("xlsx") | null = null;
+async function getXLSX() {
+  if (!_xlsx) _xlsx = await import("xlsx");
+  return _xlsx;
+}
+
 /**
  * 판매 데이터 Excel 컬럼 매핑
  *
@@ -360,9 +366,8 @@ export async function importSalesData(
 /**
  * 판매 데이터 Excel 템플릿 생성
  */
-export function createSalesTemplate(): ArrayBuffer {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const XLSX = require("xlsx");
+export async function createSalesTemplate(): Promise<ArrayBuffer> {
+  const XLSX = await getXLSX();
 
   const templateData = [
     {

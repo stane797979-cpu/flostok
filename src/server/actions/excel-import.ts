@@ -118,9 +118,9 @@ export async function getExcelTemplateBase64(type: ImportType): Promise<string> 
   let buffer: ArrayBuffer;
 
   if (type === "sales") {
-    buffer = createSalesTemplate();
+    buffer = await createSalesTemplate();
   } else {
-    buffer = createProductTemplate();
+    buffer = await createProductTemplate();
   }
 
   // ArrayBuffer -> Base64

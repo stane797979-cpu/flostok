@@ -8,6 +8,12 @@ import { eq, and } from "drizzle-orm";
 import { parseExcelBuffer, sheetToJson, parseNumber } from "./parser";
 import type { ExcelImportResult, ExcelImportError, ProductExcelRow } from "./types";
 
+let _xlsx: typeof import("xlsx") | null = null;
+async function getXLSX() {
+  if (!_xlsx) _xlsx = await import("xlsx");
+  return _xlsx;
+}
+
 /**
  * 제품 데이터 Excel 컬럼 매핑
  */
@@ -286,9 +292,8 @@ async function upsertInventory(
 /**
  * 제품 데이터 Excel 템플릿 생성
  */
-export function createProductTemplate(): ArrayBuffer {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const XLSX = require("xlsx");
+export async function createProductTemplate(): Promise<ArrayBuffer> {
+  const XLSX = await getXLSX();
 
   // 필수: SKU, 제품명
   // 권장: 카테고리, 단위, 판매단가, 재고수량
