@@ -2,12 +2,20 @@
  * 기타 입고 Excel 임포트/템플릿 서비스
  */
 
-import * as XLSX from "xlsx";
 import { db } from "@/server/db";
 import { products, inboundRecords } from "@/server/db/schema";
 import { eq, and, isNull, desc } from "drizzle-orm";
 import { parseExcelBuffer, sheetToJson, parseNumber } from "./parser";
 import { createOtherInbound } from "@/server/actions/inbound";
+
+/**
+ * XLSX 라이브러리 lazy 로딩
+ */
+let _xlsx: typeof import("xlsx") | null = null;
+async function getXLSX() {
+  if (!_xlsx) _xlsx = await import("xlsx");
+  return _xlsx;
+}
 
 /**
  * 기타 입고 Excel 컬럼 별칭
@@ -68,8 +76,8 @@ export async function importOtherInboundData(params: {
   const errors: Array<{ row: number; message: string }> = [];
   let successCount = 0;
 
-  const workbook = parseExcelBuffer(buffer);
-  const rows = sheetToJson<Record<string, unknown>>(workbook);
+  const workbook = await parseExcelBuffer(buffer);
+  const rows = await sheetToJson<Record<string, unknown>>(workbook);
 
   if (rows.length === 0) {
     return {
@@ -164,6 +172,7 @@ export async function importOtherInboundData(params: {
  * 기타 입고 Excel 템플릿 생성 (기존 입고 기록 포함)
  */
 export async function createOtherInboundTemplate(organizationId: string): Promise<ArrayBuffer> {
+  const XLSX = await getXLSX();
   const wb = XLSX.utils.book_new();
 
   // DB에서 기존 기타입고 기록 조회 (purchaseOrderId가 null인 것 = 기타입고)

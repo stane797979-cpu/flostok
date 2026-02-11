@@ -73,10 +73,10 @@ function getColumnValue(row: Record<string, unknown>, fieldName: string): unknow
 /**
  * 판매 데이터 Excel 행 파싱
  */
-function parseSalesRow(
+async function parseSalesRow(
   row: Record<string, unknown>,
   rowIndex: number
-): { data: SalesRecordExcelRow | null; errors: ExcelImportError[] } {
+): Promise<{ data: SalesRecordExcelRow | null; errors: ExcelImportError[] }> {
   const errors: ExcelImportError[] = [];
   const rowNum = rowIndex + 2; // Excel 행 번호 (헤더 + 0-인덱스)
 
@@ -93,7 +93,7 @@ function parseSalesRow(
 
   // 날짜 필수
   const dateValue = getColumnValue(row, "date");
-  const parsedDate = parseExcelDate(dateValue);
+  const parsedDate = await parseExcelDate(dateValue);
   if (!parsedDate) {
     errors.push({
       row: rowNum,
@@ -185,8 +185,8 @@ export async function importSalesData(
 
   try {
     // 1. Excel 파싱
-    const workbook = parseExcelBuffer(buffer);
-    const rows = sheetToJson<Record<string, unknown>>(workbook, sheetName);
+    const workbook = await parseExcelBuffer(buffer);
+    const rows = await sheetToJson<Record<string, unknown>>(workbook, sheetName);
 
     if (rows.length === 0) {
       return {
@@ -209,7 +209,7 @@ export async function importSalesData(
 
     // 3. 각 행 파싱 및 저장
     for (let i = 0; i < rows.length; i++) {
-      const { data, errors } = parseSalesRow(rows[i], i);
+      const { data, errors } = await parseSalesRow(rows[i], i);
 
       if (errors.length > 0) {
         allErrors.push(...errors);

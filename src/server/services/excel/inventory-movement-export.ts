@@ -6,14 +6,20 @@
  * 시트 3: 상세 이력 - 개별 트랜잭션 로우 데이터
  */
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const XLSX = require("xlsx");
-
 import {
   calculateDailyMovements,
   type MovementRecord,
 } from "@/server/services/inventory/movement-calculation";
 import { getChangeTypeByKey } from "@/server/services/inventory/types";
+
+/**
+ * XLSX 라이브러리 lazy 로딩
+ */
+let _xlsx: typeof import("xlsx") | null = null;
+async function getXLSX() {
+  if (!_xlsx) _xlsx = await import("xlsx");
+  return _xlsx;
+}
 
 // 타입 re-export (기존 코드 호환)
 export type { MovementRecord };
@@ -28,9 +34,10 @@ interface MovementExcelOptions {
 /**
  * 재고 수불부 Excel 버퍼 생성 (한국 표준 양식)
  */
-export function generateInventoryMovementExcel(
+export async function generateInventoryMovementExcel(
   options: MovementExcelOptions
-): Buffer {
+): Promise<Buffer> {
+  const XLSX = await getXLSX();
   const { records, startDate, endDate, organizationName } = options;
 
   // 제품별 원가 매핑
@@ -52,7 +59,7 @@ export function generateInventoryMovementExcel(
   // ========================================
   // 시트 1: 종합요약
   // ========================================
-  buildSummarySheet(wb, summaries, {
+  buildSummarySheet(XLSX, wb, summaries, {
     organizationName,
     startDate,
     endDate,
@@ -65,7 +72,7 @@ export function generateInventoryMovementExcel(
   // ========================================
   // 시트 2: 품목별 수불부 (T자 원장)
   // ========================================
-  buildItemLedgerSheet(wb, summaries, {
+  buildItemLedgerSheet(XLSX, wb, summaries, {
     organizationName,
     startDate,
     endDate,
@@ -78,7 +85,7 @@ export function generateInventoryMovementExcel(
   // ========================================
   // 시트 3: 상세 이력
   // ========================================
-  buildDetailSheet(wb, records, {
+  buildDetailSheet(XLSX, wb, records, {
     organizationName,
     startDate,
     endDate,
@@ -94,7 +101,8 @@ export function generateInventoryMovementExcel(
 // 시트 1: 종합요약
 // ============================================================
 function buildSummarySheet(
-  wb: ReturnType<typeof XLSX.utils.book_new>,
+  XLSX: typeof import("xlsx"),
+  wb: ReturnType<typeof import("xlsx").utils.book_new>,
   summaries: ReturnType<typeof calculateDailyMovements>,
   ctx: {
     organizationName?: string;
@@ -243,7 +251,8 @@ function buildSummarySheet(
 // 시트 2: 품목별 수불부 (T자 원장)
 // ============================================================
 function buildItemLedgerSheet(
-  wb: ReturnType<typeof XLSX.utils.book_new>,
+  XLSX: typeof import("xlsx"),
+  wb: ReturnType<typeof import("xlsx").utils.book_new>,
   summaries: ReturnType<typeof calculateDailyMovements>,
   ctx: {
     organizationName?: string;
@@ -405,7 +414,8 @@ function buildItemLedgerSheet(
 // 시트 3: 상세 이력
 // ============================================================
 function buildDetailSheet(
-  wb: ReturnType<typeof XLSX.utils.book_new>,
+  XLSX: typeof import("xlsx"),
+  wb: ReturnType<typeof import("xlsx").utils.book_new>,
   records: MovementRecord[],
   ctx: {
     organizationName?: string;

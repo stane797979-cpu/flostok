@@ -264,7 +264,7 @@ export async function analyzeOnboardingFile(
       return { success: false, error: "파일을 찾을 수 없습니다" };
     }
 
-    const result = analyzeExcelFile(file.fileBase64, sheetName);
+    const result = await analyzeExcelFile(file.fileBase64, sheetName);
 
     // 분석 결과 저장
     await db
@@ -406,7 +406,7 @@ export async function previewMapping(fileId: string) {
       return { success: false, error: "매핑 설정이 없습니다" };
     }
 
-    const result = executeMapping(
+    const result = await executeMapping(
       file.fileBase64,
       file.selectedSheet || undefined,
       file.columnMappings as MappingEntry[],
@@ -447,7 +447,7 @@ export async function executeImport(
     const mappings = file.columnMappings as MappingEntry[];
 
     // 매핑 적용하여 전체 데이터 변환
-    const transformResult = executeMapping(
+    const transformResult = await executeMapping(
       file.fileBase64,
       file.selectedSheet || undefined,
       mappings,

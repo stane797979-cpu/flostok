@@ -7,6 +7,8 @@ import {
   numeric,
   pgEnum,
   date,
+  index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 import { products } from "./products";
@@ -44,7 +46,10 @@ export const inventory = pgTable("inventory", {
   lastUpdatedAt: timestamp("last_updated_at", { withTimezone: true }).defaultNow(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  uniqueIndex("inventory_org_product_idx").on(table.organizationId, table.productId),
+  index("inventory_org_status_idx").on(table.organizationId, table.status),
+]);
 
 // 재고 이력 (변동 기록)
 export const inventoryHistory = pgTable("inventory_history", {
@@ -64,7 +69,11 @@ export const inventoryHistory = pgTable("inventory_history", {
   referenceType: text("reference_type"), // purchase_order, sale, adjustment
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index("inventory_history_org_date_idx").on(table.organizationId, table.date),
+  index("inventory_history_product_date_idx").on(table.productId, table.date),
+  index("inventory_history_org_type_idx").on(table.organizationId, table.changeType),
+]);
 
 // Lot 상태
 export const lotStatusEnum = pgEnum("lot_status", [
@@ -93,7 +102,10 @@ export const inventoryLots = pgTable("inventory_lots", {
   status: lotStatusEnum("status").default("active").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index("inventory_lots_org_product_idx").on(table.organizationId, table.productId),
+  index("inventory_lots_product_status_idx").on(table.productId, table.status),
+]);
 
 export type Inventory = typeof inventory.$inferSelect;
 export type NewInventory = typeof inventory.$inferInsert;

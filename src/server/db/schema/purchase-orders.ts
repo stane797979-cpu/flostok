@@ -7,6 +7,7 @@ import {
   numeric,
   pgEnum,
   date,
+  index,
 } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 import { suppliers } from "./suppliers";
@@ -59,7 +60,11 @@ export const purchaseOrders = pgTable("purchase_orders", {
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index("purchase_orders_org_status_idx").on(table.organizationId, table.status),
+  index("purchase_orders_org_date_idx").on(table.organizationId, table.orderDate),
+  index("purchase_orders_supplier_idx").on(table.supplierId),
+]);
 
 // 발주 항목
 export const purchaseOrderItems = pgTable("purchase_order_items", {
@@ -76,7 +81,10 @@ export const purchaseOrderItems = pgTable("purchase_order_items", {
   receivedQuantity: integer("received_quantity").default(0), // 입고된 수량
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index("purchase_order_items_po_idx").on(table.purchaseOrderId),
+  index("purchase_order_items_product_idx").on(table.productId),
+]);
 
 export type PurchaseOrder = typeof purchaseOrders.$inferSelect;
 export type NewPurchaseOrder = typeof purchaseOrders.$inferInsert;

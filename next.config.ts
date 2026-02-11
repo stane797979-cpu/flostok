@@ -48,14 +48,20 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "2mb", // 기본 1mb에서 증가
     },
 
-    // 개발 시 메모리 최적화
+    // 패키지 임포트 최적화 (트리셰이킹 강화)
     optimizePackageImports: [
       "lucide-react",
+      "recharts",
+      "date-fns",
+      "sonner",
       "@radix-ui/react-dialog",
       "@radix-ui/react-dropdown-menu",
       "@radix-ui/react-select",
       "@radix-ui/react-tabs",
       "@radix-ui/react-toast",
+      "@radix-ui/react-popover",
+      "@radix-ui/react-checkbox",
+      "@radix-ui/react-switch",
     ],
   },
 
@@ -94,6 +100,16 @@ const nextConfig: NextConfig = {
           {
             key: "Cache-Control",
             value: "no-store, max-age=0",
+          },
+        ],
+      },
+      {
+        // 정적 자산 장기 캐싱 (JS, CSS, 이미지)
+        source: "/_next/static/(.*)",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
           },
         ],
       },

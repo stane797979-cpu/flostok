@@ -4,8 +4,14 @@
  * - 판매 데이터 Excel 다운로드
  */
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const XLSX = require("xlsx");
+/**
+ * XLSX 라이브러리 lazy 로딩
+ */
+let _xlsx: typeof import("xlsx") | null = null;
+async function getXLSX() {
+  if (!_xlsx) _xlsx = await import("xlsx");
+  return _xlsx;
+}
 
 interface ProductExportRow {
   SKU: string;
@@ -37,7 +43,7 @@ interface SalesExportRow {
 /**
  * 제품 목록 Excel 생성
  */
-export function generateProductsExcel(
+export async function generateProductsExcel(
   products: Array<{
     sku: string;
     name: string;
@@ -53,7 +59,8 @@ export function generateProductsExcel(
     xyzGrade: string | null;
     isActive: Date | null;
   }>
-): ArrayBuffer {
+): Promise<ArrayBuffer> {
+  const XLSX = await getXLSX();
   const rows: ProductExportRow[] = products.map((p) => ({
     SKU: p.sku,
     제품명: p.name,
@@ -97,7 +104,7 @@ export function generateProductsExcel(
 /**
  * 판매 데이터 Excel 생성
  */
-export function generateSalesExcel(
+export async function generateSalesExcel(
   sales: Array<{
     date: string;
     sku: string;
@@ -108,7 +115,8 @@ export function generateSalesExcel(
     channel: string | null;
     notes: string | null;
   }>
-): ArrayBuffer {
+): Promise<ArrayBuffer> {
+  const XLSX = await getXLSX();
   const rows: SalesExportRow[] = sales.map((s) => ({
     날짜: s.date,
     SKU: s.sku,
@@ -164,7 +172,7 @@ const INVENTORY_STATUS_LABELS: Record<string, string> = {
 /**
  * 재고 현황 Excel 생성
  */
-export function generateInventoryExcel(
+export async function generateInventoryExcel(
   inventoryItems: Array<{
     sku: string;
     name: string;
@@ -176,7 +184,8 @@ export function generateInventoryExcel(
     daysOfInventory: number;
     location: string | null;
   }>
-): ArrayBuffer {
+): Promise<ArrayBuffer> {
+  const XLSX = await getXLSX();
   const rows: InventoryExportRow[] = inventoryItems.map((item) => ({
     SKU: item.sku,
     제품명: item.name,
@@ -227,7 +236,7 @@ interface InboundExportRow {
 /**
  * 입고 현황 Excel 생성
  */
-export function generateInboundExcel(
+export async function generateInboundExcel(
   records: Array<{
     date: string;
     orderNumber: string | null;
@@ -242,7 +251,8 @@ export function generateInboundExcel(
     lotNumber: string | null;
     notes: string | null;
   }>
-): ArrayBuffer {
+): Promise<ArrayBuffer> {
+  const XLSX = await getXLSX();
   const qualityLabels: Record<string, string> = {
     pass: "합격",
     fail: "불합격",

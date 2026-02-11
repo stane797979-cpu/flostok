@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, integer, date } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, integer, date, index } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 import { products } from "./products";
 
@@ -18,7 +18,10 @@ export const salesRecords = pgTable("sales_records", {
   channel: text("channel"), // 판매 채널 (온라인, 오프라인, B2B 등)
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index("sales_records_org_date_idx").on(table.organizationId, table.date),
+  index("sales_records_product_date_idx").on(table.productId, table.date),
+]);
 
 export type SalesRecord = typeof salesRecords.$inferSelect;
 export type NewSalesRecord = typeof salesRecords.$inferInsert;

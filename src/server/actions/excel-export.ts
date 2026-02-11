@@ -89,7 +89,7 @@ export async function exportPurchaseOrderToExcel(orderId: string): Promise<{
       })),
     };
 
-    const buffer = generatePurchaseOrderExcel(order);
+    const buffer = await generatePurchaseOrderExcel(order);
     const filename = `${order.orderNumber}_${order.orderDate || "미정"}.xlsx`;
     const base64Buffer = buffer.toString("base64");
 
@@ -190,7 +190,7 @@ export async function exportPurchaseOrdersToExcel(
       })
     );
 
-    const buffer = generateMultiplePurchaseOrdersExcel(orders);
+    const buffer = await generateMultiplePurchaseOrdersExcel(orders);
     const today = new Date().toISOString().split("T")[0].replace(/-/g, "");
     const filename = `발주서_${today}.xlsx`;
     const base64Buffer = buffer.toString("base64");
@@ -246,7 +246,7 @@ export async function exportInboundRecordsToExcel(options: {
       return { success: false, error: "해당 기간의 입고 기록이 없습니다" };
     }
 
-    const buffer = generateInboundExcel(result.records);
+    const buffer = await generateInboundExcel(result.records);
     const filename = `입고현황_${options.startDate}_${options.endDate}.xlsx`;
     const base64Buffer = Buffer.from(buffer).toString("base64");
 
@@ -345,7 +345,7 @@ export async function exportInventoryMovementToExcel(options: {
       referenceType: row.record.referenceType,
     }));
 
-    const buffer = generateInventoryMovementExcel({
+    const buffer = await generateInventoryMovementExcel({
       records: movementRecords,
       startDate: options.startDate,
       endDate: options.endDate,
@@ -416,7 +416,7 @@ export async function exportInventoryToExcel(): Promise<{
       };
     });
 
-    const buffer = generateInventoryExcel(exportItems);
+    const buffer = await generateInventoryExcel(exportItems);
     const today = new Date().toISOString().split("T")[0];
     const filename = `재고현황_${today}.xlsx`;
     const base64Buffer = Buffer.from(buffer).toString("base64");

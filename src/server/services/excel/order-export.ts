@@ -2,8 +2,16 @@
  * 발주서 Excel 익스포트 서비스
  */
 
-import * as XLSX from "xlsx";
 import { type PurchaseOrder, type PurchaseOrderItem } from "@/server/db/schema";
+
+/**
+ * XLSX 라이브러리 lazy 로딩
+ */
+let _xlsx: typeof import("xlsx") | null = null;
+async function getXLSX() {
+  if (!_xlsx) _xlsx = await import("xlsx");
+  return _xlsx;
+}
 
 /**
  * 발주서 정보 (공급자 포함)
@@ -42,7 +50,9 @@ interface OrderExcelRow {
  * @param order - 발주서 정보
  * @returns Excel 워크북 버퍼
  */
-export function generatePurchaseOrderExcel(order: PurchaseOrderWithDetails): Buffer {
+export async function generatePurchaseOrderExcel(order: PurchaseOrderWithDetails): Promise<Buffer> {
+  const XLSX = await getXLSX();
+
   // 워크북 생성
   const wb = XLSX.utils.book_new();
 
@@ -128,9 +138,11 @@ export function generatePurchaseOrderExcel(order: PurchaseOrderWithDetails): Buf
  * @param orders - 발주서 배열
  * @returns Excel 워크북 버퍼
  */
-export function generateMultiplePurchaseOrdersExcel(
+export async function generateMultiplePurchaseOrdersExcel(
   orders: PurchaseOrderWithDetails[]
-): Buffer {
+): Promise<Buffer> {
+  const XLSX = await getXLSX();
+
   // 워크북 생성
   const wb = XLSX.utils.book_new();
 

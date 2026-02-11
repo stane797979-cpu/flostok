@@ -49,12 +49,12 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
 /**
  * 단일 행을 매핑 설정에 따라 변환
  */
-function transformRow(
+async function transformRow(
   row: Record<string, unknown>,
   mappings: MappingEntry[],
   dataType: OnboardingDataType,
   rowIndex: number
-): { data: Record<string, unknown> | null; errors: ExcelImportError[] } {
+): Promise<{ data: Record<string, unknown> | null; errors: ExcelImportError[] }> {
   const errors: ExcelImportError[] = [];
   const result: Record<string, unknown> = {};
   const rowNum = rowIndex + 2; // 헤더(1행) + 0-인덱스
@@ -100,7 +100,7 @@ function transformRow(
           break;
         }
         case "date": {
-          const date = parseExcelDate(value);
+          const date = await parseExcelDate(value);
           if (!date) {
             errors.push({
               row: rowNum,
@@ -146,17 +146,17 @@ function transformRow(
  * @param previewOnly - 미리보기 모드 (처음 N행만)
  * @param previewRows - 미리보기 행 수 (기본 20)
  */
-export function executeMapping(
+export async function executeMapping(
   fileBase64: string,
   sheetName: string | undefined,
   mappings: MappingEntry[],
   dataType: OnboardingDataType,
   previewOnly = false,
   previewRows = 20
-): TransformResult {
+): Promise<TransformResult> {
   const buffer = base64ToArrayBuffer(fileBase64);
-  const workbook = parseExcelBuffer(buffer);
-  const allRows = sheetToJson<Record<string, unknown>>(workbook, sheetName);
+  const workbook = await parseExcelBuffer(buffer);
+  const allRows = await sheetToJson<Record<string, unknown>>(workbook, sheetName);
 
   const rowsToProcess = previewOnly
     ? allRows.slice(0, previewRows)
@@ -167,7 +167,7 @@ export function executeMapping(
   const allErrors: ExcelImportError[] = [];
 
   for (let i = 0; i < rowsToProcess.length; i++) {
-    const { data, errors } = transformRow(
+    const { data, errors } = await transformRow(
       rowsToProcess[i],
       activeMappings,
       dataType,

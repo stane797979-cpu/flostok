@@ -11,7 +11,6 @@ import {
 } from "@/server/services/scm/psi-aggregation";
 import { calculateEOQ } from "@/server/services/scm/eoq";
 import { revalidatePath, unstable_cache, revalidateTag } from "next/cache";
-import * as XLSX from "xlsx";
 
 /**
  * PSI 데이터 조회 내부 로직 (캐싱 대상)
@@ -244,6 +243,7 @@ export async function uploadPSIPlanExcel(
     const file = formData.get("file") as File;
     if (!file) return { success: false, message: "파일이 없습니다", importedCount: 0 };
 
+    const XLSX = await import("xlsx");
     const buffer = Buffer.from(await file.arrayBuffer());
     const workbook = XLSX.read(buffer, { type: "buffer" });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];

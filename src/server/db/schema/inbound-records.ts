@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, integer, pgEnum, date } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, integer, pgEnum, date, index } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 import { products } from "./products";
 import { purchaseOrders } from "./purchase-orders";
@@ -39,7 +39,11 @@ export const inboundRecords = pgTable("inbound_records", {
   expiryDate: date("expiry_date"), // 유통기한 (해당시)
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index("inbound_records_org_date_idx").on(table.organizationId, table.date),
+  index("inbound_records_product_date_idx").on(table.productId, table.date),
+  index("inbound_records_po_idx").on(table.purchaseOrderId),
+]);
 
 export type InboundRecord = typeof inboundRecords.$inferSelect;
 export type NewInboundRecord = typeof inboundRecords.$inferInsert;

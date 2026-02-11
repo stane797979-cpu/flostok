@@ -2,23 +2,33 @@
  * Excel 파일 파싱 유틸리티
  */
 
-import * as XLSX from "xlsx";
 import type { ExcelImportError, ExcelColumnMapping } from "./types";
+
+/**
+ * XLSX 라이브러리 lazy 로딩
+ */
+let _xlsx: typeof import("xlsx") | null = null;
+async function getXLSX() {
+  if (!_xlsx) _xlsx = await import("xlsx");
+  return _xlsx;
+}
 
 /**
  * Excel 파일 버퍼를 워크북으로 파싱
  */
-export function parseExcelBuffer(buffer: ArrayBuffer): XLSX.WorkBook {
+export async function parseExcelBuffer(buffer: ArrayBuffer): Promise<import("xlsx").WorkBook> {
+  const XLSX = await getXLSX();
   return XLSX.read(buffer, { type: "array", cellDates: true });
 }
 
 /**
  * 시트 데이터를 JSON으로 변환
  */
-export function sheetToJson<T extends Record<string, unknown>>(
-  workbook: XLSX.WorkBook,
+export async function sheetToJson<T extends Record<string, unknown>>(
+  workbook: import("xlsx").WorkBook,
   sheetName?: string
-): T[] {
+): Promise<T[]> {
+  const XLSX = await getXLSX();
   const sheet = sheetName ? workbook.Sheets[sheetName] : workbook.Sheets[workbook.SheetNames[0]];
 
   if (!sheet) {
@@ -34,7 +44,7 @@ export function sheetToJson<T extends Record<string, unknown>>(
 /**
  * Excel 날짜를 Date 객체로 변환
  */
-export function parseExcelDate(value: unknown): Date | null {
+export async function parseExcelDate(value: unknown): Promise<Date | null> {
   if (!value) return null;
 
   // 이미 Date 객체인 경우
@@ -46,6 +56,7 @@ export function parseExcelDate(value: unknown): Date | null {
   if (typeof value === "number") {
     // Excel 날짜 시리얼 -> JS Date
     // Excel은 1900-01-01을 1로 계산 (1904 시스템 제외)
+    const XLSX = await getXLSX();
     const date = XLSX.SSF.parse_date_code(value);
     if (date) {
       return new Date(date.y, date.m - 1, date.d);
@@ -173,14 +184,15 @@ export function transformRow<T extends Record<string, unknown>>(
 /**
  * 시트 이름 목록 반환
  */
-export function getSheetNames(workbook: XLSX.WorkBook): string[] {
+export function getSheetNames(workbook: import("xlsx").WorkBook): string[] {
   return workbook.SheetNames;
 }
 
 /**
  * 헤더 행 추출
  */
-export function getHeaders(workbook: XLSX.WorkBook, sheetName?: string): string[] {
+export async function getHeaders(workbook: import("xlsx").WorkBook, sheetName?: string): Promise<string[]> {
+  const XLSX = await getXLSX();
   const sheet = sheetName ? workbook.Sheets[sheetName] : workbook.Sheets[workbook.SheetNames[0]];
 
   if (!sheet) return [];

@@ -7,6 +7,7 @@ import {
   numeric,
   pgEnum,
   jsonb,
+  index,
 } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 import { suppliers } from "./suppliers";
@@ -54,7 +55,11 @@ export const products = pgTable("products", {
   isActive: timestamp("is_active").defaultNow(), // null이면 비활성/단종
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index("products_org_sku_idx").on(table.organizationId, table.sku),
+  index("products_org_grade_idx").on(table.organizationId, table.abcGrade, table.xyzGrade),
+  index("products_org_category_idx").on(table.organizationId, table.category),
+]);
 
 // 공급자-제품 매핑 (공급자별 단가, MOQ 등)
 export const supplierProducts = pgTable("supplier_products", {
@@ -72,7 +77,10 @@ export const supplierProducts = pgTable("supplier_products", {
   isPrimary: timestamp("is_primary"), // null이 아니면 주 공급자
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index("supplier_products_supplier_idx").on(table.supplierId, table.productId),
+  index("supplier_products_product_idx").on(table.productId),
+]);
 
 export type Product = typeof products.$inferSelect;
 export type NewProduct = typeof products.$inferInsert;

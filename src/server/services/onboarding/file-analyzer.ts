@@ -26,9 +26,9 @@ export interface FileAnalysisResult {
 /**
  * 값의 데이터 타입을 추론
  */
-function inferType(
+async function inferType(
   values: unknown[]
-): "text" | "number" | "date" | "unknown" {
+): Promise<"text" | "number" | "date" | "unknown"> {
   const nonNull = values.filter(
     (v) => v !== null && v !== undefined && v !== ""
   );
@@ -54,7 +54,7 @@ function inferType(
 
     // Excel 시리얼 날짜 (30000~50000 범위)
     if (typeof val === "number" && val > 25000 && val < 60000) {
-      const parsed = parseExcelDate(val);
+      const parsed = await parseExcelDate(val);
       if (parsed) {
         dateCount++;
         continue;
@@ -101,13 +101,13 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
  * @param sheetName - 분석할 시트명 (미지정 시 첫 번째 시트)
  * @param sampleRows - 샘플 데이터 행 수 (기본 5)
  */
-export function analyzeExcelFile(
+export async function analyzeExcelFile(
   fileBase64: string,
   sheetName?: string,
   sampleRows = 5
-): FileAnalysisResult {
+): Promise<FileAnalysisResult> {
   const buffer = base64ToArrayBuffer(fileBase64);
-  const workbook = parseExcelBuffer(buffer);
+  const workbook = await parseExcelBuffer(buffer);
   const sheetNames = getSheetNames(workbook);
 
   if (sheetNames.length === 0) {
@@ -115,14 +115,14 @@ export function analyzeExcelFile(
   }
 
   const selectedSheet = sheetName || sheetNames[0];
-  const headerNames = getHeaders(workbook, selectedSheet);
+  const headerNames = await getHeaders(workbook, selectedSheet);
 
   if (headerNames.length === 0) {
     throw new Error("선택된 시트에 헤더가 없습니다");
   }
 
   // 전체 데이터
-  const allRows = sheetToJson<Record<string, unknown>>(workbook, selectedSheet);
+  const allRows = await sheetToJson<Record<string, unknown>>(workbook, selectedSheet);
   const rowCount = allRows.length;
 
   // 샘플 데이터 (분석용으로 최대 100행 읽기)
@@ -130,23 +130,25 @@ export function analyzeExcelFile(
   const sampleData = allRows.slice(0, sampleRows);
 
   // 각 헤더별 분석
-  const headers: AnalyzedHeader[] = headerNames.map((name) => {
-    const columnValues = analyzeRows.map((row) => row[name]);
-    const nonNullValues = columnValues.filter(
-      (v) => v !== null && v !== undefined && v !== ""
-    );
-    const uniqueValues = new Set(
-      nonNullValues.map((v) => String(v))
-    );
+  const headers: AnalyzedHeader[] = await Promise.all(
+    headerNames.map(async (name) => {
+      const columnValues = analyzeRows.map((row) => row[name]);
+      const nonNullValues = columnValues.filter(
+        (v) => v !== null && v !== undefined && v !== ""
+      );
+      const uniqueValues = new Set(
+        nonNullValues.map((v) => String(v))
+      );
 
-    return {
-      name,
-      sampleValues: columnValues.slice(0, sampleRows),
-      inferredType: inferType(columnValues),
-      nullCount: columnValues.length - nonNullValues.length,
-      uniqueCount: uniqueValues.size,
-    };
-  });
+      return {
+        name,
+        sampleValues: columnValues.slice(0, sampleRows),
+        inferredType: await inferType(columnValues),
+        nullCount: columnValues.length - nonNullValues.length,
+        uniqueCount: uniqueValues.size,
+      };
+    })
+  );
 
   return {
     sheetNames,

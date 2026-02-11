@@ -50,6 +50,13 @@
       "when": 1770702477918,
       "tag": "0006_opposite_colossus",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1770795054688,
+      "tag": "0007_worthless_pet_avengers",
+      "breakpoints": true
     }
   ]
 }

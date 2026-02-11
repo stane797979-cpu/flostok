@@ -122,8 +122,8 @@ export async function importProductData(
   const successData: ProductExcelRow[] = [];
 
   try {
-    const workbook = parseExcelBuffer(buffer);
-    const rows = sheetToJson<Record<string, unknown>>(workbook, sheetName);
+    const workbook = await parseExcelBuffer(buffer);
+    const rows = await sheetToJson<Record<string, unknown>>(workbook, sheetName);
 
     if (rows.length === 0) {
       return {

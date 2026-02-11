@@ -70,7 +70,7 @@ export async function exportProductsToExcel(): Promise<{
       return { success: false, error: "익스포트할 제품 데이터가 없습니다" };
     }
 
-    const buffer = generateProductsExcel(productList);
+    const buffer = await generateProductsExcel(productList);
     const today = new Date().toISOString().split("T")[0]!.replace(/-/g, "");
 
     return {
@@ -129,7 +129,7 @@ export async function exportSalesToExcel(): Promise<{
       return { success: false, error: "익스포트할 판매 데이터가 없습니다" };
     }
 
-    const buffer = generateSalesExcel(salesData);
+    const buffer = await generateSalesExcel(salesData);
     const today = new Date().toISOString().split("T")[0]!.replace(/-/g, "");
 
     return {

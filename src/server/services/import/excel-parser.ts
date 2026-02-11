@@ -2,8 +2,6 @@
  * Excel 파일 파싱 유틸리티
  */
 
-import * as XLSX from "xlsx";
-
 export interface ParsedSheet {
   sheetName: string;
   headers: string[];
@@ -17,12 +15,22 @@ export interface ParsedExcelFile {
 }
 
 /**
+ * XLSX 라이브러리 lazy 로딩
+ */
+let _xlsx: typeof import("xlsx") | null = null;
+async function getXLSX() {
+  if (!_xlsx) _xlsx = await import("xlsx");
+  return _xlsx;
+}
+
+/**
  * Excel 파일 파싱
  * @param buffer - 파일 Buffer
  * @returns 파싱된 Excel 데이터
  */
-export function parseExcelFile(buffer: Buffer): ParsedExcelFile {
+export async function parseExcelFile(buffer: Buffer): Promise<ParsedExcelFile> {
   try {
+    const XLSX = await getXLSX();
     const workbook = XLSX.read(buffer, { type: "buffer" });
 
     const sheets: ParsedSheet[] = workbook.SheetNames.map((sheetName) => {
