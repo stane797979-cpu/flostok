@@ -1,0 +1,8 @@
+[phases.setup]
+nixPkgs = ["nodejs_20", "npm-9_x", "openssl"]
+
+[phases.build]
+cmds = ["NODE_OPTIONS=--max-old-space-size=8192 npm run build"]
+
+[start]
+cmd = "npm run start"
