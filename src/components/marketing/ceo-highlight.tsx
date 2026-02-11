@@ -15,24 +15,7 @@ export function CeoHighlight() {
           </p>
         </div>
 
-        <div className="mx-auto mt-16 grid max-w-5xl grid-cols-1 items-center gap-12 lg:grid-cols-2">
-          {/* 프로필 이미지 영역 */}
-          <div className="flex justify-center">
-            <div className="relative">
-              <div className="flex h-48 w-48 items-center justify-center rounded-full bg-gradient-to-br from-primary-100 to-primary-200 sm:h-64 sm:w-64">
-                <span className="text-5xl font-bold text-primary-600 sm:text-7xl">
-                  {CEO_HIGHLIGHT.name[0]}
-                </span>
-              </div>
-              <div className="absolute -bottom-2 -right-2 rounded-full bg-white px-4 py-2 shadow-lg">
-                <span className="text-sm font-semibold text-gray-900">
-                  22년+ SCM
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* 소개 텍스트 */}
+        <div className="mx-auto mt-16 max-w-3xl">
           <div>
             <div className="mb-6">
               <h3 className="text-2xl font-bold text-gray-900">
