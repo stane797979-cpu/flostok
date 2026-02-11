@@ -12,7 +12,7 @@ import {
 
 export const metadata: Metadata = {
   title: `대표 소개 | ${COMPANY.name}`,
-  description: `${CEO_HIGHLIGHT.name} 대표 - 22년 SCM 현장 경력의 전문가`,
+  description: "Stock & Logis 대표 - 22년 SCM 현장 경력의 전문가",
 };
 
 export default function CeoPage() {
@@ -23,11 +23,8 @@ export default function CeoPage() {
         <div className="mx-auto max-w-4xl">
           <div className="text-center">
             <h1 className="text-4xl font-bold text-white sm:text-5xl">
-              {CEO_HIGHLIGHT.name}
+              Stock &amp; Logis 대표
             </h1>
-            <p className="mt-2 text-lg text-gray-400">
-              {CEO_HIGHLIGHT.title}
-            </p>
             <p className="mx-auto mt-4 max-w-lg text-gray-300 leading-7">
               {CEO_HIGHLIGHT.summary}
             </p>

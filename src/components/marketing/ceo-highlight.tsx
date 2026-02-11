@@ -19,9 +19,8 @@ export function CeoHighlight() {
           <div>
             <div className="mb-6">
               <h3 className="text-2xl font-bold text-gray-900">
-                {CEO_HIGHLIGHT.name}
+                Stock &amp; Logis 대표
               </h3>
-              <p className="text-gray-500">{CEO_HIGHLIGHT.title}</p>
             </div>
 
             <div className="mb-6 flex gap-3">
