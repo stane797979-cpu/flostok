@@ -10,20 +10,17 @@ import { KPIFilters } from "./kpi-filters";
 import { getKPIDashboardData } from "@/server/actions/kpi";
 import type { KPIMetrics } from "@/server/services/scm/kpi-improvement";
 import type { KPITrend } from "@/server/services/scm/kpi-measurement";
-import type { KpiSnapshot } from "@/server/actions/kpi-snapshots";
 
 interface KpiTabsClientProps {
   metrics: KPIMetrics;
   trends: KPITrend[];
   targets: KPIMetrics;
-  snapshots: KpiSnapshot[];
 }
 
 export function KpiTabsClient({
   metrics: initialMetrics,
   trends: initialTrends,
   targets,
-  snapshots,
 }: KpiTabsClientProps) {
   const [abcFilter, setAbcFilter] = useState("all");
   const [xyzFilter, setXyzFilter] = useState("all");
@@ -96,7 +93,7 @@ export function KpiTabsClient({
       </TabsContent>
 
       <TabsContent value="monthly-trend">
-        <KpiMonthlyTrendTable snapshots={snapshots} />
+        <KpiMonthlyTrendTable trends={initialTrends} />
       </TabsContent>
 
       <TabsContent value="improvement">
