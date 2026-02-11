@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,10 +24,14 @@ export default function CeoPage() {
         <div className="mx-auto max-w-4xl">
           <div className="flex flex-col items-center gap-8 lg:flex-row lg:items-start lg:gap-12">
             {/* 프로필 */}
-            <div className="flex h-40 w-40 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-400 to-primary-600">
-              <span className="text-6xl font-bold text-white">
-                {CEO_HIGHLIGHT.name[0]}
-              </span>
+            <div className="h-40 w-40 flex-shrink-0 overflow-hidden rounded-full ring-4 ring-white/20">
+              <Image
+                src="/ceo-profile.png"
+                alt={CEO_HIGHLIGHT.name}
+                width={160}
+                height={160}
+                className="h-full w-full object-cover"
+              />
             </div>
             <div className="text-center lg:text-left">
               <h1 className="text-4xl font-bold text-white sm:text-5xl">
