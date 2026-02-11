@@ -29,17 +29,19 @@ export default async function SettingsPage({
       </div>
 
       <Tabs defaultValue={defaultTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-9">
-          <TabsTrigger value="account">내 계정</TabsTrigger>
-          <TabsTrigger value="data">데이터 관리</TabsTrigger>
-          <TabsTrigger value="organization">조직 설정</TabsTrigger>
-          <TabsTrigger value="users">사용자 관리</TabsTrigger>
-          <TabsTrigger value="permissions">권한 설정</TabsTrigger>
-          <TabsTrigger value="policy">발주 정책</TabsTrigger>
-          <TabsTrigger value="api">API 키</TabsTrigger>
-          <TabsTrigger value="notifications">알림 테스트</TabsTrigger>
-          <TabsTrigger value="activity">활동 로그</TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+          <TabsList className="inline-flex w-auto min-w-full md:grid md:w-full md:grid-cols-9">
+            <TabsTrigger value="account" className="whitespace-nowrap">내 계정</TabsTrigger>
+            <TabsTrigger value="data" className="whitespace-nowrap">데이터 관리</TabsTrigger>
+            <TabsTrigger value="organization" className="whitespace-nowrap">조직 설정</TabsTrigger>
+            <TabsTrigger value="users" className="whitespace-nowrap">사용자 관리</TabsTrigger>
+            <TabsTrigger value="permissions" className="whitespace-nowrap">권한 설정</TabsTrigger>
+            <TabsTrigger value="policy" className="whitespace-nowrap">발주 정책</TabsTrigger>
+            <TabsTrigger value="api" className="whitespace-nowrap">API 키</TabsTrigger>
+            <TabsTrigger value="notifications" className="whitespace-nowrap">알림 테스트</TabsTrigger>
+            <TabsTrigger value="activity" className="whitespace-nowrap">활동 로그</TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="account" className="space-y-4">
           <MyAccount />

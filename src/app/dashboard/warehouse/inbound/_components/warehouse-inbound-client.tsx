@@ -124,7 +124,44 @@ export function WarehouseInboundClient() {
               <div className="mb-3 text-sm text-slate-500">
                 총 {orders.length}건
               </div>
-              <div className="rounded-md border">
+
+              {/* 모바일 카드 뷰 */}
+              <div className="space-y-3 md:hidden">
+                {orders.map((order) => {
+                  const progress = order.totalQuantity > 0
+                    ? Math.round((order.receivedQuantity / order.totalQuantity) * 100)
+                    : 0;
+                  const config = statusConfig[order.status] || {
+                    label: order.status,
+                    className: "bg-slate-600",
+                  };
+                  return (
+                    <div key={order.id} className="rounded-lg border bg-white p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium">{order.orderNumber}</p>
+                          <p className="text-sm text-slate-500">{order.supplierName || "-"}</p>
+                        </div>
+                        <Badge className={config.className}>{config.label}</Badge>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="space-y-1">
+                          <p className="text-slate-500">예상입고: {order.expectedDate || "-"}</p>
+                          <p className="text-slate-500">
+                            {order.itemsCount}품목 · {order.receivedQuantity}/{order.totalQuantity} ({progress}%)
+                          </p>
+                        </div>
+                        <Button size="sm" onClick={() => handleInboundClick(order.id)}>
+                          입고 처리
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* 데스크톱 테이블 뷰 */}
+              <div className="hidden rounded-md border md:block">
                 <Table>
                   <TableHeader>
                     <TableRow>

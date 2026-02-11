@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator";
 
 interface SidebarProps {
   className?: string;
+  onNavigate?: () => void;
   userInfo?: {
     name: string;
     role: string;
@@ -21,7 +22,7 @@ interface SidebarProps {
   };
 }
 
-export function Sidebar({ className, userInfo }: SidebarProps) {
+export function Sidebar({ className, onNavigate, userInfo }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const router = useRouter();
 
@@ -106,6 +107,7 @@ export function Sidebar({ className, userInfo }: SidebarProps) {
                   icon={item.icon}
                   badge={badges[item.href]}
                   collapsed={collapsed}
+                  onClick={onNavigate}
                 />
               ))}
             </div>
@@ -119,6 +121,7 @@ export function Sidebar({ className, userInfo }: SidebarProps) {
         {userInfo?.isSuperadmin && (
           <Link
             href="/admin"
+            onClick={onNavigate}
             className={cn(
               "mb-2 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-100",
               collapsed && "justify-center px-2"
@@ -138,13 +141,17 @@ export function Sidebar({ className, userInfo }: SidebarProps) {
               href={item.href}
               icon={item.icon}
               collapsed={collapsed}
+              onClick={onNavigate}
             />
           ))}
         </div>
 
         {/* 사용자 정보 */}
         <button
-          onClick={() => router.push("/dashboard/settings?tab=account")}
+          onClick={() => {
+            onNavigate?.();
+            router.push("/dashboard/settings?tab=account");
+          }}
           className={cn(
             "mt-3 flex w-full items-center gap-3 rounded-lg border border-slate-200 p-2 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800",
             collapsed && "justify-center p-1"

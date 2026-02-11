@@ -11,9 +11,10 @@ interface NavItemProps {
   icon: LucideIcon;
   badge?: number;
   collapsed?: boolean;
+  onClick?: () => void;
 }
 
-export function NavItem({ title, href, icon: Icon, badge, collapsed = false }: NavItemProps) {
+export function NavItem({ title, href, icon: Icon, badge, collapsed = false, onClick }: NavItemProps) {
   const pathname = usePathname();
   const isActive =
     pathname === href ||
@@ -22,6 +23,7 @@ export function NavItem({ title, href, icon: Icon, badge, collapsed = false }: N
   return (
     <Link
       href={href}
+      onClick={onClick}
       className={cn(
         "flex items-center gap-3 rounded-lg px-3 py-2.5 text-base font-medium transition-colors",
         "hover:bg-slate-100 dark:hover:bg-slate-800",

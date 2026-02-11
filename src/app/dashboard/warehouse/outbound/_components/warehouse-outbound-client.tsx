@@ -163,7 +163,49 @@ export function WarehouseOutboundClient() {
               <div className="mb-3 text-sm text-slate-500">
                 총 {requests.length}건
               </div>
-              <div className="rounded-md border">
+
+              {/* 모바일 카드 뷰 */}
+              <div className="space-y-3 md:hidden">
+                {requests.map((req) => {
+                  const config = statusConfig[req.status] || {
+                    label: req.status,
+                    className: "bg-slate-600",
+                  };
+                  return (
+                    <div key={req.id} className="rounded-lg border bg-white p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium">{req.requestNumber}</p>
+                          <p className="text-sm text-slate-500">{req.requestedByName || "-"}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline">{req.outboundTypeLabel}</Badge>
+                          <Badge className={config.className}>{config.label}</Badge>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="space-y-1">
+                          <p className="text-slate-500">{req.itemsCount}품목 · {req.totalQuantity.toLocaleString()}개</p>
+                          <div className="flex items-center gap-1 text-slate-400">
+                            <Clock className="h-3.5 w-3.5" />
+                            {formatTimeAgo(req.createdAt)}
+                          </div>
+                        </div>
+                        {req.status === "pending" ? (
+                          <Button size="sm" onClick={() => handleConfirmClick(req.id)}>
+                            출고 확정
+                          </Button>
+                        ) : (
+                          <span className="text-sm text-slate-400">{config.label}</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* 데스크톱 테이블 뷰 */}
+              <div className="hidden rounded-md border md:block">
                 <Table>
                   <TableHeader>
                     <TableRow>
