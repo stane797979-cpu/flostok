@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useState } from "react";
+import { ReactNode, Suspense, useState } from "react";
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -25,18 +25,22 @@ export function DashboardShell({ children, userInfo }: DashboardShellProps) {
     <div className="flex h-screen overflow-hidden">
       {/* 데스크톱 사이드바 */}
       <div className="hidden lg:flex">
-        <Sidebar userInfo={userInfo} />
+        <Suspense>
+          <Sidebar userInfo={userInfo} />
+        </Suspense>
       </div>
 
       {/* 모바일 사이드바 (Sheet) */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent side="left" className="w-60 p-0">
           <SheetTitle className="sr-only">네비게이션 메뉴</SheetTitle>
-          <Sidebar
-            userInfo={userInfo}
-            onNavigate={handleNavigation}
-            className="border-r-0"
-          />
+          <Suspense>
+            <Sidebar
+              userInfo={userInfo}
+              onNavigate={handleNavigation}
+              className="border-r-0"
+            />
+          </Suspense>
         </SheetContent>
       </Sheet>
 

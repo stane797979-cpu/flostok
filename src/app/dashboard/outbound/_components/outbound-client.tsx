@@ -39,8 +39,12 @@ function formatMonth(date: Date): string {
   return `${date.getFullYear()}년 ${date.getMonth() + 1}월`;
 }
 
-export function OutboundClient() {
-  const [activeTab, setActiveTab] = useState("records");
+interface OutboundClientProps {
+  initialTab?: "records" | "upload";
+}
+
+export function OutboundClient({ initialTab = "records" }: OutboundClientProps) {
+  const [activeTab, setActiveTab] = useState(initialTab);
 
   // 출고 현황 상태
   const [outboundMonth, setOutboundMonth] = useState<Date>(() => new Date());

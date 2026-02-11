@@ -136,7 +136,7 @@ function formatMonth(date: Date): string {
 }
 
 interface OrdersClientProps {
-  initialTab?: "reorder" | "auto-reorder" | "orders" | "inbound" | "delivery";
+  initialTab?: "reorder" | "auto-reorder" | "orders" | "inbound" | "delivery" | "import-shipment";
   serverReorderItems?: ServerReorderItem[];
   deliveryComplianceData?: DeliveryComplianceResult | null;
 }

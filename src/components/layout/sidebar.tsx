@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Package, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NavItem } from "./nav-item";
-import { MAIN_SECTIONS, BOTTOM_NAV, type NavSection } from "@/lib/constants/navigation";
+import { MAIN_SECTIONS, BOTTOM_NAV, type NavItem as NavItemType } from "@/lib/constants/navigation";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
@@ -39,7 +39,7 @@ export function Sidebar({ className, onNavigate, userInfo }: SidebarProps) {
     "/alerts": 2,
   };
 
-  // 권한 기반 메뉴 필터링
+  // 권한 기반 메뉴 필터링 (children 지원)
   const filteredSections = useMemo(() => {
     const allowedMenus = userInfo?.allowedMenus;
     const isAllAllowed = !allowedMenus || allowedMenus.includes("*");
@@ -49,10 +49,22 @@ export function Sidebar({ className, onNavigate, userInfo }: SidebarProps) {
     return MAIN_SECTIONS
       .map((section) => ({
         ...section,
-        items: section.items.filter((item) => {
-          if (!item.menuKey) return true; // menuKey 없으면 항상 표시
-          return allowedMenus.includes(item.menuKey);
-        }),
+        items: section.items
+          .map((item): NavItemType | null => {
+            // children이 있는 항목: children을 먼저 필터
+            if (item.children && item.children.length > 0) {
+              const filteredChildren = item.children.filter((child) => {
+                if (!child.menuKey) return true;
+                return allowedMenus.includes(child.menuKey);
+              });
+              if (filteredChildren.length === 0) return null;
+              return { ...item, children: filteredChildren };
+            }
+            // 일반 항목
+            if (!item.menuKey) return item;
+            return allowedMenus.includes(item.menuKey) ? item : null;
+          })
+          .filter((item): item is NavItemType => item !== null),
       }))
       .filter((section) => section.items.length > 0);
   }, [userInfo?.allowedMenus]);
@@ -101,13 +113,14 @@ export function Sidebar({ className, onNavigate, userInfo }: SidebarProps) {
             <div className="space-y-1">
               {section.items.map((item) => (
                 <NavItem
-                  key={item.href}
+                  key={item.title}
                   title={item.title}
                   href={item.href}
                   icon={item.icon}
                   badge={badges[item.href]}
                   collapsed={collapsed}
                   onClick={onNavigate}
+                  subItems={item.children}
                 />
               ))}
             </div>

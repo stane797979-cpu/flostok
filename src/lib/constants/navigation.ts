@@ -21,6 +21,12 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+export interface SubNavItem {
+  title: string;
+  href: string;
+  menuKey?: string;
+}
+
 export interface NavItem {
   title: string;
   href: string;
@@ -28,6 +34,7 @@ export interface NavItem {
   badge?: number;
   description?: string;
   menuKey?: string; // 권한 식별자
+  children?: SubNavItem[]; // 2레벨 서브메뉴
 }
 
 export interface NavSection {
@@ -38,7 +45,7 @@ export interface NavSection {
 
 /**
  * 메인 네비게이션 — SCM 프로세스 흐름 순서
- * 계획 → 구매(입고) → 출고 → 창고 → 재고 → 관리 → 도구
+ * 계획 → 구매(입고) → 출고 → 재고 → 관리 → 도구
  */
 export const MAIN_SECTIONS: NavSection[] = [
   {
@@ -81,8 +88,26 @@ export const MAIN_SECTIONS: NavSection[] = [
         title: "발주관리",
         href: "/dashboard/orders",
         icon: ClipboardList,
-        description: "발주 생성 및 입고 추적",
+        description: "발주 생성 및 현황 관리",
         menuKey: "orders",
+        children: [
+          { title: "발주필요", href: "/dashboard/orders?tab=reorder", menuKey: "orders" },
+          { title: "자동발주", href: "/dashboard/orders?tab=auto-reorder", menuKey: "orders" },
+          { title: "발주현황", href: "/dashboard/orders?tab=orders", menuKey: "orders" },
+        ],
+      },
+      {
+        title: "입고관리",
+        href: "/dashboard/warehouse/inbound",
+        icon: PackageCheck,
+        description: "입고 확인 및 이력 관리",
+        menuKey: "inbound",
+        children: [
+          { title: "입고확정(창고)", href: "/dashboard/warehouse/inbound", menuKey: "warehouse_inbound" },
+          { title: "입고현황", href: "/dashboard/orders?tab=inbound", menuKey: "inbound" },
+          { title: "납기분석", href: "/dashboard/orders?tab=delivery", menuKey: "inbound" },
+          { title: "입항스케줄", href: "/dashboard/orders?tab=import-shipment", menuKey: "inbound" },
+        ],
       },
     ],
   },
@@ -91,27 +116,18 @@ export const MAIN_SECTIONS: NavSection[] = [
     color: "text-orange-500",
     items: [
       {
-        title: "출고 관리",
+        title: "출고관리",
         href: "/dashboard/outbound",
         icon: Truck,
-        description: "출고 등록 및 처리",
+        description: "출고 등록 및 현황 관리",
         menuKey: "outbound",
-      },
-    ],
-  },
-  {
-    title: "창고",
-    color: "text-amber-500",
-    items: [
-      {
-        title: "입고예정",
-        href: "/dashboard/warehouse/inbound",
-        icon: PackageCheck,
-        description: "발주 후 입고 대기 및 확인",
-        menuKey: "warehouse_inbound",
+        children: [
+          { title: "출고업로드", href: "/dashboard/outbound?tab=upload", menuKey: "outbound" },
+          { title: "출고현황", href: "/dashboard/outbound?tab=records", menuKey: "outbound" },
+        ],
       },
       {
-        title: "출고예정",
+        title: "출고확정(창고)",
         href: "/dashboard/warehouse/outbound",
         icon: PackageX,
         description: "출고 요청 확인 및 출고 처리",
