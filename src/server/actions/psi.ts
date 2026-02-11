@@ -10,16 +10,13 @@ import {
   type PSIResult,
 } from "@/server/services/scm/psi-aggregation";
 import { calculateEOQ } from "@/server/services/scm/eoq";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, unstable_cache, revalidateTag } from "next/cache";
 import * as XLSX from "xlsx";
 
 /**
- * PSI 데이터 조회 (8개월: 전월1 + 현재 + 미래6)
+ * PSI 데이터 조회 내부 로직 (캐싱 대상)
  */
-export async function getPSIData(): Promise<PSIResult> {
-  const user = await getCurrentUser();
-  const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
-
+async function _getPSIDataInternal(orgId: string): Promise<PSIResult> {
   const periods = generatePeriods(1, 6);
   const firstPeriod = periods[0]; // YYYY-MM
   const lastPeriod = periods[periods.length - 1];
@@ -218,6 +215,21 @@ export async function getPSIData(): Promise<PSIResult> {
 }
 
 /**
+ * PSI 데이터 조회 (8개월: 전월1 + 현재 + 미래6)
+ * unstable_cache로 60초간 캐싱
+ */
+export async function getPSIData(): Promise<PSIResult> {
+  const user = await getCurrentUser();
+  const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
+
+  return unstable_cache(
+    () => _getPSIDataInternal(orgId),
+    [`psi-data-${orgId}`],
+    { revalidate: 60, tags: [`psi-${orgId}`] }
+  )();
+}
+
+/**
  * SCM/S&OP 물량 엑셀 업로드
  * 엑셀 형식: SKU | 2025-08 SCM | 2025-08 S&OP | 2025-09 SCM | ...
  * SCM = AI 가이드 공급수량, S&OP = 회의 합의 출고예상량
@@ -359,6 +371,7 @@ export async function uploadPSIPlanExcel(
     }
 
     revalidatePath("/dashboard/psi");
+    revalidateTag(`psi-${orgId}`);
     return {
       success: true,
       message: `${importedCount}건의 계획 데이터가 업로드되었습니다`,
@@ -557,6 +570,7 @@ export async function generateSOPQuantities(
     }
 
     revalidatePath("/dashboard/psi");
+    revalidateTag(`psi-${orgId}`);
 
     const methodLabels: Record<SOPMethod, string> = {
       match_outbound: "출고계획 동일",

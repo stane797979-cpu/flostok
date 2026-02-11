@@ -5,6 +5,7 @@
 
 "use server";
 
+import { unstable_cache } from "next/cache";
 import { requireAuth } from "./auth-helpers";
 import { measureKPIMetrics, getKPITrendData } from "@/server/services/scm/kpi-measurement";
 import type { KPIMetrics } from "@/server/services/scm/kpi-improvement";
@@ -39,17 +40,24 @@ export async function getKPIDashboardData(
   filters?: KPIFilterOptions
 ): Promise<KPIDashboardData> {
   const user = await requireAuth();
+  const filterKey = filters ? JSON.stringify(filters) : "all";
 
-  const [metrics, trends] = await Promise.all([
-    measureKPIMetrics(user.organizationId, filters),
-    getKPITrendData(user.organizationId, 6, filters),
-  ]);
+  return unstable_cache(
+    async () => {
+      const [metrics, trends] = await Promise.all([
+        measureKPIMetrics(user.organizationId, filters),
+        getKPITrendData(user.organizationId, 6, filters),
+      ]);
 
-  return {
-    metrics,
-    trends,
-    targets: DEFAULT_TARGETS,
-  };
+      return {
+        metrics,
+        trends,
+        targets: DEFAULT_TARGETS,
+      };
+    },
+    [`kpi-data-${user.organizationId}-${filterKey}`],
+    { revalidate: 60, tags: [`kpi-${user.organizationId}`] }
+  )();
 }
 
 /**
@@ -62,12 +70,19 @@ export async function getKPISummary(): Promise<{
   stockoutRate: number;
 }> {
   const user = await requireAuth();
-  const metrics = await measureKPIMetrics(user.organizationId);
 
-  return {
-    inventoryTurnoverRate: Number(metrics.inventoryTurnoverRate.toFixed(1)),
-    averageInventoryDays: Number(metrics.averageInventoryDays.toFixed(1)),
-    onTimeOrderRate: Number(metrics.onTimeOrderRate.toFixed(1)),
-    stockoutRate: Number(metrics.stockoutRate.toFixed(1)),
-  };
+  return unstable_cache(
+    async () => {
+      const metrics = await measureKPIMetrics(user.organizationId);
+
+      return {
+        inventoryTurnoverRate: Number(metrics.inventoryTurnoverRate.toFixed(1)),
+        averageInventoryDays: Number(metrics.averageInventoryDays.toFixed(1)),
+        onTimeOrderRate: Number(metrics.onTimeOrderRate.toFixed(1)),
+        stockoutRate: Number(metrics.stockoutRate.toFixed(1)),
+      };
+    },
+    [`kpi-summary-${user.organizationId}`],
+    { revalidate: 60, tags: [`kpi-${user.organizationId}`] }
+  )();
 }

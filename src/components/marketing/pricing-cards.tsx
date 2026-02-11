@@ -21,7 +21,7 @@ const plans = [
   },
   {
     name: 'STARTER',
-    price: '49,000',
+    price: '29,000',
     description: '성장하는 중소기업을 위한 스타터 플랜',
     features: [
       '제품 500개까지',
@@ -37,7 +37,7 @@ const plans = [
   },
   {
     name: 'PRO',
-    price: '149,000',
+    price: '79,000',
     description: '전문적인 재고 관리가 필요한 기업',
     features: [
       '제품 무제한',

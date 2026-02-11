@@ -58,8 +58,8 @@ function getPlanAmount(
 ): number {
   const planPrices: Record<SubscriptionPlan, { monthly: number; yearly: number }> = {
     free: { monthly: 0, yearly: 0 },
-    starter: { monthly: 49000, yearly: 490000 },
-    pro: { monthly: 149000, yearly: 1490000 },
+    starter: { monthly: 29000, yearly: 290000 },
+    pro: { monthly: 79000, yearly: 790000 },
     enterprise: { monthly: 0, yearly: 0 }, // 별도 문의
   };
 

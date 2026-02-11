@@ -9,7 +9,7 @@ import {
   products,
 } from "@/server/db/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 import { processInventoryTransaction } from "./inventory";
 import { requireAuth } from "./auth-helpers";
@@ -230,6 +230,9 @@ export async function confirmInbound(input: ConfirmInboundInput): Promise<{
     revalidatePath("/dashboard/orders");
     revalidatePath("/dashboard/inventory");
     revalidatePath("/dashboard/psi");
+    revalidateTag(`psi-${user.organizationId}`);
+    revalidateTag(`kpi-${user.organizationId}`);
+    revalidateTag(`turnover-${user.organizationId}`);
 
     return {
       success: true,
@@ -409,6 +412,9 @@ export async function createOtherInbound(input: OtherInboundInput): Promise<{
     revalidatePath("/dashboard/orders");
     revalidatePath("/dashboard/inventory");
     revalidatePath("/dashboard/psi");
+    revalidateTag(`psi-${user.organizationId}`);
+    revalidateTag(`kpi-${user.organizationId}`);
+    revalidateTag(`turnover-${user.organizationId}`);
 
     return { success: true, recordId: record.id };
   } catch (error) {
@@ -465,6 +471,9 @@ export async function updateInboundRecordDate(
     revalidatePath("/dashboard/orders");
     revalidatePath("/dashboard/inventory");
     revalidatePath("/dashboard/psi");
+    revalidateTag(`psi-${user.organizationId}`);
+    revalidateTag(`kpi-${user.organizationId}`);
+    revalidateTag(`turnover-${user.organizationId}`);
 
     return { success: true };
   } catch (error) {

@@ -9,7 +9,7 @@ import {
   type InventoryHistory,
 } from "@/server/db/schema";
 import { eq, and, desc, sql, gte } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 import { classifyInventoryStatus } from "@/server/services/scm/inventory-status";
 import {
@@ -312,6 +312,8 @@ export async function processInventoryTransaction(input: InventoryTransactionInp
 
     revalidatePath("/dashboard/inventory");
     revalidatePath(`/products/${validated.productId}`);
+    revalidateTag(`kpi-${user.organizationId}`);
+    revalidateTag(`analytics-${user.organizationId}`);
 
     // 활동 로깅
     await logActivity({

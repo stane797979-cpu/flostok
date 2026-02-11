@@ -78,8 +78,8 @@ export const SUBSCRIPTION_PLANS: Record<SubscriptionPlan, PlanDetails> = {
   starter: {
     name: "starter",
     displayName: "스타터",
-    price: 49000,
-    yearlyPrice: 490000, // 월 40,833원 (약 17% 할인)
+    price: 29000,
+    yearlyPrice: 290000, // 월 24,167원 (약 17% 할인)
     features: [
       "제품 최대 100개",
       "사용자 3명",
@@ -110,8 +110,8 @@ export const SUBSCRIPTION_PLANS: Record<SubscriptionPlan, PlanDetails> = {
   pro: {
     name: "pro",
     displayName: "프로",
-    price: 149000,
-    yearlyPrice: 1490000, // 월 124,167원 (약 17% 할인)
+    price: 79000,
+    yearlyPrice: 790000, // 월 65,833원 (약 17% 할인)
     features: [
       "제품 무제한",
       "사용자 10명",

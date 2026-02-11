@@ -9,7 +9,13 @@ if (!connectionString) {
 }
 
 // For queries
-const queryClient = connectionString ? postgres(connectionString) : null;
+const queryClient = connectionString
+  ? postgres(connectionString, {
+      max: 10,
+      idle_timeout: 20,
+      connect_timeout: 10,
+    })
+  : null;
 export const db = queryClient
   ? drizzle(queryClient, { schema })
   : (null as unknown as ReturnType<typeof drizzle<typeof schema>>);

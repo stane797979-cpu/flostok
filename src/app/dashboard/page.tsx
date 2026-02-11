@@ -19,19 +19,16 @@ import { getABCXYZAnalysis } from "@/server/actions/analytics";
 /** 안전하게 대시보드 데이터를 로드 (인증 실패 시 빈 데이터) */
 async function loadDashboardData() {
   try {
-    // 병렬 로드: 통계 + 위험 품목 10개 + KPI + 회전율 + ABC-XYZ
-    const [stats, criticalItems, kpiSummary, turnoverResult, abcResult] = await Promise.all([
+    // 병렬 로드: 통계 + 품절/위험 품목 + KPI + 회전율 + ABC-XYZ (모두 병렬)
+    const [stats, outOfStockResult, criticalResult, kpiSummary, turnoverResult, abcResult] = await Promise.all([
       getInventoryStats(),
-      getInventoryList({ status: "out_of_stock", limit: 10 }).then(async (r) => {
-        // 품절 10개 미만이면 위험/부족 상태도 추가
-        if (r.items.length >= 10) return r.items;
-        const more = await getInventoryList({ status: "critical", limit: 10 - r.items.length });
-        return [...r.items, ...more.items];
-      }),
+      getInventoryList({ status: "out_of_stock", limit: 10 }),
+      getInventoryList({ status: "critical", limit: 10 }),
       getKPISummary(),
       getInventoryTurnoverData().catch(() => null),
       getABCXYZAnalysis().catch(() => ({ products: [], matrixData: [], summary: { aCount: 0, aPercentage: 0, bCount: 0, bPercentage: 0, cCount: 0, cPercentage: 0, period: "" } })),
     ]);
+    const criticalItems = [...outOfStockResult.items, ...criticalResult.items].slice(0, 10);
 
     // 발주 필요 품목 매핑 (TOP10)
     const needsOrderProducts = criticalItems.slice(0, 10).map((item) => ({

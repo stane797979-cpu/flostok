@@ -7,6 +7,7 @@
 
 'use server'
 
+import { unstable_cache } from 'next/cache'
 import { requireAuth } from './auth-helpers'
 import { db } from '@/server/db'
 import { products, salesRecords, inventory, demandForecasts } from '@/server/db/schema'
@@ -27,26 +28,43 @@ import {
 } from '@/server/services/scm/demand-forecast'
 
 /**
- * ABC-XYZ 분석 데이터 조회 (실제 DB 데이터)
- * - 최근 6개월 판매 데이터 기반
- * - 제품별 매출 합계 → ABC 분석
- * - 제품별 월별 판매량 변동 → XYZ 분석
- * - 결합하여 9등급 매트릭스 생성
+ * ABC-XYZ 분석 데이터 조회 내부 로직 (캐싱 대상)
  */
-export async function getABCXYZAnalysis() {
-  const user = await requireAuth()
-  const orgId = user.organizationId
-
+async function _getABCXYZAnalysisInternal(orgId: string) {
   // 최근 6개월 시작일
   const sixMonthsAgo = new Date()
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
   const startDate = sixMonthsAgo.toISOString().split('T')[0]
 
-  // 1. 전체 제품 목록 조회
-  const allProducts = await db
-    .select({ id: products.id, sku: products.sku, name: products.name })
-    .from(products)
-    .where(eq(products.organizationId, orgId))
+  // 병렬 데이터 로드 (3개 직렬→병렬 최적화)
+  const [allProducts, salesByProduct, monthlySales] = await Promise.all([
+    // 1. 전체 제품 목록 조회
+    db
+      .select({ id: products.id, sku: products.sku, name: products.name })
+      .from(products)
+      .where(eq(products.organizationId, orgId)),
+
+    // 2. 제품별 매출 합계 (ABC용)
+    db
+      .select({
+        productId: salesRecords.productId,
+        totalRevenue: sql<number>`COALESCE(SUM(${salesRecords.totalAmount}), 0)`,
+      })
+      .from(salesRecords)
+      .where(and(eq(salesRecords.organizationId, orgId), gte(salesRecords.date, startDate)))
+      .groupBy(salesRecords.productId),
+
+    // 3. 제품별 월별 판매량 (XYZ용)
+    db
+      .select({
+        productId: salesRecords.productId,
+        month: sql<string>`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`,
+        totalQuantity: sql<number>`COALESCE(SUM(${salesRecords.quantity}), 0)`,
+      })
+      .from(salesRecords)
+      .where(and(eq(salesRecords.organizationId, orgId), gte(salesRecords.date, startDate)))
+      .groupBy(salesRecords.productId, sql`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`),
+  ])
 
   if (allProducts.length === 0) {
     return {
@@ -81,28 +99,7 @@ export async function getABCXYZAnalysis() {
     }
   }
 
-  // 2. 제품별 매출 합계 (ABC용)
-  const salesByProduct = await db
-    .select({
-      productId: salesRecords.productId,
-      totalRevenue: sql<number>`COALESCE(SUM(${salesRecords.totalAmount}), 0)`,
-    })
-    .from(salesRecords)
-    .where(and(eq(salesRecords.organizationId, orgId), gte(salesRecords.date, startDate)))
-    .groupBy(salesRecords.productId)
-
   const revenueMap = new Map(salesByProduct.map((s) => [s.productId, Number(s.totalRevenue)]))
-
-  // 3. 제품별 월별 판매량 (XYZ용)
-  const monthlySales = await db
-    .select({
-      productId: salesRecords.productId,
-      month: sql<string>`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`,
-      totalQuantity: sql<number>`COALESCE(SUM(${salesRecords.quantity}), 0)`,
-    })
-    .from(salesRecords)
-    .where(and(eq(salesRecords.organizationId, orgId), gte(salesRecords.date, startDate)))
-    .groupBy(salesRecords.productId, sql`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`)
 
   // 월별 데이터를 제품별로 그룹핑
   const monthlyMap = new Map<string, number[]>()
@@ -215,6 +212,25 @@ export async function getABCXYZAnalysis() {
       avgCV: Math.round(avgCV * 100) / 100,
     },
   }
+}
+
+/**
+ * ABC-XYZ 분석 데이터 조회 (실제 DB 데이터)
+ * - 최근 6개월 판매 데이터 기반
+ * - 제품별 매출 합계 → ABC 분석
+ * - 제품별 월별 판매량 변동 → XYZ 분석
+ * - 결합하여 9등급 매트릭스 생성
+ * unstable_cache로 60초간 캐싱
+ */
+export async function getABCXYZAnalysis() {
+  const user = await requireAuth()
+  const orgId = user.organizationId
+
+  return unstable_cache(
+    () => _getABCXYZAnalysisInternal(orgId),
+    [`analytics-data-${orgId}`],
+    { revalidate: 60, tags: [`analytics-${orgId}`] }
+  )()
 }
 
 /**

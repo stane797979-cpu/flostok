@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { requireManagerOrAbove } from "./auth-helpers";
 import {
   refreshGradesForOrganization,
@@ -26,6 +26,7 @@ export async function refreshGrades(): Promise<{
 
     revalidatePath("/dashboard/products");
     revalidatePath("/dashboard/analytics");
+    revalidateTag(`analytics-${user.organizationId}`);
 
     return {
       success: true,

@@ -31,7 +31,7 @@ export const SUBSCRIPTION_PLANS = {
   STARTER: {
     id: "starter",
     name: "스타터",
-    price: 19900,
+    price: 29000,
     features: {
       maxProducts: 100,
       maxOrders: 50, // 월간
@@ -44,7 +44,7 @@ export const SUBSCRIPTION_PLANS = {
   PRO: {
     id: "pro",
     name: "프로",
-    price: 49900,
+    price: 79000,
     features: {
       maxProducts: 500,
       maxOrders: Infinity, // 무제한
