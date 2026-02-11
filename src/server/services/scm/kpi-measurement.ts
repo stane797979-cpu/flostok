@@ -90,7 +90,8 @@ export async function measureKPIMetrics(
     }
 
     // 제품 필터 조건 헬퍼
-    const productFilter = (col: typeof salesRecords.productId) =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const productFilter = (col: any) =>
       filteredIds ? [inArray(col, filteredIds)] : [];
 
     // 발주서 필터 (purchaseOrders에는 productId가 없으므로 서브쿼리 사용)
@@ -252,7 +253,8 @@ export async function getKPITrendData(
       }));
     }
 
-    const productFilter = (col: typeof salesRecords.productId) =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const productFilter = (col: any) =>
       filteredIds ? [inArray(col, filteredIds)] : [];
     const orderProductFilter = filteredIds
       ? [sql`${purchaseOrders.id} IN (SELECT DISTINCT ${purchaseOrderItems.purchaseOrderId} FROM ${purchaseOrderItems} WHERE ${inArray(purchaseOrderItems.productId, filteredIds)})`]

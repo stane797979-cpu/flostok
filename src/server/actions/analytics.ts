@@ -53,13 +53,30 @@ export async function getABCXYZAnalysis() {
       products: [],
       matrixData: [],
       summary: {
+        totalCount: 0,
         aCount: 0,
         aPercentage: 0,
         bCount: 0,
         bPercentage: 0,
         cCount: 0,
         cPercentage: 0,
+        xCount: 0,
+        xPercentage: 0,
+        yCount: 0,
+        yPercentage: 0,
+        zCount: 0,
+        zPercentage: 0,
         period: '최근 6개월',
+      },
+      insights: {
+        totalRevenue: 0,
+        aRevenuePercent: 0,
+        axCount: 0,
+        axRevenuePercent: 0,
+        azCount: 0,
+        bzCount: 0,
+        riskCount: 0,
+        avgCV: 0,
       },
     }
   }
@@ -144,18 +161,58 @@ export async function getABCXYZAnalysis() {
   const aCount = combined.filter((c) => c.abcGrade === 'A').length
   const bCount = combined.filter((c) => c.abcGrade === 'B').length
   const cCount = combined.filter((c) => c.abcGrade === 'C').length
+  const xCount = combined.filter((c) => c.xyzGrade === 'X').length
+  const yCount = combined.filter((c) => c.xyzGrade === 'Y').length
+  const zCount = combined.filter((c) => c.xyzGrade === 'Z').length
+
+  // 10. 인사이트 데이터
+  const totalRevenue = analysisProducts.reduce((s, p) => s + p.revenue, 0)
+  const aRevenue = analysisProducts
+    .filter((p) => p.abcGrade === 'A')
+    .reduce((s, p) => s + p.revenue, 0)
+  const aRevenuePercent = totalRevenue > 0 ? (aRevenue / totalRevenue) * 100 : 0
+
+  // 위험 등급: A등급인데 수요 불안정(Z) = 핵심 불안정
+  const azCount = combined.filter((c) => c.combinedGrade === 'AZ').length
+  const bzCount = combined.filter((c) => c.combinedGrade === 'BZ').length
+  // 핵심 안정: AX
+  const axCount = combined.filter((c) => c.combinedGrade === 'AX').length
+  const axRevenue = analysisProducts
+    .filter((p) => p.combinedGrade === 'AX')
+    .reduce((s, p) => s + p.revenue, 0)
+  const axRevenuePercent = totalRevenue > 0 ? (axRevenue / totalRevenue) * 100 : 0
+  // 평균 변동계수
+  const allCvs = analysisProducts.map((p) => p.variationRate).filter((v) => v > 0)
+  const avgCV = allCvs.length > 0 ? allCvs.reduce((s, v) => s + v, 0) / allCvs.length : 0
 
   return {
     products: analysisProducts,
     matrixData,
     summary: {
+      totalCount: total,
       aCount,
       aPercentage: total > 0 ? (aCount / total) * 100 : 0,
       bCount,
       bPercentage: total > 0 ? (bCount / total) * 100 : 0,
       cCount,
       cPercentage: total > 0 ? (cCount / total) * 100 : 0,
+      xCount,
+      xPercentage: total > 0 ? (xCount / total) * 100 : 0,
+      yCount,
+      yPercentage: total > 0 ? (yCount / total) * 100 : 0,
+      zCount,
+      zPercentage: total > 0 ? (zCount / total) * 100 : 0,
       period: '최근 6개월',
+    },
+    insights: {
+      totalRevenue,
+      aRevenuePercent: Math.round(aRevenuePercent * 10) / 10,
+      axCount,
+      axRevenuePercent: Math.round(axRevenuePercent * 10) / 10,
+      azCount,
+      bzCount,
+      riskCount: azCount + bzCount,
+      avgCV: Math.round(avgCV * 100) / 100,
     },
   }
 }

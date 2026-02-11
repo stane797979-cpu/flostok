@@ -21,8 +21,8 @@ export default async function InventoryPage() {
         name: item.product.name,
         safetyStock: item.product.safetyStock,
         reorderPoint: item.product.reorderPoint,
-        abcGrade: item.product.abcGrade,
-        xyzGrade: item.product.xyzGrade,
+        abcGrade: item.product.abcGrade as "A" | "B" | "C" | null,
+        xyzGrade: item.product.xyzGrade as "X" | "Y" | "Z" | null,
       },
     }));
 

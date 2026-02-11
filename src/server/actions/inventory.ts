@@ -65,7 +65,7 @@ type InventoryListItem = {
   lastUpdatedAt: Date | null;
   updatedAt: Date;
   createdAt: Date;
-  product: { sku: string; name: string; safetyStock: number | null; reorderPoint: number | null };
+  product: { sku: string; name: string; safetyStock: number | null; reorderPoint: number | null; abcGrade: string | null; xyzGrade: string | null };
 };
 
 export async function getInventoryList(options?: {

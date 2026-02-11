@@ -85,14 +85,34 @@ const FulfillmentRateTable = dynamic(
 export default async function AnalyticsPage() {
   let products: ProductAnalysis[] = [];
   let matrixData: { grade: string; count: number }[] = [];
-  let summary = {
+  type ABCSummary = Awaited<ReturnType<typeof getABCXYZAnalysis>>["summary"];
+  type ABCInsights = Awaited<ReturnType<typeof getABCXYZAnalysis>>["insights"];
+
+  let summary: ABCSummary = {
+    totalCount: 0,
     aCount: 0,
     aPercentage: 0,
     bCount: 0,
     bPercentage: 0,
     cCount: 0,
     cPercentage: 0,
+    xCount: 0,
+    xPercentage: 0,
+    yCount: 0,
+    yPercentage: 0,
+    zCount: 0,
+    zPercentage: 0,
     period: "최근 6개월",
+  };
+  let insights: ABCInsights = {
+    totalRevenue: 0,
+    aRevenuePercent: 0,
+    axCount: 0,
+    axRevenuePercent: 0,
+    azCount: 0,
+    bzCount: 0,
+    riskCount: 0,
+    avgCV: 0,
   };
 
   // 병렬 데이터 로드
@@ -108,6 +128,7 @@ export default async function AnalyticsPage() {
     products = abcResult.value.products;
     matrixData = abcResult.value.matrixData;
     summary = abcResult.value.summary;
+    insights = abcResult.value.insights;
   }
 
   const turnoverData =
@@ -141,7 +162,7 @@ export default async function AnalyticsPage() {
         <TabsContent value="abc-xyz" className="space-y-6">
           {hasData ? (
             <>
-              <ABCXYZSummary {...summary} />
+              <ABCXYZSummary {...summary} insights={insights} />
               <ABCXYZClient matrixData={matrixData} products={products} />
               <ABCXYZPolicyGuide />
             </>
