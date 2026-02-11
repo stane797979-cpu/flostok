@@ -5,14 +5,14 @@ export function TestimonialsSection() {
   return (
     <section
       id="testimonials"
-      className="bg-slate-50 px-6 py-24 sm:py-32 lg:px-8"
+      className="bg-slate-50 px-4 py-16 sm:px-6 sm:py-24 lg:px-8 lg:py-32"
     >
       <div className="mx-auto max-w-7xl">
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="text-base font-semibold leading-7 text-primary-600">
             고객 후기
           </h2>
-          <p className="mt-2 text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+          <p className="mt-2 text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl lg:text-4xl">
             고객이 말하는 Stock & Logis
           </p>
         </div>

@@ -39,9 +39,9 @@ const contracts = [
 export default function ContractsPage() {
   return (
     <div>
-      <section className="bg-gradient-to-b from-slate-900 to-slate-800 px-6 py-24 sm:py-32 lg:px-8">
+      <section className="bg-gradient-to-b from-slate-900 to-slate-800 px-4 py-16 sm:px-6 sm:py-24 lg:px-8 lg:py-32">
         <div className="mx-auto max-w-3xl text-center">
-          <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
+          <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl lg:text-4xl">
             계약서 양식
           </h1>
           <p className="mt-6 text-lg leading-8 text-gray-300">
@@ -51,7 +51,7 @@ export default function ContractsPage() {
         </div>
       </section>
 
-      <section className="px-6 py-24 sm:py-32 lg:px-8">
+      <section className="px-4 py-16 sm:px-6 sm:py-24 lg:px-8 lg:py-32">
         <div className="mx-auto max-w-4xl">
           <div className="mb-8 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
             본 계약서는 참고용 초안이며, 실제 계약 체결 시 법률 전문가의 검수를

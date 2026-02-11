@@ -4,13 +4,13 @@ import { CEO_HIGHLIGHT } from "@/lib/constants/homepage-data";
 
 export function CeoHighlight() {
   return (
-    <section id="ceo" className="bg-slate-50 px-6 py-24 sm:py-32 lg:px-8">
+    <section id="ceo" className="bg-slate-50 px-4 py-16 sm:px-6 sm:py-24 lg:px-8 lg:py-32">
       <div className="mx-auto max-w-7xl">
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="text-base font-semibold leading-7 text-primary-600">
             대표 소개
           </h2>
-          <p className="mt-2 text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+          <p className="mt-2 text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl lg:text-4xl">
             현장을 아는 SCM 전문가
           </p>
         </div>
@@ -19,8 +19,8 @@ export function CeoHighlight() {
           {/* 프로필 이미지 영역 */}
           <div className="flex justify-center">
             <div className="relative">
-              <div className="flex h-64 w-64 items-center justify-center rounded-full bg-gradient-to-br from-primary-100 to-primary-200">
-                <span className="text-7xl font-bold text-primary-600">
+              <div className="flex h-40 w-40 items-center justify-center rounded-full bg-gradient-to-br from-primary-100 to-primary-200 sm:h-64 sm:w-64">
+                <span className="text-5xl font-bold text-primary-600 sm:text-7xl">
                   {CEO_HIGHLIGHT.name[0]}
                 </span>
               </div>
