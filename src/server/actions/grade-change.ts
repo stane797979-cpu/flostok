@@ -1,5 +1,6 @@
 "use server";
 
+import { unstable_cache } from "next/cache";
 import { db } from "@/server/db";
 import { gradeHistory, products } from "@/server/db/schema";
 import { eq, and, desc, sql, isNotNull } from "drizzle-orm";
@@ -104,31 +105,35 @@ function getSignalAndAction(
   return { signal: "등급 상승", action: "긍정적 변화, 현행 유지" };
 }
 
-/**
- * 등급 변동 분석 조회
- */
-export async function getGradeChangeAnalysis(): Promise<GradeChangeResult> {
-  const user = await getCurrentUser();
-  const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
-
-  // 최근 2개 기간의 등급 이력 조회
-  const history = await db
-    .select({
-      productId: gradeHistory.productId,
-      period: gradeHistory.period,
-      abcGrade: gradeHistory.abcGrade,
-      xyzGrade: gradeHistory.xyzGrade,
-      combinedGrade: gradeHistory.combinedGrade,
-    })
-    .from(gradeHistory)
-    .where(eq(gradeHistory.organizationId, orgId))
-    .orderBy(desc(gradeHistory.period));
-
-  // 제품 정보 조회
-  const productList = await db
-    .select({ id: products.id, sku: products.sku, name: products.name })
-    .from(products)
-    .where(and(eq(products.organizationId, orgId), isNotNull(products.isActive)));
+async function _getGradeChangeInternal(orgId: string): Promise<GradeChangeResult> {
+  // 3개 쿼리 병렬 실행
+  const [history, productList, trendData] = await Promise.all([
+    db
+      .select({
+        productId: gradeHistory.productId,
+        period: gradeHistory.period,
+        abcGrade: gradeHistory.abcGrade,
+        xyzGrade: gradeHistory.xyzGrade,
+        combinedGrade: gradeHistory.combinedGrade,
+      })
+      .from(gradeHistory)
+      .where(eq(gradeHistory.organizationId, orgId))
+      .orderBy(desc(gradeHistory.period)),
+    db
+      .select({ id: products.id, sku: products.sku, name: products.name })
+      .from(products)
+      .where(and(eq(products.organizationId, orgId), isNotNull(products.isActive))),
+    db
+      .select({
+        period: gradeHistory.period,
+        xyzGrade: gradeHistory.xyzGrade,
+        count: sql<number>`count(*)`,
+      })
+      .from(gradeHistory)
+      .where(eq(gradeHistory.organizationId, orgId))
+      .groupBy(gradeHistory.period, gradeHistory.xyzGrade)
+      .orderBy(gradeHistory.period),
+  ]);
 
   const productMap = new Map(productList.map((p) => [p.id, p]));
 
@@ -176,18 +181,7 @@ export async function getGradeChangeAnalysis(): Promise<GradeChangeResult> {
     });
   }
 
-  // 월별 X/Y/Z 품목수 추이 (최근 6개월)
-  const trendData = await db
-    .select({
-      period: gradeHistory.period,
-      xyzGrade: gradeHistory.xyzGrade,
-      count: sql<number>`count(*)`,
-    })
-    .from(gradeHistory)
-    .where(eq(gradeHistory.organizationId, orgId))
-    .groupBy(gradeHistory.period, gradeHistory.xyzGrade)
-    .orderBy(gradeHistory.period);
-
+  // 월별 X/Y/Z 품목수 추이 (최근 6개월) — 이미 병렬로 조회됨
   const trendMap = new Map<string, GradeTrendMonth>();
   for (const row of trendData) {
     if (!row.period) continue;
@@ -210,4 +204,18 @@ export async function getGradeChangeAnalysis(): Promise<GradeChangeResult> {
     totalProducts: productList.length,
     changedCount: changes.filter((c) => c.changeType !== "lateral" && c.changeType !== "new").length,
   };
+}
+
+/**
+ * 등급 변동 분석 조회 (60초 캐시)
+ */
+export async function getGradeChangeAnalysis(): Promise<GradeChangeResult> {
+  const user = await getCurrentUser();
+  const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
+
+  return unstable_cache(
+    () => _getGradeChangeInternal(orgId),
+    [`grade-change-${orgId}`],
+    { revalidate: 60, tags: [`analytics-${orgId}`] }
+  )();
 }
