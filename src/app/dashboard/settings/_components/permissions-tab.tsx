@@ -219,7 +219,8 @@ export function PermissionsTab({ organizationId }: PermissionsTabProps) {
                     const isChecked =
                       permissions[role.key]?.[menuKey] ?? false;
                     return (
-                      <td key={role.key} className="px-4 py-2.5 text-center">
+                      <td key={role.key} className="px-4 py-2.5">
+                        <div className="flex justify-center">
                         <Checkbox
                           checked={role.locked ? true : isChecked}
                           disabled={role.locked || isPending}
@@ -231,6 +232,7 @@ export function PermissionsTab({ organizationId }: PermissionsTabProps) {
                             )
                           }
                         />
+                        </div>
                       </td>
                     );
                   })}
