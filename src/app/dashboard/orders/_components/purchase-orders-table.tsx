@@ -179,8 +179,37 @@ export function PurchaseOrdersTable({ orders, onViewClick, onDownloadClick, sele
   const sortableHeadClass = "cursor-pointer select-none hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors";
 
   return (
-    <div className={cn("rounded-md border", className)}>
-      <Table>
+    <>
+      {/* 모바일 카드 뷰 */}
+      <div className={cn("space-y-3 md:hidden", className)}>
+        {sorted.map((order) => (
+          <div key={order.id} className="rounded-lg border bg-white p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="min-w-0 flex-1">
+                <p className="font-mono text-sm font-medium">{order.orderNumber}</p>
+                <p className="text-sm text-slate-600 truncate">{order.supplierName}</p>
+              </div>
+              <div className="shrink-0 ml-2">
+                {getStatusBadge(order.status)}
+              </div>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <div className="space-y-0.5">
+                <p className="font-semibold">{formatCurrency(order.totalAmount)}</p>
+                <p className="text-slate-500">{formatDate(order.orderDate)} · {order.itemsCount}품목</p>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => onViewClick(order.id)}>
+                <Eye className="mr-1 h-4 w-4" />
+                상세
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* 데스크톱 테이블 뷰 */}
+      <div className={cn("hidden rounded-md border md:block", className)}>
+        <Table>
         <TableHeader>
           <TableRow>
             {onSelectChange && (
@@ -269,6 +298,7 @@ export function PurchaseOrdersTable({ orders, onViewClick, onDownloadClick, sele
           })}
         </TableBody>
       </Table>
-    </div>
+      </div>
+    </>
   );
 }

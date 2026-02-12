@@ -7,6 +7,7 @@ import {
   inboundRecords,
   inventoryLots,
   products,
+  suppliers,
 } from "@/server/db/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { revalidatePath, revalidateTag } from "next/cache";
@@ -713,5 +714,187 @@ export async function bulkConfirmInbound(
       processedCount: 0,
       errors: [{ orderId: "", orderNumber: "", error: "일괄 입고확인 처리에 실패했습니다" }],
     };
+  }
+}
+
+/**
+ * 창고 입고예정 목록 조회
+ *
+ * ordered, confirmed, shipped, partially_received 상태의 발주서 목록을 반환합니다.
+ */
+export async function getWarehouseInboundOrders(): Promise<{
+  orders: Array<{
+    id: string;
+    orderNumber: string;
+    supplierName: string | null;
+    status: string;
+    expectedDate: string | null;
+    orderDate: string | null;
+    itemsCount: number;
+    totalQuantity: number;
+    receivedQuantity: number;
+  }>;
+}> {
+  try {
+    const user = await requireAuth();
+
+    // 입고 대기중인 발주서 조회
+    const inboundCapableStatuses = ["ordered", "confirmed", "shipped", "partially_received"] as (typeof purchaseOrders.status.enumValues)[number][];
+
+    const ordersData = await db
+      .select({
+        order: purchaseOrders,
+        supplier: {
+          name: suppliers.name,
+        },
+      })
+      .from(purchaseOrders)
+      .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
+      .where(
+        and(
+          eq(purchaseOrders.organizationId, user.organizationId),
+          inArray(purchaseOrders.status, inboundCapableStatuses)
+        )
+      )
+      .orderBy(sql`${purchaseOrders.expectedDate} ASC NULLS LAST, ${purchaseOrders.orderDate} ASC`);
+
+    // 각 발주서의 항목 통계 조회
+    const orderIds = ordersData.map((row) => row.order.id);
+
+    if (orderIds.length === 0) {
+      return { orders: [] };
+    }
+
+    const itemsStats = await db
+      .select({
+        purchaseOrderId: purchaseOrderItems.purchaseOrderId,
+        itemsCount: sql<number>`count(*)`,
+        totalQuantity: sql<number>`coalesce(sum(${purchaseOrderItems.quantity}), 0)`,
+        receivedQuantity: sql<number>`coalesce(sum(${purchaseOrderItems.receivedQuantity}), 0)`,
+      })
+      .from(purchaseOrderItems)
+      .where(inArray(purchaseOrderItems.purchaseOrderId, orderIds))
+      .groupBy(purchaseOrderItems.purchaseOrderId);
+
+    const statsMap = new Map(
+      itemsStats.map((stat) => [
+        stat.purchaseOrderId,
+        {
+          itemsCount: Number(stat.itemsCount),
+          totalQuantity: Number(stat.totalQuantity),
+          receivedQuantity: Number(stat.receivedQuantity),
+        },
+      ])
+    );
+
+    return {
+      orders: ordersData.map((row) => {
+        const stats = statsMap.get(row.order.id) || {
+          itemsCount: 0,
+          totalQuantity: 0,
+          receivedQuantity: 0,
+        };
+
+        return {
+          id: row.order.id,
+          orderNumber: row.order.orderNumber,
+          supplierName: row.supplier?.name || null,
+          status: row.order.status,
+          expectedDate: row.order.expectedDate,
+          orderDate: row.order.orderDate,
+          itemsCount: stats.itemsCount,
+          totalQuantity: stats.totalQuantity,
+          receivedQuantity: stats.receivedQuantity,
+        };
+      }),
+    };
+  } catch (error) {
+    console.error("창고 입고예정 목록 조회 오류:", error);
+    throw new Error("창고 입고예정 목록 조회에 실패했습니다");
+  }
+}
+
+/**
+ * 발주서 상세 정보 조회 (입고용)
+ *
+ * 특정 발주서의 항목 목록을 반환합니다.
+ */
+export async function getWarehouseInboundOrderDetail(orderId: string): Promise<{
+  order: {
+    id: string;
+    orderNumber: string;
+    supplierName: string | null;
+    status: string;
+    expectedDate: string | null;
+  };
+  items: Array<{
+    orderItemId: string;
+    productId: string;
+    productSku: string;
+    productName: string;
+    orderedQuantity: number;
+    receivedQuantity: number;
+    unitPrice: number;
+  }>;
+}> {
+  try {
+    const user = await requireAuth();
+
+    // 발주서 조회
+    const [orderData] = await db
+      .select({
+        order: purchaseOrders,
+        supplier: {
+          name: suppliers.name,
+        },
+      })
+      .from(purchaseOrders)
+      .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
+      .where(
+        and(
+          eq(purchaseOrders.id, orderId),
+          eq(purchaseOrders.organizationId, user.organizationId)
+        )
+      )
+      .limit(1);
+
+    if (!orderData) {
+      throw new Error("발주서를 찾을 수 없습니다");
+    }
+
+    // 발주 항목 조회
+    const itemsData = await db
+      .select({
+        item: purchaseOrderItems,
+        product: {
+          sku: products.sku,
+          name: products.name,
+        },
+      })
+      .from(purchaseOrderItems)
+      .innerJoin(products, eq(purchaseOrderItems.productId, products.id))
+      .where(eq(purchaseOrderItems.purchaseOrderId, orderId));
+
+    return {
+      order: {
+        id: orderData.order.id,
+        orderNumber: orderData.order.orderNumber,
+        supplierName: orderData.supplier?.name || null,
+        status: orderData.order.status,
+        expectedDate: orderData.order.expectedDate,
+      },
+      items: itemsData.map((row) => ({
+        orderItemId: row.item.id,
+        productId: row.item.productId,
+        productSku: row.product.sku,
+        productName: row.product.name,
+        orderedQuantity: row.item.quantity,
+        receivedQuantity: row.item.receivedQuantity || 0,
+        unitPrice: row.item.unitPrice,
+      })),
+    };
+  } catch (error) {
+    console.error("발주서 상세 조회 오류:", error);
+    throw new Error("발주서 상세 조회에 실패했습니다");
   }
 }

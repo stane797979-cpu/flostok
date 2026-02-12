@@ -163,8 +163,76 @@ export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
         </div>
       )}
 
-      {/* 재고 테이블 */}
-      <div className="rounded-lg border bg-white dark:bg-slate-950">
+      {/* 모바일 카드 뷰 */}
+      <div className="space-y-3 md:hidden">
+        {sorted.length === 0 && (
+          <div className="rounded-lg border bg-white p-8 text-center text-slate-500 dark:bg-slate-950">
+            재고 데이터가 없습니다
+          </div>
+        )}
+        {sorted.map((item) => {
+          const safetyStock = item.product.safetyStock ?? 0;
+          const reorderPoint = item.product.reorderPoint ?? 0;
+          const status = getInventoryStatus(item.currentStock, safetyStock, reorderPoint);
+          const inventoryDays = item.daysOfInventory;
+
+          return (
+            <div key={item.id} className="rounded-lg border bg-white p-4 space-y-2 dark:bg-slate-950">
+              <div className="flex items-center justify-between">
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium truncate">{item.product.name}</p>
+                  <p className="text-xs font-mono text-slate-500">{item.product.sku}</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 ml-2">
+                  <Badge variant="outline" className={cn("font-medium", status.bgClass, status.textClass, status.borderClass)}>
+                    {status.label}
+                  </Badge>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => onAdjust(item)}>
+                        <Settings2 className="mr-2 h-4 w-4" />
+                        재고 조정
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 text-sm">
+                <div>
+                  <span className="text-slate-500">현재고</span>
+                  <span className="ml-1 font-mono font-medium">{item.currentStock.toLocaleString()}</span>
+                </div>
+                {inventoryDays !== null && (
+                  <div>
+                    <span className="text-slate-500">재고일수</span>
+                    <span className={cn(
+                      "ml-1 font-mono",
+                      inventoryDays <= 7 && "font-medium text-red-600",
+                      inventoryDays > 7 && inventoryDays <= 14 && "text-orange-600",
+                      inventoryDays > 14 && "text-slate-600"
+                    )}>
+                      {inventoryDays > 365 ? "365+" : inventoryDays}일
+                    </span>
+                  </div>
+                )}
+                {item.product.abcGrade && item.product.xyzGrade && (
+                  <Badge variant="outline" className="font-mono">
+                    {item.product.abcGrade}{item.product.xyzGrade}
+                  </Badge>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 재고 테이블 (데스크톱) */}
+      <div className="hidden rounded-lg border bg-white md:block dark:bg-slate-950">
         <Table>
           <TableHeader>
             <TableRow>

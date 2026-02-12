@@ -9,7 +9,7 @@ import {
   type InventoryHistory,
 } from "@/server/db/schema";
 import { eq, and, desc, sql, gte } from "drizzle-orm";
-import { revalidatePath, revalidateTag } from "next/cache";
+import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 import { z } from "zod";
 import { classifyInventoryStatus } from "@/server/services/scm/inventory-status";
 import {
@@ -312,6 +312,7 @@ export async function processInventoryTransaction(input: InventoryTransactionInp
 
     revalidatePath("/dashboard/inventory");
     revalidatePath(`/products/${validated.productId}`);
+    revalidateTag(`inventory-${user.organizationId}`);
     revalidateTag(`kpi-${user.organizationId}`);
     revalidateTag(`analytics-${user.organizationId}`);
 
@@ -393,18 +394,9 @@ export async function getInventoryHistory(options?: {
 }
 
 /**
- * 재고 통계
+ * 재고 통계 내부 로직
  */
-export async function getInventoryStats(): Promise<{
-  totalProducts: number;
-  outOfStock: number;
-  critical: number;
-  shortage: number;
-  optimal: number;
-  excess: number;
-  totalValue: number;
-}> {
-  const user = await requireAuth();
+async function _getInventoryStatsInternal(orgId: string) {
   const result = await db
     .select({
       status: inventory.status,
@@ -412,7 +404,7 @@ export async function getInventoryStats(): Promise<{
       totalValue: sql<number>`sum(${inventory.inventoryValue})`,
     })
     .from(inventory)
-    .where(eq(inventory.organizationId, user.organizationId))
+    .where(eq(inventory.organizationId, orgId))
     .groupBy(inventory.status);
 
   const stats = {
@@ -451,6 +443,26 @@ export async function getInventoryStats(): Promise<{
   });
 
   return stats;
+}
+
+/**
+ * 재고 통계 (30초 캐시)
+ */
+export async function getInventoryStats(): Promise<{
+  totalProducts: number;
+  outOfStock: number;
+  critical: number;
+  shortage: number;
+  optimal: number;
+  excess: number;
+  totalValue: number;
+}> {
+  const user = await requireAuth();
+  return unstable_cache(
+    () => _getInventoryStatsInternal(user.organizationId),
+    [`inventory-stats-${user.organizationId}`],
+    { revalidate: 30, tags: [`inventory-${user.organizationId}`] }
+  )();
 }
 
 /**

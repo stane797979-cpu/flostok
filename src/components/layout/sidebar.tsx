@@ -1,26 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Package, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NavItem } from "./nav-item";
-import { MAIN_SECTIONS, BOTTOM_NAV } from "@/lib/constants/navigation";
+import { MAIN_SECTIONS, BOTTOM_NAV, type NavItem as NavItemType } from "@/lib/constants/navigation";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
 interface SidebarProps {
   className?: string;
+  onNavigate?: () => void;
   userInfo?: {
     name: string;
     role: string;
     orgName: string;
     isSuperadmin?: boolean;
+    allowedMenus?: string[];
   };
 }
 
-export function Sidebar({ className, userInfo }: SidebarProps) {
+export function Sidebar({ className, onNavigate, userInfo }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const router = useRouter();
 
@@ -36,6 +38,36 @@ export function Sidebar({ className, userInfo }: SidebarProps) {
     "/orders": 5,
     "/alerts": 2,
   };
+
+  // 권한 기반 메뉴 필터링 (children 지원)
+  const filteredSections = useMemo(() => {
+    const allowedMenus = userInfo?.allowedMenus;
+    const isAllAllowed = !allowedMenus || allowedMenus.includes("*");
+
+    if (isAllAllowed) return MAIN_SECTIONS;
+
+    return MAIN_SECTIONS
+      .map((section) => ({
+        ...section,
+        items: section.items
+          .map((item): NavItemType | null => {
+            // children이 있는 항목: children을 먼저 필터
+            if (item.children && item.children.length > 0) {
+              const filteredChildren = item.children.filter((child) => {
+                if (!child.menuKey) return true;
+                return allowedMenus.includes(child.menuKey);
+              });
+              if (filteredChildren.length === 0) return null;
+              return { ...item, children: filteredChildren };
+            }
+            // 일반 항목
+            if (!item.menuKey) return item;
+            return allowedMenus.includes(item.menuKey) ? item : null;
+          })
+          .filter((item): item is NavItemType => item !== null),
+      }))
+      .filter((section) => section.items.length > 0);
+  }, [userInfo?.allowedMenus]);
 
   return (
     <aside
@@ -62,9 +94,9 @@ export function Sidebar({ className, userInfo }: SidebarProps) {
         </Link>
       </div>
 
-      {/* 메인 네비게이션 — SCM 프로세스 순서 섹션 */}
+      {/* 메인 네비게이션 — SCM 프로세스 순서 섹션 (권한 필터링 적용) */}
       <nav className="flex-1 overflow-y-auto p-3">
-        {MAIN_SECTIONS.map((section, idx) => (
+        {filteredSections.map((section, idx) => (
           <div key={idx}>
             {section.title && (
               collapsed ? (
@@ -81,12 +113,14 @@ export function Sidebar({ className, userInfo }: SidebarProps) {
             <div className="space-y-1">
               {section.items.map((item) => (
                 <NavItem
-                  key={item.href}
+                  key={item.title}
                   title={item.title}
                   href={item.href}
                   icon={item.icon}
                   badge={badges[item.href]}
                   collapsed={collapsed}
+                  onClick={onNavigate}
+                  subItems={item.children}
                 />
               ))}
             </div>
@@ -100,6 +134,7 @@ export function Sidebar({ className, userInfo }: SidebarProps) {
         {userInfo?.isSuperadmin && (
           <Link
             href="/admin"
+            onClick={onNavigate}
             className={cn(
               "mb-2 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-100",
               collapsed && "justify-center px-2"
@@ -119,13 +154,17 @@ export function Sidebar({ className, userInfo }: SidebarProps) {
               href={item.href}
               icon={item.icon}
               collapsed={collapsed}
+              onClick={onNavigate}
             />
           ))}
         </div>
 
         {/* 사용자 정보 */}
         <button
-          onClick={() => router.push("/dashboard/settings?tab=account")}
+          onClick={() => {
+            onNavigate?.();
+            router.push("/dashboard/settings?tab=account");
+          }}
           className={cn(
             "mt-3 flex w-full items-center gap-3 rounded-lg border border-slate-200 p-2 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800",
             collapsed && "justify-center p-1"

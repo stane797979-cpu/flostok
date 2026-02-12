@@ -32,7 +32,7 @@ export function Navbar() {
           : "bg-transparent"
       )}
     >
-      <div className="mx-auto flex h-28 max-w-7xl items-center px-6 lg:px-8">
+      <div className="mx-auto flex h-16 max-w-7xl items-center px-4 sm:h-20 md:h-28 sm:px-6 lg:px-8">
         {/* Logo - 좌측 */}
         <Link href="/" className="flex-shrink-0">
           <Image
@@ -42,7 +42,7 @@ export function Navbar() {
             height={120}
             className={cn(
               "w-auto transition-all duration-300 rounded",
-              scrolled ? "h-14" : "h-20"
+              scrolled ? "h-8 sm:h-10 md:h-14" : "h-10 sm:h-14 md:h-20"
             )}
             priority
           />
@@ -70,7 +70,7 @@ export function Navbar() {
 
         {/* Mobile Menu */}
         <Sheet>
-          <SheetTrigger asChild className="md:hidden">
+          <SheetTrigger asChild className="ml-auto md:hidden">
             <Button variant="ghost" size="icon">
               <Menu className="h-5 w-5" />
               <span className="sr-only">메뉴 열기</span>
@@ -84,7 +84,7 @@ export function Navbar() {
                   alt={COMPANY.name}
                   width={400}
                   height={100}
-                  className="h-16 w-auto invert"
+                  className="h-12 w-auto invert"
                 />
               </Link>
               <nav className="flex flex-col gap-4">

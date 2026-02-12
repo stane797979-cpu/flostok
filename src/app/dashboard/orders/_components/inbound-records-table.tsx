@@ -162,8 +162,46 @@ export function InboundRecordsTable({ records, className }: InboundRecordsTableP
   }
 
   return (
-    <div className={cn("rounded-md border", className)}>
-      <Table>
+    <>
+      {/* 모바일 카드 뷰 */}
+      <div className={cn("space-y-3 md:hidden", className)}>
+        {sortedRecords.map((record) => (
+          <div key={record.id} className="rounded-lg border bg-white p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="min-w-0 flex-1">
+                <p className="font-medium truncate">{record.productName}</p>
+                <p className="text-xs font-mono text-slate-500">{record.productSku}</p>
+              </div>
+              <div className="shrink-0 ml-2">
+                {qualityBadge(record.qualityResult)}
+              </div>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <div className="space-y-0.5">
+                <p className="text-slate-600">입고일: {record.date}</p>
+                <p className="text-slate-500">
+                  수량: <span className="font-semibold text-slate-900">{record.receivedQuantity}</span>
+                  {record.acceptedQuantity != null && ` (합격: ${record.acceptedQuantity})`}
+                </p>
+              </div>
+              {record.expiryDate && (
+                <span className={cn(
+                  "text-xs",
+                  isExpired(record.expiryDate) && "font-semibold text-red-600",
+                  isExpiringSoon(record.expiryDate) && "font-semibold text-orange-600",
+                  !isExpired(record.expiryDate) && !isExpiringSoon(record.expiryDate) && "text-slate-500"
+                )}>
+                  유통: {record.expiryDate}
+                </span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* 데스크톱 테이블 뷰 */}
+      <div className={cn("hidden rounded-md border md:block", className)}>
+        <Table>
         <TableHeader>
           <TableRow>
             <TableHead className="whitespace-nowrap">
@@ -294,5 +332,6 @@ export function InboundRecordsTable({ records, className }: InboundRecordsTableP
         </TableBody>
       </Table>
     </div>
+    </>
   );
 }

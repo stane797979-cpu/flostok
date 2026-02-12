@@ -57,17 +57,19 @@ interface UserManagementProps {
   organizationId: string
 }
 
-const roleLabels = {
+const roleLabels: Record<string, string> = {
   admin: '관리자',
   manager: '매니저',
   viewer: '뷰어',
-} as const
+  warehouse: '창고',
+}
 
-const roleBadgeVariants = {
+const roleBadgeVariants: Record<string, 'default' | 'destructive' | 'outline' | 'secondary'> = {
   admin: 'destructive',
   manager: 'default',
   viewer: 'secondary',
-} as const
+  warehouse: 'outline',
+}
 
 export function UserManagement({ organizationId }: UserManagementProps) {
   const [users, setUsers] = useState<OrganizationUser[]>([])
@@ -79,7 +81,7 @@ export function UserManagement({ organizationId }: UserManagementProps) {
   // 초대 다이얼로그 상태
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteRole, setInviteRole] = useState<'admin' | 'manager' | 'viewer'>('viewer')
+  const [inviteRole, setInviteRole] = useState<'admin' | 'manager' | 'viewer' | 'warehouse'>('viewer')
 
   // 사용자 목록 로드
   const loadUsers = async () => {
@@ -108,7 +110,7 @@ export function UserManagement({ organizationId }: UserManagementProps) {
   // 역할 변경
   const handleRoleChange = async (
     userId: string,
-    newRole: 'admin' | 'manager' | 'viewer'
+    newRole: 'admin' | 'manager' | 'viewer' | 'warehouse'
   ) => {
     setMessage(null)
 
@@ -250,7 +252,7 @@ export function UserManagement({ organizationId }: UserManagementProps) {
                     <Select
                       value={inviteRole}
                       onValueChange={(value) =>
-                        setInviteRole(value as 'admin' | 'manager' | 'viewer')
+                        setInviteRole(value as 'admin' | 'manager' | 'viewer' | 'warehouse')
                       }
                       disabled={isPending}
                     >
@@ -260,6 +262,7 @@ export function UserManagement({ organizationId }: UserManagementProps) {
                       <SelectContent>
                         <SelectItem value="admin">관리자 - 모든 권한</SelectItem>
                         <SelectItem value="manager">매니저 - 데이터 관리 가능</SelectItem>
+                        <SelectItem value="warehouse">창고 - 입고/출고 처리</SelectItem>
                         <SelectItem value="viewer">뷰어 - 조회만 가능</SelectItem>
                       </SelectContent>
                     </Select>
@@ -342,7 +345,7 @@ export function UserManagement({ organizationId }: UserManagementProps) {
                       <Select
                         value={user.role}
                         onValueChange={(newRole) =>
-                          handleRoleChange(user.id, newRole as 'admin' | 'manager' | 'viewer')
+                          handleRoleChange(user.id, newRole as 'admin' | 'manager' | 'viewer' | 'warehouse')
                         }
                         disabled={isPending}
                       >
@@ -356,6 +359,7 @@ export function UserManagement({ organizationId }: UserManagementProps) {
                         <SelectContent>
                           <SelectItem value="admin">관리자</SelectItem>
                           <SelectItem value="manager">매니저</SelectItem>
+                          <SelectItem value="warehouse">창고</SelectItem>
                           <SelectItem value="viewer">뷰어</SelectItem>
                         </SelectContent>
                       </Select>
@@ -421,6 +425,12 @@ export function UserManagement({ organizationId }: UserManagementProps) {
                 매니저
               </Badge>
               <p>데이터 조회 및 수정 가능, 사용자 관리 불가</p>
+            </div>
+            <div className="flex items-start gap-2">
+              <Badge variant="outline" className="mt-0.5 shrink-0">
+                창고
+              </Badge>
+              <p>입고예정/출고예정 처리 및 재고 조회 가능</p>
             </div>
             <div className="flex items-start gap-2">
               <Badge variant="secondary" className="mt-0.5 shrink-0">

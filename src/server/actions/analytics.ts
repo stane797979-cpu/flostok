@@ -282,97 +282,67 @@ export async function getDemandForecast(options?: {
     const manualMethod = options?.manualMethod
     const manualParams = options?.manualParams
 
-    // 1. 조직의 전체 제품 목록 조회 (등급 포함)
-    const allProducts = await db
-      .select({
-        id: products.id,
-        sku: products.sku,
-        name: products.name,
-        abcGrade: products.abcGrade,
-        xyzGrade: products.xyzGrade,
-      })
-      .from(products)
-      .where(eq(products.organizationId, orgId))
+    const twelveMonthsAgo = new Date()
+    twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12)
+    const startDate = twelveMonthsAgo.toISOString().split('T')[0]
+
+    // 1단계: 제품 목록 + 탑 제품(필요시) 병렬 조회
+    const [allProducts, topProduct] = await Promise.all([
+      db
+        .select({ id: products.id, sku: products.sku, name: products.name, abcGrade: products.abcGrade, xyzGrade: products.xyzGrade })
+        .from(products)
+        .where(eq(products.organizationId, orgId)),
+      !productId
+        ? db
+            .select({ productId: salesRecords.productId, totalSales: sql<number>`COUNT(*)` })
+            .from(salesRecords)
+            .where(eq(salesRecords.organizationId, orgId))
+            .groupBy(salesRecords.productId)
+            .orderBy(sql`COUNT(*) DESC`)
+            .limit(1)
+        : Promise.resolve(null),
+    ])
 
     if (allProducts.length === 0) {
       return { products: [], forecast: null }
     }
 
-    // 2. productId가 없으면 판매 데이터가 가장 많은 상위 1개 제품 자동 선택
-    let selectedProductId = productId
+    const selectedProductId = productId || topProduct?.[0]?.productId
     if (!selectedProductId) {
-      const topProduct = await db
-        .select({
-          productId: salesRecords.productId,
-          totalSales: sql<number>`COUNT(*)`,
-        })
-        .from(salesRecords)
-        .where(eq(salesRecords.organizationId, orgId))
-        .groupBy(salesRecords.productId)
-        .orderBy(sql`COUNT(*) DESC`)
-        .limit(1)
-
-      if (topProduct.length === 0) {
-        return { products: allProducts, forecast: null }
-      }
-      selectedProductId = topProduct[0].productId
+      return { products: allProducts, forecast: null }
     }
 
-    // 3. 제품 상세 정보 조회 (ABC, XYZ, 안전재고 등)
-    const productDetail = await db
-      .select({
-        id: products.id,
-        name: products.name,
-        abcGrade: products.abcGrade,
-        xyzGrade: products.xyzGrade,
-        safetyStock: products.safetyStock,
-      })
-      .from(products)
-      .where(eq(products.id, selectedProductId))
-      .limit(1)
+    // 2단계: 제품상세 + 재고 + 월별판매량 병렬 조회
+    const [productDetail, inventoryRow, monthlySales] = await Promise.all([
+      db
+        .select({ id: products.id, name: products.name, abcGrade: products.abcGrade, xyzGrade: products.xyzGrade, safetyStock: products.safetyStock })
+        .from(products)
+        .where(eq(products.id, selectedProductId))
+        .limit(1),
+      db
+        .select({ currentStock: inventory.currentStock })
+        .from(inventory)
+        .where(and(eq(inventory.organizationId, orgId), eq(inventory.productId, selectedProductId)))
+        .limit(1),
+      db
+        .select({
+          month: sql<string>`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`,
+          totalQuantity: sql<number>`COALESCE(SUM(${salesRecords.quantity}), 0)`,
+        })
+        .from(salesRecords)
+        .where(and(eq(salesRecords.organizationId, orgId), eq(salesRecords.productId, selectedProductId), gte(salesRecords.date, startDate)))
+        .groupBy(sql`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`)
+        .orderBy(sql`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`),
+    ])
 
     if (productDetail.length === 0) {
       return { products: allProducts, forecast: null }
     }
 
     const product = productDetail[0]
-
-    // 4. 현재 재고 조회 (과다재고 판정용)
-    const inventoryRow = await db
-      .select({ currentStock: inventory.currentStock })
-      .from(inventory)
-      .where(
-        and(
-          eq(inventory.organizationId, orgId),
-          eq(inventory.productId, selectedProductId)
-        )
-      )
-      .limit(1)
-
     const currentStock = inventoryRow[0]?.currentStock ?? 0
     const safetyStock = product.safetyStock ?? 0
     const isOverstock = safetyStock > 0 && currentStock >= safetyStock * 3
-
-    // 5. 최근 12개월 월별 판매량 조회
-    const twelveMonthsAgo = new Date()
-    twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12)
-    const startDate = twelveMonthsAgo.toISOString().split('T')[0]
-
-    const monthlySales = await db
-      .select({
-        month: sql<string>`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`,
-        totalQuantity: sql<number>`COALESCE(SUM(${salesRecords.quantity}), 0)`,
-      })
-      .from(salesRecords)
-      .where(
-        and(
-          eq(salesRecords.organizationId, orgId),
-          eq(salesRecords.productId, selectedProductId),
-          gte(salesRecords.date, startDate)
-        )
-      )
-      .groupBy(sql`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`)
-      .orderBy(sql`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`)
 
     if (monthlySales.length < 2) {
       return { products: allProducts, forecast: null }
@@ -444,8 +414,7 @@ export async function getDemandForecast(options?: {
       }
     })
 
-    // 13. 예측 결과를 demand_forecasts 테이블에 저장 (UPSERT)
-    // 발주 추천에서 이 데이터를 활용하여 예측 기반 일평균판매량 산출
+    // 13. 예측 결과를 demand_forecasts 테이블에 저장 (비동기 배치 UPSERT)
     const methodDbMap: Record<string, string> = {
       SMA: 'sma_3',
       SES: 'ses',
@@ -453,50 +422,59 @@ export async function getDemandForecast(options?: {
     }
     const dbMethod = methodDbMap[forecastResult.method] || 'sma_3'
     const mapeValue = Math.round((forecastResult.mape ?? backtestResult.mape) * 10) / 10
+    const noteText = isManual ? `수동 선택: ${forecastResult.method}` : `자동 선택: ${forecastResult.method}`
 
-    try {
-      for (const pm of predictedMonths) {
-        const periodDate = `${pm.month}-01`
-        // 기존 예측이 있으면 업데이트, 없으면 삽입
-        const existing = await db
-          .select({ id: demandForecasts.id })
+    // 저장은 응답 반환에 영향을 주지 않으므로 비동기로 처리
+    void (async () => {
+      try {
+        const periods = predictedMonths.map((pm) => `${pm.month}-01`)
+        // 기존 예측 한 번에 조회
+        const existingRows = await db
+          .select({ id: demandForecasts.id, period: demandForecasts.period })
           .from(demandForecasts)
           .where(
             and(
               eq(demandForecasts.organizationId, orgId),
               eq(demandForecasts.productId, selectedProductId),
-              eq(demandForecasts.period, periodDate)
+              sql`${demandForecasts.period} IN (${sql.join(periods.map(p => sql`${p}`), sql`, `)})`
             )
           )
-          .limit(1)
+        const existingMap = new Map(existingRows.map((r) => [r.period, r.id]))
 
-        if (existing.length > 0) {
-          await db
-            .update(demandForecasts)
-            .set({
-              method: dbMethod as typeof demandForecasts.method.enumValues[number],
-              forecastQuantity: pm.value,
-              mape: String(mapeValue),
-              notes: isManual ? `수동 선택: ${forecastResult.method}` : `자동 선택: ${forecastResult.method}`,
-              updatedAt: new Date(),
-            })
-            .where(eq(demandForecasts.id, existing[0].id))
-        } else {
-          await db.insert(demandForecasts).values({
-            organizationId: orgId,
-            productId: selectedProductId,
-            period: periodDate,
-            method: dbMethod as typeof demandForecasts.method.enumValues[number],
-            forecastQuantity: pm.value,
-            mape: String(mapeValue),
-            notes: isManual ? `수동 선택: ${forecastResult.method}` : `자동 선택: ${forecastResult.method}`,
-          })
+        // UPDATE와 INSERT를 병렬 처리
+        const ops: Promise<unknown>[] = []
+        for (const pm of predictedMonths) {
+          const periodDate = `${pm.month}-01`
+          const existId = existingMap.get(periodDate)
+          if (existId) {
+            ops.push(
+              db.update(demandForecasts).set({
+                method: dbMethod as typeof demandForecasts.method.enumValues[number],
+                forecastQuantity: pm.value,
+                mape: String(mapeValue),
+                notes: noteText,
+                updatedAt: new Date(),
+              }).where(eq(demandForecasts.id, existId))
+            )
+          } else {
+            ops.push(
+              db.insert(demandForecasts).values({
+                organizationId: orgId,
+                productId: selectedProductId,
+                period: periodDate,
+                method: dbMethod as typeof demandForecasts.method.enumValues[number],
+                forecastQuantity: pm.value,
+                mape: String(mapeValue),
+                notes: noteText,
+              })
+            )
+          }
         }
+        await Promise.all(ops)
+      } catch (saveError) {
+        console.error('수요예측 결과 DB 저장 오류:', saveError)
       }
-    } catch (saveError) {
-      // 저장 실패해도 예측 결과는 반환 (저장은 부수효과)
-      console.error('수요예측 결과 DB 저장 오류:', saveError)
-    }
+    })()
 
     return {
       products: allProducts,

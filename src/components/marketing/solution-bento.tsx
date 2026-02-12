@@ -10,14 +10,14 @@ export function SolutionBento() {
   return (
     <section
       id="solution"
-      className="bg-slate-50 px-6 py-24 sm:py-32 lg:px-8"
+      className="bg-slate-50 px-4 py-16 sm:px-6 sm:py-24 lg:px-8 lg:py-32"
     >
       <div className="mx-auto max-w-7xl">
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="text-base font-semibold leading-7 text-primary-600">
             {COMPANY.solutionName}
           </h2>
-          <p className="mt-2 text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+          <p className="mt-2 text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl lg:text-4xl">
             AI가 관리하는 스마트한 재고 시스템
           </p>
           <p className="mt-6 text-lg leading-8 text-gray-600">
@@ -30,7 +30,7 @@ export function SolutionBento() {
           {largeFeatures.map((feature) => (
             <div
               key={feature.title}
-              className="group rounded-2xl bg-gradient-to-br from-primary-50 to-indigo-50 p-8 ring-1 ring-primary-100 transition-shadow hover:shadow-lg"
+              className="group rounded-2xl bg-gradient-to-br from-primary-50 to-indigo-50 p-5 ring-1 ring-primary-100 transition-shadow hover:shadow-lg sm:p-8"
             >
               <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary-600">
                 <feature.icon className="h-6 w-6 text-white" />

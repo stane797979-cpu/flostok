@@ -7,17 +7,17 @@ export function HeroConsulting() {
   return (
     <section
       id="hero"
-      className="relative overflow-hidden bg-gradient-to-b from-slate-900 to-slate-800 px-6 py-24 sm:py-32 lg:px-8"
+      className="relative overflow-hidden bg-gradient-to-b from-slate-900 to-slate-800 px-4 py-16 sm:px-6 sm:py-24 lg:px-8 lg:py-32"
     >
       <div className="mx-auto max-w-7xl">
         <div className="mx-auto max-w-3xl text-center">
           {/* 슬로건 뱃지 */}
-          <div className="mb-8 inline-flex items-center rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-sm font-medium text-white/80 backdrop-blur-sm">
+          <div className="mb-6 inline-flex items-center rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs sm:mb-8 sm:px-4 sm:py-1.5 sm:text-sm font-medium text-white/80 backdrop-blur-sm">
             {COMPANY.slogan}
           </div>
 
           {/* 헤드라인 */}
-          <h1 className="text-4xl font-bold tracking-tight text-white sm:text-5xl lg:text-6xl">
+          <h1 className="text-2xl font-bold tracking-tight text-white sm:text-4xl lg:text-6xl">
             {HERO.headline.split("\n").map((line, i) => (
               <span key={i}>
                 {line}
@@ -27,7 +27,7 @@ export function HeroConsulting() {
           </h1>
 
           {/* 서브카피 */}
-          <p className="mt-6 text-lg leading-8 text-gray-300">
+          <p className="mt-4 text-base leading-7 text-gray-300 sm:mt-6 sm:text-lg sm:leading-8">
             {HERO.subCopy.split("\n").map((line, i) => (
               <span key={i}>
                 {line}
@@ -37,8 +37,8 @@ export function HeroConsulting() {
           </p>
 
           {/* CTA */}
-          <div className="mt-10 flex items-center justify-center gap-x-4">
-            <Button size="lg" asChild>
+          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:mt-10 sm:flex-row sm:gap-x-4">
+            <Button size="lg" className="w-full sm:w-auto" asChild>
               <Link href="/contact">
                 {HERO.ctaPrimary}
                 <ArrowRight className="ml-2 h-4 w-4" />
@@ -47,7 +47,7 @@ export function HeroConsulting() {
             <Button
               size="lg"
               variant="outline"
-              className="border-white bg-white/10 text-white hover:bg-white/20"
+              className="w-full border-white bg-white/10 text-white hover:bg-white/20 sm:w-auto"
               asChild
             >
               <Link href="/solution">{HERO.ctaSecondary}</Link>
@@ -61,7 +61,7 @@ export function HeroConsulting() {
             <div className="aspect-[16/9] w-full rounded-md bg-slate-800 shadow-2xl ring-1 ring-white/10">
               <div className="flex h-full flex-col items-center justify-center p-8 text-gray-500">
                 <div className="text-center">
-                  <div className="text-6xl font-bold text-gray-600">
+                  <div className="text-3xl font-bold text-gray-600 sm:text-6xl">
                     Stock &amp; Logis
                   </div>
                   <p className="mt-4 text-sm text-gray-500">

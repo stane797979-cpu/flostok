@@ -8,8 +8,9 @@ import { createClient } from '@/lib/supabase/server'
 import { db } from '@/server/db'
 import { users, organizations } from '@/server/db/schema'
 import { eq } from 'drizzle-orm'
+import { getMenuPermissionsForRole } from '@/server/actions/permissions'
 
-const DEFAULT_USER_INFO = { name: '관리자', role: '관리자', orgName: '', isSuperadmin: false }
+const DEFAULT_USER_INFO = { name: '관리자', role: '관리자', orgName: '', isSuperadmin: false, allowedMenus: ['*'] as string[] }
 
 function isDevMode(): boolean {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
@@ -19,7 +20,7 @@ function isDevMode(): boolean {
 
 export async function getUserInfoForLayout() {
   if (isDevMode()) {
-    return { name: '개발자', role: '관리자', orgName: '개발 조직', isSuperadmin: true }
+    return { name: '개발자', role: '관리자', orgName: '개발 조직', isSuperadmin: true, allowedMenus: ['*'] }
   }
 
   try {
@@ -43,7 +44,7 @@ export async function getUserInfoForLayout() {
       return DEFAULT_USER_INFO
     }
 
-    const roleMap: Record<string, string> = { admin: '관리자', manager: '매니저', viewer: '뷰어' }
+    const roleMap: Record<string, string> = { admin: '관리자', manager: '매니저', viewer: '뷰어', warehouse: '창고' }
     let orgName = ''
     try {
       const org = await db.query.organizations.findFirst({
@@ -54,11 +55,20 @@ export async function getUserInfoForLayout() {
       /* 조직 조회 실패 무시 */
     }
 
+    // 권한 조회
+    let allowedMenus: string[] = ['*']
+    try {
+      allowedMenus = await getMenuPermissionsForRole(dbUser.organizationId, dbUser.role)
+    } catch {
+      /* 권한 조회 실패 시 기본값 유지 */
+    }
+
     return {
       name: dbUser.name || dbUser.email.split('@')[0],
       role: roleMap[dbUser.role] || dbUser.role,
       orgName,
       isSuperadmin: dbUser.isSuperadmin ?? false,
+      allowedMenus,
     }
   } catch {
     return DEFAULT_USER_INFO

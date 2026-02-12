@@ -12,7 +12,7 @@ import {
 
 export const metadata: Metadata = {
   title: `대표 소개 | ${COMPANY.name}`,
-  description: `${CEO_HIGHLIGHT.name} 대표 - 22년 SCM 현장 경력의 전문가`,
+  description: "Stock & Logis 대표 - 22년 SCM 현장 경력의 전문가",
 };
 
 export default function CeoPage() {
@@ -21,38 +21,27 @@ export default function CeoPage() {
       {/* 헤더 */}
       <section className="bg-gradient-to-b from-slate-900 to-slate-800 px-6 py-24 sm:py-32 lg:px-8">
         <div className="mx-auto max-w-4xl">
-          <div className="flex flex-col items-center gap-8 lg:flex-row lg:items-start lg:gap-12">
-            {/* 프로필 */}
-            <div className="flex h-40 w-40 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-400 to-primary-600">
-              <span className="text-6xl font-bold text-white">
-                {CEO_HIGHLIGHT.name[0]}
-              </span>
-            </div>
-            <div className="text-center lg:text-left">
-              <h1 className="text-4xl font-bold text-white sm:text-5xl">
-                {CEO_HIGHLIGHT.name}
-              </h1>
-              <p className="mt-2 text-lg text-gray-400">
-                {CEO_HIGHLIGHT.title}
-              </p>
-              <p className="mt-4 max-w-lg text-gray-300 leading-7">
-                {CEO_HIGHLIGHT.summary}
-              </p>
+          <div className="text-center">
+            <h1 className="text-4xl font-bold text-white sm:text-5xl">
+              Stock &amp; Logis 대표
+            </h1>
+            <p className="mx-auto mt-4 max-w-lg text-gray-300 leading-7">
+              {CEO_HIGHLIGHT.summary}
+            </p>
 
-              {/* Stats */}
-              <div className="mt-8 flex flex-wrap justify-center gap-4 lg:justify-start">
-                {CEO_HIGHLIGHT.stats.map((stat) => (
-                  <div
-                    key={stat.label}
-                    className="rounded-lg bg-white/10 px-4 py-3 text-center backdrop-blur-sm"
-                  >
-                    <div className="text-xl font-bold text-white">
-                      {stat.value}
-                    </div>
-                    <div className="text-xs text-gray-400">{stat.label}</div>
+            {/* Stats */}
+            <div className="mt-8 flex flex-wrap justify-center gap-4">
+              {CEO_HIGHLIGHT.stats.map((stat) => (
+                <div
+                  key={stat.label}
+                  className="rounded-lg bg-white/10 px-4 py-3 text-center backdrop-blur-sm"
+                >
+                  <div className="text-xl font-bold text-white">
+                    {stat.value}
                   </div>
-                ))}
-              </div>
+                  <div className="text-xs text-gray-400">{stat.label}</div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
