@@ -130,6 +130,27 @@ export default function SolutionPage() {
               <Link href="#pricing">가격 보기</Link>
             </Button>
           </div>
+
+          {/* 대시보드 미리보기 */}
+          <div className="mt-16 flow-root">
+            <div className="relative -m-2 rounded-xl bg-white/5 p-2 ring-1 ring-inset ring-white/10 lg:-m-4 lg:rounded-2xl lg:p-4">
+              <div className="aspect-[16/9] w-full rounded-md bg-slate-800 shadow-2xl ring-1 ring-white/10">
+                <div className="flex h-full flex-col items-center justify-center p-8 text-gray-500">
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-gray-600 sm:text-6xl">
+                      FloStok
+                    </div>
+                    <p className="mt-4 text-sm text-gray-500">
+                      대시보드 스크린샷 영역
+                    </p>
+                    <p className="mt-2 text-xs text-gray-600">
+                      실제 배포 시 대시보드 캡처 이미지로 교체
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
