@@ -4,7 +4,7 @@ import { db } from "@/server/db";
 import { purchaseOrders, purchaseOrderItems } from "@/server/db/schema";
 import { suppliers } from "@/server/db/schema";
 import { products } from "@/server/db/schema";
-import { eq, and, ne } from "drizzle-orm";
+import { eq, and, ne, inArray } from "drizzle-orm";
 import { getCurrentUser } from "./auth-helpers";
 import {
   analyzeDeliveryCompliance,
@@ -64,7 +64,8 @@ export async function getDeliveryComplianceData(): Promise<DeliveryComplianceRes
         productName: products.name,
       })
       .from(purchaseOrderItems)
-      .innerJoin(products, eq(purchaseOrderItems.productId, products.id));
+      .innerJoin(products, eq(purchaseOrderItems.productId, products.id))
+      .where(inArray(purchaseOrderItems.purchaseOrderId, orderIds));
 
     for (const row of itemRows) {
       const existing = orderProductMap.get(row.purchaseOrderId) || [];

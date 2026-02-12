@@ -141,9 +141,37 @@ interface OrdersClientProps {
   initialTab?: "reorder" | "auto-reorder" | "orders" | "inbound" | "delivery" | "import-shipment";
   serverReorderItems?: ServerReorderItem[];
   deliveryComplianceData?: DeliveryComplianceResult | null;
+  serverPurchaseOrders?: Array<{
+    id: string;
+    orderNumber: string;
+    supplier?: { name: string } | null;
+    itemsCount: number;
+    totalAmount: number | null;
+    status: string;
+    orderDate: string | null;
+    expectedDate: string | null;
+    createdAt?: string | null;
+  }>;
+  serverInboundRecords?: Array<{
+    id: string;
+    date: string;
+    productName: string;
+    productSku: string;
+    expectedQuantity: number;
+    receivedQuantity: number;
+    acceptedQuantity: number;
+    rejectedQuantity: number;
+    qualityResult: string | null;
+    lotNumber: string | null;
+    orderNumber: string | null;
+    supplierName: string | null;
+    location: string | null;
+    notes: string | null;
+    createdAt: string;
+  }>;
 }
 
-export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], deliveryComplianceData = null }: OrdersClientProps) {
+export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], deliveryComplianceData = null, serverPurchaseOrders, serverInboundRecords }: OrdersClientProps) {
   // 발주 필요 품목 (발주 후 재조회 가능하도록 state로 관리)
   const [reorderItems, setReorderItems] = useState<ReorderItem[]>(
     () => serverReorderItems.map(mapServerToClientReorderItem)
@@ -172,7 +200,19 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
   const [orderDetailDialogOpen, setOrderDetailDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ReorderItem | null>(null);
   const [selectedOrderId, setSelectedOrderId] = useState<string>("");
-  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrderListItem[]>([]);
+  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrderListItem[]>(() => {
+    if (!serverPurchaseOrders) return [];
+    return serverPurchaseOrders.map((order) => ({
+      id: order.id,
+      orderNumber: order.orderNumber,
+      supplierName: order.supplier?.name || "미지정",
+      itemsCount: order.itemsCount,
+      totalAmount: order.totalAmount || 0,
+      status: mapOrderStatus(order.status),
+      orderDate: order.orderDate || (order.createdAt ? new Date(order.createdAt).toISOString().split("T")[0] : ""),
+      expectedDate: order.expectedDate || null,
+    }));
+  });
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
 
   // 발주 현황 체크박스
@@ -183,7 +223,10 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
 
   // 입고 현황 상태
   const [inboundMonth, setInboundMonth] = useState<Date>(() => new Date());
-  const [inboundRecords, setInboundRecords] = useState<InboundRecord[]>([]);
+  const [inboundRecords, setInboundRecords] = useState<InboundRecord[]>(() => {
+    if (!serverInboundRecords) return [];
+    return serverInboundRecords.map((r) => ({ ...r, createdAt: new Date(r.createdAt) }));
+  });
   const [isLoadingInbound, setIsLoadingInbound] = useState(false);
   const [isDownloadingInbound, setIsDownloadingInbound] = useState(false);
   const [otherInboundOpen, setOtherInboundOpen] = useState(false);
@@ -301,11 +344,11 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
     }
   }, [inboundMonth, toast]);
 
-  // 초기 로드 (탭에 따라 필요한 데이터만 로드)
+  // 초기 로드 (서버에서 프리페치된 데이터가 없는 탭만 클라이언트에서 로드)
   useEffect(() => {
-    if (initialTab === "orders") {
+    if (initialTab === "orders" && !serverPurchaseOrders) {
       loadPurchaseOrders();
-    } else if (initialTab === "inbound") {
+    } else if (initialTab === "inbound" && !serverInboundRecords) {
       loadInboundRecords(inboundMonth);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

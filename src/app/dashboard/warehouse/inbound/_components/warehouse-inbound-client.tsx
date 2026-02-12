@@ -39,9 +39,13 @@ const statusConfig: Record<
   partially_received: { label: "부분입고", className: "bg-purple-600" },
 };
 
-export function WarehouseInboundClient() {
-  const [orders, setOrders] = useState<WarehouseOrder[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+interface WarehouseInboundClientProps {
+  initialOrders?: WarehouseOrder[];
+}
+
+export function WarehouseInboundClient({ initialOrders }: WarehouseInboundClientProps) {
+  const [orders, setOrders] = useState<WarehouseOrder[]>(initialOrders ?? []);
+  const [isLoading, setIsLoading] = useState(!initialOrders || initialOrders.length === 0);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const { toast } = useToast();
@@ -64,8 +68,12 @@ export function WarehouseInboundClient() {
   }, [toast]);
 
   useEffect(() => {
+    if (initialOrders && initialOrders.length > 0) {
+      setIsLoading(false);
+      return;
+    }
     loadOrders();
-  }, [loadOrders]);
+  }, [loadOrders, initialOrders]);
 
   const handleInboundClick = (orderId: string) => {
     setSelectedOrderId(orderId);

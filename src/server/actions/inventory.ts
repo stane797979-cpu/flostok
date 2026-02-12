@@ -17,7 +17,7 @@ import {
   getChangeTypeInfo,
 } from "@/server/services/inventory/types";
 import { deductByFIFO, formatDeductionNotes } from "@/server/services/inventory/lot-fifo";
-import { requireAuth } from "./auth-helpers";
+import { requireAuth, type AuthUser } from "./auth-helpers";
 import { logActivity } from "@/server/services/activity-log";
 import { checkAndCreateInventoryAlert } from "@/server/services/notifications/inventory-alerts";
 
@@ -200,7 +200,18 @@ export async function getInventoryByProductId(productId: string): Promise<Invent
 /**
  * 재고 변동 처리
  */
-export async function processInventoryTransaction(input: InventoryTransactionInput): Promise<{
+/** 배치 처리 시 전달 가능한 컨텍스트 */
+interface InventoryTransactionContext {
+  user?: AuthUser;
+  product?: typeof products.$inferSelect;
+  skipRevalidate?: boolean;
+  skipActivityLog?: boolean;
+}
+
+export async function processInventoryTransaction(
+  input: InventoryTransactionInput,
+  context?: InventoryTransactionContext,
+): Promise<{
   success: boolean;
   stockBefore?: number;
   stockAfter?: number;
@@ -209,7 +220,7 @@ export async function processInventoryTransaction(input: InventoryTransactionInp
   error?: string;
 }> {
   try {
-    const user = await requireAuth();
+    const user = context?.user ?? await requireAuth();
 
     // 유효성 검사
     const validated = inventoryTransactionSchema.parse(input);
@@ -218,19 +229,25 @@ export async function processInventoryTransaction(input: InventoryTransactionInp
     const changeTypeInfo = getChangeTypeInfo(validated.changeType as InventoryChangeTypeKey);
     const changeAmount = validated.quantity * changeTypeInfo.sign;
 
-    // 제품 정보 조회
-    const [product] = await db
+    // 제품 정보 조회 (컨텍스트에 있으면 DB 조회 생략)
+    const product = context?.product ?? (await db
       .select()
       .from(products)
       .where(and(eq(products.id, validated.productId), eq(products.organizationId, user.organizationId)))
-      .limit(1);
+      .limit(1)
+    )[0];
 
     if (!product) {
       return { success: false, error: "제품을 찾을 수 없습니다" };
     }
 
-    // 현재 재고 조회 (없으면 생성)
-    let currentInventory = await getInventoryByProductId(validated.productId);
+    // 현재 재고 조회 (직접 조회 — requireAuth 중복 제거)
+    const invResult = await db
+      .select()
+      .from(inventory)
+      .where(and(eq(inventory.productId, validated.productId), eq(inventory.organizationId, user.organizationId)))
+      .limit(1);
+    let currentInventory: typeof inventory.$inferSelect | null = invResult[0] || null;
     const stockBefore = currentInventory?.currentStock || 0;
 
     // 출고 시 재고 부족 체크
@@ -310,20 +327,24 @@ export async function processInventoryTransaction(input: InventoryTransactionInp
       notes: lotNotes || null,
     });
 
-    revalidatePath("/dashboard/inventory");
-    revalidatePath(`/products/${validated.productId}`);
-    revalidateTag(`inventory-${user.organizationId}`);
-    revalidateTag(`kpi-${user.organizationId}`);
-    revalidateTag(`analytics-${user.organizationId}`);
+    if (!context?.skipRevalidate) {
+      revalidatePath("/dashboard/inventory");
+      revalidatePath(`/products/${validated.productId}`);
+      revalidateTag(`inventory-${user.organizationId}`);
+      revalidateTag(`kpi-${user.organizationId}`);
+      revalidateTag(`analytics-${user.organizationId}`);
+    }
 
     // 활동 로깅
-    await logActivity({
-      user,
-      action: "UPDATE",
-      entityType: "inventory",
-      entityId: validated.productId,
-      description: `재고 변동: ${changeTypeInfo.label} ${changeAmount > 0 ? "+" : ""}${changeAmount}개`,
-    });
+    if (!context?.skipActivityLog) {
+      await logActivity({
+        user,
+        action: "UPDATE",
+        entityType: "inventory",
+        entityId: validated.productId,
+        description: `재고 변동: ${changeTypeInfo.label} ${changeAmount > 0 ? "+" : ""}${changeAmount}개`,
+      });
+    }
 
     // 알림 자동 트리거 (fire-and-forget)
     checkAndCreateInventoryAlert({

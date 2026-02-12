@@ -113,6 +113,15 @@ export async function confirmInbound(input: ConfirmInboundInput): Promise<{
 
     const today = new Date().toISOString().split("T")[0];
 
+    // [최적화] 입고 항목에 필요한 제품 정보를 배치 조회
+    const productIds = validated.items.map(item => item.productId);
+    const productsData = productIds.length > 0
+      ? await db.select().from(products).where(
+          and(inArray(products.id, productIds), eq(products.organizationId, user.organizationId))
+        )
+      : [];
+    const productsMap = new Map(productsData.map(p => [p.id, p]));
+
     // 트랜잭션으로 전체 입고 처리
     const result = await db.transaction(async (tx) => {
       const recordIds: string[] = [];
@@ -159,15 +168,23 @@ export async function confirmInbound(input: ConfirmInboundInput): Promise<{
           status: "active",
         });
 
-        // 2. 재고 증가 처리 (트랜잭션 내에서 직접 처리)
-        const inventoryResult = await processInventoryTransaction({
-          productId: item.productId,
-          changeType: "INBOUND_PURCHASE",
-          quantity: item.receivedQuantity,
-          referenceId: validated.orderId,
-          notes: `발주서 ${purchaseOrder.orderNumber} 입고`,
-          location: item.location,
-        });
+        // 2. 재고 증가 처리 (user + product 전달, revalidate/log는 루프 후 1회만)
+        const inventoryResult = await processInventoryTransaction(
+          {
+            productId: item.productId,
+            changeType: "INBOUND_PURCHASE",
+            quantity: item.receivedQuantity,
+            referenceId: validated.orderId,
+            notes: `발주서 ${purchaseOrder.orderNumber} 입고`,
+            location: item.location,
+          },
+          {
+            user,
+            product: productsMap.get(item.productId),
+            skipRevalidate: true,
+            skipActivityLog: true,
+          },
+        );
 
         if (!inventoryResult.success) {
           throw new Error(`재고 증가 처리 실패 (제품 ID: ${item.productId}): ${inventoryResult.error}`);
