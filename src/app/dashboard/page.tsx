@@ -15,6 +15,32 @@ import { getInventoryStatus } from "@/lib/constants/inventory-status";
 import { getKPISummary } from "@/server/actions/kpi";
 import { getInventoryTurnoverData } from "@/server/actions/turnover";
 import { getABCXYZAnalysis } from "@/server/actions/analytics";
+import { createClient } from "@/lib/supabase/server";
+import { cookies } from "next/headers";
+
+/** 직접 인증 진단 — Server Component에서 쿠키와 Supabase 세션 상태 확인 */
+async function debugAuth(): Promise<Record<string, unknown>> {
+  try {
+    const cookieStore = await cookies();
+    const allCookies = cookieStore.getAll();
+    const sbCookies = allCookies.filter(c => c.name.includes("sb-") || c.name.includes("supabase"));
+
+    const supabase = await createClient();
+    const { data, error } = await supabase.auth.getUser();
+
+    return {
+      totalCookies: allCookies.length,
+      sbCookieNames: sbCookies.map(c => c.name),
+      sbCookieLens: sbCookies.map(c => `${c.name}(${c.value.length})`),
+      authOk: !error && !!data.user,
+      userId: data.user?.id?.slice(0, 8) || null,
+      email: data.user?.email || null,
+      authError: error?.message || null,
+    };
+  } catch (err) {
+    return { debugError: String(err) };
+  }
+}
 
 /** 안전하게 대시보드 데이터를 로드 (인증 실패 시 빈 데이터) */
 async function loadDashboardData() {
@@ -125,15 +151,23 @@ async function loadDashboardData() {
 }
 
 export default async function DashboardPage() {
-  const { stats, needsOrderProducts, statusDistribution, totalSku, kpi, turnoverTop5, matrixData, _debugErrors } =
-    await loadDashboardData();
+  const [dashData, authDebug] = await Promise.all([
+    loadDashboardData(),
+    debugAuth(),
+  ]);
+  const { stats, needsOrderProducts, statusDistribution, totalSku, kpi, turnoverTop5, matrixData, _debugErrors } = dashData;
 
   return (
     <div className="space-y-6">
-      {/* 임시 진단 배너 — 에러 발생 시에만 표시 */}
+      {/* 임시 인증 진단 배너 */}
+      <div className="rounded-lg border border-blue-300 bg-blue-50 p-4 text-xs text-blue-800 font-mono">
+        <p className="font-bold text-sm">인증 진단 (임시):</p>
+        <pre className="mt-1 whitespace-pre-wrap">{JSON.stringify(authDebug, null, 2)}</pre>
+      </div>
+      {/* 데이터 에러 배너 */}
       {_debugErrors && (
         <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800">
-          <p className="font-bold">데이터 로드 에러 (진단용):</p>
+          <p className="font-bold">데이터 로드 에러:</p>
           {_debugErrors.map((e, i) => <p key={i}>{e}</p>)}
         </div>
       )}
