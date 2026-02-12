@@ -4,7 +4,7 @@
  * - org + permissions 병렬 실행
  */
 
-import { getCachedCurrentUser } from "@/server/auth/get-current-user";
+import { getCurrentUser } from "@/server/actions/auth-helpers";
 import { db } from "@/server/db";
 import { organizations } from "@/server/db/schema";
 import { eq } from "drizzle-orm";
@@ -27,8 +27,8 @@ const roleMap: Record<string, string> = {
 
 export async function getUserInfoForLayout() {
   try {
-    // React cache()로 캐싱된 인증 — page action들과 동일 호출 공유
-    const user = await getCachedCurrentUser();
+    // cache()로 캐싱된 인증 — page action들과 동일 호출 공유
+    const user = await getCurrentUser();
     if (!user) return DEFAULT_USER_INFO;
 
     // org + permissions 병렬 실행 (직렬 → 병렬: 50-150ms 절감)
