@@ -1,12 +1,13 @@
+import { Suspense } from "react";
 import dynamic from "next/dynamic";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ABCXYZSummary } from "./_components/abc-xyz-summary";
 import { Card, CardContent } from "@/components/ui/card";
 import { Construction } from "lucide-react";
 import { getABCXYZAnalysis } from "@/server/actions/analytics";
-import { getInventoryTurnoverData } from "@/server/actions/turnover";
-import { getGradeChangeAnalysis } from "@/server/actions/grade-change";
-import { getFulfillmentRateData } from "@/server/actions/fulfillment-rate";
+import { AnalyticsGradeChange } from "./_components/analytics-grade-change";
+import { AnalyticsFulfillment } from "./_components/analytics-fulfillment";
+import { AnalyticsTurnover } from "./_components/analytics-turnover";
 import type { ProductAnalysis } from "./_components/abc-xyz-table";
 
 const ABCXYZClient = dynamic(
@@ -26,16 +27,6 @@ const ABCXYZPolicyGuide = dynamic(
   {
     loading: () => (
       <div className="h-48 flex items-center justify-center text-slate-400">로딩 중...</div>
-    ),
-  }
-);
-
-const InventoryTurnover = dynamic(
-  () =>
-    import("./_components/inventory-turnover").then((mod) => ({ default: mod.InventoryTurnover })),
-  {
-    loading: () => (
-      <div className="h-96 flex items-center justify-center text-slate-400">로딩 중...</div>
     ),
   }
 );
@@ -60,29 +51,14 @@ const DemandForecastChart = dynamic(
   }
 );
 
-const GradeChangeTable = dynamic(
-  () =>
-    import("./_components/grade-change-table").then((mod) => ({ default: mod.GradeChangeTable })),
-  {
-    loading: () => (
-      <div className="h-96 flex items-center justify-center text-slate-400">로딩 중...</div>
-    ),
-  }
-);
-
-const FulfillmentRateTable = dynamic(
-  () =>
-    import("./_components/fulfillment-rate-table").then((mod) => ({
-      default: mod.FulfillmentRateTable,
-    })),
-  {
-    loading: () => (
-      <div className="h-96 flex items-center justify-center text-slate-400">로딩 중...</div>
-    ),
-  }
-);
+function TabLoadingSkeleton() {
+  return (
+    <div className="h-96 flex items-center justify-center text-slate-400">로딩 중...</div>
+  );
+}
 
 export default async function AnalyticsPage() {
+  // 기본 탭(ABC-XYZ) 데이터만 즉시 로드 — 나머지 탭은 Suspense로 독립 스트리밍
   let products: ProductAnalysis[] = [];
   let matrixData: { grade: string; count: number }[] = [];
   type ABCSummary = Awaited<ReturnType<typeof getABCXYZAnalysis>>["summary"];
@@ -115,28 +91,15 @@ export default async function AnalyticsPage() {
     avgCV: 0,
   };
 
-  // 병렬 데이터 로드
-  const [abcResult, turnoverResult, gradeChangeResult, fulfillmentResult] =
-    await Promise.allSettled([
-      getABCXYZAnalysis(),
-      getInventoryTurnoverData(),
-      getGradeChangeAnalysis(),
-      getFulfillmentRateData(),
-    ]);
-
-  if (abcResult.status === "fulfilled") {
-    products = abcResult.value.products;
-    matrixData = abcResult.value.matrixData;
-    summary = abcResult.value.summary;
-    insights = abcResult.value.insights;
+  try {
+    const abcResult = await getABCXYZAnalysis();
+    products = abcResult.products;
+    matrixData = abcResult.matrixData;
+    summary = abcResult.summary;
+    insights = abcResult.insights;
+  } catch {
+    // ABC-XYZ 로드 실패 시 빈 데이터로 표시
   }
-
-  const turnoverData =
-    turnoverResult.status === "fulfilled" ? turnoverResult.value : null;
-  const gradeChangeData =
-    gradeChangeResult.status === "fulfilled" ? gradeChangeResult.value : null;
-  const fulfillmentData =
-    fulfillmentResult.status === "fulfilled" ? fulfillmentResult.value : null;
 
   const hasData = products.length > 0;
 
@@ -181,11 +144,15 @@ export default async function AnalyticsPage() {
         </TabsContent>
 
         <TabsContent value="grade-change">
-          <GradeChangeTable data={gradeChangeData} />
+          <Suspense fallback={<TabLoadingSkeleton />}>
+            <AnalyticsGradeChange />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="fulfillment">
-          <FulfillmentRateTable data={fulfillmentData} />
+          <Suspense fallback={<TabLoadingSkeleton />}>
+            <AnalyticsFulfillment />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="demand-forecast">
@@ -193,7 +160,9 @@ export default async function AnalyticsPage() {
         </TabsContent>
 
         <TabsContent value="turnover">
-          <InventoryTurnover data={turnoverData} />
+          <Suspense fallback={<TabLoadingSkeleton />}>
+            <AnalyticsTurnover />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="sales-trend">

@@ -1,13 +1,32 @@
+import dynamic from "next/dynamic";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DataManagement } from "./_components/data-management";
-import { UserManagement } from "./_components/user-management";
-import { OrderPolicySettingsComponent } from "./_components/order-policy-settings";
-import { OrganizationTab } from "./_components/organization-tab";
-import { APIKeySettings } from "./_components/api-key-settings";
-import { NotificationTest } from "./_components/notification-test";
 import { MyAccount } from "./_components/my-account";
-import { ActivityLogTab } from "./_components/activity-log-tab";
-import { PermissionsTab } from "./_components/permissions-tab";
+
+// Dynamic imports — 선택된 탭만 로드 (초기 번들 ~240kB → ~60kB)
+const DataManagement = dynamic(
+  () => import("./_components/data-management").then((m) => ({ default: m.DataManagement }))
+);
+const UserManagement = dynamic(
+  () => import("./_components/user-management").then((m) => ({ default: m.UserManagement }))
+);
+const OrderPolicySettingsComponent = dynamic(
+  () => import("./_components/order-policy-settings").then((m) => ({ default: m.OrderPolicySettingsComponent }))
+);
+const OrganizationTab = dynamic(
+  () => import("./_components/organization-tab").then((m) => ({ default: m.OrganizationTab }))
+);
+const APIKeySettings = dynamic(
+  () => import("./_components/api-key-settings").then((m) => ({ default: m.APIKeySettings }))
+);
+const NotificationTest = dynamic(
+  () => import("./_components/notification-test").then((m) => ({ default: m.NotificationTest }))
+);
+const ActivityLogTab = dynamic(
+  () => import("./_components/activity-log-tab").then((m) => ({ default: m.ActivityLogTab }))
+);
+const PermissionsTab = dynamic(
+  () => import("./_components/permissions-tab").then((m) => ({ default: m.PermissionsTab }))
+);
 
 // TEMP: 개발 중 임시 조직 ID (Phase 6.1에서 실제 세션 기반으로 변경)
 const TEMP_ORG_ID = "00000000-0000-0000-0000-000000000001";
