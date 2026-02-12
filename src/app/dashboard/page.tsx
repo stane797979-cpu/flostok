@@ -18,27 +18,33 @@ import { getABCXYZAnalysis } from "@/server/actions/analytics";
 
 /** 안전하게 대시보드 데이터를 로드 (인증 실패 시 빈 데이터) */
 async function loadDashboardData() {
+  const errors: string[] = [];
   try {
     // 병렬 로드: 개별 .catch()로 부분 실패 시에도 나머지 정상 표시
     const [stats, criticalItems, kpiSummary, turnoverResult, abcResult] = await Promise.all([
       getInventoryStats().catch((err) => {
         console.error("[대시보드] getInventoryStats 실패:", err);
+        errors.push(`Stats: ${err instanceof Error ? err.message : String(err)}`);
         return { totalProducts: 0, outOfStock: 0, critical: 0, shortage: 0, optimal: 0, excess: 0, totalValue: 0 };
       }),
       getInventoryListByStatuses({ statuses: ["out_of_stock", "critical"], limit: 10 }).catch((err) => {
         console.error("[대시보드] getInventoryListByStatuses 실패:", err);
+        errors.push(`Items: ${err instanceof Error ? err.message : String(err)}`);
         return [] as Awaited<ReturnType<typeof getInventoryListByStatuses>>;
       }),
       getKPISummary().catch((err) => {
         console.error("[대시보드] getKPISummary 실패:", err);
+        errors.push(`KPI: ${err instanceof Error ? err.message : String(err)}`);
         return { inventoryTurnoverRate: 0, averageInventoryDays: 0, onTimeOrderRate: 0, stockoutRate: 0 };
       }),
       getInventoryTurnoverData().catch((err) => {
         console.error("[대시보드] getInventoryTurnoverData 실패:", err);
+        errors.push(`Turnover: ${err instanceof Error ? err.message : String(err)}`);
         return null;
       }),
       getABCXYZAnalysis().catch((err) => {
         console.error("[대시보드] getABCXYZAnalysis 실패:", err);
+        errors.push(`ABC: ${err instanceof Error ? err.message : String(err)}`);
         return { products: [], matrixData: [], summary: { aCount: 0, aPercentage: 0, bCount: 0, bPercentage: 0, cCount: 0, cPercentage: 0, period: "" } };
       }),
     ]);
@@ -101,6 +107,7 @@ async function loadDashboardData() {
       kpi: kpiSummary,
       turnoverTop5,
       matrixData: abcResult.matrixData,
+      _debugErrors: errors.length > 0 ? errors : null,
     };
   } catch (error) {
     console.error("대시보드 데이터 로드 실패:", error);
@@ -112,16 +119,24 @@ async function loadDashboardData() {
       kpi: { inventoryTurnoverRate: 0, averageInventoryDays: 0, onTimeOrderRate: 0, stockoutRate: 0 },
       turnoverTop5: { fastest: [], slowest: [] },
       matrixData: [],
+      _debugErrors: [`전체 실패: ${error instanceof Error ? error.message : String(error)}`],
     };
   }
 }
 
 export default async function DashboardPage() {
-  const { stats, needsOrderProducts, statusDistribution, totalSku, kpi, turnoverTop5, matrixData } =
+  const { stats, needsOrderProducts, statusDistribution, totalSku, kpi, turnoverTop5, matrixData, _debugErrors } =
     await loadDashboardData();
 
   return (
     <div className="space-y-6">
+      {/* 임시 진단 배너 — 에러 발생 시에만 표시 */}
+      {_debugErrors && (
+        <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800">
+          <p className="font-bold">데이터 로드 에러 (진단용):</p>
+          {_debugErrors.map((e, i) => <p key={i}>{e}</p>)}
+        </div>
+      )}
       {/* KPI 카드 */}
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
