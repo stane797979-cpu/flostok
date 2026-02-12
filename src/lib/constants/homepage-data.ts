@@ -43,6 +43,7 @@ export interface MarketingNavItem {
 }
 
 export const MARKETING_NAV: MarketingNavItem[] = [
+  { name: "홈", href: "/" },
   { name: "회사 소개", href: "/about" },
   { name: "대표 소개", href: "/ceo" },
   { name: "커리큘럼", href: "/curriculum" },
