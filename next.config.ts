@@ -57,13 +57,21 @@ const nextConfig: NextConfig = {
       "recharts",
       "date-fns",
       "sonner",
+      "@radix-ui/react-alert-dialog",
+      "@radix-ui/react-checkbox",
       "@radix-ui/react-dialog",
       "@radix-ui/react-dropdown-menu",
+      "@radix-ui/react-label",
+      "@radix-ui/react-popover",
+      "@radix-ui/react-progress",
+      "@radix-ui/react-scroll-area",
       "@radix-ui/react-select",
+      "@radix-ui/react-separator",
+      "@radix-ui/react-slider",
+      "@radix-ui/react-slot",
       "@radix-ui/react-tabs",
       "@radix-ui/react-toast",
-      "@radix-ui/react-popover",
-      "@radix-ui/react-checkbox",
+      "@radix-ui/react-tooltip",
     ],
   },
 
@@ -112,6 +120,16 @@ const nextConfig: NextConfig = {
           {
             key: "Cache-Control",
             value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+      {
+        // public 폴더 이미지/폰트 캐싱
+        source: "/:path*\\.(png|jpg|jpeg|gif|webp|svg|ico|woff|woff2)",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=86400, stale-while-revalidate=604800",
           },
         ],
       },

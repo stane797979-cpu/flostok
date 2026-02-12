@@ -10,6 +10,13 @@ import { MAIN_SECTIONS, BOTTOM_NAV, type NavItem as NavItemType } from "@/lib/co
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
+// TODO: 실제 배지 데이터는 서버에서 가져오기
+const BADGES: Record<string, number> = {
+  "/inventory": 3,
+  "/orders": 5,
+  "/alerts": 2,
+};
+
 interface SidebarProps {
   className?: string;
   onNavigate?: () => void;
@@ -31,13 +38,6 @@ export function Sidebar({ className, onNavigate, userInfo }: SidebarProps) {
   const orgName = userInfo?.orgName || "";
 
   const firstChar = userName ? userName.charAt(0).toUpperCase() : "?";
-
-  // TODO: 실제 배지 데이터는 서버에서 가져오기
-  const badges: Record<string, number> = {
-    "/inventory": 3,
-    "/orders": 5,
-    "/alerts": 2,
-  };
 
   // 권한 기반 메뉴 필터링 (children 지원)
   const filteredSections = useMemo(() => {
@@ -117,7 +117,7 @@ export function Sidebar({ className, onNavigate, userInfo }: SidebarProps) {
                   title={item.title}
                   href={item.href}
                   icon={item.icon}
-                  badge={badges[item.href]}
+                  badge={BADGES[item.href]}
                   collapsed={collapsed}
                   onClick={onNavigate}
                   subItems={item.children}

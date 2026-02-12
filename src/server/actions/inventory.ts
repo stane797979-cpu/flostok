@@ -8,7 +8,7 @@ import {
   type Inventory,
   type InventoryHistory,
 } from "@/server/db/schema";
-import { eq, and, desc, sql, gte } from "drizzle-orm";
+import { eq, and, desc, sql, gte, inArray } from "drizzle-orm";
 import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 import { z } from "zod";
 import { classifyInventoryStatus } from "@/server/services/scm/inventory-status";
@@ -511,4 +511,71 @@ export async function initializeInventory(
       error: error instanceof Error ? error.message : "재고 초기화에 실패했습니다",
     };
   }
+}
+
+/**
+ * 복수 상태 재고 목록 조회 (단일 쿼리 + 30초 캐시)
+ * 대시보드에서 out_of_stock + critical을 한 번에 가져올 때 사용
+ */
+async function _getInventoryListByStatusesInternal(
+  orgId: string,
+  statuses: (typeof inventory.status.enumValues)[number][],
+  limit: number
+): Promise<InventoryListItem[]> {
+  const items = await db
+    .select({
+      id: inventory.id,
+      organizationId: inventory.organizationId,
+      productId: inventory.productId,
+      currentStock: inventory.currentStock,
+      availableStock: inventory.availableStock,
+      reservedStock: inventory.reservedStock,
+      incomingStock: inventory.incomingStock,
+      status: inventory.status,
+      location: inventory.location,
+      inventoryValue: inventory.inventoryValue,
+      daysOfInventory: inventory.daysOfInventory,
+      lastUpdatedAt: inventory.lastUpdatedAt,
+      updatedAt: inventory.updatedAt,
+      createdAt: inventory.createdAt,
+      product: {
+        sku: products.sku,
+        name: products.name,
+        safetyStock: products.safetyStock,
+        reorderPoint: products.reorderPoint,
+        abcGrade: products.abcGrade,
+        xyzGrade: products.xyzGrade,
+      },
+    })
+    .from(inventory)
+    .innerJoin(products, eq(inventory.productId, products.id))
+    .where(
+      and(
+        eq(inventory.organizationId, orgId),
+        inArray(inventory.status, statuses)
+      )
+    )
+    .orderBy(desc(inventory.updatedAt))
+    .limit(limit);
+
+  return items.map((row) => ({
+    ...row,
+    daysOfInventory: row.daysOfInventory,
+  }));
+}
+
+export async function getInventoryListByStatuses(options: {
+  statuses: string[];
+  limit?: number;
+}): Promise<InventoryListItem[]> {
+  const user = await requireAuth();
+  const { statuses, limit = 20 } = options;
+  const validStatuses = statuses as (typeof inventory.status.enumValues)[number][];
+  const cacheKey = `inventory-by-statuses-${user.organizationId}-${statuses.sort().join(",")}`;
+
+  return unstable_cache(
+    () => _getInventoryListByStatusesInternal(user.organizationId, validStatuses, limit),
+    [cacheKey],
+    { revalidate: 30, tags: [`inventory-${user.organizationId}`] }
+  )();
 }

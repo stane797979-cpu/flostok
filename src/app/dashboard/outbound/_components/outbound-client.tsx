@@ -42,6 +42,7 @@ interface OutboundClientProps {
 }
 
 export function OutboundClient({ initialTab = "records" }: OutboundClientProps) {
+  const [activeTab, setActiveTab] = useState(initialTab);
 
   // 출고 현황 상태
   const [outboundMonth, setOutboundMonth] = useState<Date>(() => new Date());

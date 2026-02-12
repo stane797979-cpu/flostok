@@ -1,13 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef, useTransition } from "react";
+import dynamic from "next/dynamic";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { ChevronLeft, ChevronRight, Download, Loader2, PackagePlus, XCircle, PackageCheck, Upload } from "lucide-react";
-import { DeliveryComplianceTab } from "./delivery-compliance-tab";
-import { ImportShipmentTab } from "./import-shipment-tab";
 import type { DeliveryComplianceResult } from "@/server/services/scm/delivery-compliance";
 import { ReorderSummary } from "./reorder-summary";
 import { ReorderItemsTable, type ReorderItem } from "./reorder-items-table";
@@ -17,10 +16,14 @@ import {
   type AutoReorderRecommendation,
 } from "./auto-reorder-recommendations-table";
 import { InboundRecordsTable, type InboundRecord } from "./inbound-records-table";
-import { OrderDialog } from "./order-dialog";
-import { BulkOrderDialog } from "./bulk-order-dialog";
-import { OrderDetailDialog } from "./order-detail-dialog";
-import { OtherInboundDialog } from "./other-inbound-dialog";
+
+// 다이얼로그 + 독립 탭: 사용자 인터랙션 시에만 로드 (초기 번들 감소)
+const OrderDialog = dynamic(() => import("./order-dialog").then((m) => m.OrderDialog), { ssr: false });
+const BulkOrderDialog = dynamic(() => import("./bulk-order-dialog").then((m) => m.BulkOrderDialog), { ssr: false });
+const OrderDetailDialog = dynamic(() => import("./order-detail-dialog").then((m) => m.OrderDetailDialog), { ssr: false });
+const OtherInboundDialog = dynamic(() => import("./other-inbound-dialog").then((m) => m.OtherInboundDialog), { ssr: false });
+const DeliveryComplianceTab = dynamic(() => import("./delivery-compliance-tab").then((m) => m.DeliveryComplianceTab));
+const ImportShipmentTab = dynamic(() => import("./import-shipment-tab").then((m) => m.ImportShipmentTab));
 import { useToast } from "@/hooks/use-toast";
 import {
   createPurchaseOrder,

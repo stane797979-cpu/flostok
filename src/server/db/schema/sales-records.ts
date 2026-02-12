@@ -21,6 +21,7 @@ export const salesRecords = pgTable("sales_records", {
 }, (table) => [
   index("sales_records_org_date_idx").on(table.organizationId, table.date),
   index("sales_records_product_date_idx").on(table.productId, table.date),
+  index("sales_records_org_product_date_idx").on(table.organizationId, table.productId, table.date),
 ]);
 
 export type SalesRecord = typeof salesRecords.$inferSelect;

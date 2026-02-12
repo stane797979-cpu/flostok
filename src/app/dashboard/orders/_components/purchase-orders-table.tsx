@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, memo } from "react";
 import {
   Table,
   TableBody,
@@ -40,7 +40,7 @@ type SortDirection = "asc" | "desc";
 
 const STATUS_ORDER = ["draft", "ordered", "pending_receipt", "received", "cancelled"];
 
-export function PurchaseOrdersTable({ orders, onViewClick, onDownloadClick, selectedIds, onSelectChange, className }: PurchaseOrdersTableProps) {
+export const PurchaseOrdersTable = memo(function PurchaseOrdersTable({ orders, onViewClick, onDownloadClick, selectedIds, onSelectChange, className }: PurchaseOrdersTableProps) {
   // 체크 가능한 상태: 취소/완료 제외 전부
   const checkableStatuses: PurchaseOrderListItem["status"][] = ["draft", "ordered", "pending_receipt"];
   const checkableOrders = orders.filter((o) => checkableStatuses.includes(o.status));
@@ -301,4 +301,4 @@ export function PurchaseOrdersTable({ orders, onViewClick, onDownloadClick, sele
       </div>
     </>
   );
-}
+});

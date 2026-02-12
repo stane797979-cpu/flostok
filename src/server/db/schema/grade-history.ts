@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, numeric, date } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, numeric, date, index } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 import { products } from "./products";
 import { abcGradeEnum, xyzGradeEnum } from "./products";
@@ -22,7 +22,10 @@ export const gradeHistory = pgTable("grade_history", {
     scale: 2,
   }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index("grade_history_org_period_idx").on(table.organizationId, table.period),
+  index("grade_history_org_product_idx").on(table.organizationId, table.productId),
+]);
 
 export type GradeHistory = typeof gradeHistory.$inferSelect;
 export type NewGradeHistory = typeof gradeHistory.$inferInsert;

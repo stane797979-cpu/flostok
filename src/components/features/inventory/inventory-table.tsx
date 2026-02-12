@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, memo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Table,
@@ -62,7 +62,7 @@ const STATUS_ORDER = [
   "overstock",
 ];
 
-export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
+export const InventoryTable = memo(function InventoryTable({ items, onAdjust }: InventoryTableProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [sortKey, setSortKey] = useState<SortKey>("status");
   const [sortDir, setSortDir] = useState<SortDirection>("asc");
@@ -385,4 +385,4 @@ export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
       </div>
     </div>
   );
-}
+});

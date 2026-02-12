@@ -7,6 +7,7 @@ import {
   numeric,
   pgEnum,
   date,
+  index,
 } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 import { products } from "./products";
@@ -43,7 +44,10 @@ export const demandForecasts = pgTable("demand_forecasts", {
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index("demand_forecasts_org_period_idx").on(table.organizationId, table.period),
+  index("demand_forecasts_org_product_period_idx").on(table.organizationId, table.productId, table.period),
+]);
 
 export type DemandForecast = typeof demandForecasts.$inferSelect;
 export type NewDemandForecast = typeof demandForecasts.$inferInsert;

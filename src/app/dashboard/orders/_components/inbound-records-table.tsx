@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, memo } from "react";
 import {
   Table,
   TableBody,
@@ -108,7 +108,7 @@ const qualityBadge = (result: string | null) => {
   }
 };
 
-export function InboundRecordsTable({ records, className }: InboundRecordsTableProps) {
+export const InboundRecordsTable = memo(function InboundRecordsTable({ records, className }: InboundRecordsTableProps) {
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
@@ -334,4 +334,4 @@ export function InboundRecordsTable({ records, className }: InboundRecordsTableP
     </div>
     </>
   );
-}
+});
