@@ -5,41 +5,36 @@ import { roleMenuPermissions } from "@/server/db/schema";
 import { eq, and } from "drizzle-orm";
 import { requireAdmin } from "./auth-helpers";
 import { revalidatePath } from "next/cache";
-import { unstable_cache } from "next/cache";
 import { ALL_MENU_KEYS, DEFAULT_PERMISSIONS } from "@/lib/constants/menu-permissions";
 
 /**
- * 역할별 메뉴 권한 조회 (5분 캐싱)
+ * 역할별 메뉴 권한 조회
  */
 export async function getMenuPermissionsForRole(
   organizationId: string,
   role: string
 ): Promise<string[]> {
-  return unstable_cache(
-    async () => {
-      try {
-        const records = await db
-          .select()
-          .from(roleMenuPermissions)
-          .where(
-            and(
-              eq(roleMenuPermissions.organizationId, organizationId),
-              eq(roleMenuPermissions.role, role as "admin" | "manager" | "viewer" | "warehouse")
-            )
-          );
+  try {
+    const records = await db
+      .select()
+      .from(roleMenuPermissions)
+      .where(
+        and(
+          eq(roleMenuPermissions.organizationId, organizationId),
+          eq(roleMenuPermissions.role, role as "admin" | "manager" | "viewer" | "warehouse")
+        )
+      );
 
-        if (records.length > 0) {
-          return records.filter((r) => r.isAllowed).map((r) => r.menuKey);
-        }
+    // DB 레코드가 있으면 allowed인 것만 반환
+    if (records.length > 0) {
+      return records.filter((r) => r.isAllowed).map((r) => r.menuKey);
+    }
 
-        return DEFAULT_PERMISSIONS[role] || [];
-      } catch {
-        return DEFAULT_PERMISSIONS[role] || [];
-      }
-    },
-    [`permissions-${organizationId}-${role}`],
-    { revalidate: 300, tags: [`permissions-${organizationId}`] }
-  )();
+    // 없으면 기본값 사용
+    return DEFAULT_PERMISSIONS[role] || [];
+  } catch {
+    return DEFAULT_PERMISSIONS[role] || [];
+  }
 }
 
 /**

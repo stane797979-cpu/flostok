@@ -14,7 +14,7 @@ const queryClient = connectionString
   ? postgres(connectionString, {
       max: 10,
       idle_timeout: 20,
-      connect_timeout: 5,
+      connect_timeout: 10,
       ...(isPgBouncer ? { prepare: false } : {}),
     })
   : null;

@@ -19,13 +19,28 @@ import { getABCXYZAnalysis } from "@/server/actions/analytics";
 /** 안전하게 대시보드 데이터를 로드 (인증 실패 시 빈 데이터) */
 async function loadDashboardData() {
   try {
-    // 병렬 로드: 통계 + 품절/위험 품목(단일쿼리) + KPI + 회전율 + ABC-XYZ
+    // 병렬 로드: 개별 .catch()로 부분 실패 시에도 나머지 정상 표시
     const [stats, criticalItems, kpiSummary, turnoverResult, abcResult] = await Promise.all([
-      getInventoryStats(),
-      getInventoryListByStatuses({ statuses: ["out_of_stock", "critical"], limit: 10 }),
-      getKPISummary(),
-      getInventoryTurnoverData().catch(() => null),
-      getABCXYZAnalysis().catch(() => ({ products: [], matrixData: [], summary: { aCount: 0, aPercentage: 0, bCount: 0, bPercentage: 0, cCount: 0, cPercentage: 0, period: "" } })),
+      getInventoryStats().catch((err) => {
+        console.error("[대시보드] getInventoryStats 실패:", err);
+        return { totalProducts: 0, outOfStock: 0, critical: 0, shortage: 0, optimal: 0, excess: 0, totalValue: 0 };
+      }),
+      getInventoryListByStatuses({ statuses: ["out_of_stock", "critical"], limit: 10 }).catch((err) => {
+        console.error("[대시보드] getInventoryListByStatuses 실패:", err);
+        return [] as Awaited<ReturnType<typeof getInventoryListByStatuses>>;
+      }),
+      getKPISummary().catch((err) => {
+        console.error("[대시보드] getKPISummary 실패:", err);
+        return { inventoryTurnoverRate: 0, averageInventoryDays: 0, onTimeOrderRate: 0, stockoutRate: 0 };
+      }),
+      getInventoryTurnoverData().catch((err) => {
+        console.error("[대시보드] getInventoryTurnoverData 실패:", err);
+        return null;
+      }),
+      getABCXYZAnalysis().catch((err) => {
+        console.error("[대시보드] getABCXYZAnalysis 실패:", err);
+        return { products: [], matrixData: [], summary: { aCount: 0, aPercentage: 0, bCount: 0, bPercentage: 0, cCount: 0, cPercentage: 0, period: "" } };
+      }),
     ]);
 
     // 발주 필요 품목 매핑 (TOP10)
