@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, integer, numeric, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, integer, numeric, jsonb, index } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 
 // 공급자
@@ -29,7 +29,9 @@ export const suppliers = pgTable("suppliers", {
   isActive: timestamp("is_active").defaultNow(), // null이면 비활성
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index("suppliers_org_idx").on(table.organizationId),
+]);
 
 export type Supplier = typeof suppliers.$inferSelect;
 export type NewSupplier = typeof suppliers.$inferInsert;

@@ -73,6 +73,7 @@ export const inventoryHistory = pgTable("inventory_history", {
   index("inventory_history_org_date_idx").on(table.organizationId, table.date),
   index("inventory_history_product_date_idx").on(table.productId, table.date),
   index("inventory_history_org_type_idx").on(table.organizationId, table.changeType),
+  index("inventory_history_org_product_date_idx").on(table.organizationId, table.productId, table.date),
 ]);
 
 // Lot 상태

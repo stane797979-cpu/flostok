@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, pgEnum, boolean } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, pgEnum, boolean, index } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 import { products } from "./products";
 
@@ -42,7 +42,10 @@ export const alerts = pgTable("alerts", {
   readAt: timestamp("read_at", { withTimezone: true }),
   expiresAt: timestamp("expires_at", { withTimezone: true }), // 만료 시간
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index("alerts_org_read_idx").on(table.organizationId, table.isRead),
+  index("alerts_org_created_idx").on(table.organizationId, table.createdAt),
+]);
 
 export type Alert = typeof alerts.$inferSelect;
 export type NewAlert = typeof alerts.$inferInsert;

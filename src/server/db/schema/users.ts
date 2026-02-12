@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, pgEnum, boolean } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, pgEnum, boolean, index } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 
 export const userRoleEnum = pgEnum("user_role", ["admin", "manager", "viewer", "warehouse"]);
@@ -17,7 +17,10 @@ export const users = pgTable("users", {
   isSuperadmin: boolean("is_superadmin").default(false).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index("users_email_idx").on(table.email),
+  index("users_org_idx").on(table.organizationId),
+]);
 
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
