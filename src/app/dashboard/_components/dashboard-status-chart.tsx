@@ -2,7 +2,9 @@ import { InventoryStatusChart } from "@/components/features/dashboard/inventory-
 import { getInventoryStats } from "@/server/actions/inventory";
 
 export async function DashboardStatusChart() {
-  const stats = await getInventoryStats();
+  const stats = await getInventoryStats().catch(() => ({
+    totalProducts: 0, outOfStock: 0, critical: 0, shortage: 0, optimal: 0, excess: 0, totalValue: 0,
+  }));
 
   // 재고상태 분포 계산
   const statusDistribution: Record<string, number> = {};

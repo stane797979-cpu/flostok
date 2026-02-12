@@ -3,7 +3,9 @@ import { Package, AlertTriangle, TrendingDown, Archive } from "lucide-react";
 import { getInventoryStats } from "@/server/actions/inventory";
 
 export async function DashboardStatsCards() {
-  const stats = await getInventoryStats();
+  const stats = await getInventoryStats().catch(() => ({
+    totalProducts: 0, outOfStock: 0, critical: 0, shortage: 0, optimal: 0, excess: 0, totalValue: 0,
+  }));
 
   return (
     <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">

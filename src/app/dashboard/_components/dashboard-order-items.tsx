@@ -11,7 +11,7 @@ export async function DashboardOrderItems() {
   const criticalItems = await getInventoryListByStatuses({
     statuses: ["out_of_stock", "critical"],
     limit: 10,
-  });
+  }).catch(() => [] as Awaited<ReturnType<typeof getInventoryListByStatuses>>);
 
   const needsOrderProducts = criticalItems.slice(0, 10).map((item) => ({
     id: item.productId,

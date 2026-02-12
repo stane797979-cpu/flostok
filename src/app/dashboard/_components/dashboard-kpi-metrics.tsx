@@ -4,7 +4,9 @@ import { getKPISummary } from "@/server/actions/kpi";
 import Link from "next/link";
 
 export async function DashboardKPIMetrics() {
-  const kpi = await getKPISummary();
+  const kpi = await getKPISummary().catch(() => ({
+    inventoryTurnoverRate: 0, averageInventoryDays: 0, onTimeOrderRate: 0, stockoutRate: 0,
+  }));
 
   return (
     <div>
