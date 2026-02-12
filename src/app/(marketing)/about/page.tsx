@@ -12,7 +12,7 @@ export default function AboutPage() {
       {/* 비전 / 미션 */}
       <section className="bg-gradient-to-b from-slate-900 to-slate-800 px-6 py-24 sm:py-32 lg:px-8">
         <div className="mx-auto max-w-4xl text-center">
-          <p className="text-sm font-semibold text-primary-400">About Us</p>
+          <p className="text-lg font-semibold text-primary-400 sm:text-xl">About Us</p>
           <h1 className="mt-4 text-4xl font-bold tracking-tight text-white sm:text-5xl">
             {COMPANY.name}
           </h1>

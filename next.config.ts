@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // standalone 모드: Railway 배포 시 메모리 최적화 (node_modules 미포함)
+  output: "standalone",
+
   // 스트릭트 모드: 개발 환경에서 추가 검사
   reactStrictMode: true,
 
