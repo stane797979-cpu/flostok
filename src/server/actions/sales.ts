@@ -9,9 +9,6 @@ import { processInventoryTransaction } from "./inventory";
 import { requireAuth } from "./auth-helpers";
 import { logActivity } from "@/server/services/activity-log";
 
-// TODO: 인증 구현 후 실제 organizationId로 교체
-const TEMP_ORG_ID = "00000000-0000-0000-0000-000000000001";
-
 /**
  * 판매 기록 입력 스키마
  */
@@ -332,11 +329,13 @@ export async function getProductSalesStats(options?: {
  * 판매 채널 목록 조회
  */
 export async function getSalesChannels(): Promise<string[]> {
+  const user = await requireAuth();
+
   const result = await db
     .selectDistinct({ channel: salesRecords.channel })
     .from(salesRecords)
     .where(
-      and(eq(salesRecords.organizationId, TEMP_ORG_ID), sql`${salesRecords.channel} IS NOT NULL`)
+      and(eq(salesRecords.organizationId, user.organizationId), sql`${salesRecords.channel} IS NOT NULL`)
     )
     .orderBy(asc(salesRecords.channel));
 
@@ -350,6 +349,7 @@ export async function getAverageDailySales(
   productId: string,
   periodDays: number = 30
 ): Promise<number> {
+  const user = await requireAuth();
   const endDate = new Date().toISOString().split("T")[0];
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - periodDays);
@@ -362,7 +362,7 @@ export async function getAverageDailySales(
     .from(salesRecords)
     .where(
       and(
-        eq(salesRecords.organizationId, TEMP_ORG_ID),
+        eq(salesRecords.organizationId, user.organizationId),
         eq(salesRecords.productId, productId),
         gte(salesRecords.date, startDateStr),
         lte(salesRecords.date, endDate)

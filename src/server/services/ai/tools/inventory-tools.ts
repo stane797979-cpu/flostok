@@ -9,9 +9,7 @@ import { eq, and, sql, gte, lte, desc } from "drizzle-orm";
 import { classifyInventoryStatus } from "@/server/services/scm/inventory-status";
 import { calculateSafetyStock } from "@/server/services/scm/safety-stock";
 import { getAverageDailySales } from "@/server/actions/sales";
-
-// TODO: 인증 구현 후 실제 organizationId로 교체
-const TEMP_ORG_ID = "00000000-0000-0000-0000-000000000001";
+import { getCurrentUser } from "@/server/actions/auth-helpers";
 
 /**
  * 재고 상태 조회 도구 정의
@@ -111,6 +109,9 @@ export async function executeGetInventoryStatus(input: {
   error?: string;
 }> {
   try {
+    const user = await getCurrentUser();
+    const orgId = user?.organizationId || "";
+
     const { productId, sku, status, limit = 20 } = input;
 
     // SKU로 제품 ID 조회
@@ -119,7 +120,7 @@ export async function executeGetInventoryStatus(input: {
       const [product] = await db
         .select({ id: products.id })
         .from(products)
-        .where(and(eq(products.sku, sku), eq(products.organizationId, TEMP_ORG_ID)))
+        .where(and(eq(products.sku, sku), eq(products.organizationId, orgId)))
         .limit(1);
       targetProductId = product?.id;
     }
@@ -133,7 +134,7 @@ export async function executeGetInventoryStatus(input: {
         })
         .from(products)
         .leftJoin(inventory, eq(products.id, inventory.productId))
-        .where(and(eq(products.id, targetProductId), eq(products.organizationId, TEMP_ORG_ID)))
+        .where(and(eq(products.id, targetProductId), eq(products.organizationId, orgId)))
         .limit(1);
 
       if (!result) {
@@ -186,7 +187,7 @@ export async function executeGetInventoryStatus(input: {
     }
 
     // 전체 현황 조회
-    const conditions = [eq(inventory.organizationId, TEMP_ORG_ID)];
+    const conditions = [eq(inventory.organizationId, orgId)];
     if (status) {
       conditions.push(
         eq(inventory.status, status as (typeof inventory.status.enumValues)[number])
@@ -201,7 +202,7 @@ export async function executeGetInventoryStatus(input: {
         totalValue: sql<number>`sum(${inventory.inventoryValue})`,
       })
       .from(inventory)
-      .where(eq(inventory.organizationId, TEMP_ORG_ID))
+      .where(eq(inventory.organizationId, orgId))
       .groupBy(inventory.status);
 
     const summary = {
@@ -366,6 +367,9 @@ export async function executeCalculateSafetyStock(input: {
   error?: string;
 }> {
   try {
+    const user = await getCurrentUser();
+    const orgId = user?.organizationId || "";
+
     const { productId: inputProductId, sku, serviceLevel = 0.95, periodDays = 90 } = input;
 
     // 제품 ID 확인
@@ -374,7 +378,7 @@ export async function executeCalculateSafetyStock(input: {
       const [product] = await db
         .select({ id: products.id })
         .from(products)
-        .where(and(eq(products.sku, sku), eq(products.organizationId, TEMP_ORG_ID)))
+        .where(and(eq(products.sku, sku), eq(products.organizationId, orgId)))
         .limit(1);
       productId = product?.id;
     }
@@ -387,7 +391,7 @@ export async function executeCalculateSafetyStock(input: {
     const [product] = await db
       .select()
       .from(products)
-      .where(and(eq(products.id, productId), eq(products.organizationId, TEMP_ORG_ID)))
+      .where(and(eq(products.id, productId), eq(products.organizationId, orgId)))
       .limit(1);
 
     if (!product) {
@@ -407,7 +411,7 @@ export async function executeCalculateSafetyStock(input: {
       .from(salesRecords)
       .where(
         and(
-          eq(salesRecords.organizationId, TEMP_ORG_ID),
+          eq(salesRecords.organizationId, orgId),
           eq(salesRecords.productId, productId),
           gte(salesRecords.date, startDate.toISOString().split("T")[0]),
           lte(salesRecords.date, endDate.toISOString().split("T")[0])

@@ -46,7 +46,8 @@ export async function getImportShipments(options?: {
   limit?: number;
 }): Promise<{ items: ImportShipmentItem[] }> {
   const user = await getCurrentUser();
-  const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
+  const orgId = user?.organizationId;
+  if (!orgId) return { items: [] };
   const limit = options?.limit ?? 100;
 
   const rows = await db
@@ -127,7 +128,8 @@ export async function createImportShipment(data: {
 }): Promise<{ success: boolean; message: string }> {
   try {
     const user = await getCurrentUser();
-    const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
+    const orgId = user?.organizationId;
+    if (!orgId) return { success: false, message: "조직 정보를 찾을 수 없습니다" };
 
     await db.insert(importShipments).values({
       organizationId: orgId,
@@ -181,7 +183,8 @@ export async function updateImportShipment(
 ): Promise<{ success: boolean; message: string }> {
   try {
     const user = await getCurrentUser();
-    const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
+    const orgId = user?.organizationId;
+    if (!orgId) return { success: false, message: "조직 정보를 찾을 수 없습니다" };
 
     // 기존 레코드 조회
     const [existing] = await db
@@ -231,7 +234,8 @@ export async function deleteImportShipment(
 ): Promise<{ success: boolean; message: string }> {
   try {
     const user = await getCurrentUser();
-    const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
+    const orgId = user?.organizationId;
+    if (!orgId) return { success: false, message: "조직 정보를 찾을 수 없습니다" };
 
     await db
       .delete(importShipments)

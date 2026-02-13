@@ -23,7 +23,8 @@ export interface KpiSnapshot {
  */
 export async function getKpiSnapshots(): Promise<KpiSnapshot[]> {
   const user = await getCurrentUser();
-  const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
+  const orgId = user?.organizationId;
+  if (!orgId) return [];
 
   const rows = await db
     .select()
@@ -60,7 +61,8 @@ export async function saveKpiSnapshot(
 ): Promise<{ success: boolean; message: string }> {
   try {
     const user = await getCurrentUser();
-    const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
+    const orgId = user?.organizationId;
+    if (!orgId) return { success: false, message: "조직 정보를 찾을 수 없습니다" };
 
     // 기존 데이터 확인
     const [existing] = await db
@@ -138,7 +140,8 @@ export async function updateKpiComment(
 export async function ensureKpiSnapshots(trends: KPITrend[]): Promise<void> {
   try {
     const user = await getCurrentUser();
-    const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
+    const orgId = user?.organizationId;
+    if (!orgId) return;
 
     // 배치 처리: 순차 SELECT+INSERT 루프 → 1회 조회 + 1회 배치 INSERT (24→2 쿼리)
     const periods = trends.map(t => t.month);

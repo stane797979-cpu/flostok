@@ -8,9 +8,6 @@ import { eq, and } from "drizzle-orm";
 import type { SalesRowData } from "../validators/sales-validator";
 import { processInventoryTransaction } from "@/server/actions/inventory";
 
-// TODO: 인증 구현 후 실제 organizationId로 교체
-const TEMP_ORG_ID = "00000000-0000-0000-0000-000000000001";
-
 export interface ImportResult {
   success: boolean;
   imported: number;
@@ -25,11 +22,11 @@ export interface ImportResult {
 /**
  * SKU -> productId 매핑 캐시 생성
  */
-async function buildSkuToProductIdMap(): Promise<Map<string, string>> {
+async function buildSkuToProductIdMap(organizationId: string): Promise<Map<string, string>> {
   const allProducts = await db
     .select({ id: products.id, sku: products.sku })
     .from(products)
-    .where(eq(products.organizationId, TEMP_ORG_ID));
+    .where(eq(products.organizationId, organizationId));
 
   const map = new Map<string, string>();
   allProducts.forEach((product) => {
@@ -41,10 +38,12 @@ async function buildSkuToProductIdMap(): Promise<Map<string, string>> {
 
 /**
  * 판매 데이터 일괄 임포트
+ * @param organizationId - 조직 ID
  * @param validatedData - 검증된 판매 데이터
- * @param options.deductInventory - true일 때 재고 자동 차감 (출고 처리)
+ * @param options - 임포트 옵션
  */
 export async function importSalesData(
+  organizationId: string,
   validatedData: SalesRowData[],
   options?: {
     skipInventory?: boolean; // deprecated, deductInventory 사용
@@ -60,7 +59,7 @@ export async function importSalesData(
 
   try {
     // SKU -> productId 매핑
-    const skuMap = await buildSkuToProductIdMap();
+    const skuMap = await buildSkuToProductIdMap(organizationId);
 
     // 배치 처리
     for (let i = 0; i < validatedData.length; i += batchSize) {
@@ -103,7 +102,7 @@ export async function importSalesData(
         const totalAmount = unitPrice * row.quantity;
 
         batchRecords.push({
-          organizationId: TEMP_ORG_ID,
+          organizationId: organizationId,
           productId,
           date: row.date,
           quantity: row.quantity,
@@ -158,6 +157,7 @@ export async function importSalesData(
  * 중복 체크 (같은 날짜, 제품, 수량)
  */
 export async function checkDuplicateSales(
+  organizationId: string,
   productId: string,
   date: string,
   quantity: number
@@ -167,7 +167,7 @@ export async function checkDuplicateSales(
     .from(salesRecords)
     .where(
       and(
-        eq(salesRecords.organizationId, TEMP_ORG_ID),
+        eq(salesRecords.organizationId, organizationId),
         eq(salesRecords.productId, productId),
         eq(salesRecords.date, date),
         eq(salesRecords.quantity, quantity)

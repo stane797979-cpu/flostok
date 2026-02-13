@@ -8,9 +8,6 @@ import { z } from "zod";
 import { getCurrentUser } from "./auth-helpers";
 import { logActivity } from "@/server/services/activity-log";
 
-// TODO: 인증 구현 후 실제 organizationId로 교체
-const TEMP_ORG_ID = "00000000-0000-0000-0000-000000000001";
-
 /**
  * 공급자 입력 스키마
  */
@@ -47,7 +44,10 @@ export async function getSuppliers(options?: {
 
   // WHERE 조건 구성
   const user = await getCurrentUser();
-  const orgId = user?.organizationId || TEMP_ORG_ID;
+  if (!user?.organizationId) {
+    return { suppliers: [], total: 0 };
+  }
+  const orgId = user.organizationId;
   const conditions = [eq(suppliers.organizationId, orgId)];
 
   if (search) {
@@ -91,7 +91,10 @@ export async function getSuppliers(options?: {
  */
 export async function getSupplierById(id: string): Promise<Supplier | null> {
   const user = await getCurrentUser();
-  const orgId = user?.organizationId || TEMP_ORG_ID;
+  if (!user?.organizationId) {
+    return null;
+  }
+  const orgId = user.organizationId;
   const result = await db
     .select()
     .from(suppliers)
@@ -109,7 +112,10 @@ export async function createSupplier(
 ): Promise<{ success: boolean; supplier?: Supplier; error?: string }> {
   try {
     const user = await getCurrentUser();
-    const orgId = user?.organizationId || TEMP_ORG_ID;
+    if (!user?.organizationId) {
+      return { success: false, error: "인증이 필요합니다" };
+    }
+    const orgId = user.organizationId;
 
     // 유효성 검사
     const validated = supplierSchema.parse(input);
@@ -167,6 +173,11 @@ export async function updateSupplier(
       return { success: false, error: "공급자를 찾을 수 없습니다" };
     }
 
+    if (!user?.organizationId) {
+      return { success: false, error: "인증이 필요합니다" };
+    }
+    const orgId = user.organizationId;
+
     // 수정
     const updateData: Record<string, unknown> = {
       ...input,
@@ -177,7 +188,6 @@ export async function updateSupplier(
       updateData.rating = String(input.rating);
     }
 
-    const orgId = user?.organizationId || TEMP_ORG_ID;
     const [updated] = await db
       .update(suppliers)
       .set(updateData)
@@ -212,7 +222,10 @@ export async function updateSupplier(
 export async function deleteSupplier(id: string): Promise<{ success: boolean; error?: string }> {
   try {
     const user = await getCurrentUser();
-    const orgId = user?.organizationId || TEMP_ORG_ID;
+    if (!user?.organizationId) {
+      return { success: false, error: "인증이 필요합니다" };
+    }
+    const orgId = user.organizationId;
     const existing = await getSupplierById(id);
     if (!existing) {
       return { success: false, error: "공급자를 찾을 수 없습니다" };
@@ -253,7 +266,10 @@ export async function deleteSuppliers(
     }
 
     const user = await getCurrentUser();
-    const orgId = user?.organizationId || TEMP_ORG_ID;
+    if (!user?.organizationId) {
+      return { success: false, deletedCount: 0, error: "인증이 필요합니다" };
+    }
+    const orgId = user.organizationId;
 
     await db
       .delete(suppliers)
@@ -287,7 +303,10 @@ export async function getSupplierStats(): Promise<{
   avgLeadTime: number;
 }> {
   const user = await getCurrentUser();
-  const orgId = user?.organizationId || TEMP_ORG_ID;
+  if (!user?.organizationId) {
+    return { total: 0, avgRating: 0, avgLeadTime: 7 };
+  }
+  const orgId = user.organizationId;
   const result = await db
     .select({
       count: sql<number>`count(*)`,
@@ -309,7 +328,10 @@ export async function getSupplierStats(): Promise<{
  */
 export async function getSupplierOptions(): Promise<{ id: string; name: string }[]> {
   const user = await getCurrentUser();
-  const orgId = user?.organizationId || TEMP_ORG_ID;
+  if (!user?.organizationId) {
+    return [];
+  }
+  const orgId = user.organizationId;
   const result = await db
     .select({
       id: suppliers.id,

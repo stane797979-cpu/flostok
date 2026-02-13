@@ -45,7 +45,17 @@ export interface StockoutSummary {
  */
 export async function getStockoutData(): Promise<StockoutSummary> {
   const user = await getCurrentUser();
-  const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
+  const orgId = user?.organizationId;
+  if (!orgId) {
+    return {
+      records: [],
+      totalProducts: 0,
+      stockoutCount: 0,
+      stockoutRate: 0,
+      avgDurationDays: 0,
+      causeDistribution: [],
+    };
+  }
   const today = new Date().toISOString().split("T")[0];
 
   // 1. 현재 재고 맵 (전체 제품)
@@ -250,7 +260,8 @@ export async function updateStockoutRecord(
     if (recordId.startsWith("auto-")) {
       const productId = recordId.replace("auto-", "");
       const user = await getCurrentUser();
-      const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
+      const orgId = user?.organizationId;
+      if (!orgId) return { success: false, message: "조직 정보를 찾을 수 없습니다" };
       const today = new Date().toISOString().split("T")[0];
 
       const [inserted] = await db

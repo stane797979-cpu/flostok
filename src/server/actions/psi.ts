@@ -219,7 +219,10 @@ async function _getPSIDataInternal(orgId: string): Promise<PSIResult> {
  */
 export async function getPSIData(): Promise<PSIResult> {
   const user = await getCurrentUser();
-  const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
+  const orgId = user?.organizationId;
+  if (!orgId) {
+    return { products: [], periods: [], totalProducts: 0 };
+  }
 
   return unstable_cache(
     () => _getPSIDataInternal(orgId),
@@ -238,7 +241,8 @@ export async function uploadPSIPlanExcel(
 ): Promise<{ success: boolean; message: string; importedCount: number }> {
   try {
     const user = await getCurrentUser();
-    const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
+    const orgId = user?.organizationId;
+    if (!orgId) return { success: false, message: "조직 정보를 찾을 수 없습니다", importedCount: 0 };
 
     const file = formData.get("file") as File;
     if (!file) return { success: false, message: "파일이 없습니다", importedCount: 0 };
@@ -423,7 +427,8 @@ export async function generateSOPQuantities(
 ): Promise<{ success: boolean; message: string; updatedCount: number }> {
   try {
     const user = await getCurrentUser();
-    const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
+    const orgId = user?.organizationId;
+    if (!orgId) return { success: false, message: "조직 정보를 찾을 수 없습니다", updatedCount: 0 };
 
     // 미래 6개월 기간 생성
     const now = new Date();

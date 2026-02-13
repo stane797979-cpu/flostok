@@ -41,7 +41,17 @@ function classifyTurnoverStatus(rate: number): TurnoverData["status"] {
  */
 export async function getInventoryTurnoverData(): Promise<TurnoverSummary> {
   const user = await getCurrentUser();
-  const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
+  const orgId = user?.organizationId;
+  if (!orgId) {
+    return {
+      items: [],
+      avgTurnoverRate: 0,
+      avgDaysOfInventory: 0,
+      lowTurnoverCount: 0,
+      top5Fastest: [],
+      top5Slowest: [],
+    };
+  }
 
   return unstable_cache(
     async () => {

@@ -160,7 +160,10 @@ async function _getFulfillmentRateInternal(orgId: string): Promise<FulfillmentRa
  */
 export async function getFulfillmentRateData(): Promise<FulfillmentRateSummary> {
   const user = await getCurrentUser();
-  const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
+  const orgId = user?.organizationId;
+  if (!orgId) {
+    return { items: [], avgFulfillmentRate: 0, overForecastCount: 0, underForecastCount: 0, periods: [] };
+  }
 
   return unstable_cache(
     () => _getFulfillmentRateInternal(orgId),

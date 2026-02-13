@@ -7,9 +7,6 @@ import { products } from "@/server/db/schema";
 import { eq, and } from "drizzle-orm";
 import type { ProductRowData } from "../validators/product-validator";
 
-// TODO: 인증 구현 후 실제 organizationId로 교체
-const TEMP_ORG_ID = "00000000-0000-0000-0000-000000000001";
-
 export interface ImportResult {
   success: boolean;
   imported: number;
@@ -25,11 +22,11 @@ export interface ImportResult {
 /**
  * 기존 SKU 목록 조회
  */
-async function getExistingSkuMap(): Promise<Map<string, string>> {
+async function getExistingSkuMap(organizationId: string): Promise<Map<string, string>> {
   const existing = await db
     .select({ id: products.id, sku: products.sku })
     .from(products)
-    .where(eq(products.organizationId, TEMP_ORG_ID));
+    .where(eq(products.organizationId, organizationId));
 
   const map = new Map<string, string>();
   existing.forEach((product) => {
@@ -41,10 +38,12 @@ async function getExistingSkuMap(): Promise<Map<string, string>> {
 
 /**
  * 제품 마스터 일괄 임포트
+ * @param organizationId - 조직 ID
  * @param validatedData - 검증된 제품 데이터
- * @param updateExisting - 기존 제품 업데이트 여부
+ * @param options - 임포트 옵션
  */
 export async function importProductData(
+  organizationId: string,
   validatedData: ProductRowData[],
   options?: {
     updateExisting?: boolean; // 기존 제품 업데이트
@@ -60,7 +59,7 @@ export async function importProductData(
 
   try {
     // 기존 SKU 매핑
-    const existingSkuMap = await getExistingSkuMap();
+    const existingSkuMap = await getExistingSkuMap(organizationId);
 
     // 배치 처리
     for (let i = 0; i < validatedData.length; i += batchSize) {
@@ -96,7 +95,7 @@ export async function importProductData(
                   imageUrl: row.imageUrl,
                   updatedAt: new Date(),
                 })
-                .where(and(eq(products.id, existingId), eq(products.organizationId, TEMP_ORG_ID)));
+                .where(and(eq(products.id, existingId), eq(products.organizationId, organizationId)));
               updated++;
             } else {
               skipped++;
@@ -104,7 +103,7 @@ export async function importProductData(
           } else {
             // 신규 제품 생성
             await db.insert(products).values({
-              organizationId: TEMP_ORG_ID,
+              organizationId: organizationId,
               sku: row.sku,
               name: row.name,
               category: row.category,
@@ -128,7 +127,7 @@ export async function importProductData(
             const [newProduct] = await db
               .select({ id: products.id })
               .from(products)
-              .where(and(eq(products.sku, row.sku), eq(products.organizationId, TEMP_ORG_ID)))
+              .where(and(eq(products.sku, row.sku), eq(products.organizationId, organizationId)))
               .limit(1);
             if (newProduct) {
               existingSkuMap.set(row.sku, newProduct.id);

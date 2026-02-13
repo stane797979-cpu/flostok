@@ -211,7 +211,10 @@ async function _getGradeChangeInternal(orgId: string): Promise<GradeChangeResult
  */
 export async function getGradeChangeAnalysis(): Promise<GradeChangeResult> {
   const user = await getCurrentUser();
-  const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
+  const orgId = user?.organizationId;
+  if (!orgId) {
+    return { changes: [], trend: [], totalProducts: 0, changedCount: 0 };
+  }
 
   return unstable_cache(
     () => _getGradeChangeInternal(orgId),

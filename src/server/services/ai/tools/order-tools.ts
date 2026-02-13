@@ -12,9 +12,7 @@ import {
   calculateReorderPriority,
   type ProductReorderData,
 } from "@/server/services/scm/reorder-recommendation";
-
-// TODO: 인증 구현 후 실제 organizationId로 교체
-const TEMP_ORG_ID = "00000000-0000-0000-0000-000000000001";
+import { getCurrentUser } from "@/server/actions/auth-helpers";
 
 /**
  * 발주 추천 목록 조회 도구 정의
@@ -102,11 +100,18 @@ export async function executeGetReorderRecommendations(input: {
   error?: string;
 }> {
   try {
+    const user = await getCurrentUser();
+    const orgId = user?.organizationId;
+
+    if (!orgId) {
+      return { success: false, error: "인증이 필요합니다" };
+    }
+
     const { urgencyLevel = 0, abcGrade, supplierId, limit = 20 } = input;
 
     // 발주 필요 제품 조회 (현재고 <= 발주점)
     const conditions = [
-      eq(products.organizationId, TEMP_ORG_ID),
+      eq(products.organizationId, orgId),
       sql`${products.isActive} IS NOT NULL`,
     ];
 
@@ -329,9 +334,16 @@ export async function executeGetPurchaseOrderStatus(input: {
   error?: string;
 }> {
   try {
+    const user = await getCurrentUser();
+    const orgId = user?.organizationId;
+
+    if (!orgId) {
+      return { success: false, error: "인증이 필요합니다" };
+    }
+
     const { status, supplierId, limit = 10 } = input;
 
-    const conditions = [eq(purchaseOrders.organizationId, TEMP_ORG_ID)];
+    const conditions = [eq(purchaseOrders.organizationId, orgId)];
 
     if (status) {
       conditions.push(
@@ -350,7 +362,7 @@ export async function executeGetPurchaseOrderStatus(input: {
         totalAmount: sql<number>`sum(${purchaseOrders.totalAmount})`,
       })
       .from(purchaseOrders)
-      .where(eq(purchaseOrders.organizationId, TEMP_ORG_ID))
+      .where(eq(purchaseOrders.organizationId, orgId))
       .groupBy(purchaseOrders.status);
 
     const byStatus: Record<string, { count: number; amount: number }> = {};

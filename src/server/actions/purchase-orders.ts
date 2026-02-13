@@ -29,9 +29,6 @@ import { getCurrentUser } from "./auth-helpers";
 import { logActivity } from "@/server/services/activity-log";
 import type { OrganizationSettings } from "@/types/organization-settings";
 
-// TODO: 인증 구현 후 실제 organizationId로 교체
-const TEMP_ORG_ID = "00000000-0000-0000-0000-000000000001";
-
 /**
  * 발주 필요 품목 조회 옵션 스키마
  */
@@ -57,7 +54,10 @@ export async function getReorderItems(options?: {
 }> {
   try {
     const user = await getCurrentUser();
-    const orgId = user?.organizationId || TEMP_ORG_ID;
+    if (!user?.organizationId) {
+      throw new Error("인증된 사용자를 찾을 수 없습니다");
+    }
+    const orgId = user.organizationId;
 
     // 옵션 유효성 검사
     const validatedOptions = reorderOptionsSchema.parse(options || {});
@@ -289,12 +289,23 @@ export async function calculateReorderQuantity(productId: string): Promise<{
       .from(products)
       .leftJoin(inventory, eq(products.id, inventory.productId))
       .leftJoin(suppliers, eq(products.primarySupplierId, suppliers.id))
-      .where(and(eq(products.id, productId), eq(products.organizationId, TEMP_ORG_ID)))
+      .where(eq(products.id, productId))
       .limit(1);
 
     if (!productData) {
       throw new Error("제품을 찾을 수 없습니다");
     }
+
+    if (!productData) {
+      throw new Error("제품을 찾을 수 없습니다");
+    }
+
+    // 조직 ID 확인
+    const user = await getCurrentUser();
+    if (!user?.organizationId) {
+      throw new Error("인증된 사용자를 찾을 수 없습니다");
+    }
+    const orgId = user.organizationId;
 
     // 일평균 판매량 조회 (최근 30일)
     const thirtyDaysAgo = new Date();
@@ -304,7 +315,7 @@ export async function calculateReorderQuantity(productId: string): Promise<{
       .from(salesRecords)
       .where(
         and(
-          eq(salesRecords.organizationId, TEMP_ORG_ID),
+          eq(salesRecords.organizationId, orgId),
           eq(salesRecords.productId, productId),
           gte(salesRecords.date, thirtyDaysAgo.toISOString().split("T")[0])
         )
@@ -315,7 +326,7 @@ export async function calculateReorderQuantity(productId: string): Promise<{
     const [singleOrgData] = await db
       .select({ settings: organizations.settings })
       .from(organizations)
-      .where(eq(organizations.id, TEMP_ORG_ID))
+      .where(eq(organizations.id, orgId))
       .limit(1);
     const singleOrgSettings = singleOrgData?.settings as OrganizationSettings | null;
 
@@ -429,7 +440,10 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
 
     // 조직 ID 가져오기
     const user = await getCurrentUser();
-    const orgId = user?.organizationId || TEMP_ORG_ID;
+    if (!user?.organizationId) {
+      return { success: false, error: "인증된 사용자를 찾을 수 없습니다" };
+    }
+    const orgId = user.organizationId;
 
     // 공급자 + 제품 + 발주번호 시퀀스 병렬 조회
     const productIds = validated.items.map((item) => item.productId);
@@ -586,11 +600,17 @@ export async function updatePurchaseOrderStatus(
       return { success: false, error: "유효하지 않은 상태입니다" };
     }
 
+    const user = await getCurrentUser();
+    if (!user?.organizationId) {
+      return { success: false, error: "인증된 사용자를 찾을 수 없습니다" };
+    }
+    const orgId = user.organizationId;
+
     // 현재 발주서 조회
     const [order] = await db
       .select()
       .from(purchaseOrders)
-      .where(and(eq(purchaseOrders.id, orderId), eq(purchaseOrders.organizationId, TEMP_ORG_ID)))
+      .where(and(eq(purchaseOrders.id, orderId), eq(purchaseOrders.organizationId, orgId)))
       .limit(1);
 
     if (!order) {
@@ -628,16 +648,13 @@ export async function updatePurchaseOrderStatus(
     revalidatePath("/dashboard/orders");
 
     // 활동 로깅
-    const user = await getCurrentUser();
-    if (user) {
-      await logActivity({
-        user,
-        action: "UPDATE",
-        entityType: "purchase_order",
-        entityId: orderId,
-        description: `발주서 상태 변경: ${oldStatus} → ${newStatus}`,
-      });
-    }
+    await logActivity({
+      user,
+      action: "UPDATE",
+      entityType: "purchase_order",
+      entityId: orderId,
+      description: `발주서 상태 변경: ${oldStatus} → ${newStatus}`,
+    });
 
     return { success: true };
   } catch (error) {
@@ -663,9 +680,15 @@ export async function getPurchaseOrders(options?: {
   })[];
   total: number;
 }> {
+  const user = await getCurrentUser();
+  if (!user?.organizationId) {
+    return { orders: [], total: 0 };
+  }
+  const orgId = user.organizationId;
+
   const { status, supplierId, startDate, endDate, limit = 50, offset = 0 } = options || {};
 
-  const conditions = [eq(purchaseOrders.organizationId, TEMP_ORG_ID)];
+  const conditions = [eq(purchaseOrders.organizationId, orgId)];
 
   if (status) {
     conditions.push(
@@ -731,6 +754,12 @@ export async function getPurchaseOrderById(orderId: string): Promise<
     })
   | null
 > {
+  const user = await getCurrentUser();
+  if (!user?.organizationId) {
+    return null;
+  }
+  const orgId = user.organizationId;
+
   const [orderData] = await db
     .select({
       order: purchaseOrders,
@@ -742,7 +771,7 @@ export async function getPurchaseOrderById(orderId: string): Promise<
     })
     .from(purchaseOrders)
     .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
-    .where(and(eq(purchaseOrders.id, orderId), eq(purchaseOrders.organizationId, TEMP_ORG_ID)))
+    .where(and(eq(purchaseOrders.id, orderId), eq(purchaseOrders.organizationId, orgId)))
     .limit(1);
 
   if (!orderData) return null;
@@ -801,7 +830,8 @@ export async function updatePurchaseOrderExpectedDate(
     }
 
     const user = await getCurrentUser();
-    const orgId = user?.organizationId || TEMP_ORG_ID;
+    if (!user?.organizationId) return { success: false, error: "인증이 필요합니다" };
+    const orgId = user.organizationId;
 
     const [order] = await db
       .select({ id: purchaseOrders.id })
@@ -858,13 +888,19 @@ export async function cancelBulkPurchaseOrders(
       return { success: false, cancelledCount: 0, errors: [] };
     }
 
+    const user = await getCurrentUser();
+    if (!user?.organizationId) {
+      return { success: false, cancelledCount: 0, errors: [{ orderId: "", orderNumber: "", error: "인증이 필요합니다" }] };
+    }
+    const orgId = user.organizationId;
+
     // 선택된 발주서 조회
     const orders = await db
       .select({ id: purchaseOrders.id, orderNumber: purchaseOrders.orderNumber, status: purchaseOrders.status })
       .from(purchaseOrders)
       .where(
         and(
-          eq(purchaseOrders.organizationId, TEMP_ORG_ID),
+          eq(purchaseOrders.organizationId, orgId),
           sql`${purchaseOrders.id} IN ${orderIds}`
         )
       );
@@ -890,7 +926,7 @@ export async function cancelBulkPurchaseOrders(
         .set({ status: "cancelled", updatedAt: new Date() })
         .where(
           and(
-            eq(purchaseOrders.organizationId, TEMP_ORG_ID),
+            eq(purchaseOrders.organizationId, orgId),
             sql`${purchaseOrders.id} IN ${cancellableIds}`
           )
         );
@@ -898,9 +934,6 @@ export async function cancelBulkPurchaseOrders(
     }
 
     revalidatePath("/dashboard/orders");
-
-    // 활동 로깅
-    const user = await getCurrentUser();
     if (user && cancelledCount > 0) {
       await logActivity({
         user,
@@ -1089,8 +1122,12 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
     // 유효성 검사
     const validated = createBulkPurchaseOrdersSchema.parse(input);
 
-    // 사용자 정보 조회 (활동 로깅용)
+    // 사용자 정보 조회
     const user = await getCurrentUser();
+    if (!user?.organizationId) {
+      return { success: false, createdOrders: [], errors: [{ productId: "AUTH", error: "인증이 필요합니다" }] };
+    }
+    const orgId = user.organizationId;
 
     // 1. 공급자별로 품목 그룹화
     const itemsBySupplier = new Map<string, typeof validated.items>();
@@ -1102,7 +1139,7 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
 
     // 발주 제한 확인 (생성할 발주서 수만큼 확인)
     const { checkOrderLimit } = await import("@/server/services/subscription/limits");
-    const limit = await checkOrderLimit(TEMP_ORG_ID);
+    const limit = await checkOrderLimit(orgId);
     const ordersToCreate = itemsBySupplier.size;
 
     if (limit.limit !== Infinity && limit.current + ordersToCreate > limit.limit) {
@@ -1125,15 +1162,15 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
     const [allSuppliersData, allProductsData, todayOrderCount] = await Promise.all([
       // 전체 공급자 한번에 조회
       db.select().from(suppliers).where(
-        and(eq(suppliers.organizationId, TEMP_ORG_ID), sql`${suppliers.id} IN ${allSupplierIds}`)
+        and(eq(suppliers.organizationId, orgId), sql`${suppliers.id} IN ${allSupplierIds}`)
       ),
       // 전체 제품 한번에 조회
       db.select().from(products).where(
-        and(eq(products.organizationId, TEMP_ORG_ID), sql`${products.id} IN ${allProductIds}`)
+        and(eq(products.organizationId, orgId), sql`${products.id} IN ${allProductIds}`)
       ),
       // 오늘 발주 수 1회만 조회
       db.select({ count: sql<number>`count(*)` }).from(purchaseOrders).where(
-        and(eq(purchaseOrders.organizationId, TEMP_ORG_ID), sql`DATE(${purchaseOrders.createdAt}) = CURRENT_DATE`)
+        and(eq(purchaseOrders.organizationId, orgId), sql`DATE(${purchaseOrders.createdAt}) = CURRENT_DATE`)
       ),
     ]);
 
@@ -1191,7 +1228,7 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
           const [order] = await tx
             .insert(purchaseOrders)
             .values({
-              organizationId: TEMP_ORG_ID,
+              organizationId: orgId,
               orderNumber,
               supplierId,
               status: "ordered",
@@ -1289,7 +1326,8 @@ export async function uploadPurchaseOrderExcel(
 ): Promise<{ success: boolean; message: string; createdCount: number }> {
   try {
     const user = await getCurrentUser();
-    const orgId = user?.organizationId || TEMP_ORG_ID;
+    if (!user?.organizationId) return { success: false, message: "인증이 필요합니다", createdCount: 0 };
+    const orgId = user.organizationId;
 
     const file = formData.get("file") as File;
     if (!file) return { success: false, message: "파일이 없습니다", createdCount: 0 };

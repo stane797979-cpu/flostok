@@ -74,20 +74,7 @@ export async function GET(request: NextRequest) {
           continue
         }
 
-        // TODO: getReorderItems를 organizationId를 받도록 수정 필요
-        // 현재는 TEMP_ORG_ID만 지원하므로 해당 조직만 처리
-        if (org.id !== '00000000-0000-0000-0000-000000000001') {
-          console.log(`[Auto-Reorder Cron] 조직 ${org.name}: 아직 미구현 (멀티테넌시 지원 필요)`)
-          results.push({
-            organizationId: org.id,
-            organizationName: org.name,
-            productsProcessed: 0,
-            ordersCreated: 0,
-          })
-          continue
-        }
-
-        // 발주 필요 제품 조회 (임시: DB에서 직접 조회)
+        // 발주 필요 제품 조회
         const { getReorderItems } = await import('@/server/actions/purchase-orders')
         const { items: recommendations } = await getReorderItems({ limit: 100 })
 

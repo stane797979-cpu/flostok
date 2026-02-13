@@ -16,7 +16,21 @@ import {
  */
 export async function getDeliveryComplianceData(): Promise<DeliveryComplianceResult> {
   const user = await getCurrentUser();
-  const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
+  const orgId = user?.organizationId;
+  if (!orgId) {
+    return {
+      items: [],
+      summary: {
+        total: 0,
+        onTime: 0,
+        delayed: 0,
+        early: 0,
+        onTimeRate: 0,
+        avgDelay: 0,
+      },
+      bySupplier: [],
+    };
+  }
 
   // 발주 데이터 조회 (취소/초안 제외)
   const orderRows = await db
