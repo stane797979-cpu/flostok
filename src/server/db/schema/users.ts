@@ -15,6 +15,8 @@ export const users = pgTable("users", {
   avatarUrl: text("avatar_url"),
   role: userRoleEnum("role").default("viewer").notNull(),
   isSuperadmin: boolean("is_superadmin").default(false).notNull(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }), // 탈퇴일 (soft delete)
+  withdrawalReason: text("withdrawal_reason"), // 탈퇴 사유
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [

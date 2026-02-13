@@ -74,7 +74,11 @@ export const getCachedCurrentUser = cache(
         .where(eq(users.authId, user.id))
         .limit(1);
 
-      if (dbUser) return dbUser;
+      if (dbUser) {
+        // 탈퇴한 사용자 차단
+        if (dbUser.deletedAt) return null;
+        return dbUser;
+      }
 
       // authId로 못 찾으면, 이메일로 찾아서 authId 자동 동기화
       if (user.email) {
@@ -85,6 +89,8 @@ export const getCachedCurrentUser = cache(
           .limit(1);
 
         if (emailUser) {
+          // 탈퇴한 사용자 차단
+          if (emailUser.deletedAt) return null;
           await db
             .update(users)
             .set({ authId: user.id, updatedAt: new Date() })
