@@ -7,7 +7,8 @@
 import { revalidatePath } from 'next/cache'
 import { db } from '@/server/db'
 import { users, organizations } from '@/server/db/schema'
-import { eq, and } from 'drizzle-orm'
+import { eq, and, asc, isNull } from 'drizzle-orm'
+import { getCurrentUser } from './auth-helpers'
 
 /** 응답 타입 */
 type ActionResponse<T = unknown> =
@@ -78,14 +79,18 @@ export async function getCurrentUserProfile(authId: string): Promise<{
   organizationName: string;
 } | null> {
   try {
-    const user = await db.query.users.findFirst({
-      where: eq(users.authId, authId),
-    })
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.authId, authId))
+      .limit(1)
     if (!user) return null
 
-    const org = await db.query.organizations.findFirst({
-      where: eq(organizations.id, user.organizationId),
-    })
+    const [org] = await db
+      .select()
+      .from(organizations)
+      .where(eq(organizations.id, user.organizationId))
+      .limit(1)
 
     const roleMap: Record<string, string> = {
       admin: '관리자',
@@ -103,21 +108,42 @@ export async function getCurrentUserProfile(authId: string): Promise<{
   }
 }
 
-/** 조직의 사용자 목록 조회 */
+/** 조직의 사용자 목록 조회 — 인증 기반 */
 export async function getOrganizationUsersAction(
-  organizationId: string
+  organizationId?: string
 ): Promise<ActionResponse<OrganizationUser[]>> {
   try {
-    const organizationUsers = await db.query.users.findMany({
-      where: eq(users.organizationId, organizationId),
-      orderBy: (users, { asc }) => [asc(users.createdAt)],
-    })
+    const currentUser = await getCurrentUser()
+    const orgId = currentUser?.organizationId || organizationId
+    if (!orgId) {
+      return { success: false, error: '인증이 필요합니다' }
+    }
+
+    const organizationUsers = await db
+      .select({
+        id: users.id,
+        authId: users.authId,
+        organizationId: users.organizationId,
+        email: users.email,
+        name: users.name,
+        avatarUrl: users.avatarUrl,
+        role: users.role,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+      })
+      .from(users)
+      .where(and(
+        eq(users.organizationId, orgId),
+        isNull(users.deletedAt)
+      ))
+      .orderBy(asc(users.createdAt))
 
     return {
       success: true,
       data: organizationUsers,
     }
   } catch (error) {
+    console.error('사용자 목록 조회 실패:', error)
     return {
       success: false,
       error: error instanceof Error ? error.message : '사용자 목록 조회에 실패했습니다',
@@ -132,10 +158,15 @@ export async function updateUserRoleAction(
   newRole: 'admin' | 'manager' | 'viewer' | 'warehouse'
 ): Promise<ActionResponse<void>> {
   try {
+    const currentUser = await getCurrentUser()
+    const orgId = currentUser?.organizationId || organizationId
+
     // 사용자가 해당 조직에 속하는지 확인
-    const user = await db.query.users.findFirst({
-      where: and(eq(users.id, userId), eq(users.organizationId, organizationId)),
-    })
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(and(eq(users.id, userId), eq(users.organizationId, orgId)))
+      .limit(1)
 
     if (!user) {
       return {
@@ -173,10 +204,15 @@ export async function removeUserAction(
   organizationId: string
 ): Promise<ActionResponse<void>> {
   try {
+    const currentUser = await getCurrentUser()
+    const orgId = currentUser?.organizationId || organizationId
+
     // 사용자가 해당 조직에 속하는지 확인
-    const user = await db.query.users.findFirst({
-      where: and(eq(users.id, userId), eq(users.organizationId, organizationId)),
-    })
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(and(eq(users.id, userId), eq(users.organizationId, orgId)))
+      .limit(1)
 
     if (!user) {
       return {
@@ -187,11 +223,16 @@ export async function removeUserAction(
 
     // 마지막 admin 체크 (최소 1명의 admin 필요)
     if (user.role === 'admin') {
-      const adminCount = await db.query.users.findMany({
-        where: and(eq(users.organizationId, organizationId), eq(users.role, 'admin')),
-      })
+      const adminUsers = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(and(
+          eq(users.organizationId, orgId),
+          eq(users.role, 'admin'),
+          isNull(users.deletedAt)
+        ))
 
-      if (adminCount.length <= 1) {
+      if (adminUsers.length <= 1) {
         return {
           success: false,
           error: '조직에 최소 1명의 관리자가 필요합니다',
@@ -223,10 +264,15 @@ export async function inviteUserAction(
   role: 'admin' | 'manager' | 'viewer' | 'warehouse'
 ): Promise<ActionResponse<void>> {
   try {
+    const currentUser = await getCurrentUser()
+    const orgId = currentUser?.organizationId || organizationId
+
     // 이메일 중복 확인
-    const existingUser = await db.query.users.findFirst({
-      where: and(eq(users.email, email), eq(users.organizationId, organizationId)),
-    })
+    const [existingUser] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.email, email), eq(users.organizationId, orgId)))
+      .limit(1)
 
     if (existingUser) {
       return {
@@ -239,7 +285,7 @@ export async function inviteUserAction(
     // 현재는 임시 사용자 생성 (authId는 임시값)
     await db.insert(users).values({
       authId: `temp_${Date.now()}_${Math.random()}`, // 임시 authId
-      organizationId,
+      organizationId: orgId,
       email,
       name: email.split('@')[0], // 이메일에서 이름 추출
       role,

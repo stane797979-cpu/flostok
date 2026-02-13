@@ -28,7 +28,7 @@ import {
 import { createApiKey, deleteApiKey, listApiKeys, type APIKey } from '@/server/actions/api-keys'
 
 interface APIKeySettingsProps {
-  organizationId: string
+  organizationId?: string
 }
 
 export function APIKeySettings({ organizationId }: APIKeySettingsProps): React.ReactNode {

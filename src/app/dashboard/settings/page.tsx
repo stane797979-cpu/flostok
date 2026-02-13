@@ -1,6 +1,7 @@
 import dynamic from "next/dynamic";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MyAccount } from "./_components/my-account";
+import { getCurrentUser } from "@/server/actions/auth-helpers";
 
 // Dynamic imports — 선택된 탭만 로드 (초기 번들 ~240kB → ~60kB)
 const DataManagement = dynamic(
@@ -28,8 +29,8 @@ const PermissionsTab = dynamic(
   () => import("./_components/permissions-tab").then((m) => ({ default: m.PermissionsTab }))
 );
 
-// TEMP: 개발 중 임시 조직 ID (Phase 6.1에서 실제 세션 기반으로 변경)
-const TEMP_ORG_ID = "00000000-0000-0000-0000-000000000001";
+// 개발용 폴백 조직 ID
+const FALLBACK_ORG_ID = "00000000-0000-0000-0000-000000000001";
 
 export default async function SettingsPage({
   searchParams,
@@ -39,6 +40,10 @@ export default async function SettingsPage({
   const { tab } = await searchParams;
   const validTabs = ["account", "data", "organization", "users", "permissions", "policy", "api", "notifications", "activity"];
   const defaultTab = tab && validTabs.includes(tab) ? tab : "account";
+
+  // 실제 로그인 사용자의 조직 ID 사용
+  const user = await getCurrentUser();
+  const organizationId = user?.organizationId || FALLBACK_ORG_ID;
 
   return (
     <div className="space-y-6">
@@ -71,23 +76,23 @@ export default async function SettingsPage({
         </TabsContent>
 
         <TabsContent value="organization" className="space-y-4">
-          <OrganizationTab organizationId={TEMP_ORG_ID} />
+          <OrganizationTab organizationId={organizationId} />
         </TabsContent>
 
         <TabsContent value="users" className="space-y-4">
-          <UserManagement organizationId={TEMP_ORG_ID} />
+          <UserManagement organizationId={organizationId} />
         </TabsContent>
 
         <TabsContent value="permissions" className="space-y-4">
-          <PermissionsTab organizationId={TEMP_ORG_ID} />
+          <PermissionsTab organizationId={organizationId} />
         </TabsContent>
 
         <TabsContent value="policy" className="space-y-4">
-          <OrderPolicySettingsComponent organizationId={TEMP_ORG_ID} />
+          <OrderPolicySettingsComponent organizationId={organizationId} />
         </TabsContent>
 
         <TabsContent value="api" className="space-y-4">
-          <APIKeySettings organizationId={TEMP_ORG_ID} />
+          <APIKeySettings organizationId={organizationId} />
         </TabsContent>
 
         <TabsContent value="notifications" className="space-y-4">

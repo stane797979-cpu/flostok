@@ -38,18 +38,11 @@ export async function getMenuPermissionsForRole(
 }
 
 /**
- * 조직의 전체 권한 설정 조회 (설정 페이지용)
+ * 조직의 전체 권한 설정 조회 (설정 페이지용) — 인증 기반
  */
-export async function getAllMenuPermissions(organizationId: string): Promise<
+export async function getAllMenuPermissions(organizationId?: string): Promise<
   Record<string, Record<string, boolean>>
 > {
-  await requireAdmin();
-
-  const records = await db
-    .select()
-    .from(roleMenuPermissions)
-    .where(eq(roleMenuPermissions.organizationId, organizationId));
-
   // 기본값으로 초기화
   const result: Record<string, Record<string, boolean>> = {};
   const roles = ["admin", "manager", "viewer", "warehouse"] as const;
@@ -62,11 +55,23 @@ export async function getAllMenuPermissions(organizationId: string): Promise<
     }
   }
 
-  // DB 레코드로 덮어쓰기
-  for (const record of records) {
-    if (result[record.role]) {
-      result[record.role][record.menuKey] = record.isAllowed;
+  try {
+    const user = await requireAdmin();
+    const orgId = user.organizationId || organizationId;
+
+    const records = await db
+      .select()
+      .from(roleMenuPermissions)
+      .where(eq(roleMenuPermissions.organizationId, orgId));
+
+    // DB 레코드로 덮어쓰기
+    for (const record of records) {
+      if (result[record.role]) {
+        result[record.role][record.menuKey] = record.isAllowed;
+      }
     }
+  } catch (error) {
+    console.error("권한 설정 조회 오류:", error);
   }
 
   return result;

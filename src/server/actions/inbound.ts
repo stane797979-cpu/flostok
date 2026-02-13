@@ -613,11 +613,8 @@ export async function getInboundRecords(options?: GetInboundRecordsOptions): Pro
       total: Number(countResult[0]?.count || 0),
     };
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      throw new Error(`입력 데이터가 올바르지 않습니다: ${error.issues[0]?.message}`);
-    }
     console.error("입고 기록 조회 오류:", error);
-    throw new Error("입고 기록 조회에 실패했습니다");
+    return { records: [], total: 0 };
   }
 }
 
@@ -827,7 +824,7 @@ export async function getWarehouseInboundOrders(): Promise<{
     };
   } catch (error) {
     console.error("창고 입고예정 목록 조회 오류:", error);
-    throw new Error("창고 입고예정 목록 조회에 실패했습니다");
+    return { orders: [] };
   }
 }
 
@@ -912,6 +909,9 @@ export async function getWarehouseInboundOrderDetail(orderId: string): Promise<{
     };
   } catch (error) {
     console.error("발주서 상세 조회 오류:", error);
-    throw new Error("발주서 상세 조회에 실패했습니다");
+    return {
+      order: { id: "", orderNumber: "", supplierName: null, status: "", expectedDate: null },
+      items: [],
+    };
   }
 }

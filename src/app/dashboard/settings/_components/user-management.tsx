@@ -54,7 +54,7 @@ import {
 } from '@/server/actions/users'
 
 interface UserManagementProps {
-  organizationId: string
+  organizationId?: string
 }
 
 const roleLabels: Record<string, string> = {
@@ -115,7 +115,7 @@ export function UserManagement({ organizationId }: UserManagementProps) {
     setMessage(null)
 
     startTransition(async () => {
-      const result = await updateUserRoleAction(userId, organizationId, newRole)
+      const result = await updateUserRoleAction(userId, organizationId || '', newRole)
 
       if (result.success) {
         setMessage({ type: 'success', text: '역할이 성공적으로 변경되었습니다' })
@@ -131,7 +131,7 @@ export function UserManagement({ organizationId }: UserManagementProps) {
     setMessage(null)
 
     startTransition(async () => {
-      const result = await removeUserAction(userId, organizationId)
+      const result = await removeUserAction(userId, organizationId || '')
 
       if (result.success) {
         setMessage({ type: 'success', text: '사용자가 성공적으로 제거되었습니다' })
@@ -153,7 +153,7 @@ export function UserManagement({ organizationId }: UserManagementProps) {
     }
 
     startTransition(async () => {
-      const result = await inviteUserAction(organizationId, inviteEmail, inviteRole)
+      const result = await inviteUserAction(organizationId || '', inviteEmail, inviteRole)
 
       if (result.success) {
         setMessage({ type: 'success', text: '사용자가 성공적으로 초대되었습니다' })

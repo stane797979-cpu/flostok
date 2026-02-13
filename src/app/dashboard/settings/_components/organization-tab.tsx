@@ -7,7 +7,7 @@ import { getOrganizationAction } from '@/server/actions/organization'
 import { Skeleton } from '@/components/ui/skeleton'
 
 interface OrganizationTabProps {
-  organizationId: string
+  organizationId?: string
 }
 
 export function OrganizationTab({ organizationId }: OrganizationTabProps) {
@@ -28,6 +28,7 @@ export function OrganizationTab({ organizationId }: OrganizationTabProps) {
     async function loadOrganization() {
       try {
         setIsLoading(true)
+        // 서버 액션 내부에서 getCurrentUser() 기반으로 조직 결정
         const result = await getOrganizationAction(organizationId)
 
         if (result.success) {

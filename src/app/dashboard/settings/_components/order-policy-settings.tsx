@@ -17,7 +17,7 @@ import { DEFAULT_ORDER_POLICY, DEFAULT_SUPPLY_COEFFICIENTS } from "@/types/organ
 import { useToast } from "@/hooks/use-toast";
 
 interface OrderPolicySettingsProps {
-  organizationId: string;
+  organizationId?: string;
 }
 
 export function OrderPolicySettingsComponent({ organizationId }: OrderPolicySettingsProps) {
@@ -28,7 +28,7 @@ export function OrderPolicySettingsComponent({ organizationId }: OrderPolicySett
   const [settings, setSettings] = useState<OrderPolicySettings>(DEFAULT_ORDER_POLICY);
   const [errors, setErrors] = useState<Partial<Record<keyof OrderPolicySettings, string>>>({});
 
-  // 설정 불러오기
+  // 설정 불러오기 — 서버 액션 내부에서 인증 기반으로 조직 결정
   useEffect(() => {
     async function loadSettings() {
       try {
@@ -106,7 +106,7 @@ export function OrderPolicySettingsComponent({ organizationId }: OrderPolicySett
 
     setIsSaving(true);
     try {
-      const result = await updateOrderPolicySettings(organizationId, settings);
+      const result = await updateOrderPolicySettings(organizationId || "", settings);
 
       if (result.success) {
         toast({

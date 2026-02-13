@@ -21,7 +21,7 @@ import {
 import { ALL_MENU_KEYS, MENU_KEY_LABELS } from "@/lib/constants/menu-permissions";
 
 interface PermissionsTabProps {
-  organizationId: string;
+  organizationId?: string;
 }
 
 const ROLES = [
