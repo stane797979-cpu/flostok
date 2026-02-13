@@ -2,7 +2,7 @@
 
 import { db } from "@/server/db";
 import { roleMenuPermissions } from "@/server/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { requireAdmin } from "./auth-helpers";
 import { revalidatePath } from "next/cache";
 import { ALL_MENU_KEYS, DEFAULT_PERMISSIONS } from "@/lib/constants/menu-permissions";
@@ -88,34 +88,31 @@ export async function updateMenuPermissions(
       return { success: false, error: "관리자 역할의 권한은 변경할 수 없습니다" };
     }
 
+    // 배치 Upsert: 순차 SELECT+INSERT/UPDATE 루프 → 1개 쿼리 (30→1)
     const entries = Object.entries(permissions);
-    for (const [menuKey, isAllowed] of entries) {
-      // upsert: 존재하면 업데이트, 없으면 생성
-      const existing = await db
-        .select()
-        .from(roleMenuPermissions)
-        .where(
-          and(
-            eq(roleMenuPermissions.organizationId, organizationId),
-            eq(roleMenuPermissions.role, role as "admin" | "manager" | "viewer" | "warehouse"),
-            eq(roleMenuPermissions.menuKey, menuKey)
-          )
-        )
-        .limit(1);
+    const values = entries.map(([menuKey, isAllowed]) => ({
+      organizationId,
+      role: role as "admin" | "manager" | "viewer" | "warehouse",
+      menuKey,
+      isAllowed,
+      updatedAt: new Date(),
+    }));
 
-      if (existing.length > 0) {
-        await db
-          .update(roleMenuPermissions)
-          .set({ isAllowed, updatedAt: new Date() })
-          .where(eq(roleMenuPermissions.id, existing[0].id));
-      } else {
-        await db.insert(roleMenuPermissions).values({
-          organizationId,
-          role: role as "admin" | "manager" | "viewer" | "warehouse",
-          menuKey,
-          isAllowed,
+    if (values.length > 0) {
+      await db
+        .insert(roleMenuPermissions)
+        .values(values)
+        .onConflictDoUpdate({
+          target: [
+            roleMenuPermissions.organizationId,
+            roleMenuPermissions.role,
+            roleMenuPermissions.menuKey,
+          ],
+          set: {
+            isAllowed: sql`excluded.is_allowed`,
+            updatedAt: sql`excluded.updated_at`,
+          },
         });
-      }
     }
 
     revalidatePath("/dashboard");

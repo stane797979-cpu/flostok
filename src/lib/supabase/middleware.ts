@@ -72,5 +72,20 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // 인증된 사용자의 auth ID를 헤더로 전달 → 레이아웃에서 Supabase 재호출 생략
+  if (user && isProtectedRoute) {
+    // 기존 응답의 쿠키를 보존
+    const existingCookies = supabaseResponse.cookies.getAll();
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set("x-auth-user-id", user.id);
+    supabaseResponse = NextResponse.next({
+      request: { headers: requestHeaders },
+    });
+    // 세션 갱신 쿠키 재적용
+    existingCookies.forEach(({ name, value, ...options }) =>
+      supabaseResponse.cookies.set(name, value, options)
+    );
+  }
+
   return supabaseResponse;
 }

@@ -2,7 +2,7 @@
 
 import { db } from "@/server/db";
 import { kpiMonthlySnapshots } from "@/server/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { getCurrentUser } from "./auth-helpers";
 import { revalidatePath } from "next/cache";
 import type { KPITrend } from "@/server/services/scm/kpi-measurement";
@@ -140,21 +140,22 @@ export async function ensureKpiSnapshots(trends: KPITrend[]): Promise<void> {
     const user = await getCurrentUser();
     const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
 
-    for (const trend of trends) {
-      const [existing] = await db
-        .select({ id: kpiMonthlySnapshots.id })
-        .from(kpiMonthlySnapshots)
-        .where(
-          and(
-            eq(kpiMonthlySnapshots.organizationId, orgId),
-            eq(kpiMonthlySnapshots.period, trend.month)
-          )
+    // 배치 처리: 순차 SELECT+INSERT 루프 → 1회 조회 + 1회 배치 INSERT (24→2 쿼리)
+    const periods = trends.map(t => t.month);
+    const existingSnapshots = await db
+      .select({ period: kpiMonthlySnapshots.period })
+      .from(kpiMonthlySnapshots)
+      .where(
+        and(
+          eq(kpiMonthlySnapshots.organizationId, orgId),
+          inArray(kpiMonthlySnapshots.period, periods)
         )
-        .limit(1);
+      );
+    const existingPeriods = new Set(existingSnapshots.map(s => s.period));
 
-      if (existing) continue;
-
-      await db.insert(kpiMonthlySnapshots).values({
+    const newValues = trends
+      .filter(trend => !existingPeriods.has(trend.month))
+      .map(trend => ({
         organizationId: orgId,
         period: trend.month,
         turnoverRate: trend.inventoryTurnoverRate.toFixed(1),
@@ -162,7 +163,10 @@ export async function ensureKpiSnapshots(trends: KPITrend[]): Promise<void> {
         onTimeDeliveryRate: trend.onTimeOrderRate.toFixed(1),
         fulfillmentRate: trend.orderFulfillmentRate.toFixed(1),
         actualShipmentRate: null,
-      });
+      }));
+
+    if (newValues.length > 0) {
+      await db.insert(kpiMonthlySnapshots).values(newValues);
     }
   } catch (error) {
     console.error("KPI 스냅샷 자동 생성 실패:", error);
