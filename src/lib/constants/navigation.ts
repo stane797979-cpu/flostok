@@ -18,6 +18,7 @@ import {
   CalendarRange,
   PackageCheck,
   PackageX,
+  Compass,
   type LucideIcon,
 } from "lucide-react";
 
@@ -77,6 +78,13 @@ export const MAIN_SECTIONS: NavSection[] = [
         icon: BarChart3,
         description: "ABC-XYZ·수요예측·회전율 분석",
         menuKey: "analytics",
+      },
+      {
+        title: "수요예측 가이드",
+        href: "/dashboard/forecast-guide",
+        icon: Compass,
+        description: "질문에 답하면 최적 예측 방법 추천",
+        menuKey: "forecast_guide",
       },
     ],
   },
