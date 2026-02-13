@@ -1,6 +1,7 @@
 import {
   LayoutDashboard,
   Building2,
+  ShieldCheck,
   ArrowLeft,
   type LucideIcon,
 } from "lucide-react";
@@ -21,6 +22,11 @@ export const ADMIN_NAV: AdminNavItem[] = [
     title: "조직 관리",
     href: "/admin/organizations",
     icon: Building2,
+  },
+  {
+    title: "보안 아키텍처",
+    href: "/admin/security",
+    icon: ShieldCheck,
   },
 ];
 

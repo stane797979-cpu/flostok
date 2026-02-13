@@ -126,13 +126,10 @@ export default function ConsultingContractPage() {
               </p>
               <ul className="ml-6 space-y-2 text-gray-700">
                 <li className="list-disc">
-                  <strong>착수금 30%:</strong> 계약 체결 후 7영업일 이내
+                  <strong>착수금 50%:</strong> 계약 체결 후 7영업일 이내
                 </li>
                 <li className="list-disc">
-                  <strong>중간금 40%:</strong> 중간 산출물 제출 후 10영업일 이내
-                </li>
-                <li className="list-disc">
-                  <strong>잔금 30%:</strong> 최종 산출물 검수 완료 후 10영업일 이내
+                  <strong>잔금 50%:</strong> 최종 산출물 검수 완료 후 10영업일 이내
                 </li>
               </ul>
               <p className="text-gray-700">
@@ -176,6 +173,17 @@ export default function ConsultingContractPage() {
               </p>
               <p className="text-gray-700">
                 ④ 검수 완료 시 갑은 검수 완료서에 서명하여 을에게 제공한다.
+              </p>
+              <p className="text-gray-700">
+                ⑤ 컨설팅 산출물에 포함된 수요예측, 발주 추천 수량, 안전재고, 재고 최적화 방안 등의 수치 정보는
+                <strong> 의사결정 참고 자료(가이드)</strong>로 제공되는 것이며, 확정적 지시나 보증이 아니다.
+                산출물에 포함된 수치의 정확성, 완전성, 적시성에 대해 을은 명시적·묵시적 보증을 하지 않는다.
+              </p>
+              <p className="text-gray-700">
+                ⑥ 갑이 산출물에 포함된 수치를 실제 발주·생산·재고 운영에 반영하고자 하는 경우,
+                반드시 <strong>수량의 현실적 적절성 및 적합성을 사전 검증</strong>한 후 최종 의사결정을 하여야 한다.
+                검증 없이 산출물의 수치를 그대로 적용하여 발생하는 과잉 발주, 재고 부족, 결품, 과잉 재고 등의
+                직접적·간접적 손해에 대한 책임은 전적으로 갑에게 있다.
               </p>
             </div>
           </article>
