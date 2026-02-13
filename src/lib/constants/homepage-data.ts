@@ -32,7 +32,7 @@ export const COMPANY = {
     "22년 현장 경력의 SCM 전문가가 직접 설계한 컨설팅, 교육, 그리고 AI 솔루션",
   ceoName: "이동욱",
   solutionName: "FloStok",
-  email: "contact@stockandlogis.com",
+  email: "logisglobalceo@gmail.com",
   phone: "02-XXX-XXXX", // TODO: 실제 번호로 교체
 } as const;
 
