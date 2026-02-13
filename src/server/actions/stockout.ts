@@ -74,25 +74,31 @@ export async function getStockoutData(): Promise<StockoutSummary> {
       )
     );
 
-  for (const record of activeRecords) {
-    const currentStock = stockMap.get(record.productId) ?? 0;
-    if (currentStock >= 1) {
-      // 재고 회복 → 자동 정상화
-      const startDate = record.stockoutStartDate ? new Date(record.stockoutStartDate) : new Date();
+  // 재고 회복된 결품 기록을 모아서 배치 정상화
+  const toNormalize = activeRecords
+    .filter((r) => (stockMap.get(r.productId) ?? 0) >= 1)
+    .map((r) => {
+      const startDate = r.stockoutStartDate ? new Date(r.stockoutStartDate) : new Date();
       const endDate = new Date(today);
       const duration = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+      return { id: r.id, duration, closingStock: stockMap.get(r.productId) ?? 0 };
+    });
 
-      await db
-        .update(stockoutRecords)
-        .set({
-          stockoutEndDate: today,
-          durationDays: duration,
-          closingStock: currentStock,
-          actionStatus: "normalized",
-          updatedAt: new Date(),
-        })
-        .where(eq(stockoutRecords.id, record.id));
-    }
+  if (toNormalize.length > 0) {
+    const ids = toNormalize.map((r) => r.id);
+    const durationCases = toNormalize.map((r) => sql`WHEN ${r.id} THEN ${r.duration}`);
+    const stockCases = toNormalize.map((r) => sql`WHEN ${r.id} THEN ${r.closingStock}`);
+
+    await db
+      .update(stockoutRecords)
+      .set({
+        stockoutEndDate: today,
+        durationDays: sql`CASE id ${sql.join(durationCases, sql` `)} END`,
+        closingStock: sql`CASE id ${sql.join(stockCases, sql` `)} END`,
+        actionStatus: "normalized",
+        updatedAt: new Date(),
+      })
+      .where(sql`${stockoutRecords.id} IN ${ids}`);
   }
 
   // 3. 전체 결품 기록 조회 (정상화 반영 후)

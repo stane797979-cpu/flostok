@@ -309,66 +309,87 @@ export async function uploadPSIPlanExcel(
       };
     }
 
-    // Upsert 실행
+    // 배치 Upsert 실행 (ON CONFLICT DO UPDATE)
     let importedCount = 0;
-    for (const row of rows) {
-      const sku = String(row[skuCol] || "").trim();
-      if (!sku) continue;
 
-      const productId = skuMap.get(sku);
-      if (!productId) continue;
+    // 1) 발주방식 업데이트 모아서 배치 처리
+    if (orderMethodCol) {
+      const orderMethodUpdates = new Map<string, "fixed_quantity" | "fixed_period">();
+      for (const row of rows) {
+        const sku = String(row[skuCol] || "").trim();
+        if (!sku) continue;
+        const productId = skuMap.get(sku);
+        if (!productId) continue;
 
-      // 발주방식 업데이트 (행에 발주방식 데이터가 있으면)
-      if (orderMethodCol) {
         const methodValue = String(row[orderMethodCol] || "").trim();
         let dbValue: "fixed_quantity" | "fixed_period" | null = null;
         if (methodValue === "정량" || methodValue === "fixed_quantity" || methodValue === "Q") dbValue = "fixed_quantity";
         else if (methodValue === "정기" || methodValue === "fixed_period" || methodValue === "P") dbValue = "fixed_period";
 
-        if (dbValue && productId) {
-          await db.update(products).set({ orderMethod: dbValue, updatedAt: new Date() }).where(eq(products.id, productId));
+        if (dbValue) orderMethodUpdates.set(productId, dbValue);
+      }
+
+      // 발주방식별 배치 UPDATE
+      for (const [method, ids] of [
+        ["fixed_quantity" as const, [...orderMethodUpdates.entries()].filter(([, v]) => v === "fixed_quantity").map(([k]) => k)],
+        ["fixed_period" as const, [...orderMethodUpdates.entries()].filter(([, v]) => v === "fixed_period").map(([k]) => k)],
+      ] as const) {
+        if (ids.length > 0) {
+          await db.update(products).set({ orderMethod: method, updatedAt: new Date() }).where(sql`${products.id} IN ${ids}`);
         }
       }
+    }
+
+    // 2) PSI 데이터 배치 upsert (ON CONFLICT)
+    const upsertBatch: Array<{
+      organizationId: string;
+      productId: string;
+      period: string;
+      sopQuantity: number;
+      inboundPlanQuantity: number;
+      outboundPlanQuantity: number;
+    }> = [];
+
+    for (const row of rows) {
+      const sku = String(row[skuCol] || "").trim();
+      if (!sku) continue;
+      const productId = skuMap.get(sku);
+      if (!productId) continue;
 
       for (const col of planColumns) {
         const value = Number(row[col.header]) || 0;
         if (value === 0) continue;
 
         const periodDate = `${col.period}-01`;
-
-        // upsert: 기존 데이터가 있으면 update, 없으면 insert
-        const existing = await db
-          .select({ id: psiPlans.id })
-          .from(psiPlans)
-          .where(
-            and(
-              eq(psiPlans.organizationId, orgId),
-              eq(psiPlans.productId, productId),
-              eq(psiPlans.period, periodDate)
-            )
-          )
-          .limit(1);
-
-        if (existing.length > 0) {
-          const updateData: Record<string, unknown> = { updatedAt: new Date() };
-          if (col.type === "sop") updateData.sopQuantity = value;
-          else if (col.type === "outbound_plan") updateData.outboundPlanQuantity = value;
-          else updateData.inboundPlanQuantity = value;
-
-          await db.update(psiPlans).set(updateData).where(eq(psiPlans.id, existing[0].id));
-        } else {
-          await db.insert(psiPlans).values({
-            organizationId: orgId,
-            productId,
-            period: periodDate,
-            sopQuantity: col.type === "sop" ? value : 0,
-            inboundPlanQuantity: col.type === "inbound_plan" ? value : 0,
-            outboundPlanQuantity: col.type === "outbound_plan" ? value : 0,
-          });
-        }
-        importedCount++;
+        upsertBatch.push({
+          organizationId: orgId,
+          productId,
+          period: periodDate,
+          sopQuantity: col.type === "sop" ? value : 0,
+          inboundPlanQuantity: col.type === "inbound_plan" ? value : 0,
+          outboundPlanQuantity: col.type === "outbound_plan" ? value : 0,
+        });
       }
     }
+
+    // 500건씩 청크로 나눠서 배치 upsert
+    const CHUNK_SIZE = 500;
+    for (let i = 0; i < upsertBatch.length; i += CHUNK_SIZE) {
+      const chunk = upsertBatch.slice(i, i + CHUNK_SIZE);
+      await db
+        .insert(psiPlans)
+        .values(chunk)
+        .onConflictDoUpdate({
+          target: [psiPlans.organizationId, psiPlans.productId, psiPlans.period],
+          set: {
+            sopQuantity: sql`CASE WHEN excluded.sop_quantity > 0 THEN excluded.sop_quantity ELSE ${psiPlans.sopQuantity} END`,
+            inboundPlanQuantity: sql`CASE WHEN excluded.inbound_plan_quantity > 0 THEN excluded.inbound_plan_quantity ELSE ${psiPlans.inboundPlanQuantity} END`,
+            outboundPlanQuantity: sql`CASE WHEN excluded.outbound_plan_quantity > 0 THEN excluded.outbound_plan_quantity ELSE ${psiPlans.outboundPlanQuantity} END`,
+            updatedAt: new Date(),
+          },
+        });
+    }
+    importedCount = upsertBatch.length;
 
     revalidatePath("/dashboard/psi");
     revalidateTag(`psi-${orgId}`);
@@ -488,7 +509,15 @@ export async function generateSOPQuantities(
       forecastMap.get(row.productId)!.set(row.month, row.forecastQty);
     }
 
-    let updatedCount = 0;
+    // 순차 계산 후 배치 upsert를 위해 결과를 수집
+    const sopUpsertBatch: Array<{
+      organizationId: string;
+      productId: string;
+      period: string;
+      sopQuantity: number;
+      inboundPlanQuantity: number;
+      outboundPlanQuantity: number;
+    }> = [];
 
     for (const product of productRows) {
       const currentStock = inventoryMap.get(product.id) ?? 0;
@@ -534,40 +563,37 @@ export async function generateSOPQuantities(
         sopQty = Math.round(sopQty);
 
         if (sopQty > 0) {
-          const periodDate = `${period}-01`;
-
-          // upsert
-          const existing = await db
-            .select({ id: psiPlans.id })
-            .from(psiPlans)
-            .where(
-              and(
-                eq(psiPlans.organizationId, orgId),
-                eq(psiPlans.productId, product.id),
-                eq(psiPlans.period, periodDate)
-              )
-            )
-            .limit(1);
-
-          if (existing.length > 0) {
-            await db.update(psiPlans)
-              .set({ sopQuantity: sopQty, updatedAt: new Date() })
-              .where(eq(psiPlans.id, existing[0].id));
-          } else {
-            await db.insert(psiPlans).values({
-              organizationId: orgId,
-              productId: product.id,
-              period: periodDate,
-              sopQuantity: sopQty,
-            });
-          }
-          updatedCount++;
+          sopUpsertBatch.push({
+            organizationId: orgId,
+            productId: product.id,
+            period: `${period}-01`,
+            sopQuantity: sopQty,
+            inboundPlanQuantity: 0,
+            outboundPlanQuantity: 0,
+          });
         }
 
         // 다음 달 기초재고 = 현재 기초재고 + S&OP(공급) - 출고P
         runningStock = Math.max(0, runningStock + sopQty - outPlan);
       }
     }
+
+    // 배치 upsert (ON CONFLICT → sopQuantity만 갱신)
+    const SOP_CHUNK = 500;
+    for (let i = 0; i < sopUpsertBatch.length; i += SOP_CHUNK) {
+      const chunk = sopUpsertBatch.slice(i, i + SOP_CHUNK);
+      await db
+        .insert(psiPlans)
+        .values(chunk)
+        .onConflictDoUpdate({
+          target: [psiPlans.organizationId, psiPlans.productId, psiPlans.period],
+          set: {
+            sopQuantity: sql`excluded.sop_quantity`,
+            updatedAt: new Date(),
+          },
+        });
+    }
+    const updatedCount = sopUpsertBatch.length;
 
     revalidatePath("/dashboard/psi");
     revalidateTag(`psi-${orgId}`);

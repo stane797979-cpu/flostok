@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/server/db'
 import { organizations, products, purchaseOrders, purchaseOrderItems, suppliers } from '@/server/db/schema'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -115,31 +115,34 @@ export async function GET(request: NextRequest) {
           }>
         >()
 
+        // 필요한 제품 ID 수집 후 배치 가격 조회
+        const productIds = recommendations.filter((r) => r.supplier?.id).map((r) => r.productId)
+        const productPriceMap = new Map<string, { unitPrice: number; costPrice: number | null }>()
+
+        if (productIds.length > 0) {
+          const priceRows = await db
+            .select({ id: products.id, unitPrice: products.unitPrice, costPrice: products.costPrice })
+            .from(products)
+            .where(sql`${products.id} IN ${productIds}`)
+          for (const row of priceRows) {
+            productPriceMap.set(row.id, { unitPrice: row.unitPrice ?? 0, costPrice: row.costPrice })
+          }
+        }
+
         for (const rec of recommendations) {
-          // supplierId가 없으면 스킵
           if (!rec.supplier?.id) {
             console.warn(`[Auto-Reorder Cron] 제품 ${rec.productId}: 공급자 없음`)
             continue
           }
 
           const supplierId = rec.supplier.id
-
-          // 제품 가격 정보 조회
-          const [product] = await db
-            .select({
-              unitPrice: products.unitPrice,
-              costPrice: products.costPrice,
-            })
-            .from(products)
-            .where(eq(products.id, rec.productId))
-            .limit(1)
+          const product = productPriceMap.get(rec.productId)
 
           if (!product) {
             console.warn(`[Auto-Reorder Cron] 제품 ${rec.productId}: 찾을 수 없음`)
             continue
           }
 
-          // 공급자별 그룹에 추가
           if (!supplierGroups.has(supplierId)) {
             supplierGroups.set(supplierId, [])
           }
@@ -152,11 +155,21 @@ export async function GET(request: NextRequest) {
           })
         }
 
+        // 공급자 정보 배치 조회
+        const supplierIds = [...supplierGroups.keys()]
+        const supplierMap = new Map<string, typeof suppliers.$inferSelect>()
+
+        if (supplierIds.length > 0) {
+          const supplierRows = await db.select().from(suppliers).where(sql`${suppliers.id} IN ${supplierIds}`)
+          for (const row of supplierRows) {
+            supplierMap.set(row.id, row)
+          }
+        }
+
         // 공급자별로 발주서 생성
         let ordersCreated = 0
         for (const [supplierId, items] of supplierGroups.entries()) {
-          // 공급자 정보 가져오기
-          const [supplier] = await db.select().from(suppliers).where(eq(suppliers.id, supplierId)).limit(1)
+          const supplier = supplierMap.get(supplierId)
 
           if (!supplier) {
             console.warn(`[Auto-Reorder Cron] 공급자 ${supplierId}: 찾을 수 없음`)

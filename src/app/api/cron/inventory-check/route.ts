@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/server/db'
 import { organizations, inventory, products, alerts } from '@/server/db/schema'
-import { eq, and } from 'drizzle-orm'
+import { eq, and, sql, gte } from 'drizzle-orm'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -157,38 +157,44 @@ export async function GET(request: NextRequest) {
         if (alertsToCreate.length > 0) {
           const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000)
 
-          for (const alert of alertsToCreate) {
-            const existingAlerts = await db
-              .select()
-              .from(alerts)
-              .where(
-                and(
-                  eq(alerts.organizationId, org.id),
-                  eq(alerts.type, alert.type),
-                  eq(alerts.productId, alert.productId)
-                )
-              )
-              .limit(1)
-
-            if (
-              existingAlerts.length > 0 &&
-              existingAlerts[0].createdAt &&
-              existingAlerts[0].createdAt > sixHoursAgo
-            ) {
-              continue
-            }
-
-            await db.insert(alerts).values({
-              organizationId: alert.organizationId,
-              productId: alert.productId,
-              type: alert.type,
-              severity: alert.severity,
-              title: alert.title,
-              message: alert.message,
-              isRead: false,
+          // 배치로 최근 알림 조회 (조직 전체, 6시간 이내)
+          const recentAlerts = await db
+            .select({
+              type: alerts.type,
+              productId: alerts.productId,
             })
+            .from(alerts)
+            .where(
+              and(
+                eq(alerts.organizationId, org.id),
+                gte(alerts.createdAt, sixHoursAgo)
+              )
+            )
 
-            newAlertsCreated++
+          // Set으로 중복 체크용 키 생성
+          const recentAlertKeys = new Set(
+            recentAlerts.map((a) => `${a.type}:${a.productId}`)
+          )
+
+          // 중복 제외한 알림만 필터링
+          const newAlerts = alertsToCreate.filter(
+            (alert) => !recentAlertKeys.has(`${alert.type}:${alert.productId}`)
+          )
+
+          // 배치 INSERT
+          if (newAlerts.length > 0) {
+            await db.insert(alerts).values(
+              newAlerts.map((alert) => ({
+                organizationId: alert.organizationId,
+                productId: alert.productId,
+                type: alert.type,
+                severity: alert.severity,
+                title: alert.title,
+                message: alert.message,
+                isRead: false,
+              }))
+            )
+            newAlertsCreated = newAlerts.length
           }
         }
 

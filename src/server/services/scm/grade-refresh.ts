@@ -109,21 +109,11 @@ export async function refreshGradesForOrganization(
 
     result.newProductCount = newProducts.length;
 
-    // 4. 신제품: metadata 업데이트 (등급은 null로 설정)
+    // 4. 신제품: 배치 metadata 업데이트 (등급은 null로 설정)
     if (newProducts.length > 0) {
-      const gradeInfo: GradeInfo = {
-        isNewProduct: true,
-        salesMonths: 0,
-        lastGradeRefresh: now.toISOString(),
-      };
-
-      for (const productId of newProducts) {
-        try {
-          const product = productList.find((p) => p.id === productId);
-          const existingMetadata =
-            (product?.metadata as Record<string, unknown>) || {};
-
-          // 판매 이력이 있는 경우 실제 개월 수 계산
+      try {
+        // 각 제품별 gradeInfo JSON 생성
+        const valueRows = newProducts.map((productId) => {
           const firstSaleDate = firstSaleMap.get(productId);
           let salesMonths = 0;
           if (firstSaleDate) {
@@ -132,24 +122,29 @@ export async function refreshGradesForOrganization(
               (now.getFullYear() - firstDate.getFullYear()) * 12 +
               (now.getMonth() - firstDate.getMonth());
           }
+          const gradeInfo: GradeInfo = {
+            isNewProduct: true,
+            salesMonths,
+            lastGradeRefresh: now.toISOString(),
+          };
+          return sql`(${productId}::uuid, ${JSON.stringify(gradeInfo)}::jsonb)`;
+        });
 
-          await db
-            .update(products)
-            .set({
-              abcGrade: null,
-              xyzGrade: null,
-              metadata: {
-                ...existingMetadata,
-                gradeInfo: { ...gradeInfo, salesMonths },
-              },
-              updatedAt: now,
-            })
-            .where(eq(products.id, productId));
-        } catch (error) {
-          result.errors.push(
-            `신제품 ${productId} 업데이트 실패: ${error instanceof Error ? error.message : "알 수 없는 오류"}`
-          );
-        }
+        // 단일 UPDATE ... FROM (VALUES ...) 쿼리로 배치 처리
+        await db.execute(sql`
+          UPDATE products
+          SET
+            abc_grade = NULL,
+            xyz_grade = NULL,
+            metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('gradeInfo', v.grade_info),
+            updated_at = ${now}
+          FROM (VALUES ${sql.join(valueRows, sql`, `)}) AS v(product_id, grade_info)
+          WHERE products.id = v.product_id
+        `);
+      } catch (error) {
+        result.errors.push(
+          `신제품 배치 업데이트 실패: ${error instanceof Error ? error.message : "알 수 없는 오류"}`
+        );
       }
     }
 
@@ -243,15 +238,14 @@ export async function refreshGradesForOrganization(
       const abcMap = new Map(abcResults.map((r) => [r.id, r.grade]));
       const xyzMap = new Map(xyzResults.map((r) => [r.id, r]));
 
-      for (const productId of eligibleProducts) {
-        try {
+      // 5-5a. products 배치 UPDATE (UPDATE ... FROM VALUES)
+      try {
+        const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+
+        const updateRows = eligibleProducts.map((productId) => {
           const abcGrade = abcMap.get(productId) || null;
           const xyzResult = xyzMap.get(productId);
           const xyzGrade = xyzResult?.grade || null;
-
-          const product = productList.find((p) => p.id === productId);
-          const existingMetadata =
-            (product?.metadata as Record<string, unknown>) || {};
 
           const firstSaleDate = firstSaleMap.get(productId);
           let salesMonths = 0;
@@ -268,23 +262,40 @@ export async function refreshGradesForOrganization(
             lastGradeRefresh: now.toISOString(),
           };
 
-          await db
-            .update(products)
-            .set({
-              abcGrade,
-              xyzGrade,
-              metadata: { ...existingMetadata, gradeInfo },
-              updatedAt: now,
-            })
-            .where(eq(products.id, productId));
+          return sql`(${productId}::uuid, ${abcGrade}, ${xyzGrade}, ${JSON.stringify(gradeInfo)}::jsonb)`;
+        });
 
-          // 등급 이력 저장 (grade_history)
-          const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+        await db.execute(sql`
+          UPDATE products
+          SET
+            abc_grade = v.abc_grade,
+            xyz_grade = v.xyz_grade,
+            metadata = COALESCE(products.metadata, '{}'::jsonb) || jsonb_build_object('gradeInfo', v.grade_info),
+            updated_at = ${now}
+          FROM (VALUES ${sql.join(updateRows, sql`, `)}) AS v(product_id, abc_grade, xyz_grade, grade_info)
+          WHERE products.id = v.product_id
+        `);
+
+        result.updatedCount = eligibleProducts.length;
+      } catch (error) {
+        result.errors.push(
+          `제품 등급 배치 업데이트 실패: ${error instanceof Error ? error.message : "알 수 없는 오류"}`
+        );
+      }
+
+      // 5-5b. grade_history 배치 INSERT
+      try {
+        const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+
+        const historyRows = eligibleProducts.map((productId) => {
+          const abcGrade = abcMap.get(productId) || null;
+          const xyzResult = xyzMap.get(productId);
+          const xyzGrade = xyzResult?.grade || null;
           const combinedGrade = abcGrade && xyzGrade ? `${abcGrade}${xyzGrade}` : null;
           const salesValue = salesByProduct.get(productId)?.totalValue || 0;
           const cv = xyzResult?.coefficientOfVariation ?? null;
 
-          await db.insert(gradeHistory).values({
+          return {
             organizationId,
             productId,
             period,
@@ -293,14 +304,16 @@ export async function refreshGradesForOrganization(
             combinedGrade,
             salesValue: salesValue.toString(),
             coefficientOfVariation: cv !== null ? cv.toFixed(2) : null,
-          });
+          };
+        });
 
-          result.updatedCount++;
-        } catch (error) {
-          result.errors.push(
-            `제품 ${productId} 등급 업데이트 실패: ${error instanceof Error ? error.message : "알 수 없는 오류"}`
-          );
+        if (historyRows.length > 0) {
+          await db.insert(gradeHistory).values(historyRows);
         }
+      } catch (error) {
+        result.errors.push(
+          `등급 이력 배치 저장 실패: ${error instanceof Error ? error.message : "알 수 없는 오류"}`
+        );
       }
     }
 

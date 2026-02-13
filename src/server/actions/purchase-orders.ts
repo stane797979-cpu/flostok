@@ -871,6 +871,7 @@ export async function cancelBulkPurchaseOrders(
 
     const cancellableStatuses = ["draft", "pending", "approved", "ordered", "confirmed"];
 
+    const cancellableIds: string[] = [];
     for (const order of orders) {
       if (!cancellableStatuses.includes(order.status)) {
         errors.push({
@@ -878,15 +879,22 @@ export async function cancelBulkPurchaseOrders(
           orderNumber: order.orderNumber,
           error: `현재 상태(${order.status})에서는 취소할 수 없습니다`,
         });
-        continue;
+      } else {
+        cancellableIds.push(order.id);
       }
+    }
 
+    if (cancellableIds.length > 0) {
       await db
         .update(purchaseOrders)
         .set({ status: "cancelled", updatedAt: new Date() })
-        .where(eq(purchaseOrders.id, order.id));
-
-      cancelledCount++;
+        .where(
+          and(
+            eq(purchaseOrders.organizationId, TEMP_ORG_ID),
+            sql`${purchaseOrders.id} IN ${cancellableIds}`
+          )
+        );
+      cancelledCount = cancellableIds.length;
     }
 
     revalidatePath("/dashboard/orders");

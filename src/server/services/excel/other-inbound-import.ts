@@ -90,6 +90,13 @@ export async function importOtherInboundData(params: {
     };
   }
 
+  // SKU→제품 Map 미리 배치 조회 (N+1 제거)
+  const allProducts = await db
+    .select({ id: products.id, sku: products.sku })
+    .from(products)
+    .where(eq(products.organizationId, organizationId));
+  const skuToProduct = new Map(allProducts.map((p) => [p.sku, p]));
+
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     const rowNum = i + 2; // 헤더=1행, 데이터=2행부터
@@ -102,12 +109,8 @@ export async function importOtherInboundData(params: {
         continue;
       }
 
-      // 제품 찾기
-      const [product] = await db
-        .select({ id: products.id })
-        .from(products)
-        .where(and(eq(products.organizationId, organizationId), eq(products.sku, sku)))
-        .limit(1);
+      // 제품 찾기 (미리 로드된 Map에서)
+      const product = skuToProduct.get(sku);
 
       if (!product) {
         errors.push({ row: rowNum, message: `SKU '${sku}' 제품을 찾을 수 없습니다` });

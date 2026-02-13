@@ -9,7 +9,7 @@
 
 import { db } from "@/server/db";
 import { subscriptions } from "@/server/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql, lte } from "drizzle-orm";
 
 /**
  * 구독 플랜 정의
@@ -242,31 +242,23 @@ export async function changePlan(
 export async function processExpiredSubscriptions() {
   const now = new Date();
 
-  const expiredSubscriptions = await db
-    .select()
-    .from(subscriptions)
+  // 만료 조건을 DB 쿼리에서 직접 필터링 + 배치 UPDATE
+  const result = await db
+    .update(subscriptions)
+    .set({
+      status: "expired",
+      updatedAt: now,
+    })
     .where(
       and(
         eq(subscriptions.status, "active"),
-        eq(subscriptions.cancelAtPeriodEnd, true)
+        eq(subscriptions.cancelAtPeriodEnd, true),
+        lte(subscriptions.currentPeriodEnd, now)
       )
-    );
+    )
+    .returning({ id: subscriptions.id });
 
-  const toExpire = expiredSubscriptions.filter(
-    (sub) => new Date(sub.currentPeriodEnd) <= now
-  );
-
-  for (const sub of toExpire) {
-    await db
-      .update(subscriptions)
-      .set({
-        status: "expired",
-        updatedAt: new Date(),
-      })
-      .where(eq(subscriptions.id, sub.id));
-  }
-
-  return toExpire.length;
+  return result.length;
 }
 
 /**

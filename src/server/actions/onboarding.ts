@@ -707,6 +707,16 @@ async function importSupplierRows(
   let successCount = 0;
   const imported: Record<string, unknown>[] = [];
 
+  // 기존 공급자를 미리 배치 조회하여 Map 생성 (N+1 제거)
+  const existingSuppliers = await db
+    .select()
+    .from(suppliers)
+    .where(eq(suppliers.organizationId, organizationId));
+  const supplierByName = new Map(existingSuppliers.map((s) => [s.name, s]));
+
+  const newSupplierValues: Array<typeof suppliers.$inferInsert> = [];
+  const updateBatch: Array<{ id: string; data: Record<string, unknown> }> = [];
+
   for (let i = 0; i < result.rows.length; i++) {
     const row = result.rows[i];
     const name = String(row.name || "").trim();
@@ -716,12 +726,7 @@ async function importSupplierRows(
     }
 
     try {
-      const existing = await db.query.suppliers.findFirst({
-        where: and(
-          eq(suppliers.organizationId, organizationId),
-          eq(suppliers.name, name)
-        ),
-      });
+      const existing = supplierByName.get(name);
 
       if (existing) {
         if (duplicateHandling === "skip") continue;
@@ -729,20 +734,22 @@ async function importSupplierRows(
           errors.push({ row: i + 2, column: "name", value: name, message: `중복 공급자: ${name}` });
           continue;
         }
-        // update
-        await db.update(suppliers).set({
-          code: row.code ? String(row.code) : existing.code,
-          businessNumber: row.businessNumber ? String(row.businessNumber) : existing.businessNumber,
-          contactName: row.contactName ? String(row.contactName) : existing.contactName,
-          contactEmail: row.contactEmail ? String(row.contactEmail) : existing.contactEmail,
-          contactPhone: row.contactPhone ? String(row.contactPhone) : existing.contactPhone,
-          address: row.address ? String(row.address) : existing.address,
-          paymentTerms: row.paymentTerms ? String(row.paymentTerms) : existing.paymentTerms,
-          avgLeadTime: row.avgLeadTime ? Number(row.avgLeadTime) : existing.avgLeadTime,
-          updatedAt: new Date(),
-        }).where(eq(suppliers.id, existing.id));
+        updateBatch.push({
+          id: existing.id,
+          data: {
+            code: row.code ? String(row.code) : existing.code,
+            businessNumber: row.businessNumber ? String(row.businessNumber) : existing.businessNumber,
+            contactName: row.contactName ? String(row.contactName) : existing.contactName,
+            contactEmail: row.contactEmail ? String(row.contactEmail) : existing.contactEmail,
+            contactPhone: row.contactPhone ? String(row.contactPhone) : existing.contactPhone,
+            address: row.address ? String(row.address) : existing.address,
+            paymentTerms: row.paymentTerms ? String(row.paymentTerms) : existing.paymentTerms,
+            avgLeadTime: row.avgLeadTime ? Number(row.avgLeadTime) : existing.avgLeadTime,
+            updatedAt: new Date(),
+          },
+        });
       } else {
-        await db.insert(suppliers).values({
+        newSupplierValues.push({
           organizationId,
           name,
           code: row.code ? String(row.code) : null,
@@ -760,6 +767,20 @@ async function importSupplierRows(
     } catch (err) {
       errors.push({ row: i + 2, message: `DB 저장 실패: ${err instanceof Error ? err.message : "알 수 없는 오류"}` });
     }
+  }
+
+  // 배치 INSERT (신규 공급자)
+  if (newSupplierValues.length > 0) {
+    await db.insert(suppliers).values(newSupplierValues);
+  }
+
+  // 배치 UPDATE (기존 공급자) — 각 행의 업데이트 데이터가 다르므로 개별 실행하되 Promise.all로 병렬화
+  if (updateBatch.length > 0) {
+    await Promise.all(
+      updateBatch.map((item) =>
+        db.update(suppliers).set(item.data).where(eq(suppliers.id, item.id))
+      )
+    );
   }
 
   return {
@@ -782,6 +803,23 @@ async function importInventoryRows(
   let successCount = 0;
   const imported: Record<string, unknown>[] = [];
 
+  // SKU→제품 Map 미리 배치 조회 (N+1 제거)
+  const allProducts = await db
+    .select({ id: products.id, sku: products.sku })
+    .from(products)
+    .where(eq(products.organizationId, organizationId));
+  const skuToProduct = new Map(allProducts.map((p) => [p.sku, p]));
+
+  // 기존 재고 Map 미리 배치 조회 (N+1 제거)
+  const allInventory = await db
+    .select()
+    .from(inventory)
+    .where(eq(inventory.organizationId, organizationId));
+  const inventoryByProductId = new Map(allInventory.map((inv) => [inv.productId, inv]));
+
+  const newInventoryValues: Array<typeof inventory.$inferInsert> = [];
+  const updateInventoryBatch: Array<{ id: string; data: Record<string, unknown> }> = [];
+
   for (let i = 0; i < result.rows.length; i++) {
     const row = result.rows[i];
     const sku = String(row.sku || "").trim();
@@ -791,14 +829,7 @@ async function importInventoryRows(
     }
 
     try {
-      // SKU로 제품 찾기
-      const product = await db.query.products.findFirst({
-        where: and(
-          eq(products.organizationId, organizationId),
-          eq(products.sku, sku)
-        ),
-      });
-
+      const product = skuToProduct.get(sku);
       if (!product) {
         errors.push({ row: i + 2, column: "sku", value: sku, message: `제품을 찾을 수 없음: ${sku}` });
         continue;
@@ -809,13 +840,7 @@ async function importInventoryRows(
       const reservedStock = row.reservedStock != null ? Number(row.reservedStock) : 0;
       const location = row.location ? String(row.location) : null;
 
-      // 기존 재고 레코드 확인
-      const existing = await db.query.inventory.findFirst({
-        where: and(
-          eq(inventory.organizationId, organizationId),
-          eq(inventory.productId, product.id)
-        ),
-      });
+      const existing = inventoryByProductId.get(product.id);
 
       if (existing) {
         if (duplicateHandling === "skip") continue;
@@ -823,17 +848,19 @@ async function importInventoryRows(
           errors.push({ row: i + 2, column: "sku", value: sku, message: `재고 레코드 이미 존재: ${sku}` });
           continue;
         }
-        // update
-        await db.update(inventory).set({
-          currentStock,
-          availableStock,
-          reservedStock,
-          location: location || existing.location,
-          updatedAt: new Date(),
-          lastUpdatedAt: new Date(),
-        }).where(eq(inventory.id, existing.id));
+        updateInventoryBatch.push({
+          id: existing.id,
+          data: {
+            currentStock,
+            availableStock,
+            reservedStock,
+            location: location || existing.location,
+            updatedAt: new Date(),
+            lastUpdatedAt: new Date(),
+          },
+        });
       } else {
-        await db.insert(inventory).values({
+        newInventoryValues.push({
           organizationId,
           productId: product.id,
           currentStock,
@@ -847,6 +874,20 @@ async function importInventoryRows(
     } catch (err) {
       errors.push({ row: i + 2, message: `DB 저장 실패: ${err instanceof Error ? err.message : "알 수 없는 오류"}` });
     }
+  }
+
+  // 배치 INSERT (신규 재고)
+  if (newInventoryValues.length > 0) {
+    await db.insert(inventory).values(newInventoryValues);
+  }
+
+  // 배치 UPDATE (기존 재고) — 각 행이 다르므로 Promise.all로 병렬화
+  if (updateInventoryBatch.length > 0) {
+    await Promise.all(
+      updateInventoryBatch.map((item) =>
+        db.update(inventory).set(item.data).where(eq(inventory.id, item.id))
+      )
+    );
   }
 
   return {

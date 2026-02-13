@@ -374,25 +374,30 @@ export async function confirmOutboundRequest(
       };
     }
 
-    // 항목별 확정 수량 업데이트 및 재고 차감
-    for (const item of validated.items) {
-      // 항목 정보 조회
-      const [requestItem] = await db
-        .select()
-        .from(outboundRequestItems)
-        .where(eq(outboundRequestItems.id, item.itemId))
-        .limit(1);
+    // 항목 정보 배치 조회 (N+1 제거)
+    const itemIds = validated.items.map((i) => i.itemId);
+    const requestItemRows = await db
+      .select()
+      .from(outboundRequestItems)
+      .where(sql`${outboundRequestItems.id} IN ${itemIds}`);
+    const requestItemMap = new Map(requestItemRows.map((r) => [r.id, r]));
 
-      if (!requestItem) continue;
-      if (item.confirmedQuantity === 0) continue; // 0개면 재고 차감 안함
-
-      // confirmedQuantity 업데이트
+    // confirmedQuantity 배치 업데이트
+    const updateItems = validated.items.filter((i) => i.confirmedQuantity > 0 && requestItemMap.has(i.itemId));
+    if (updateItems.length > 0) {
+      const qtyCase = updateItems.map((i) => sql`WHEN ${i.itemId} THEN ${i.confirmedQuantity}`);
       await db
         .update(outboundRequestItems)
-        .set({ confirmedQuantity: item.confirmedQuantity })
-        .where(eq(outboundRequestItems.id, item.itemId));
+        .set({ confirmedQuantity: sql`CASE id ${sql.join(qtyCase, sql` `)} END` })
+        .where(sql`${outboundRequestItems.id} IN ${updateItems.map((i) => i.itemId)}`);
+    }
 
-      // 재고 차감 (processInventoryTransaction)
+    // 재고 차감은 순차 실행 (데이터 무결성)
+    for (const item of validated.items) {
+      const requestItem = requestItemMap.get(item.itemId);
+      if (!requestItem) continue;
+      if (item.confirmedQuantity === 0) continue;
+
       const result = await processInventoryTransaction({
         productId: requestItem.productId,
         changeType: request.outboundType as
