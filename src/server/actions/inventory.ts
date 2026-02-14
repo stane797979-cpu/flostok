@@ -17,7 +17,7 @@ import {
   getChangeTypeInfo,
 } from "@/server/services/inventory/types";
 import { deductByFIFO, formatDeductionNotes } from "@/server/services/inventory/lot-fifo";
-import { requireAuth, type AuthUser } from "./auth-helpers";
+import { requireAuth, requireAdmin, type AuthUser } from "./auth-helpers";
 import { logActivity } from "@/server/services/activity-log";
 import { checkAndCreateInventoryAlert } from "@/server/services/notifications/inventory-alerts";
 
@@ -661,4 +661,224 @@ export async function getInventoryListByStatuses(options: {
     [cacheKey],
     { revalidate: 30, tags: [`inventory-${user.organizationId}`] }
   )();
+}
+
+/**
+ * 재고 개별 삭제 (admin만)
+ * - inventory 레코드 삭제 + 이력에 DELETION 기록
+ * - inventory_history는 보존 (감사 추적)
+ */
+export async function deleteInventoryItem(
+  inventoryId: string,
+  reason?: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const user = await requireAdmin();
+
+    const [item] = await db
+      .select()
+      .from(inventory)
+      .where(
+        and(
+          eq(inventory.id, inventoryId),
+          eq(inventory.organizationId, user.organizationId)
+        )
+      )
+      .limit(1);
+
+    if (!item) {
+      return { success: false, error: "재고 항목을 찾을 수 없습니다" };
+    }
+
+    // 삭제 이력 기록
+    if (item.currentStock > 0) {
+      await db.insert(inventoryHistory).values({
+        organizationId: user.organizationId,
+        productId: item.productId,
+        warehouseId: item.warehouseId,
+        changeType: "OUTBOUND_ADJUSTMENT",
+        changeAmount: -item.currentStock,
+        stockBefore: item.currentStock,
+        stockAfter: 0,
+        date: new Date().toISOString().split("T")[0],
+        notes: `재고 삭제${reason ? ` (사유: ${reason})` : ""}`,
+      });
+    }
+
+    // inventory 레코드 삭제
+    await db
+      .delete(inventory)
+      .where(eq(inventory.id, inventoryId));
+
+    await logActivity({
+      user,
+      action: "DELETE",
+      entityType: "product",
+      entityId: item.productId,
+      description: `재고 삭제: ${item.productId} (수량: ${item.currentStock})${reason ? ` 사유: ${reason}` : ""}`,
+      metadata: { inventoryId, stockBefore: item.currentStock, reason },
+    });
+
+    revalidatePath("/dashboard/inventory");
+    revalidateTag(`inventory-${user.organizationId}`);
+
+    return { success: true };
+  } catch (error) {
+    console.error("재고 삭제 오류:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "재고 삭제에 실패했습니다",
+    };
+  }
+}
+
+/**
+ * 재고 일괄 삭제 (선택된 항목들)
+ */
+export async function deleteInventoryItems(
+  inventoryIds: string[],
+  reason?: string
+): Promise<{ success: boolean; deletedCount: number; error?: string }> {
+  try {
+    const user = await requireAdmin();
+
+    if (inventoryIds.length === 0) {
+      return { success: false, deletedCount: 0, error: "삭제할 항목이 없습니다" };
+    }
+
+    // 대상 재고 조회
+    const items = await db
+      .select()
+      .from(inventory)
+      .where(
+        and(
+          inArray(inventory.id, inventoryIds),
+          eq(inventory.organizationId, user.organizationId)
+        )
+      );
+
+    if (items.length === 0) {
+      return { success: false, deletedCount: 0, error: "삭제할 재고를 찾을 수 없습니다" };
+    }
+
+    // 삭제 이력 일괄 기록
+    const historyValues = items
+      .filter((item) => item.currentStock > 0)
+      .map((item) => ({
+        organizationId: user.organizationId,
+        productId: item.productId,
+        warehouseId: item.warehouseId,
+        changeType: "OUTBOUND_ADJUSTMENT" as const,
+        changeAmount: -item.currentStock,
+        stockBefore: item.currentStock,
+        stockAfter: 0,
+        date: new Date().toISOString().split("T")[0],
+        notes: `일괄 재고 삭제${reason ? ` (사유: ${reason})` : ""}`,
+      }));
+
+    if (historyValues.length > 0) {
+      await db.insert(inventoryHistory).values(historyValues);
+    }
+
+    // 일괄 삭제
+    await db
+      .delete(inventory)
+      .where(
+        and(
+          inArray(inventory.id, inventoryIds),
+          eq(inventory.organizationId, user.organizationId)
+        )
+      );
+
+    await logActivity({
+      user,
+      action: "DELETE",
+      entityType: "product",
+      entityId: items[0].productId,
+      description: `재고 일괄 삭제: ${items.length}건${reason ? ` (사유: ${reason})` : ""}`,
+      metadata: { inventoryIds, deletedCount: items.length, reason },
+    });
+
+    revalidatePath("/dashboard/inventory");
+    revalidateTag(`inventory-${user.organizationId}`);
+
+    return { success: true, deletedCount: items.length };
+  } catch (error) {
+    console.error("재고 일괄 삭제 오류:", error);
+    return {
+      success: false,
+      deletedCount: 0,
+      error: error instanceof Error ? error.message : "재고 일괄 삭제에 실패했습니다",
+    };
+  }
+}
+
+/**
+ * 전체 재고 삭제 (admin만, 조직 전체)
+ */
+export async function deleteAllInventory(
+  reason: string
+): Promise<{ success: boolean; deletedCount: number; error?: string }> {
+  try {
+    const user = await requireAdmin();
+
+    if (!reason.trim()) {
+      return { success: false, deletedCount: 0, error: "전체 삭제 시 사유 입력은 필수입니다" };
+    }
+
+    // 전체 재고 조회
+    const items = await db
+      .select()
+      .from(inventory)
+      .where(eq(inventory.organizationId, user.organizationId));
+
+    if (items.length === 0) {
+      return { success: false, deletedCount: 0, error: "삭제할 재고가 없습니다" };
+    }
+
+    // 삭제 이력 일괄 기록
+    const historyValues = items
+      .filter((item) => item.currentStock > 0)
+      .map((item) => ({
+        organizationId: user.organizationId,
+        productId: item.productId,
+        warehouseId: item.warehouseId,
+        changeType: "OUTBOUND_ADJUSTMENT" as const,
+        changeAmount: -item.currentStock,
+        stockBefore: item.currentStock,
+        stockAfter: 0,
+        date: new Date().toISOString().split("T")[0],
+        notes: `전체 재고 삭제 (사유: ${reason})`,
+      }));
+
+    if (historyValues.length > 0) {
+      await db.insert(inventoryHistory).values(historyValues);
+    }
+
+    // 전체 삭제
+    await db
+      .delete(inventory)
+      .where(eq(inventory.organizationId, user.organizationId));
+
+    await logActivity({
+      user,
+      action: "DELETE",
+      entityType: "product",
+      entityId: "all",
+      description: `전체 재고 삭제: ${items.length}건 (사유: ${reason})`,
+      metadata: { deletedCount: items.length, reason },
+    });
+
+    revalidatePath("/dashboard/inventory");
+    revalidateTag(`inventory-${user.organizationId}`);
+
+    return { success: true, deletedCount: items.length };
+  } catch (error) {
+    console.error("전체 재고 삭제 오류:", error);
+    return {
+      success: false,
+      deletedCount: 0,
+      error: error instanceof Error ? error.message : "전체 재고 삭제에 실패했습니다",
+    };
+  }
 }

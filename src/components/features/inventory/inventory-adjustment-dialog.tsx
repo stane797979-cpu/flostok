@@ -148,7 +148,7 @@ export function InventoryAdjustmentDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[520px]">
         <DialogHeader>
           <DialogTitle>재고 조정</DialogTitle>
           <DialogDescription>
@@ -159,19 +159,15 @@ export function InventoryAdjustmentDialog({
         <div className="space-y-4 py-4">
           {/* 제품 정보 (읽기 전용) */}
           <div className="rounded-lg border bg-slate-50 p-3 dark:bg-slate-900">
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div>
-                <span className="text-slate-500">SKU</span>
-                <p className="font-mono font-medium">{target.sku}</p>
+            <div className="grid grid-cols-[auto_1fr_auto] items-center gap-x-4 gap-y-1 text-sm">
+              <span className="text-slate-500">SKU</span>
+              <span className="font-mono font-medium">{target.sku}</span>
+              <div className="row-span-2 text-right">
+                <span className="block text-xs text-slate-500">현재고</span>
+                <span className="text-2xl font-bold leading-tight">{target.currentStock.toLocaleString()}</span>
               </div>
-              <div>
-                <span className="text-slate-500">제품명</span>
-                <p className="font-medium">{target.name}</p>
-              </div>
-              <div className="col-span-2">
-                <span className="text-slate-500">현재고</span>
-                <p className="text-lg font-bold">{target.currentStock.toLocaleString()}</p>
-              </div>
+              <span className="text-slate-500">제품명</span>
+              <span className="font-medium truncate">{target.name}</span>
             </div>
           </div>
 
@@ -273,35 +269,39 @@ export function InventoryAdjustmentDialog({
                 <History className="h-3.5 w-3.5" />
                 최근 변경 이력
               </h4>
-              <div className="max-h-40 overflow-y-auto overflow-x-hidden rounded-md border">
-                <div className="divide-y text-xs">
-                  {historyRecords.map((h) => (
-                    <div key={h.id} className="flex items-center gap-2 px-3 py-2 min-w-0">
-                      <Badge
-                        variant="outline"
-                        className={
-                          h.changeAmount > 0
-                            ? "text-[10px] border-green-200 text-green-700 flex-shrink-0"
-                            : "text-[10px] border-red-200 text-red-700 flex-shrink-0"
-                        }
-                      >
-                        {h.changeAmount > 0 ? "+" : ""}{h.changeAmount}
-                      </Badge>
-                      <span className="flex-shrink-0 text-slate-500">
-                        {h.stockBefore} → {h.stockAfter}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-slate-400">
-                        {h.notes || changeTypeLabel(h.changeType)}
-                      </span>
-                      <span className="flex-shrink-0 text-slate-400">
-                        {new Date(h.createdAt).toLocaleDateString("ko-KR", {
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+              <div className="max-h-40 overflow-y-auto rounded-md border">
+                <table className="w-full text-xs">
+                  <tbody className="divide-y">
+                    {historyRecords.map((h) => (
+                      <tr key={h.id}>
+                        <td className="whitespace-nowrap px-2 py-1.5">
+                          <Badge
+                            variant="outline"
+                            className={
+                              h.changeAmount > 0
+                                ? "text-[10px] border-green-200 text-green-700"
+                                : "text-[10px] border-red-200 text-red-700"
+                            }
+                          >
+                            {h.changeAmount > 0 ? "+" : ""}{h.changeAmount}
+                          </Badge>
+                        </td>
+                        <td className="whitespace-nowrap px-2 py-1.5 text-slate-500">
+                          {h.stockBefore} → {h.stockAfter}
+                        </td>
+                        <td className="max-w-[180px] truncate px-2 py-1.5 text-slate-400">
+                          {h.notes || changeTypeLabel(h.changeType)}
+                        </td>
+                        <td className="whitespace-nowrap px-2 py-1.5 text-right text-slate-400">
+                          {new Date(h.createdAt).toLocaleDateString("ko-KR", {
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           </>

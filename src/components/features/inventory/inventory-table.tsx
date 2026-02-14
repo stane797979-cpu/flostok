@@ -19,7 +19,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ShoppingCart, MoreHorizontal, Settings2, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { ShoppingCart, MoreHorizontal, Settings2, ArrowUpDown, ArrowUp, ArrowDown, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getInventoryStatus } from "@/lib/constants/inventory-status";
 
@@ -49,6 +49,10 @@ export interface InventoryItem {
 interface InventoryTableProps {
   items: InventoryItem[];
   onAdjust: (item: InventoryItem) => void;
+  onDelete?: (item: InventoryItem) => void;
+  onBulkDelete?: (ids: string[]) => void;
+  selectedIds?: string[];
+  onSelectionChange?: (ids: string[]) => void;
 }
 
 type SortKey = "sku" | "name" | "status" | "abcXyzGrade" | "currentStock" | "safetyStock" | "reorderPoint" | "daysOfInventory" | "warehouse" | "location";
@@ -68,8 +72,10 @@ const STATUS_ORDER = [
   "overstock",
 ];
 
-export const InventoryTable = memo(function InventoryTable({ items, onAdjust }: InventoryTableProps) {
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+export const InventoryTable = memo(function InventoryTable({ items, onAdjust, onDelete, onBulkDelete, selectedIds: externalSelectedIds, onSelectionChange }: InventoryTableProps) {
+  const [internalSelectedIds, setInternalSelectedIds] = useState<string[]>([]);
+  const selectedIds = externalSelectedIds ?? internalSelectedIds;
+  const setSelectedIds = onSelectionChange ?? setInternalSelectedIds;
   const [sortKey, setSortKey] = useState<SortKey>("status");
   const [sortDir, setSortDir] = useState<SortDirection>("asc");
   const router = useRouter();
@@ -163,6 +169,12 @@ export const InventoryTable = memo(function InventoryTable({ items, onAdjust }: 
         <div className="flex items-center justify-between rounded-lg border bg-slate-50 p-4 dark:bg-slate-900">
           <span className="text-sm font-medium">{selectedIds.length}개 항목 선택됨</span>
           <div className="flex gap-2">
+            {onBulkDelete && (
+              <Button size="sm" variant="destructive" onClick={() => onBulkDelete(selectedIds)}>
+                <Trash2 className="mr-2 h-4 w-4" />
+                선택 삭제 ({selectedIds.length})
+              </Button>
+            )}
             <Button size="sm" variant="default" onClick={() => router.push("/dashboard/orders")}>
               <ShoppingCart className="mr-2 h-4 w-4" />
               일괄 발주 생성
@@ -206,6 +218,15 @@ export const InventoryTable = memo(function InventoryTable({ items, onAdjust }: 
                         <Settings2 className="mr-2 h-4 w-4" />
                         재고 조정
                       </DropdownMenuItem>
+                      {onDelete && (
+                        <DropdownMenuItem
+                          onClick={() => onDelete(item)}
+                          className="text-red-600 focus:text-red-600"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          재고 삭제
+                        </DropdownMenuItem>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
@@ -390,6 +411,15 @@ export const InventoryTable = memo(function InventoryTable({ items, onAdjust }: 
                           <DropdownMenuItem onClick={() => router.push("/dashboard/orders")}>
                             <ShoppingCart className="mr-2 h-4 w-4" />
                             발주 생성
+                          </DropdownMenuItem>
+                        )}
+                        {onDelete && (
+                          <DropdownMenuItem
+                            onClick={() => onDelete(item)}
+                            className="text-red-600 focus:text-red-600"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            재고 삭제
                           </DropdownMenuItem>
                         )}
                       </DropdownMenuContent>
