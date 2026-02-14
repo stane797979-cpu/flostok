@@ -707,6 +707,19 @@ export async function bulkConfirmInbound(
 
     const inboundCapableStatuses = ["ordered", "confirmed", "shipped", "partially_received"];
 
+    // 모든 발주서의 항목을 한 번에 배치 조회 (N+1 제거)
+    const allItems = await db
+      .select()
+      .from(purchaseOrderItems)
+      .where(inArray(purchaseOrderItems.purchaseOrderId, orderIds));
+
+    const itemsByOrderId = new Map<string, typeof allItems>();
+    for (const item of allItems) {
+      const existing = itemsByOrderId.get(item.purchaseOrderId) || [];
+      existing.push(item);
+      itemsByOrderId.set(item.purchaseOrderId, existing);
+    }
+
     for (const order of orders) {
       if (!inboundCapableStatuses.includes(order.status)) {
         errors.push({
@@ -718,11 +731,7 @@ export async function bulkConfirmInbound(
       }
 
       try {
-        // 해당 발주서의 항목 조회
-        const items = await db
-          .select()
-          .from(purchaseOrderItems)
-          .where(eq(purchaseOrderItems.purchaseOrderId, order.id));
+        const items = itemsByOrderId.get(order.id) || [];
 
         // 미입고 항목 필터링
         const pendingItems = items.filter(

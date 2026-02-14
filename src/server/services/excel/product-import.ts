@@ -4,7 +4,7 @@
 
 import { db } from "@/server/db";
 import { products, inventory } from "@/server/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { parseExcelBuffer, sheetToJson, parseNumber } from "./parser";
 import type { ExcelImportResult, ExcelImportError, ProductExcelRow } from "./types";
 
@@ -150,6 +150,17 @@ export async function importProductData(
 
     const skuToId = new Map(existingProducts.map((p) => [p.sku, p.id]));
 
+    // 기존 재고 배치 조회 (N+1 제거)
+    const existingInventory = await db
+      .select({ id: inventory.id, productId: inventory.productId })
+      .from(inventory)
+      .where(eq(inventory.organizationId, organizationId));
+    const inventoryByProductId = new Map(existingInventory.map((inv) => [inv.productId, inv.id]));
+
+    // 재고 업데이트/생성 배치 수집용
+    const inventoryUpdates: Array<{ invId: string; currentStock: number }> = [];
+    const inventoryInserts: Array<{ productId: string; currentStock: number }> = [];
+
     for (let i = 0; i < rows.length; i++) {
       const { data, errors } = parseProductRow(rows[i], i);
 
@@ -193,9 +204,14 @@ export async function importProductData(
           })
           .where(eq(products.id, existingId));
 
-        // 재고수량이 있으면 inventory 업데이트
+        // 재고수량이 있으면 배치 수집
         if (data.currentStock !== undefined) {
-          await upsertInventory(organizationId, existingId, data.currentStock);
+          const invId = inventoryByProductId.get(existingId);
+          if (invId) {
+            inventoryUpdates.push({ invId, currentStock: data.currentStock });
+          } else {
+            inventoryInserts.push({ productId: existingId, currentStock: data.currentStock });
+          }
         }
 
         successData.push(data);
@@ -216,12 +232,39 @@ export async function importProductData(
         moq: data.moq ?? 1,
       }).returning({ id: products.id });
 
-      // 재고수량이 있으면 inventory 생성
+      // 재고수량이 있으면 배치 수집
       if (newProduct && data.currentStock !== undefined) {
-        await upsertInventory(organizationId, newProduct.id, data.currentStock);
+        inventoryInserts.push({ productId: newProduct.id, currentStock: data.currentStock });
       }
 
       successData.push(data);
+    }
+
+    // 재고 배치 INSERT (신규)
+    if (inventoryInserts.length > 0) {
+      await db.insert(inventory).values(
+        inventoryInserts.map((item) => ({
+          organizationId,
+          productId: item.productId,
+          currentStock: item.currentStock,
+          availableStock: item.currentStock,
+          reservedStock: 0,
+          incomingStock: 0,
+        }))
+      );
+    }
+
+    // 재고 배치 UPDATE (기존) — Promise.all 병렬화
+    if (inventoryUpdates.length > 0) {
+      await Promise.all(
+        inventoryUpdates.map((item) =>
+          db.update(inventory).set({
+            currentStock: item.currentStock,
+            availableStock: item.currentStock,
+            updatedAt: new Date(),
+          }).where(eq(inventory.id, item.invId))
+        )
+      );
     }
 
     return {
@@ -249,45 +292,6 @@ export async function importProductData(
   }
 }
 
-/**
- * inventory 테이블 upsert (있으면 업데이트, 없으면 생성)
- */
-async function upsertInventory(
-  organizationId: string,
-  productId: string,
-  currentStock: number
-) {
-  const [existing] = await db
-    .select({ id: inventory.id })
-    .from(inventory)
-    .where(
-      and(
-        eq(inventory.organizationId, organizationId),
-        eq(inventory.productId, productId)
-      )
-    )
-    .limit(1);
-
-  if (existing) {
-    await db
-      .update(inventory)
-      .set({
-        currentStock,
-        availableStock: currentStock,
-        updatedAt: new Date(),
-      })
-      .where(eq(inventory.id, existing.id));
-  } else {
-    await db.insert(inventory).values({
-      organizationId,
-      productId,
-      currentStock,
-      availableStock: currentStock,
-      reservedStock: 0,
-      incomingStock: 0,
-    });
-  }
-}
 
 /**
  * 제품 데이터 Excel 템플릿 생성

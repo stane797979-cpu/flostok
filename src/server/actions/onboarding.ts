@@ -909,6 +909,15 @@ async function importInboundRows(
   let successCount = 0;
   const imported: Record<string, unknown>[] = [];
 
+  // SKU→제품 Map 미리 배치 조회 (N+1 제거)
+  const allProducts = await db
+    .select({ id: products.id, sku: products.sku })
+    .from(products)
+    .where(eq(products.organizationId, organizationId));
+  const skuToProduct = new Map(allProducts.map((p) => [p.sku, p]));
+
+  const newInboundValues: Array<typeof inboundRecords.$inferInsert> = [];
+
   for (let i = 0; i < result.rows.length; i++) {
     const row = result.rows[i];
     const sku = String(row.sku || "").trim();
@@ -918,13 +927,7 @@ async function importInboundRows(
     }
 
     try {
-      // SKU로 제품 찾기
-      const product = await db.query.products.findFirst({
-        where: and(
-          eq(products.organizationId, organizationId),
-          eq(products.sku, sku)
-        ),
-      });
+      const product = skuToProduct.get(sku);
 
       if (!product) {
         errors.push({ row: i + 2, column: "sku", value: sku, message: `제품을 찾을 수 없음: ${sku}` });
@@ -938,7 +941,7 @@ async function importInboundRows(
         continue;
       }
 
-      await db.insert(inboundRecords).values({
+      newInboundValues.push({
         organizationId,
         productId: product.id,
         date: dateStr || new Date().toISOString().split("T")[0],
@@ -952,8 +955,13 @@ async function importInboundRows(
       successCount++;
       imported.push(row);
     } catch (err) {
-      errors.push({ row: i + 2, message: `DB 저장 실패: ${err instanceof Error ? err.message : "알 수 없는 오류"}` });
+      errors.push({ row: i + 2, message: `데이터 처리 실패: ${err instanceof Error ? err.message : "알 수 없는 오류"}` });
     }
+  }
+
+  // 배치 INSERT (모든 입고 기록을 한 번에)
+  if (newInboundValues.length > 0) {
+    await db.insert(inboundRecords).values(newInboundValues);
   }
 
   return {

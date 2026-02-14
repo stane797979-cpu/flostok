@@ -4,9 +4,8 @@
  */
 
 import { db } from "@/server/db";
-import { products, inventory, suppliers, purchaseOrders } from "@/server/db/schema";
-import { eq, and, sql, or, desc } from "drizzle-orm";
-import { getAverageDailySales } from "@/server/actions/sales";
+import { products, inventory, suppliers, purchaseOrders, salesRecords } from "@/server/db/schema";
+import { eq, and, sql, or, desc, gte, inArray } from "drizzle-orm";
 import {
   convertToReorderItem,
   calculateReorderPriority,
@@ -147,9 +146,38 @@ export async function executeGetReorderRecommendations(input: {
         )
       );
 
-    // 각 제품의 발주 추천 정보 생성
-    const reorderItemsPromises = reorderCandidates.map(async (row) => {
-      const avgDailySales = await getAverageDailySales(row.product.id, 30);
+    // 전체 제품의 일평균 판매량을 GROUP BY 단일 쿼리로 조회 (N+1 제거)
+    const candidateProductIds = reorderCandidates.map((r) => r.product.id);
+    const avgDailySalesMap = new Map<string, number>();
+
+    if (candidateProductIds.length > 0) {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const startDateStr = thirtyDaysAgo.toISOString().split("T")[0];
+
+      const salesAgg = await db
+        .select({
+          productId: salesRecords.productId,
+          totalQuantity: sql<number>`coalesce(sum(${salesRecords.quantity}), 0)`,
+        })
+        .from(salesRecords)
+        .where(
+          and(
+            eq(salesRecords.organizationId, orgId),
+            inArray(salesRecords.productId, candidateProductIds),
+            gte(salesRecords.date, startDateStr)
+          )
+        )
+        .groupBy(salesRecords.productId);
+
+      for (const row of salesAgg) {
+        avgDailySalesMap.set(row.productId, Number(row.totalQuantity) / 30);
+      }
+    }
+
+    // 각 제품의 발주 추천 정보 생성 (동기적 — DB 호출 없음)
+    const results = reorderCandidates.map((row) => {
+      const avgDailySales = avgDailySalesMap.get(row.product.id) || 0;
 
       const data: ProductReorderData = {
         productId: row.product.id,
@@ -176,8 +204,6 @@ export async function executeGetReorderRecommendations(input: {
         avgDailySales,
       };
     });
-
-    const results = await Promise.all(reorderItemsPromises);
     const validResults = results.filter((r) => r.item !== null);
 
     // 긴급도 필터링

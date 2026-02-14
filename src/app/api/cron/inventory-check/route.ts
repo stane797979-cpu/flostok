@@ -60,8 +60,8 @@ export async function GET(request: NextRequest) {
       error?: string
     }> = []
 
-    for (const org of allOrganizations) {
-      try {
+    const settled = await Promise.allSettled(
+      allOrganizations.map(async (org) => {
         const inventoryItems = await db
           .select({
             inventory,
@@ -72,14 +72,13 @@ export async function GET(request: NextRequest) {
           .where(eq(inventory.organizationId, org.id))
 
         if (inventoryItems.length === 0) {
-          results.push({
+          return {
             organizationId: org.id,
             organizationName: org.name,
             productsChecked: 0,
             alertsCreated: 0,
             breakdown: { outOfStock: 0, critical: 0, low: 0, excess: 0, overstock: 0 },
-          })
-          continue
+          }
         }
 
         const breakdown = { outOfStock: 0, critical: 0, low: 0, excess: 0, overstock: 0 }
@@ -97,8 +96,6 @@ export async function GET(request: NextRequest) {
           const inv = item.inventory
           const product = item.product
           const status = getInventoryStatus(inv.currentStock, product.safetyStock, product.reorderPoint)
-
-          totalChecked++
 
           if (status.status === 'out_of_stock') {
             breakdown.outOfStock++
@@ -198,24 +195,31 @@ export async function GET(request: NextRequest) {
           }
         }
 
-        totalAlertsCreated += newAlertsCreated
-
-        results.push({
+        return {
           organizationId: org.id,
           organizationName: org.name,
           productsChecked: inventoryItems.length,
           alertsCreated: newAlertsCreated,
           breakdown,
-        })
-      } catch (error) {
-        console.error(`[Inventory Check Cron] 조직 ${org.name} 처리 실패:`, error)
+        }
+      })
+    )
+
+    for (const [i, result] of settled.entries()) {
+      if (result.status === 'fulfilled') {
+        results.push(result.value)
+        totalChecked += result.value.productsChecked
+        totalAlertsCreated += result.value.alertsCreated
+      } else {
+        const org = allOrganizations[i]
+        console.error(`[Inventory Check Cron] 조직 ${org.name} 처리 실패:`, result.reason)
         results.push({
           organizationId: org.id,
           organizationName: org.name,
           productsChecked: 0,
           alertsCreated: 0,
           breakdown: { outOfStock: 0, critical: 0, low: 0, excess: 0, overstock: 0 },
-          error: error instanceof Error ? error.message : '알 수 없는 오류',
+          error: result.reason instanceof Error ? result.reason.message : '알 수 없는 오류',
         })
       }
     }

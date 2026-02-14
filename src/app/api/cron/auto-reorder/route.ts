@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/server/db'
 import { organizations, products, purchaseOrders, purchaseOrderItems, suppliers } from '@/server/db/schema'
-import { eq, sql } from 'drizzle-orm'
+import { sql } from 'drizzle-orm'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -54,9 +54,9 @@ export async function GET(request: NextRequest) {
       error?: string
     }> = []
 
-    // 3. 각 조직별로 자동 발주 처리
-    for (const org of allOrganizations) {
-      try {
+    // 3. 각 조직별로 자동 발주 처리 (병렬 처리)
+    const settled = await Promise.allSettled(
+      allOrganizations.map(async (org) => {
         console.log(`[Auto-Reorder Cron] 조직 처리 시작: ${org.name} (${org.id})`)
 
         // 조직 설정에서 자동 발주 활성화 여부 확인
@@ -65,13 +65,12 @@ export async function GET(request: NextRequest) {
 
         if (!autoReorderEnabled) {
           console.log(`[Auto-Reorder Cron] 조직 ${org.name}: 자동 발주 비활성화됨`)
-          results.push({
+          return {
             organizationId: org.id,
             organizationName: org.name,
             productsProcessed: 0,
             ordersCreated: 0,
-          })
-          continue
+          }
         }
 
         // 발주 필요 제품 조회
@@ -80,13 +79,12 @@ export async function GET(request: NextRequest) {
 
         if (recommendations.length === 0) {
           console.log(`[Auto-Reorder Cron] 조직 ${org.name}: 발주 필요 제품 없음`)
-          results.push({
+          return {
             organizationId: org.id,
             organizationName: org.name,
             productsProcessed: 0,
             ordersCreated: 0,
-          })
-          continue
+          }
         }
 
         console.log(`[Auto-Reorder Cron] 조직 ${org.name}: 발주 필요 제품 ${recommendations.length}개`)
@@ -203,23 +201,29 @@ export async function GET(request: NextRequest) {
           )
         }
 
-        totalProcessed += recommendations.length
-        totalOrdered += ordersCreated
-
-        results.push({
+        return {
           organizationId: org.id,
           organizationName: org.name,
           productsProcessed: recommendations.length,
           ordersCreated,
-        })
-      } catch (error) {
-        console.error(`[Auto-Reorder Cron] 조직 ${org.name} 처리 실패:`, error)
+        }
+      })
+    )
+
+    for (const [i, result] of settled.entries()) {
+      if (result.status === 'fulfilled') {
+        results.push(result.value)
+        totalProcessed += result.value.productsProcessed
+        totalOrdered += result.value.ordersCreated
+      } else {
+        const org = allOrganizations[i]
+        console.error(`[Auto-Reorder Cron] 조직 ${org.name} 처리 실패:`, result.reason)
         results.push({
           organizationId: org.id,
           organizationName: org.name,
           productsProcessed: 0,
           ordersCreated: 0,
-          error: error instanceof Error ? error.message : '알 수 없는 오류',
+          error: result.reason instanceof Error ? result.reason.message : '알 수 없는 오류',
         })
       }
     }

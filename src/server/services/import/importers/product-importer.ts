@@ -101,8 +101,8 @@ export async function importProductData(
               skipped++;
             }
           } else {
-            // 신규 제품 생성
-            await db.insert(products).values({
+            // 신규 제품 생성 (.returning으로 ID 재조회 불필요)
+            const [newProduct] = await db.insert(products).values({
               organizationId: organizationId,
               sku: row.sku,
               name: row.name,
@@ -120,15 +120,10 @@ export async function importProductData(
               targetStock: row.targetStock,
               barcode: row.barcode,
               imageUrl: row.imageUrl,
-            });
+            }).returning({ id: products.id });
             imported++;
 
             // 캐시 업데이트
-            const [newProduct] = await db
-              .select({ id: products.id })
-              .from(products)
-              .where(and(eq(products.sku, row.sku), eq(products.organizationId, organizationId)))
-              .limit(1);
             if (newProduct) {
               existingSkuMap.set(row.sku, newProduct.id);
             }

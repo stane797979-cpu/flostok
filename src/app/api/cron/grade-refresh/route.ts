@@ -60,9 +60,9 @@ export async function GET(request: NextRequest) {
       error?: string;
     }> = [];
 
-    // 3. 각 조직별로 등급 갱신
-    for (const org of allOrganizations) {
-      try {
+    // 3. 각 조직별로 등급 갱신 (병렬 처리)
+    const settled = await Promise.allSettled(
+      allOrganizations.map(async (org) => {
         console.log(
           `[Grade-Refresh Cron] 조직 처리 시작: ${org.name} (${org.id})`
         );
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
           );
         }
 
-        results.push({
+        return {
           organizationId: org.id,
           organizationName: org.name,
           totalProducts: refreshResult.totalProducts,
@@ -90,11 +90,18 @@ export async function GET(request: NextRequest) {
             refreshResult.errors.length > 0
               ? `${refreshResult.errors.length}건 오류`
               : undefined,
-        });
-      } catch (error) {
+        };
+      })
+    );
+
+    for (const [i, result] of settled.entries()) {
+      if (result.status === 'fulfilled') {
+        results.push(result.value);
+      } else {
+        const org = allOrganizations[i];
         console.error(
           `[Grade-Refresh Cron] 조직 ${org.name} 처리 실패:`,
-          error
+          result.reason
         );
         results.push({
           organizationId: org.id,
@@ -102,7 +109,7 @@ export async function GET(request: NextRequest) {
           totalProducts: 0,
           updatedCount: 0,
           newProductCount: 0,
-          error: error instanceof Error ? error.message : "알 수 없는 오류",
+          error: result.reason instanceof Error ? result.reason.message : "알 수 없는 오류",
         });
       }
     }

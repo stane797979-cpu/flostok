@@ -13,7 +13,7 @@ import {
   suppliers,
   kpiMonthlySnapshots,
 } from '@/server/db/schema'
-import { eq, desc, asc, sql, count, sum, gte, and, ne } from 'drizzle-orm'
+import { eq, desc, asc, sql, count, sum, gte, and, ne, inArray } from 'drizzle-orm'
 import { requireSuperadmin } from './auth-helpers'
 
 type ActionResponse<T = unknown> =
@@ -101,24 +101,47 @@ export async function getAllOrganizations(): Promise<ActionResponse<Organization
       .where(ne(organizations.id, SYSTEM_ORG_ID))
       .orderBy(desc(organizations.createdAt))
 
-    const orgsWithStats = await Promise.all(
-      orgs.map(async (org) => {
-        const [uc] = await db.select({ value: count() }).from(users).where(eq(users.organizationId, org.id))
-        const [pc] = await db.select({ value: count() }).from(products).where(eq(products.organizationId, org.id))
-        const [oc] = await db.select({ value: count() }).from(purchaseOrders).where(eq(purchaseOrders.organizationId, org.id))
+    if (orgs.length === 0) {
+      return { success: true, data: [] }
+    }
 
-        return {
-          id: org.id,
-          name: org.name,
-          slug: org.slug,
-          plan: org.plan,
-          createdAt: org.createdAt,
-          userCount: uc?.value ?? 0,
-          productCount: pc?.value ?? 0,
-          orderCount: oc?.value ?? 0,
-        }
-      })
-    )
+    const orgIds = orgs.map((org) => org.id)
+
+    // GROUP BY 집계 쿼리 3개를 병렬 실행
+    const [userCounts, productCounts, orderCounts] = await Promise.all([
+      db
+        .select({ orgId: users.organizationId, value: count() })
+        .from(users)
+        .where(inArray(users.organizationId, orgIds))
+        .groupBy(users.organizationId),
+      db
+        .select({ orgId: products.organizationId, value: count() })
+        .from(products)
+        .where(inArray(products.organizationId, orgIds))
+        .groupBy(products.organizationId),
+      db
+        .select({ orgId: purchaseOrders.organizationId, value: count() })
+        .from(purchaseOrders)
+        .where(inArray(purchaseOrders.organizationId, orgIds))
+        .groupBy(purchaseOrders.organizationId),
+    ])
+
+    // Map으로 변환 (O(1) 조회)
+    const userCountMap = new Map(userCounts.map((item) => [item.orgId, item.value]))
+    const productCountMap = new Map(productCounts.map((item) => [item.orgId, item.value]))
+    const orderCountMap = new Map(orderCounts.map((item) => [item.orgId, item.value]))
+
+    // 동기적으로 조합
+    const orgsWithStats = orgs.map((org) => ({
+      id: org.id,
+      name: org.name,
+      slug: org.slug,
+      plan: org.plan,
+      createdAt: org.createdAt,
+      userCount: userCountMap.get(org.id) ?? 0,
+      productCount: productCountMap.get(org.id) ?? 0,
+      orderCount: orderCountMap.get(org.id) ?? 0,
+    }))
 
     return { success: true, data: orgsWithStats }
   } catch (error) {
@@ -427,75 +450,169 @@ export async function getOrganizationsMonitoring(): Promise<ActionResponse<OrgMo
       .where(ne(organizations.id, SYSTEM_ORG_ID))
       .orderBy(asc(organizations.name))
 
+    if (orgs.length === 0) {
+      return { success: true, data: [] }
+    }
+
+    const orgIds = orgs.map((org) => org.id)
     const thirtyDaysAgo = new Date()
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
     const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0]
 
-    const results = await Promise.all(
-      orgs.map(async (org) => {
-        const orgId = org.id
+    // 7개의 GROUP BY 집계 쿼리를 병렬 실행
+    const [
+      userCounts,
+      productCounts,
+      inventoryStats,
+      salesStats,
+      monthlyOrderCounts,
+      pendingOrderCounts,
+      kpiSnapshots,
+    ] = await Promise.all([
+      // 1. 사용자 수
+      db
+        .select({ orgId: users.organizationId, value: count() })
+        .from(users)
+        .where(inArray(users.organizationId, orgIds))
+        .groupBy(users.organizationId)
+        .catch(() => []),
+      // 2. 제품 수
+      db
+        .select({ orgId: products.organizationId, value: count() })
+        .from(products)
+        .where(inArray(products.organizationId, orgIds))
+        .groupBy(products.organizationId)
+        .catch(() => []),
+      // 3. 재고 통계
+      db
+        .select({
+          orgId: inventory.organizationId,
+          totalValue: sql<number>`coalesce(sum(${inventory.inventoryValue}), 0)`,
+          stockout: sql<number>`count(case when ${inventory.status} = '품절' then 1 end)`,
+          critical: sql<number>`count(case when ${inventory.status} = '위험' then 1 end)`,
+          low: sql<number>`count(case when ${inventory.status} in ('부족', '주의') then 1 end)`,
+          normal: sql<number>`count(case when ${inventory.status} = '적정' then 1 end)`,
+          excess: sql<number>`count(case when ${inventory.status} in ('과다', '과잉') then 1 end)`,
+        })
+        .from(inventory)
+        .where(inArray(inventory.organizationId, orgIds))
+        .groupBy(inventory.organizationId)
+        .catch(() => []),
+      // 4. 월간 판매액
+      db
+        .select({
+          orgId: salesRecords.organizationId,
+          totalAmount: sql<number>`coalesce(sum(${salesRecords.totalAmount}), 0)`,
+        })
+        .from(salesRecords)
+        .where(and(inArray(salesRecords.organizationId, orgIds), gte(salesRecords.date, thirtyDaysAgoStr)))
+        .groupBy(salesRecords.organizationId)
+        .catch(() => []),
+      // 5. 월간 발주 수
+      db
+        .select({ orgId: purchaseOrders.organizationId, value: count() })
+        .from(purchaseOrders)
+        .where(and(inArray(purchaseOrders.organizationId, orgIds), gte(purchaseOrders.createdAt, thirtyDaysAgo)))
+        .groupBy(purchaseOrders.organizationId)
+        .catch(() => []),
+      // 6. 대기 중인 발주 수
+      db
+        .select({ orgId: purchaseOrders.organizationId, value: count() })
+        .from(purchaseOrders)
+        .where(and(inArray(purchaseOrders.organizationId, orgIds), eq(purchaseOrders.status, 'pending')))
+        .groupBy(purchaseOrders.organizationId)
+        .catch(() => []),
+      // 7. 최신 KPI (윈도우 함수 사용)
+      db
+        .select({
+          orgId: kpiMonthlySnapshots.organizationId,
+          turnoverRate: kpiMonthlySnapshots.turnoverRate,
+          stockoutRate: kpiMonthlySnapshots.stockoutRate,
+          rowNum: sql<number>`row_number() over (partition by ${kpiMonthlySnapshots.organizationId} order by ${kpiMonthlySnapshots.period} desc)`,
+        })
+        .from(kpiMonthlySnapshots)
+        .where(inArray(kpiMonthlySnapshots.organizationId, orgIds))
+        .catch(() => []),
+    ])
 
-        const [
-          userCountResult,
-          productCountResult,
-          inventoryStats,
-          salesStats,
-          orderStats,
-          pendingOrders,
-          latestKpi,
-        ] = await Promise.all([
-          db.select({ value: count() }).from(users).where(eq(users.organizationId, orgId)).catch(() => [{ value: 0 }]),
-          db.select({ value: count() }).from(products).where(eq(products.organizationId, orgId)).catch(() => [{ value: 0 }]),
-          db.select({
-            totalValue: sql<number>`coalesce(sum(${inventory.inventoryValue}), 0)`,
-            stockout: sql<number>`count(case when ${inventory.status} = '품절' then 1 end)`,
-            critical: sql<number>`count(case when ${inventory.status} = '위험' then 1 end)`,
-            low: sql<number>`count(case when ${inventory.status} in ('부족', '주의') then 1 end)`,
-            normal: sql<number>`count(case when ${inventory.status} = '적정' then 1 end)`,
-            excess: sql<number>`count(case when ${inventory.status} in ('과다', '과잉') then 1 end)`,
-          }).from(inventory).where(eq(inventory.organizationId, orgId)).catch(() => [{ totalValue: 0, stockout: 0, critical: 0, low: 0, normal: 0, excess: 0 }]),
-          db.select({
-            totalAmount: sql<number>`coalesce(sum(${salesRecords.totalAmount}), 0)`,
-          }).from(salesRecords).where(
-            and(eq(salesRecords.organizationId, orgId), gte(salesRecords.date, thirtyDaysAgoStr))
-          ).catch(() => [{ totalAmount: 0 }]),
-          db.select({ value: count() }).from(purchaseOrders).where(
-            and(eq(purchaseOrders.organizationId, orgId), gte(purchaseOrders.createdAt, thirtyDaysAgo))
-          ).catch(() => [{ value: 0 }]),
-          db.select({ value: count() }).from(purchaseOrders).where(
-            and(eq(purchaseOrders.organizationId, orgId), eq(purchaseOrders.status, 'pending'))
-          ).catch(() => [{ value: 0 }]),
-          db.select({
-            turnoverRate: kpiMonthlySnapshots.turnoverRate,
-            stockoutRate: kpiMonthlySnapshots.stockoutRate,
-          }).from(kpiMonthlySnapshots).where(eq(kpiMonthlySnapshots.organizationId, orgId)).orderBy(desc(kpiMonthlySnapshots.period)).limit(1).catch(() => []),
-        ])
+    // Map으로 변환 (O(1) 조회)
+    const userCountMap = new Map(userCounts.map((item) => [item.orgId, item.value]))
+    const productCountMap = new Map(productCounts.map((item) => [item.orgId, item.value]))
 
-        const inv = inventoryStats[0] || { totalValue: 0, stockout: 0, critical: 0, low: 0, normal: 0, excess: 0 }
-        const kpi = latestKpi[0]
-
-        return {
-          id: org.id,
-          name: org.name,
-          slug: org.slug,
-          plan: org.plan,
-          createdAt: org.createdAt,
-          userCount: userCountResult[0]?.value ?? 0,
-          productCount: productCountResult[0]?.value ?? 0,
-          totalInventoryValue: Number(inv.totalValue) || 0,
-          stockoutCount: Number(inv.stockout) || 0,
-          criticalCount: Number(inv.critical) || 0,
-          lowCount: Number(inv.low) || 0,
-          normalCount: Number(inv.normal) || 0,
-          excessCount: Number(inv.excess) || 0,
-          monthlySalesAmount: Number(salesStats[0]?.totalAmount) || 0,
-          monthlyOrderCount: orderStats[0]?.value ?? 0,
-          pendingOrderCount: pendingOrders[0]?.value ?? 0,
-          turnoverRate: kpi?.turnoverRate ? parseFloat(kpi.turnoverRate) : null,
-          stockoutRate: kpi?.stockoutRate ? parseFloat(kpi.stockoutRate) : null,
-        }
-      })
+    type InventoryStatsValue = {
+      totalValue: number
+      stockout: number
+      critical: number
+      low: number
+      normal: number
+      excess: number
+    }
+    const inventoryStatsMap = new Map<string, InventoryStatsValue>(
+      inventoryStats.map((item) => [
+        item.orgId,
+        {
+          totalValue: Number(item.totalValue) || 0,
+          stockout: Number(item.stockout) || 0,
+          critical: Number(item.critical) || 0,
+          low: Number(item.low) || 0,
+          normal: Number(item.normal) || 0,
+          excess: Number(item.excess) || 0,
+        },
+      ])
     )
+    const salesStatsMap = new Map(salesStats.map((item) => [item.orgId, Number(item.totalAmount) || 0]))
+    const monthlyOrderCountMap = new Map(monthlyOrderCounts.map((item) => [item.orgId, item.value]))
+    const pendingOrderCountMap = new Map(pendingOrderCounts.map((item) => [item.orgId, item.value]))
+
+    type KpiValue = {
+      turnoverRate: number | null
+      stockoutRate: number | null
+    }
+    const kpiMap = new Map<string, KpiValue>(
+      kpiSnapshots
+        .filter((item) => item.rowNum === 1)
+        .map((item) => [
+          item.orgId,
+          {
+            turnoverRate: item.turnoverRate ? parseFloat(item.turnoverRate) : null,
+            stockoutRate: item.stockoutRate ? parseFloat(item.stockoutRate) : null,
+          },
+        ])
+    )
+
+    // 동기적으로 조합
+    const results = orgs.map((org) => {
+      const inv = inventoryStatsMap.get(org.id) || {
+        totalValue: 0,
+        stockout: 0,
+        critical: 0,
+        low: 0,
+        normal: 0,
+        excess: 0,
+      }
+      const kpi = kpiMap.get(org.id)
+
+      return {
+        id: org.id,
+        name: org.name,
+        slug: org.slug,
+        plan: org.plan,
+        createdAt: org.createdAt,
+        userCount: userCountMap.get(org.id) ?? 0,
+        productCount: productCountMap.get(org.id) ?? 0,
+        totalInventoryValue: inv.totalValue,
+        stockoutCount: inv.stockout,
+        criticalCount: inv.critical,
+        lowCount: inv.low,
+        normalCount: inv.normal,
+        excessCount: inv.excess,
+        monthlySalesAmount: salesStatsMap.get(org.id) ?? 0,
+        monthlyOrderCount: monthlyOrderCountMap.get(org.id) ?? 0,
+        pendingOrderCount: pendingOrderCountMap.get(org.id) ?? 0,
+        turnoverRate: kpi?.turnoverRate ?? null,
+        stockoutRate: kpi?.stockoutRate ?? null,
+      }
+    })
 
     return { success: true, data: results }
   } catch (error) {

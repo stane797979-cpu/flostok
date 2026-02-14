@@ -1407,6 +1407,18 @@ export async function uploadPurchaseOrderExcel(
     const itemsBySupplier = new Map<string, ParsedItem[]>();
     const skipped: string[] = [];
 
+    // supplier_products 배치 조회 (N+1 제거) — productId → supplierId Map
+    const supplierProductMappings = await db
+      .select({
+        productId: sql<string>`product_id`,
+        supplierId: sql<string>`supplier_id`,
+      })
+      .from(sql`supplier_products`)
+      .where(sql`product_id IN (${sql.join(productList.map((p) => sql`${p.id}`), sql`, `)})`);
+    const productToSupplier = new Map(
+      supplierProductMappings.map((m) => [m.productId, m.supplierId])
+    );
+
     for (const row of rows) {
       const sku = String(row[skuCol] || "").trim();
       if (!sku) continue;
@@ -1420,20 +1432,14 @@ export async function uploadPurchaseOrderExcel(
       const quantity = Number(row[qtyCol]) || 0;
       if (quantity <= 0) continue;
 
-      // 공급자: 엑셀에 있으면 매칭, 없으면 첫 번째 공급자
+      // 공급자: 엑셀에 있으면 매칭, 없으면 supplier_products Map에서 조회
       let supplierId = "";
       if (supplierCol && row[supplierCol]) {
         const supplierName = String(row[supplierCol]).trim();
         supplierId = supplierNameMap.get(supplierName) || "";
       }
       if (!supplierId) {
-        // 제품의 공급자 매핑에서 조회
-        const [mapping] = await db
-          .select({ supplierId: sql<string>`supplier_id` })
-          .from(sql`supplier_products`)
-          .where(sql`product_id = ${productId}`)
-          .limit(1);
-        supplierId = mapping?.supplierId || "";
+        supplierId = productToSupplier.get(productId) || "";
       }
       if (!supplierId) {
         skipped.push(`${sku} (공급자 미지정)`);

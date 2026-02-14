@@ -4,7 +4,7 @@
 
 import { db } from "@/server/db";
 import { products, salesRecords } from "@/server/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import type { SalesRowData } from "../validators/sales-validator";
 import { processInventoryTransaction } from "@/server/actions/inventory";
 
@@ -75,6 +75,23 @@ export async function importSalesData(
         notes: string | null;
       }> = [];
 
+      // 배치 내 제품 단가를 한 번에 조회 (N+1 제거)
+      const batchProductIds = batch
+        .map((row) => skuMap.get(row.sku))
+        .filter((id): id is string => !!id);
+      const uniqueProductIds = [...new Set(batchProductIds)];
+
+      const productPriceMap = new Map<string, number>();
+      if (uniqueProductIds.length > 0) {
+        const priceRows = await db
+          .select({ id: products.id, unitPrice: products.unitPrice })
+          .from(products)
+          .where(inArray(products.id, uniqueProductIds));
+        for (const p of priceRows) {
+          productPriceMap.set(p.id, p.unitPrice ?? 0);
+        }
+      }
+
       for (let j = 0; j < batch.length; j++) {
         const row = batch[j];
         const rowNumber = i + j + 2; // Excel 행 번호 (헤더 제외, 1-based)
@@ -91,14 +108,7 @@ export async function importSalesData(
           continue;
         }
 
-        // 제품 정보 조회 (단가 기본값)
-        const [product] = await db
-          .select({ unitPrice: products.unitPrice })
-          .from(products)
-          .where(eq(products.id, productId))
-          .limit(1);
-
-        const unitPrice = row.unitPrice ?? product?.unitPrice ?? 0;
+        const unitPrice = row.unitPrice ?? productPriceMap.get(productId) ?? 0;
         const totalAmount = unitPrice * row.quantity;
 
         batchRecords.push({
