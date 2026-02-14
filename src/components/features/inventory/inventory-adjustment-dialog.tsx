@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { processInventoryTransaction, getInventoryHistory } from "@/server/actions/inventory";
+import { requestInventoryAdjustment, getInventoryHistory } from "@/server/actions/inventory";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, History } from "lucide-react";
 import type { InventoryHistory } from "@/server/db/schema";
@@ -101,7 +101,7 @@ export function InventoryAdjustmentDialog({
 
     setIsSubmitting(true);
     try {
-      const result = await processInventoryTransaction({
+      const result = await requestInventoryAdjustment({
         productId: target.productId,
         changeType: direction === "increase" ? "INBOUND_ADJUSTMENT" : "OUTBOUND_ADJUSTMENT",
         quantity: quantityNum,
@@ -111,10 +111,19 @@ export function InventoryAdjustmentDialog({
       });
 
       if (result.success) {
-        toast({
-          title: "재고 조정 완료",
-          description: `${target.name}: ${result.stockBefore} → ${result.stockAfter}`,
-        });
+        if (result.isRequest) {
+          // 승인 요청이 생성된 경우
+          toast({
+            title: "재고 조정 요청 제출됨",
+            description: `${target.name} 조정 요청이 제출되었습니다. 슈퍼관리자 승인 후 반영됩니다.`,
+          });
+        } else {
+          // 즉시 처리된 경우 (superadmin)
+          toast({
+            title: "재고 조정 완료",
+            description: `${target.name}: ${result.stockBefore} → ${result.stockAfter}`,
+          });
+        }
         handleClose();
         onSuccess();
       } else {

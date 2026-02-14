@@ -55,7 +55,11 @@ export default function SuppliersPage() {
 
     const result = await deleteSupplier(supplier.id);
     if (result.success) {
-      toast({ title: "삭제 완료", description: `${supplier.name}이(가) 삭제되었습니다.` });
+      if (result.isRequest) {
+        toast({ title: "삭제 요청 제출됨", description: `${supplier.name} 삭제 요청이 제출되었습니다. 슈퍼관리자 승인 후 삭제됩니다.` });
+      } else {
+        toast({ title: "삭제 완료", description: `${supplier.name}이(가) 삭제되었습니다.` });
+      }
       fetchSuppliers();
     } else {
       toast({ title: "삭제 실패", description: result.error, variant: "destructive" });

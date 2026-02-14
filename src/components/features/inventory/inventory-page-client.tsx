@@ -135,7 +135,11 @@ export function InventoryPageClient({
     try {
       const result = await deleteInventoryItem(deleteTarget.id, deleteReason || undefined);
       if (result.success) {
-        toast({ title: "삭제 완료", description: `${deleteTarget.product.name} 재고가 삭제되었습니다` });
+        if (result.isRequest) {
+          toast({ title: "삭제 요청 제출됨", description: `${deleteTarget.product.name} 삭제 요청이 제출되었습니다. 슈퍼관리자 승인 후 삭제됩니다.` });
+        } else {
+          toast({ title: "삭제 완료", description: `${deleteTarget.product.name} 재고가 삭제되었습니다` });
+        }
         setDeleteDialogOpen(false);
         handleRefresh();
       } else {
@@ -160,7 +164,11 @@ export function InventoryPageClient({
     try {
       const result = await deleteInventoryItems(bulkDeleteIds, deleteReason || undefined);
       if (result.success) {
-        toast({ title: "삭제 완료", description: `${result.deletedCount}건의 재고가 삭제되었습니다` });
+        if (result.isRequest) {
+          toast({ title: "삭제 요청 제출됨", description: `${result.requestedCount}건의 삭제 요청이 제출되었습니다. 슈퍼관리자 승인 후 삭제됩니다.` });
+        } else {
+          toast({ title: "삭제 완료", description: `${result.deletedCount}건의 재고가 삭제되었습니다` });
+        }
         setBulkDeleteDialogOpen(false);
         setSelectedIds([]);
         handleRefresh();

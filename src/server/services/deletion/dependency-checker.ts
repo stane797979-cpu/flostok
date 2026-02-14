@@ -211,6 +211,81 @@ export async function checkSupplierDependencies(
 }
 
 /**
+ * 재고 삭제 전 의존성 체크
+ *
+ * - 해당 재고의 변동 이력 건수 조회
+ */
+export async function checkInventoryDependencies(
+  inventoryId: string,
+  organizationId: string
+): Promise<DependencyCheckResult> {
+  const warnings: string[] = [];
+  const errors: string[] = [];
+
+  // 해당 inventory 레코드 조회
+  const [invRecord] = await db
+    .select()
+    .from(inventory)
+    .where(
+      and(
+        eq(inventory.id, inventoryId),
+        eq(inventory.organizationId, organizationId)
+      )
+    );
+
+  if (!invRecord) {
+    return {
+      canDelete: false,
+      impactLevel: "low",
+      dependencies: [],
+      warnings: [],
+      errors: ["재고 항목을 찾을 수 없습니다"],
+    };
+  }
+
+  const [historyResult] = await Promise.all([
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(inventoryHistory)
+      .where(
+        and(
+          eq(inventoryHistory.productId, invRecord.productId),
+          eq(inventoryHistory.organizationId, organizationId)
+        )
+      ),
+  ]);
+
+  const dependencies: DependencyInfo[] = [
+    { entityType: "inventory_history", label: "재고 변동 이력", count: historyResult[0]?.count || 0 },
+  ].filter((d) => d.count > 0);
+
+  const totalDeps = dependencies.reduce((sum, d) => sum + d.count, 0);
+
+  if (invRecord.currentStock > 0) {
+    warnings.push(
+      `현재고 ${invRecord.currentStock.toLocaleString()}개가 0으로 처리됩니다.`
+    );
+  }
+
+  if (totalDeps > 0) {
+    warnings.push(
+      `이 재고와 연관된 ${totalDeps}건의 변동 이력이 있습니다. 이력은 보존됩니다.`
+    );
+  }
+
+  const impactLevel: "low" | "medium" | "high" =
+    invRecord.currentStock > 100 ? "high" : invRecord.currentStock > 0 ? "medium" : "low";
+
+  return {
+    canDelete: true, // 재고는 항상 삭제 가능 (승인 프로세스로 통제)
+    impactLevel,
+    dependencies,
+    warnings,
+    errors,
+  };
+}
+
+/**
  * 엔티티 타입별 의존성 체크 디스패처
  */
 export async function checkEntityDependencies(
@@ -223,6 +298,17 @@ export async function checkEntityDependencies(
       return checkProductDependencies(entityId, organizationId);
     case "supplier":
       return checkSupplierDependencies(entityId, organizationId);
+    case "inventory":
+      return checkInventoryDependencies(entityId, organizationId);
+    case "inventory_adjustment":
+      // 재고 조정은 의존성 체크 불필요 — 항상 허용 (승인으로 통제)
+      return {
+        canDelete: true,
+        impactLevel: "low",
+        dependencies: [],
+        warnings: [],
+        errors: [],
+      };
     default:
       return {
         canDelete: true,

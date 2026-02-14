@@ -6,6 +6,8 @@ import {
   products,
   suppliers,
   purchaseOrders,
+  inventory,
+  inventoryHistory,
 } from "@/server/db/schema";
 import { eq, and } from "drizzle-orm";
 import { logActivity } from "@/server/services/activity-log";
@@ -15,10 +17,16 @@ import {
 } from "./dependency-checker";
 
 interface CreateDeletionRequestInput {
-  entityType: "product" | "supplier" | "purchase_order";
+  entityType: "product" | "supplier" | "purchase_order" | "inventory" | "inventory_adjustment";
   entityId: string;
   reason: string;
   notes?: string;
+  /** 재고 조정 요청 시 추가 정보 */
+  adjustmentInfo?: {
+    changeType: "INBOUND_ADJUSTMENT" | "OUTBOUND_ADJUSTMENT";
+    quantity: number;
+    warehouseId?: string;
+  };
 }
 
 interface CreateDeletionRequestResult {
@@ -107,6 +115,49 @@ export async function createDeletionRequest(
       if (!order) return { success: false, error: "발주서를 찾을 수 없습니다" };
       entitySnapshot = order as unknown as Record<string, unknown>;
       entityName = order.orderNumber;
+      break;
+    }
+    case "inventory": {
+      const [inv] = await db
+        .select()
+        .from(inventory)
+        .where(
+          and(
+            eq(inventory.id, input.entityId),
+            eq(inventory.organizationId, user.organizationId)
+          )
+        );
+      if (!inv) return { success: false, error: "재고 항목을 찾을 수 없습니다" };
+      // 제품명도 함께 조회
+      const [prod] = await db
+        .select({ sku: products.sku, name: products.name })
+        .from(products)
+        .where(eq(products.id, inv.productId));
+      entitySnapshot = inv as unknown as Record<string, unknown>;
+      entityName = prod ? `${prod.sku} ${prod.name} (재고 ${inv.currentStock}개)` : `재고 ${inv.currentStock}개`;
+      break;
+    }
+    case "inventory_adjustment": {
+      // 재고 조정 요청: entityId = productId
+      const [adjProd] = await db
+        .select()
+        .from(products)
+        .where(
+          and(
+            eq(products.id, input.entityId),
+            eq(products.organizationId, user.organizationId)
+          )
+        );
+      if (!adjProd) return { success: false, error: "제품을 찾을 수 없습니다" };
+      const adjInfo = input.adjustmentInfo;
+      const adjLabel = adjInfo?.changeType === "INBOUND_ADJUSTMENT" ? "증가" : "감소";
+      entitySnapshot = {
+        productId: input.entityId,
+        sku: adjProd.sku,
+        name: adjProd.name,
+        adjustmentInfo: adjInfo,
+      };
+      entityName = `${adjProd.sku} ${adjProd.name} 재고 조정 (${adjLabel} ${adjInfo?.quantity ?? 0}개)`;
       break;
     }
   }
@@ -263,6 +314,77 @@ export async function approveDeletionRequest(
           )
         );
       break;
+
+    case "inventory": {
+      // 재고 삭제: 이력 기록 후 레코드 삭제
+      const [inv] = await db
+        .select()
+        .from(inventory)
+        .where(
+          and(
+            eq(inventory.id, request.entityId),
+            eq(inventory.organizationId, user.organizationId)
+          )
+        );
+      if (inv && inv.currentStock > 0) {
+        await db.insert(inventoryHistory).values({
+          organizationId: user.organizationId,
+          productId: inv.productId,
+          warehouseId: inv.warehouseId,
+          changeType: "OUTBOUND_ADJUSTMENT",
+          changeAmount: -inv.currentStock,
+          stockBefore: inv.currentStock,
+          stockAfter: 0,
+          date: now.toISOString().split("T")[0],
+          notes: `재고 삭제 승인 (사유: ${request.reason})`,
+        });
+      }
+      if (inv) {
+        await db
+          .delete(inventory)
+          .where(eq(inventory.id, request.entityId));
+      }
+      break;
+    }
+    case "inventory_adjustment": {
+      // 재고 조정 승인: processInventoryTransaction과 동일한 로직 실행
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const snapshot = request.entitySnapshot as any;
+      const adjInfo = snapshot?.adjustmentInfo;
+      if (!adjInfo) {
+        return { success: false, error: "재고 조정 정보가 없습니다" };
+      }
+      // 동적 import로 순환 참조 방지
+      const { processInventoryTransaction } = await import("@/server/actions/inventory");
+      const adjResult = await processInventoryTransaction(
+        {
+          productId: request.entityId,
+          changeType: adjInfo.changeType,
+          quantity: adjInfo.quantity,
+          warehouseId: adjInfo.warehouseId,
+          notes: `승인된 재고 조정 (사유: ${request.reason}, 요청자: ${request.requestedByName})`,
+        },
+        {
+          user: {
+            id: user.id,
+            authId: "",
+            organizationId: user.organizationId,
+            email: user.email,
+            name: user.name || null,
+            avatarUrl: null,
+            role: user.role as "admin" | "manager" | "viewer" | "warehouse",
+            isSuperadmin: user.isSuperadmin,
+            createdAt: now,
+            updatedAt: now,
+          },
+          skipActivityLog: true, // 별도 활동 로그 기록
+        }
+      );
+      if (!adjResult.success) {
+        return { success: false, error: adjResult.error || "재고 조정 실행 실패" };
+      }
+      break;
+    }
   }
 
   // 요청 상태 업데이트
@@ -282,9 +404,11 @@ export async function approveDeletionRequest(
   await logActivity({
     user,
     action: "DELETE",
-    entityType: request.entityType as "product" | "supplier" | "purchase_order",
+    entityType: (request.entityType === "inventory" || request.entityType === "inventory_adjustment" ? "product" : request.entityType) as "product" | "supplier" | "purchase_order",
     entityId: request.entityId,
-    description: `${request.entityName} 삭제 승인 및 실행 (요청자: ${request.requestedByName})`,
+    description: request.entityType === "inventory_adjustment"
+      ? `${request.entityName} 승인 및 실행 (요청자: ${request.requestedByName})`
+      : `${request.entityName} 삭제 승인 및 실행 (요청자: ${request.requestedByName})`,
     metadata: {
       deletionRequestId: requestId,
       beforeSnapshot: request.entitySnapshot,
@@ -345,9 +469,11 @@ export async function rejectDeletionRequest(
   await logActivity({
     user,
     action: "UPDATE",
-    entityType: request.entityType as "product" | "supplier" | "purchase_order",
+    entityType: (request.entityType === "inventory" || request.entityType === "inventory_adjustment" ? "product" : request.entityType) as "product" | "supplier" | "purchase_order",
     entityId: request.entityId,
-    description: `${request.entityName} 삭제 요청 거부 (사유: ${rejectionReason})`,
+    description: request.entityType === "inventory_adjustment"
+      ? `${request.entityName} 요청 거부 (사유: ${rejectionReason})`
+      : `${request.entityName} 삭제 요청 거부 (사유: ${rejectionReason})`,
     metadata: {
       deletionRequestId: requestId,
       rejectionReason,

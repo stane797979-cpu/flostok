@@ -31,6 +31,7 @@ import {
   TrendingDown,
   Truck,
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import type { DependencyCheckResult } from "@/server/services/deletion/dependency-checker";
 
 interface ProductDeleteDialogProps {
@@ -55,6 +56,7 @@ export function ProductDeleteDialog({
   productNames = [],
 }: ProductDeleteDialogProps) {
   const router = useRouter();
+  const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
   const [reason, setReason] = useState("");
@@ -82,14 +84,33 @@ export function ProductDeleteDialog({
     setIsLoading(true);
     try {
       if (isBulk) {
-        await deleteProducts(productIds, reason);
+        const result = await deleteProducts(productIds, reason);
+        if (result.success) {
+          if (result.isRequest) {
+            toast({ title: "삭제 요청 제출됨", description: `${result.requestedCount}건의 삭제 요청이 제출되었습니다. 슈퍼관리자 승인 후 삭제됩니다.` });
+          } else {
+            toast({ title: "삭제 완료", description: `${result.deletedCount}건이 삭제되었습니다.` });
+          }
+        } else {
+          toast({ title: "삭제 실패", description: result.error, variant: "destructive" });
+        }
       } else if (productIds[0]) {
-        await deleteProduct(productIds[0], reason);
+        const result = await deleteProduct(productIds[0], reason);
+        if (result.success) {
+          if (result.isRequest) {
+            toast({ title: "삭제 요청 제출됨", description: `${productNames[0] || "제품"} 삭제 요청이 제출되었습니다. 슈퍼관리자 승인 후 삭제됩니다.` });
+          } else {
+            toast({ title: "삭제 완료", description: `${productNames[0] || "제품"}이(가) 삭제되었습니다.` });
+          }
+        } else {
+          toast({ title: "삭제 실패", description: result.error, variant: "destructive" });
+        }
       }
       onOpenChange(false);
       router.refresh();
     } catch (error) {
       console.error("삭제 오류:", error);
+      toast({ title: "오류", description: "삭제 처리 중 오류가 발생했습니다.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }

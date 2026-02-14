@@ -255,38 +255,39 @@ export async function updateProduct(
 
 /**
  * 제품 삭제 (Soft Delete)
- * - admin: 즉시 소프트 삭제 (의존성 체크 포함)
- * - manager: 삭제 요청 생성 → admin 승인 필요
+ * - superadmin: 즉시 소프트 삭제 (의존성 체크 포함)
+ * - admin/manager: 삭제 요청 생성 → superadmin 승인 필요
  */
 export async function deleteProduct(
   id: string,
   reason: string = "관리자 삭제"
-): Promise<{ success: boolean; error?: string; requestId?: string }> {
+): Promise<{ success: boolean; error?: string; requestId?: string; isRequest?: boolean }> {
   try {
     const user = await requireManagerOrAbove();
 
-    if (user.role === "admin" || user.isSuperadmin) {
-      // admin은 즉시 soft delete
+    // superadmin만 즉시 soft delete
+    if (user.isSuperadmin) {
       const result = await immediateDeleteEntity("product", id, reason, user);
       if (result.success) {
         revalidatePath("/products");
       }
       return result;
-    } else {
-      // manager는 삭제 요청 생성
-      const result = await createDeletionRequest(
-        { entityType: "product", entityId: id, reason },
-        user
-      );
-      if (result.success) {
-        revalidatePath("/products");
-      }
-      return {
-        success: result.success,
-        error: result.error,
-        requestId: result.requestId,
-      };
     }
+
+    // admin/manager는 삭제 요청 생성
+    const result = await createDeletionRequest(
+      { entityType: "product", entityId: id, reason },
+      user
+    );
+    if (result.success) {
+      revalidatePath("/products");
+    }
+    return {
+      success: result.success,
+      error: result.error,
+      requestId: result.requestId,
+      isRequest: result.success ? true : undefined,
+    };
   } catch (error) {
     console.error("제품 삭제 오류:", error);
     return {
@@ -298,11 +299,13 @@ export async function deleteProduct(
 
 /**
  * 제품 일괄 삭제 (Soft Delete)
+ * - superadmin: 즉시 삭제
+ * - admin/manager: 각 제품별 삭제 요청 생성
  */
 export async function deleteProducts(
   ids: string[],
   reason: string = "일괄 삭제"
-): Promise<{ success: boolean; deletedCount: number; error?: string }> {
+): Promise<{ success: boolean; deletedCount: number; requestedCount?: number; error?: string; isRequest?: boolean }> {
   try {
     const user = await requireManagerOrAbove();
     if (ids.length === 0) {
@@ -313,23 +316,17 @@ export async function deleteProducts(
     const errors: string[] = [];
 
     for (const id of ids) {
-      if (user.role === "admin" || user.isSuperadmin) {
+      if (user.isSuperadmin) {
         const result = await immediateDeleteEntity("product", id, reason, user);
-        if (result.success) {
-          successCount++;
-        } else {
-          errors.push(result.error || "알 수 없는 오류");
-        }
+        if (result.success) successCount++;
+        else errors.push(result.error || "알 수 없는 오류");
       } else {
         const result = await createDeletionRequest(
           { entityType: "product", entityId: id, reason },
           user
         );
-        if (result.success) {
-          successCount++;
-        } else {
-          errors.push(result.error || "알 수 없는 오류");
-        }
+        if (result.success) successCount++;
+        else errors.push(result.error || "알 수 없는 오류");
       }
     }
 
@@ -339,7 +336,10 @@ export async function deleteProducts(
       return { success: false, deletedCount: 0, error: errors.join(", ") };
     }
 
-    return { success: true, deletedCount: successCount };
+    if (user.isSuperadmin) {
+      return { success: true, deletedCount: successCount };
+    }
+    return { success: true, deletedCount: 0, requestedCount: successCount, isRequest: true };
   } catch (error) {
     console.error("제품 일괄 삭제 오류:", error);
     return {

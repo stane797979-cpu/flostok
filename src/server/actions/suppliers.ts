@@ -220,36 +220,39 @@ export async function updateSupplier(
 
 /**
  * 공급자 삭제 (Soft Delete)
- * - admin: 즉시 소프트 삭제 (의존성 체크 포함)
- * - manager: 삭제 요청 생성 → admin 승인 필요
+ * - superadmin: 즉시 소프트 삭제 (의존성 체크 포함)
+ * - admin/manager: 삭제 요청 생성 → superadmin 승인 필요
  */
 export async function deleteSupplier(
   id: string,
   reason: string = "관리자 삭제"
-): Promise<{ success: boolean; error?: string; requestId?: string }> {
+): Promise<{ success: boolean; error?: string; requestId?: string; isRequest?: boolean }> {
   try {
     const user = await requireManagerOrAbove();
 
-    if (user.role === "admin" || user.isSuperadmin) {
+    // superadmin만 즉시 삭제
+    if (user.isSuperadmin) {
       const result = await immediateDeleteEntity("supplier", id, reason, user);
       if (result.success) {
         revalidatePath("/dashboard/suppliers");
       }
       return result;
-    } else {
-      const result = await createDeletionRequest(
-        { entityType: "supplier", entityId: id, reason },
-        user
-      );
-      if (result.success) {
-        revalidatePath("/dashboard/suppliers");
-      }
-      return {
-        success: result.success,
-        error: result.error,
-        requestId: result.requestId,
-      };
     }
+
+    // admin/manager: 삭제 요청 생성
+    const result = await createDeletionRequest(
+      { entityType: "supplier", entityId: id, reason },
+      user
+    );
+    if (result.success) {
+      revalidatePath("/dashboard/suppliers");
+    }
+    return {
+      success: result.success,
+      error: result.error,
+      requestId: result.requestId,
+      isRequest: result.success ? true : undefined,
+    };
   } catch (error) {
     console.error("공급자 삭제 오류:", error);
     return {
@@ -261,11 +264,13 @@ export async function deleteSupplier(
 
 /**
  * 공급자 일괄 삭제 (Soft Delete)
+ * - superadmin: 즉시 삭제
+ * - admin/manager: 각 공급자별 삭제 요청 생성
  */
 export async function deleteSuppliers(
   ids: string[],
   reason: string = "일괄 삭제"
-): Promise<{ success: boolean; deletedCount: number; error?: string }> {
+): Promise<{ success: boolean; deletedCount: number; requestedCount?: number; error?: string; isRequest?: boolean }> {
   try {
     if (ids.length === 0) {
       return { success: false, deletedCount: 0, error: "삭제할 공급자가 없습니다" };
@@ -276,7 +281,7 @@ export async function deleteSuppliers(
     const errors: string[] = [];
 
     for (const id of ids) {
-      if (user.role === "admin" || user.isSuperadmin) {
+      if (user.isSuperadmin) {
         const result = await immediateDeleteEntity("supplier", id, reason, user);
         if (result.success) successCount++;
         else errors.push(result.error || "알 수 없는 오류");
@@ -296,7 +301,10 @@ export async function deleteSuppliers(
       return { success: false, deletedCount: 0, error: errors.join(", ") };
     }
 
-    return { success: true, deletedCount: successCount };
+    if (user.isSuperadmin) {
+      return { success: true, deletedCount: successCount };
+    }
+    return { success: true, deletedCount: 0, requestedCount: successCount, isRequest: true };
   } catch (error) {
     console.error("공급자 일괄 삭제 오류:", error);
     return { success: false, deletedCount: 0, error: "공급자 삭제에 실패했습니다" };
