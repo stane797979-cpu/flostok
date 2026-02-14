@@ -8,9 +8,7 @@
  */
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { db } from "@/server/db";
-import { users, organizations, products, inventory } from "@/server/db/schema";
-import { eq, count } from "drizzle-orm";
+import postgres from "postgres";
 
 export async function GET() {
   const result: Record<string, unknown> = {
@@ -19,131 +17,122 @@ export async function GET() {
       hasSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
       hasDatabaseUrl: !!process.env.DATABASE_URL,
       nodeEnv: process.env.NODE_ENV,
+      // DATABASE_URL 앞부분만 노출 (비밀번호 마스킹)
+      databaseUrlPrefix: process.env.DATABASE_URL
+        ? process.env.DATABASE_URL.replace(/:[^:@]+@/, ":***@").slice(0, 80) + "..."
+        : "NOT SET",
     },
   };
 
+  // 1. Supabase Auth 확인
   try {
-    // 1. Supabase Auth 확인
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
-
     result.supabaseAuth = {
       hasUser: !!user,
       userId: user?.id?.slice(0, 8) + "...",
       email: user?.email,
       error: authError?.message || null,
     };
+  } catch (e) {
+    result.supabaseAuth = { error: e instanceof Error ? e.message : String(e) };
+  }
 
-    if (!user) {
-      result.diagnosis = "Supabase Auth에서 사용자를 찾을 수 없습니다. 로그인 상태를 확인하세요.";
-      return NextResponse.json(result);
-    }
-
-    // 2. DB users 테이블에서 authId로 조회
-    const [dbUserByAuth] = await db
-      .select({
-        id: users.id,
-        authId: users.authId,
-        organizationId: users.organizationId,
-        email: users.email,
-        role: users.role,
-        deletedAt: users.deletedAt,
-      })
-      .from(users)
-      .where(eq(users.authId, user.id))
-      .limit(1);
-
-    result.dbUserByAuthId = dbUserByAuth
-      ? {
-          found: true,
-          id: dbUserByAuth.id.slice(0, 8) + "...",
-          organizationId: dbUserByAuth.organizationId,
-          email: dbUserByAuth.email,
-          role: dbUserByAuth.role,
-          deletedAt: dbUserByAuth.deletedAt,
-        }
-      : { found: false };
-
-    // 3. DB users 테이블에서 이메일로 조회
-    if (!dbUserByAuth && user.email) {
-      const [dbUserByEmail] = await db
-        .select({
-          id: users.id,
-          authId: users.authId,
-          organizationId: users.organizationId,
-          email: users.email,
-        })
-        .from(users)
-        .where(eq(users.email, user.email))
-        .limit(1);
-
-      result.dbUserByEmail = dbUserByEmail
-        ? {
-            found: true,
-            id: dbUserByEmail.id.slice(0, 8) + "...",
-            authId: dbUserByEmail.authId?.slice(0, 8) + "..." || "null",
-            organizationId: dbUserByEmail.organizationId,
-          }
-        : { found: false };
-    }
-
-    // 4. 해당 조직의 데이터 존재 확인
-    const orgId = dbUserByAuth?.organizationId;
-    if (orgId) {
-      const [orgInfo] = await db
-        .select()
-        .from(organizations)
-        .where(eq(organizations.id, orgId))
-        .limit(1);
-
-      const [productCount] = await db
-        .select({ count: count() })
-        .from(products)
-        .where(eq(products.organizationId, orgId));
-
-      const [inventoryCount] = await db
-        .select({ count: count() })
-        .from(inventory)
-        .where(eq(inventory.organizationId, orgId));
-
-      result.organizationData = {
-        orgName: orgInfo?.name || "NOT FOUND",
-        orgId,
-        productCount: productCount?.count || 0,
-        inventoryCount: inventoryCount?.count || 0,
-      };
-    }
-
-    // 5. 전체 조직 목록 (데이터 비교용)
-    const allOrgs = await db
-      .select({ id: organizations.id, name: organizations.name })
-      .from(organizations)
-      .limit(10);
-
-    const orgDataCounts = await Promise.all(
-      allOrgs.map(async (org) => {
-        const [pc] = await db.select({ count: count() }).from(products).where(eq(products.organizationId, org.id));
-        return { orgId: org.id, orgName: org.name, productCount: pc?.count || 0 };
-      })
-    );
-
-    result.allOrganizations = orgDataCounts;
-
-    // 6. 진단
-    if (!dbUserByAuth) {
-      result.diagnosis = "DB users 테이블에 해당 authId의 사용자가 없습니다. OAuth 콜백 동기화 실패 가능성.";
-    } else if (!orgId) {
-      result.diagnosis = "사용자의 organizationId가 없습니다.";
-    } else if ((result.organizationData as Record<string, unknown>)?.productCount === 0) {
-      result.diagnosis = `사용자 조직(${orgId})에 제품 데이터가 없습니다. 데이터가 다른 조직에 있을 수 있습니다.`;
-    } else {
-      result.diagnosis = "인증 및 데이터 매핑이 정상입니다. 다른 원인을 확인하세요.";
-    }
-
-    return NextResponse.json(result);
-  } catch (error) {
-    result.error = error instanceof Error ? error.message : String(error);
-    result.diagnosis = "예외 발생 — DB 연결 또는 쿼리 오류 가능성";
+  // 2. DB 직접 연결 테스트 (Drizzle 우회)
+  const dbUrl = process.env.DATABASE_URL;
+  if (!dbUrl) {
+    result.dbTest = { error: "DATABASE_URL이 설정되지 않았습니다" };
+    result.diagnosis = "DATABASE_URL 환경 변수 미설정";
     return NextResponse.json(result, { status: 500 });
   }
+
+  let sql: ReturnType<typeof postgres> | null = null;
+  try {
+    const isPgBouncer = dbUrl.includes("pgbouncer=true") || dbUrl.includes(":6543");
+    sql = postgres(dbUrl, {
+      max: 1,
+      connect_timeout: 15,
+      idle_timeout: 10,
+      ...(isPgBouncer ? { prepare: false } : {}),
+    });
+
+    // 간단한 연결 테스트
+    const pingResult = await sql`SELECT 1 as ping, now() as server_time`;
+    result.dbConnection = {
+      status: "connected",
+      serverTime: pingResult[0]?.server_time,
+    };
+
+    // users 테이블 조회 테스트
+    const userRows = await sql`SELECT count(*) as cnt FROM users`;
+    result.dbUserCount = Number(userRows[0]?.cnt) || 0;
+
+    // organizations 테이블 조회
+    const orgRows = await sql`
+      SELECT o.id, o.name,
+        (SELECT count(*) FROM products p WHERE p.organization_id = o.id) as product_count,
+        (SELECT count(*) FROM inventory i WHERE i.organization_id = o.id) as inventory_count
+      FROM organizations o
+      LIMIT 10
+    `;
+    result.organizations = orgRows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      productCount: Number(r.product_count),
+      inventoryCount: Number(r.inventory_count),
+    }));
+
+    // 현재 로그인 사용자의 DB 레코드 확인
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const dbUsers = await sql`
+        SELECT id, auth_id, organization_id, email, role, deleted_at
+        FROM users
+        WHERE auth_id = ${user.id} OR email = ${user.email || ''}
+        LIMIT 5
+      `;
+      result.matchingUsers = dbUsers.map((u) => ({
+        id: String(u.id).slice(0, 8) + "...",
+        authId: u.auth_id ? String(u.auth_id).slice(0, 8) + "..." : null,
+        organizationId: u.organization_id,
+        email: u.email,
+        role: u.role,
+        deletedAt: u.deleted_at,
+      }));
+
+      if (dbUsers.length === 0) {
+        result.diagnosis = "DB에 해당 사용자가 없습니다. authId/email 매칭 실패.";
+      } else {
+        const orgId = dbUsers[0].organization_id;
+        const orgData = (result.organizations as Array<Record<string, unknown>>)?.find(
+          (o) => o.id === orgId
+        );
+        if (orgData && Number(orgData.productCount) === 0) {
+          result.diagnosis = `사용자 조직(${orgId})에 제품이 0건입니다. 데이터가 다른 조직에 있을 수 있습니다.`;
+        } else {
+          result.diagnosis = "인증 + DB 매핑 정상. 쿼리 로직 문제일 수 있습니다.";
+        }
+      }
+    }
+  } catch (e) {
+    const errMsg = e instanceof Error ? e.message : String(e);
+    const errStack = e instanceof Error ? e.stack?.split("\n").slice(0, 3).join("\n") : undefined;
+    result.dbTest = {
+      error: errMsg,
+      stack: errStack,
+      hint: errMsg.includes("timeout")
+        ? "DB 연결 타임아웃 — Railway→Supabase 경로 문제"
+        : errMsg.includes("password")
+          ? "DB 비밀번호 불일치 — Railway 환경 변수 확인 필요"
+          : errMsg.includes("does not exist")
+            ? "테이블 미존재 — 마이그레이션 필요"
+            : "알 수 없는 DB 에러",
+    };
+    result.diagnosis = "DB 연결/쿼리 실패: " + errMsg;
+  } finally {
+    if (sql) await sql.end().catch(() => {});
+  }
+
+  return NextResponse.json(result);
 }
