@@ -44,12 +44,20 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Trash2, Plus, Users, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Switch } from '@/components/ui/switch'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import { Trash2, Plus, Users, Loader2, CheckCircle2, AlertCircle, ShieldCheck } from 'lucide-react'
 import {
   getOrganizationUsersAction,
   updateUserRoleAction,
   removeUserAction,
   inviteUserAction,
+  toggleSuperadminAction,
   type OrganizationUser,
 } from '@/server/actions/users'
 
@@ -119,6 +127,25 @@ export function UserManagement({ organizationId }: UserManagementProps) {
 
       if (result.success) {
         setMessage({ type: 'success', text: '역할이 성공적으로 변경되었습니다' })
+        await loadUsers()
+      } else {
+        setMessage({ type: 'error', text: result.error })
+      }
+    })
+  }
+
+  // 슈퍼관리자 토글
+  const handleToggleSuperadmin = async (userId: string, isSuperadmin: boolean) => {
+    setMessage(null)
+
+    startTransition(async () => {
+      const result = await toggleSuperadminAction(userId, isSuperadmin)
+
+      if (result.success) {
+        setMessage({
+          type: 'success',
+          text: isSuperadmin ? '슈퍼관리자로 설정되었습니다' : '슈퍼관리자 권한이 해제되었습니다',
+        })
         await loadUsers()
       } else {
         setMessage({ type: 'error', text: result.error })
@@ -308,6 +335,7 @@ export function UserManagement({ organizationId }: UserManagementProps) {
                 <TableHead className="min-w-[200px]">이름</TableHead>
                 <TableHead className="min-w-[240px]">이메일</TableHead>
                 <TableHead className="min-w-[120px]">권한</TableHead>
+                <TableHead className="min-w-[100px]">슈퍼관리자</TableHead>
                 <TableHead className="min-w-[150px]">가입일</TableHead>
                 <TableHead className="w-12 text-right">작업</TableHead>
               </TableRow>
@@ -315,7 +343,7 @@ export function UserManagement({ organizationId }: UserManagementProps) {
             <TableBody>
               {users.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-32 text-center text-slate-500">
+                  <TableCell colSpan={6} className="h-32 text-center text-slate-500">
                     사용자가 없습니다
                   </TableCell>
                 </TableRow>
@@ -337,7 +365,12 @@ export function UserManagement({ organizationId }: UserManagementProps) {
                             {(user.name || user.email)[0].toUpperCase()}
                           </div>
                         )}
-                        <span>{user.name || '이름 없음'}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span>{user.name || '이름 없음'}</span>
+                          {user.isSuperadmin && (
+                            <ShieldCheck className="h-4 w-4 text-amber-500" />
+                          )}
+                        </div>
                       </div>
                     </TableCell>
                     <TableCell className="text-sm text-slate-600">{user.email}</TableCell>
@@ -363,6 +396,24 @@ export function UserManagement({ organizationId }: UserManagementProps) {
                           <SelectItem value="viewer">뷰어</SelectItem>
                         </SelectContent>
                       </Select>
+                    </TableCell>
+                    <TableCell>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex items-center">
+                              <Switch
+                                checked={user.isSuperadmin}
+                                onCheckedChange={(checked) => handleToggleSuperadmin(user.id, checked)}
+                                disabled={isPending}
+                              />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>{user.isSuperadmin ? '슈퍼관리자 해제' : '슈퍼관리자 설정'}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     </TableCell>
                     <TableCell className="text-sm text-slate-600">
                       {new Date(user.createdAt).toLocaleDateString('ko-KR', {
@@ -415,24 +466,31 @@ export function UserManagement({ organizationId }: UserManagementProps) {
           <h4 className="mb-2 text-sm font-semibold text-slate-900">권한 설명</h4>
           <div className="space-y-1.5 text-sm text-slate-600">
             <div className="flex items-start gap-2">
+              <Badge className="mt-0.5 shrink-0 bg-amber-500 hover:bg-amber-600">
+                <ShieldCheck className="mr-1 h-3 w-3" />
+                슈퍼관리자
+              </Badge>
+              <p>플랫폼 최고 권한. 데이터 영구 삭제, 삭제 요청 본인 승인 가능</p>
+            </div>
+            <div className="flex items-start gap-2">
               <Badge variant="destructive" className="mt-0.5 shrink-0">
                 관리자
               </Badge>
-              <p>모든 데이터 조회, 수정, 삭제 및 사용자 관리 권한</p>
+              <p>모든 데이터 조회, 수정, 삭제 및 사용자 관리, 삭제 요청 승인 권한</p>
             </div>
             <div className="flex items-start gap-2">
               <Badge variant="default" className="mt-0.5 shrink-0">
                 매니저
               </Badge>
-              <p>데이터 조회 및 수정 가능, 사용자 관리 불가</p>
+              <p>데이터 조회 및 수정 가능, 삭제 요청 제출 가능 (승인은 관리자)</p>
             </div>
             <div className="flex items-start gap-2">
               <Badge variant="outline" className="mt-0.5 shrink-0">
                 창고
               </Badge>
-              <p>입고예정/출고예정 처리 및 재고 조회 가능</p>
+              <p>입고/출고 처리 및 재고 조회 가능</p>
             </div>
-            <div className="flex items-start gap-2">
+            <div className="flex items-center gap-2">
               <Badge variant="secondary" className="mt-0.5 shrink-0">
                 뷰어
               </Badge>

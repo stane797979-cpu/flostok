@@ -24,6 +24,7 @@ export interface OrganizationUser {
   name: string | null
   avatarUrl: string | null
   role: 'admin' | 'manager' | 'viewer' | 'warehouse'
+  isSuperadmin: boolean
   createdAt: Date
   updatedAt: Date
 }
@@ -128,6 +129,7 @@ export async function getOrganizationUsersAction(
         name: users.name,
         avatarUrl: users.avatarUrl,
         role: users.role,
+        isSuperadmin: users.isSuperadmin,
         createdAt: users.createdAt,
         updatedAt: users.updatedAt,
       })
@@ -253,6 +255,74 @@ export async function removeUserAction(
     return {
       success: false,
       error: error instanceof Error ? error.message : '사용자 제거에 실패했습니다',
+    }
+  }
+}
+
+/** 슈퍼관리자 설정/해제 — admin만 가능 */
+export async function toggleSuperadminAction(
+  userId: string,
+  isSuperadmin: boolean
+): Promise<ActionResponse<void>> {
+  try {
+    const currentUser = await getCurrentUser()
+    if (!currentUser) {
+      return { success: false, error: '인증이 필요합니다' }
+    }
+
+    // admin만 superadmin 설정 가능
+    if (currentUser.role !== 'admin' && !currentUser.isSuperadmin) {
+      return { success: false, error: '관리자 권한이 필요합니다' }
+    }
+
+    // 대상 사용자 확인
+    const [targetUser] = await db
+      .select()
+      .from(users)
+      .where(and(
+        eq(users.id, userId),
+        eq(users.organizationId, currentUser.organizationId)
+      ))
+      .limit(1)
+
+    if (!targetUser) {
+      return { success: false, error: '사용자를 찾을 수 없습니다' }
+    }
+
+    // 본인의 superadmin 해제 시 다른 superadmin이 있는지 확인
+    if (!isSuperadmin && userId === currentUser.id) {
+      const otherSuperadmins = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(and(
+          eq(users.organizationId, currentUser.organizationId),
+          eq(users.isSuperadmin, true),
+          isNull(users.deletedAt)
+        ))
+
+      if (otherSuperadmins.length <= 1) {
+        return {
+          success: false,
+          error: '최소 1명의 슈퍼관리자가 필요합니다. 다른 사용자를 먼저 슈퍼관리자로 지정해주세요.',
+        }
+      }
+    }
+
+    await db
+      .update(users)
+      .set({
+        isSuperadmin,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+
+    revalidatePath('/dashboard/settings')
+
+    return { success: true, data: undefined }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : '슈퍼관리자 설정에 실패했습니다',
     }
   }
 }
