@@ -175,7 +175,13 @@ export const InventoryTable = memo(function InventoryTable({ items, onAdjust, on
                 선택 삭제 ({selectedIds.length})
               </Button>
             )}
-            <Button size="sm" variant="default" onClick={() => router.push("/dashboard/orders")}>
+            <Button size="sm" variant="default" onClick={() => {
+              const productIds = sorted
+                .filter((item) => selectedIds.includes(item.id))
+                .map((item) => item.productId);
+              const params = new URLSearchParams({ tab: "reorder", productIds: productIds.join(",") });
+              router.push(`/dashboard/orders?${params.toString()}`);
+            }}>
               <ShoppingCart className="mr-2 h-4 w-4" />
               일괄 발주 생성
             </Button>
@@ -408,7 +414,10 @@ export const InventoryTable = memo(function InventoryTable({ items, onAdjust, on
                           재고 조정
                         </DropdownMenuItem>
                         {needsOrder && (
-                          <DropdownMenuItem onClick={() => router.push("/dashboard/orders")}>
+                          <DropdownMenuItem onClick={() => {
+                            const params = new URLSearchParams({ tab: "reorder", productIds: item.productId });
+                            router.push(`/dashboard/orders?${params.toString()}`);
+                          }}>
                             <ShoppingCart className="mr-2 h-4 w-4" />
                             발주 생성
                           </DropdownMenuItem>

@@ -10,17 +10,18 @@ type OrderTab = (typeof VALID_TABS)[number];
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; productIds?: string }>;
 }) {
-  const { tab } = await searchParams;
+  const { tab, productIds } = await searchParams;
   const resolvedTab: OrderTab = tab && VALID_TABS.includes(tab as OrderTab) ? (tab as OrderTab) : "reorder";
+  const preselectedProductIds = productIds ? productIds.split(",").filter(Boolean) : undefined;
 
   // 탭에 따라 필요한 데이터만 프리페치
   const promises: Promise<unknown>[] = [];
   const keys: string[] = [];
 
-  // reorder/auto-reorder 탭: 발주 필요 품목
-  if (resolvedTab === "reorder" || resolvedTab === "auto-reorder") {
+  // reorder/auto-reorder 탭: 발주 필요 품목 (productIds가 있으면 reorder 탭도 로드)
+  if (resolvedTab === "reorder" || resolvedTab === "auto-reorder" || preselectedProductIds) {
     keys.push("reorder");
     promises.push(getReorderItems().catch(() => ({ items: [] })));
   }
@@ -67,12 +68,13 @@ export default async function OrdersPage({
   return (
     <OrdersClient
       key={resolvedTab}
-      initialTab={resolvedTab}
+      initialTab={preselectedProductIds ? "reorder" : resolvedTab}
       serverReorderItems={serverReorderItems}
       deliveryComplianceData={deliveryComplianceData}
       serverPurchaseOrders={serverPurchaseOrders}
       serverInboundRecords={serverInboundRecords}
       warehouses={warehousesList}
+      preselectedProductIds={preselectedProductIds}
     />
   );
 }

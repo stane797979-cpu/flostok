@@ -147,6 +147,7 @@ interface WarehouseOption {
 interface OrdersClientProps {
   initialTab?: "reorder" | "auto-reorder" | "orders" | "inbound" | "delivery" | "import-shipment";
   serverReorderItems?: ServerReorderItem[];
+  preselectedProductIds?: string[];
   deliveryComplianceData?: DeliveryComplianceResult | null;
   warehouses?: WarehouseOption[];
   serverPurchaseOrders?: Array<{
@@ -179,7 +180,7 @@ interface OrdersClientProps {
   }>;
 }
 
-export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], deliveryComplianceData = null, serverPurchaseOrders, serverInboundRecords, warehouses = [] }: OrdersClientProps) {
+export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], deliveryComplianceData = null, serverPurchaseOrders, serverInboundRecords, warehouses = [], preselectedProductIds }: OrdersClientProps) {
   // 발주 필요 품목 (발주 후 재조회 가능하도록 state로 관리)
   const [reorderItems, setReorderItems] = useState<ReorderItem[]>(
     () => serverReorderItems.map(mapServerToClientReorderItem)
@@ -201,7 +202,13 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
     }
   }, []);
 
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>(() => {
+    if (!preselectedProductIds?.length) return [];
+    const preselectedSet = new Set(preselectedProductIds);
+    return reorderItems
+      .filter((item) => preselectedSet.has(item.productId))
+      .map((item) => item.productId);
+  });
   const [selectedAutoReorderIds, setSelectedAutoReorderIds] = useState<string[]>([]);
   const [orderDialogOpen, setOrderDialogOpen] = useState(false);
   const [bulkOrderDialogOpen, setBulkOrderDialogOpen] = useState(false);
