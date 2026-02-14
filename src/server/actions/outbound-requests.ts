@@ -7,6 +7,7 @@ import {
   products,
   inventory,
   users,
+  warehouses,
 } from "@/server/db/schema";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import {
@@ -138,6 +139,8 @@ export async function getOutboundRequests(options?: {
     outboundType: string;
     outboundTypeLabel: string;
     requestedByName: string | null;
+    sourceWarehouseName: string | null;
+    targetWarehouseName: string | null;
     itemsCount: number;
     totalQuantity: number;
     createdAt: Date;
@@ -165,10 +168,14 @@ export async function getOutboundRequests(options?: {
       status: outboundRequests.status,
       outboundType: outboundRequests.outboundType,
       requestedByName: users.name,
+      sourceWarehouseName: sql<string | null>`sw.name`,
+      targetWarehouseName: sql<string | null>`tw.name`,
       createdAt: outboundRequests.createdAt,
     })
     .from(outboundRequests)
     .leftJoin(users, eq(outboundRequests.requestedById, users.id))
+    .leftJoin(sql`${warehouses} as sw`, sql`sw.id = ${outboundRequests.sourceWarehouseId}`)
+    .leftJoin(sql`${warehouses} as tw`, sql`tw.id = ${outboundRequests.targetWarehouseId}`)
     .where(and(...conditions))
     .orderBy(desc(outboundRequests.createdAt))
     .limit(limit)
@@ -214,6 +221,8 @@ export async function getOutboundRequests(options?: {
         outboundType: r.outboundType,
         outboundTypeLabel: OUTBOUND_TYPE_LABELS[r.outboundType] || r.outboundType,
         requestedByName: r.requestedByName,
+        sourceWarehouseName: r.sourceWarehouseName ?? null,
+        targetWarehouseName: r.targetWarehouseName ?? null,
         itemsCount: stats.itemsCount,
         totalQuantity: stats.totalQuantity,
         createdAt: r.createdAt,
@@ -237,6 +246,8 @@ export async function getOutboundRequestById(requestId: string): Promise<{
     requestedByName: string | null;
     confirmedByName: string | null;
     confirmedAt: Date | null;
+    sourceWarehouseName: string | null;
+    targetWarehouseName: string | null;
     notes: string | null;
     createdAt: Date;
     items: Array<{
@@ -267,6 +278,8 @@ export async function getOutboundRequestById(requestId: string): Promise<{
         confirmedAt: outboundRequests.confirmedAt,
         requestedByName: sql<string>`requested_by.name`,
         confirmedByName: sql<string>`confirmed_by.name`,
+        sourceWarehouseName: sql<string | null>`sw.name`,
+        targetWarehouseName: sql<string | null>`tw.name`,
       })
       .from(outboundRequests)
       .leftJoin(
@@ -277,6 +290,8 @@ export async function getOutboundRequestById(requestId: string): Promise<{
         sql`users as confirmed_by`,
         eq(outboundRequests.confirmedById, sql`confirmed_by.id`)
       )
+      .leftJoin(sql`${warehouses} as sw`, sql`sw.id = ${outboundRequests.sourceWarehouseId}`)
+      .leftJoin(sql`${warehouses} as tw`, sql`tw.id = ${outboundRequests.targetWarehouseId}`)
       .where(
         and(
           eq(outboundRequests.id, requestId),
@@ -317,6 +332,8 @@ export async function getOutboundRequestById(requestId: string): Promise<{
         requestedByName: request.requestedByName,
         confirmedByName: request.confirmedByName,
         confirmedAt: request.confirmedAt,
+        sourceWarehouseName: request.sourceWarehouseName ?? null,
+        targetWarehouseName: request.targetWarehouseName ?? null,
         notes: request.notes,
         createdAt: request.createdAt,
         items: items.map((item) => ({

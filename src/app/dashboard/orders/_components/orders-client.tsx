@@ -137,10 +137,18 @@ function formatMonth(date: Date): string {
   return `${date.getFullYear()}년 ${date.getMonth() + 1}월`;
 }
 
+interface WarehouseOption {
+  id: string;
+  code: string;
+  name: string;
+  isDefault?: boolean;
+}
+
 interface OrdersClientProps {
   initialTab?: "reorder" | "auto-reorder" | "orders" | "inbound" | "delivery" | "import-shipment";
   serverReorderItems?: ServerReorderItem[];
   deliveryComplianceData?: DeliveryComplianceResult | null;
+  warehouses?: WarehouseOption[];
   serverPurchaseOrders?: Array<{
     id: string;
     orderNumber: string;
@@ -171,7 +179,7 @@ interface OrdersClientProps {
   }>;
 }
 
-export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], deliveryComplianceData = null, serverPurchaseOrders, serverInboundRecords }: OrdersClientProps) {
+export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], deliveryComplianceData = null, serverPurchaseOrders, serverInboundRecords, warehouses = [] }: OrdersClientProps) {
   // 발주 필요 품목 (발주 후 재조회 가능하도록 state로 관리)
   const [reorderItems, setReorderItems] = useState<ReorderItem[]>(
     () => serverReorderItems.map(mapServerToClientReorderItem)
@@ -961,6 +969,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
         open={orderDialogOpen}
         onOpenChange={setOrderDialogOpen}
         product={selectedProduct}
+        warehouses={warehouses}
         onSubmit={handleOrderSubmit}
       />
 

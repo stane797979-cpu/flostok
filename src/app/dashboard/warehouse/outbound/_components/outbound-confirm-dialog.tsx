@@ -46,6 +46,8 @@ interface RequestDetail {
   requestedByName: string | null;
   confirmedByName: string | null;
   confirmedAt: Date | null;
+  sourceWarehouseName: string | null;
+  targetWarehouseName: string | null;
   notes: string | null;
   createdAt: Date;
   items: Array<{
@@ -223,6 +225,15 @@ export function OutboundConfirmDialog({
                 <Badge variant="outline" className="mt-1">
                   {request.outboundTypeLabel}
                 </Badge>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-slate-500">출고 창고</p>
+                <p className="mt-1">
+                  {request.sourceWarehouseName || "-"}
+                  {request.targetWarehouseName && (
+                    <span className="text-xs text-slate-400"> → {request.targetWarehouseName}</span>
+                  )}
+                </p>
               </div>
               <div>
                 <p className="text-sm font-medium text-slate-500">요청자</p>

@@ -31,6 +31,8 @@ interface OutboundRequest {
   outboundType: string;
   outboundTypeLabel: string;
   requestedByName: string | null;
+  sourceWarehouseName: string | null;
+  targetWarehouseName: string | null;
   itemsCount: number;
   totalQuantity: number;
   createdAt: Date;
@@ -185,6 +187,12 @@ export function WarehouseOutboundClient() {
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <div className="space-y-1">
+                          {req.sourceWarehouseName && (
+                            <p className="text-slate-600 font-medium">
+                              {req.sourceWarehouseName}
+                              {req.targetWarehouseName && ` → ${req.targetWarehouseName}`}
+                            </p>
+                          )}
                           <p className="text-slate-500">{req.itemsCount}품목 · {req.totalQuantity.toLocaleString()}개</p>
                           <div className="flex items-center gap-1 text-slate-400">
                             <Clock className="h-3.5 w-3.5" />
@@ -212,6 +220,7 @@ export function WarehouseOutboundClient() {
                       <TableHead>요청번호</TableHead>
                       <TableHead>출고유형</TableHead>
                       <TableHead>상태</TableHead>
+                      <TableHead>출고 창고</TableHead>
                       <TableHead>요청자</TableHead>
                       <TableHead className="text-center">품목수</TableHead>
                       <TableHead className="text-center">총수량</TableHead>
@@ -240,6 +249,12 @@ export function WarehouseOutboundClient() {
                             <Badge className={config.className}>
                               {config.label}
                             </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {req.sourceWarehouseName || "-"}
+                            {req.targetWarehouseName && (
+                              <span className="text-xs text-slate-400"> → {req.targetWarehouseName}</span>
+                            )}
                           </TableCell>
                           <TableCell>
                             {req.requestedByName || "-"}

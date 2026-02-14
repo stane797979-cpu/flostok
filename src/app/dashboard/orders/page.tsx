@@ -1,6 +1,7 @@
 import { getReorderItems, getPurchaseOrders } from "@/server/actions/purchase-orders";
 import { getDeliveryComplianceData } from "@/server/actions/delivery-compliance";
 import { getInboundRecords } from "@/server/actions/inbound";
+import { getWarehouses } from "@/server/actions/warehouses";
 import { OrdersClient } from "./_components/orders-client";
 
 const VALID_TABS = ["reorder", "auto-reorder", "orders", "inbound", "delivery", "import-shipment"] as const;
@@ -45,6 +46,10 @@ export default async function OrdersPage({
     promises.push(getInboundRecords({ startDate, endDate, limit: 500 }).catch(() => ({ records: [] })));
   }
 
+  // 창고 목록은 항상 로드 (발주 시 창고 선택 필요)
+  keys.push("warehouses");
+  promises.push(getWarehouses().catch(() => ({ warehouses: [] })));
+
   const results = await Promise.all(promises);
   const dataMap = Object.fromEntries(keys.map((k, i) => [k, results[i]]));
 
@@ -56,6 +61,8 @@ export default async function OrdersPage({
   const serverPurchaseOrders = (dataMap.orders as any)?.orders ?? undefined;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const serverInboundRecords = (dataMap.inbound as any)?.records ?? undefined;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const warehousesList = (dataMap.warehouses as any)?.warehouses ?? [];
 
   return (
     <OrdersClient
@@ -65,6 +72,7 @@ export default async function OrdersPage({
       deliveryComplianceData={deliveryComplianceData}
       serverPurchaseOrders={serverPurchaseOrders}
       serverInboundRecords={serverInboundRecords}
+      warehouses={warehousesList}
     />
   );
 }

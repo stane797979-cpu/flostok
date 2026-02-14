@@ -8,6 +8,7 @@ import {
   inventoryLots,
   products,
   suppliers,
+  warehouses,
 } from "@/server/db/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { revalidatePath, revalidateTag } from "next/cache";
@@ -762,6 +763,7 @@ export async function getWarehouseInboundOrders(): Promise<{
     id: string;
     orderNumber: string;
     supplierName: string | null;
+    destinationWarehouseName: string | null;
     status: string;
     expectedDate: string | null;
     orderDate: string | null;
@@ -782,9 +784,13 @@ export async function getWarehouseInboundOrders(): Promise<{
         supplier: {
           name: suppliers.name,
         },
+        warehouse: {
+          name: warehouses.name,
+        },
       })
       .from(purchaseOrders)
       .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
+      .leftJoin(warehouses, eq(purchaseOrders.destinationWarehouseId, warehouses.id))
       .where(
         and(
           eq(purchaseOrders.organizationId, user.organizationId),
@@ -834,6 +840,7 @@ export async function getWarehouseInboundOrders(): Promise<{
           id: row.order.id,
           orderNumber: row.order.orderNumber,
           supplierName: row.supplier?.name || null,
+          destinationWarehouseName: row.warehouse?.name || null,
           status: row.order.status,
           expectedDate: row.order.expectedDate,
           orderDate: row.order.orderDate,

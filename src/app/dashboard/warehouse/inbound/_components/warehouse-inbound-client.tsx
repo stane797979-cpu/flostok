@@ -21,6 +21,7 @@ interface WarehouseOrder {
   id: string;
   orderNumber: string;
   supplierName: string | null;
+  destinationWarehouseName: string | null;
   status: string;
   expectedDate: string | null;
   orderDate: string | null;
@@ -162,6 +163,9 @@ export function WarehouseInboundClient({ initialOrders, warehouses }: WarehouseI
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <div className="space-y-1">
+                          {order.destinationWarehouseName && (
+                            <p className="text-slate-600 font-medium">{order.destinationWarehouseName}</p>
+                          )}
                           <p className="text-slate-500">예상입고: {order.expectedDate || "-"}</p>
                           <p className="text-slate-500">
                             {order.itemsCount}품목 · {order.receivedQuantity}/{order.totalQuantity} ({progress}%)
@@ -183,6 +187,7 @@ export function WarehouseInboundClient({ initialOrders, warehouses }: WarehouseI
                     <TableRow>
                       <TableHead>발주번호</TableHead>
                       <TableHead>공급업체</TableHead>
+                      <TableHead>입고 창고</TableHead>
                       <TableHead>상태</TableHead>
                       <TableHead>예상입고일</TableHead>
                       <TableHead className="text-center">품목수</TableHead>
@@ -209,6 +214,7 @@ export function WarehouseInboundClient({ initialOrders, warehouses }: WarehouseI
                             </div>
                           </TableCell>
                           <TableCell>{order.supplierName || "-"}</TableCell>
+                          <TableCell>{order.destinationWarehouseName || "-"}</TableCell>
                           <TableCell>
                             <Badge className={config.className}>
                               {config.label}

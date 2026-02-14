@@ -237,6 +237,7 @@ export function InventoryPageClient({
         open={adjustOpen}
         onOpenChange={setAdjustOpen}
         target={adjustTarget}
+        warehouses={warehouses}
         onSuccess={handleRefresh}
       />
     </div>

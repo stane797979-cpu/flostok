@@ -46,10 +46,18 @@ export interface AdjustmentTarget {
   currentStock: number;
 }
 
+interface WarehouseOption {
+  id: string;
+  code: string;
+  name: string;
+  isDefault?: boolean;
+}
+
 interface InventoryAdjustmentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   target: AdjustmentTarget | null;
+  warehouses?: WarehouseOption[];
   onSuccess: () => void;
 }
 
@@ -57,24 +65,30 @@ export function InventoryAdjustmentDialog({
   open,
   onOpenChange,
   target,
+  warehouses = [],
   onSuccess,
 }: InventoryAdjustmentDialogProps) {
   const [direction, setDirection] = useState<"increase" | "decrease">("increase");
   const [quantity, setQuantity] = useState("");
+  const [warehouseId, setWarehouseId] = useState("");
   const [location, setLocation] = useState("");
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [historyRecords, setHistoryRecords] = useState<InventoryHistory[]>([]);
   const { toast } = useToast();
 
-  // 다이얼로그 열릴 때 이력 로드
+  // 다이얼로그 열릴 때 이력 로드 + 기본 창고 설정
   useEffect(() => {
     if (open && target) {
       getInventoryHistory({ productId: target.productId, limit: 10 })
         .then((result) => setHistoryRecords(result.records))
         .catch(() => setHistoryRecords([]));
+      // 기본 창고 pre-select
+      const defaultWh = warehouses.find((w) => w.isDefault);
+      if (defaultWh) setWarehouseId(defaultWh.id);
+      else if (warehouses.length > 0) setWarehouseId(warehouses[0].id);
     }
-  }, [open, target]);
+  }, [open, target, warehouses]);
 
   const quantityNum = Number(quantity) || 0;
   const expectedStock =
@@ -91,6 +105,7 @@ export function InventoryAdjustmentDialog({
         productId: target.productId,
         changeType: direction === "increase" ? "INBOUND_ADJUSTMENT" : "OUTBOUND_ADJUSTMENT",
         quantity: quantityNum,
+        warehouseId: warehouseId || undefined,
         notes: notes || undefined,
         location: location || undefined,
       });
@@ -123,6 +138,7 @@ export function InventoryAdjustmentDialog({
   const handleClose = () => {
     setDirection("increase");
     setQuantity("");
+    setWarehouseId("");
     setLocation("");
     setNotes("");
     onOpenChange(false);
@@ -158,6 +174,25 @@ export function InventoryAdjustmentDialog({
               </div>
             </div>
           </div>
+
+          {/* 창고 선택 */}
+          {warehouses.length > 0 && (
+            <div className="space-y-2">
+              <Label>창고 <span className="text-red-500">*</span></Label>
+              <Select value={warehouseId} onValueChange={setWarehouseId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="창고를 선택하세요" />
+                </SelectTrigger>
+                <SelectContent>
+                  {warehouses.map((wh) => (
+                    <SelectItem key={wh.id} value={wh.id}>
+                      {wh.name} ({wh.code}){wh.isDefault ? " - 기본" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* 조정 유형 */}
           <div className="space-y-2">
