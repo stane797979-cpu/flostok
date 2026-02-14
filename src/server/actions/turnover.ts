@@ -65,8 +65,8 @@ export async function getInventoryTurnoverData(): Promise<TurnoverSummary> {
       const salesAgg = db
         .select({
           productId: salesRecords.productId,
-          totalQty: sql<number>`coalesce(sum(${salesRecords.quantity}), 0)`,
-          totalAmount: sql<number>`coalesce(sum(${salesRecords.totalAmount}), 0)`,
+          totalQty: sql<number>`coalesce(sum(${salesRecords.quantity}), 0)`.as('total_qty'),
+          totalAmount: sql<number>`coalesce(sum(${salesRecords.totalAmount}), 0)`.as('total_amount'),
         })
         .from(salesRecords)
         .where(
