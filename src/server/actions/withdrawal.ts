@@ -15,42 +15,15 @@ import { users, organizations, subscriptions, paymentHistory } from '@/server/db
 import { eq, and, desc } from 'drizzle-orm'
 import { requireAuth } from './auth-helpers'
 import { cancelPayment, savePaymentHistory } from '@/server/services/payment/portone'
+import type { WithdrawalPreCheck } from '@/types/withdrawal'
+
+// Re-export: 타입과 상수는 @/types/withdrawal에서 관리
+// ('use server' 모듈에서 비함수 값을 export하면 클라이언트에서 undefined가 됨)
+export type { WithdrawalPreCheck, WithdrawalReason } from '@/types/withdrawal'
 
 type ActionResponse<T = unknown> =
   | { success: true; data: T }
   | { success: false; error: string }
-
-/** 탈퇴 사유 목록 */
-export const WITHDRAWAL_REASONS = [
-  '서비스를 더 이상 사용하지 않음',
-  '다른 서비스로 전환',
-  '비용이 부담됨',
-  '기능이 부족함',
-  '사용하기 어려움',
-  '기타',
-] as const
-
-export type WithdrawalReason = (typeof WITHDRAWAL_REASONS)[number]
-
-/** 탈퇴 전 사전 확인 정보 */
-export interface WithdrawalPreCheck {
-  hasActiveSubscription: boolean
-  subscription: {
-    plan: string
-    status: string
-    billingCycle: string
-    currentPeriodEnd: Date
-  } | null
-  refundInfo: {
-    eligible: boolean
-    estimatedAmount: number
-    usedDays: number
-    totalDays: number
-    refundRate: number
-  } | null
-  organizationUserCount: number
-  isLastAdmin: boolean
-}
 
 /**
  * 환불 금액 계산

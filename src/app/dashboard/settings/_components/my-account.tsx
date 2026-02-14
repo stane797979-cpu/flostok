@@ -39,9 +39,8 @@ import {
   withdrawAccountAction,
   cancelSubscriptionAction,
   getSubscriptionInfo,
-  WITHDRAWAL_REASONS,
-  type WithdrawalPreCheck,
 } from '@/server/actions/withdrawal';
+import { WITHDRAWAL_REASONS, type WithdrawalPreCheck } from '@/types/withdrawal';
 
 const PLAN_LABELS: Record<string, string> = {
   free: '무료',
