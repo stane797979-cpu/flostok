@@ -68,12 +68,21 @@ export function SupplierFormDialog({ open, onOpenChange, supplier }: SupplierFor
         : await createSupplier(formData);
 
       if (result.success) {
-        toast({
-          title: isEditing ? "공급자 수정 완료" : "공급자 추가 완료",
-          description: isEditing
-            ? "공급자 정보가 성공적으로 수정되었습니다."
-            : "새로운 공급자가 성공적으로 등록되었습니다.",
-        });
+        if (result.isRequest) {
+          toast({
+            title: isEditing ? "수정 요청 제출됨" : "등록 요청 제출됨",
+            description: isEditing
+              ? "공급업체 수정 요청이 제출되었습니다. 슈퍼관리자 승인 후 반영됩니다."
+              : "공급업체 등록 요청이 제출되었습니다. 슈퍼관리자 승인 후 등록됩니다.",
+          });
+        } else {
+          toast({
+            title: isEditing ? "공급자 수정 완료" : "공급자 추가 완료",
+            description: isEditing
+              ? "공급자 정보가 성공적으로 수정되었습니다."
+              : "새로운 공급자가 성공적으로 등록되었습니다.",
+          });
+        }
         onOpenChange(false);
       } else {
         setError(result.error || "작업에 실패했습니다");

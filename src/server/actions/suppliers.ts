@@ -108,10 +108,12 @@ export async function getSupplierById(id: string): Promise<Supplier | null> {
 
 /**
  * 공급자 생성
+ * - superadmin: 즉시 등록
+ * - admin/manager: 등록 요청 생성 → superadmin 승인 필요
  */
 export async function createSupplier(
   input: SupplierInput
-): Promise<{ success: boolean; supplier?: Supplier; error?: string }> {
+): Promise<{ success: boolean; supplier?: Supplier; error?: string; isRequest?: boolean }> {
   try {
     const user = await getCurrentUser();
     if (!user?.organizationId) {
@@ -122,19 +124,18 @@ export async function createSupplier(
     // 유효성 검사
     const validated = supplierSchema.parse(input);
 
-    // 생성
-    const [newSupplier] = await db
-      .insert(suppliers)
-      .values({
-        ...validated,
-        organizationId: orgId,
-        contactEmail: validated.contactEmail || null,
-        rating: String(validated.rating),
-      })
-      .returning();
+    // superadmin: 즉시 등록
+    if (user.isSuperadmin) {
+      const [newSupplier] = await db
+        .insert(suppliers)
+        .values({
+          ...validated,
+          organizationId: orgId,
+          contactEmail: validated.contactEmail || null,
+          rating: String(validated.rating),
+        })
+        .returning();
 
-    // 활동 로깅
-    if (user) {
       await logActivity({
         user,
         action: "CREATE",
@@ -142,10 +143,33 @@ export async function createSupplier(
         entityId: newSupplier.id,
         description: `${validated.name} 공급업체 등록`,
       });
+
+      revalidatePath("/dashboard/suppliers");
+      return { success: true, supplier: newSupplier };
     }
 
-    revalidatePath("/dashboard/suppliers");
-    return { success: true, supplier: newSupplier };
+    // admin/manager: 등록 요청 생성
+    const result = await createDeletionRequest(
+      {
+        entityType: "supplier_create",
+        entityId: "new",
+        reason: `${validated.name} 공급업체 등록 요청`,
+        changeData: {
+          ...validated,
+          contactEmail: validated.contactEmail || null,
+          rating: String(validated.rating),
+        },
+      },
+      user
+    );
+    if (result.success) {
+      revalidatePath("/dashboard/suppliers");
+    }
+    return {
+      success: result.success,
+      error: result.error,
+      isRequest: result.success ? true : undefined,
+    };
   } catch (error) {
     if (error instanceof z.ZodError) {
       const zodError = error as z.ZodError;
@@ -161,11 +185,13 @@ export async function createSupplier(
 
 /**
  * 공급자 수정
+ * - superadmin: 즉시 수정
+ * - admin/manager: 수정 요청 생성 → superadmin 승인 필요
  */
 export async function updateSupplier(
   id: string,
   input: Partial<SupplierInput>
-): Promise<{ success: boolean; supplier?: Supplier; error?: string }> {
+): Promise<{ success: boolean; supplier?: Supplier; error?: string; isRequest?: boolean }> {
   try {
     const user = await getCurrentUser();
 
@@ -180,35 +206,61 @@ export async function updateSupplier(
     }
     const orgId = user.organizationId;
 
-    // 수정
-    const updateData: Record<string, unknown> = {
-      ...input,
-      contactEmail: input.contactEmail || null,
-      updatedAt: new Date(),
-    };
-    if (input.rating !== undefined) {
-      updateData.rating = String(input.rating);
-    }
+    // superadmin: 즉시 수정
+    if (user.isSuperadmin) {
+      const updateData: Record<string, unknown> = {
+        ...input,
+        contactEmail: input.contactEmail || null,
+        updatedAt: new Date(),
+      };
+      if (input.rating !== undefined) {
+        updateData.rating = String(input.rating);
+      }
 
-    const [updated] = await db
-      .update(suppliers)
-      .set(updateData)
-      .where(and(eq(suppliers.id, id), eq(suppliers.organizationId, orgId), isNull(suppliers.deletedAt)))
-      .returning();
+      const [updated] = await db
+        .update(suppliers)
+        .set(updateData)
+        .where(and(eq(suppliers.id, id), eq(suppliers.organizationId, orgId), isNull(suppliers.deletedAt)))
+        .returning();
 
-    // 활동 로깅
-    if (user) {
       await logActivity({
         user,
         action: "UPDATE",
         entityType: "supplier",
         entityId: id,
-        description: `공급업체 수정`,
+        description: `${updated.name} 공급업체 수정`,
       });
+
+      revalidatePath("/dashboard/suppliers");
+      return { success: true, supplier: updated };
     }
 
-    revalidatePath("/dashboard/suppliers");
-    return { success: true, supplier: updated };
+    // admin/manager: 수정 요청 생성
+    const changeData: Record<string, unknown> = { ...input };
+    if (input.contactEmail !== undefined) {
+      changeData.contactEmail = input.contactEmail || null;
+    }
+    if (input.rating !== undefined) {
+      changeData.rating = String(input.rating);
+    }
+
+    const result = await createDeletionRequest(
+      {
+        entityType: "supplier_update",
+        entityId: id,
+        reason: `${existing.name} 공급업체 수정 요청`,
+        changeData,
+      },
+      user
+    );
+    if (result.success) {
+      revalidatePath("/dashboard/suppliers");
+    }
+    return {
+      success: result.success,
+      error: result.error,
+      isRequest: result.success ? true : undefined,
+    };
   } catch (error) {
     console.error("공급자 수정 오류:", error);
     return {

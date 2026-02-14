@@ -23,6 +23,7 @@ import {
 import { createProduct, updateProduct, type ProductInput } from "@/server/actions/products";
 import { type Product } from "@/server/db/schema";
 import { Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface ProductFormDialogProps {
   open: boolean;
@@ -42,6 +43,7 @@ export function ProductFormDialog({
   categories = [],
 }: ProductFormDialogProps) {
   const router = useRouter();
+  const { toast } = useToast();
   const isEditing = !!product;
 
   const [isLoading, setIsLoading] = useState(false);
@@ -76,6 +78,21 @@ export function ProductFormDialog({
         : await createProduct(formData);
 
       if (result.success) {
+        if (result.isRequest) {
+          toast({
+            title: isEditing ? "수정 요청 제출됨" : "등록 요청 제출됨",
+            description: isEditing
+              ? "제품 수정 요청이 제출되었습니다. 슈퍼관리자 승인 후 반영됩니다."
+              : "제품 등록 요청이 제출되었습니다. 슈퍼관리자 승인 후 등록됩니다.",
+          });
+        } else {
+          toast({
+            title: isEditing ? "제품 수정 완료" : "제품 등록 완료",
+            description: isEditing
+              ? "제품 정보가 성공적으로 수정되었습니다."
+              : "새로운 제품이 성공적으로 등록되었습니다.",
+          });
+        }
         onOpenChange(false);
         router.refresh();
       } else {

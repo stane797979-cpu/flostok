@@ -139,10 +139,12 @@ export async function getProductBySku(sku: string): Promise<Product | null> {
 
 /**
  * 제품 생성
+ * - superadmin: 즉시 등록
+ * - admin/manager: 등록 요청 생성 → superadmin 승인 필요
  */
 export async function createProduct(
   input: ProductInput
-): Promise<{ success: boolean; product?: Product; error?: string }> {
+): Promise<{ success: boolean; product?: Product; error?: string; isRequest?: boolean }> {
   try {
     const user = await requireAuth();
 
@@ -165,26 +167,47 @@ export async function createProduct(
       };
     }
 
-    // 생성
-    const [newProduct] = await db
-      .insert(products)
-      .values({
-        ...validated,
-        organizationId: user.organizationId,
-      })
-      .returning();
+    // superadmin: 즉시 등록
+    if (user.isSuperadmin) {
+      const [newProduct] = await db
+        .insert(products)
+        .values({
+          ...validated,
+          organizationId: user.organizationId,
+        })
+        .returning();
 
-    revalidatePath("/products");
+      revalidatePath("/products");
 
-    await logActivity({
-      user,
-      action: "CREATE",
-      entityType: "product",
-      entityId: newProduct.id,
-      description: `${validated.sku} ${validated.name} 제품 등록`,
-    });
+      await logActivity({
+        user,
+        action: "CREATE",
+        entityType: "product",
+        entityId: newProduct.id,
+        description: `${validated.sku} ${validated.name} 제품 등록`,
+      });
 
-    return { success: true, product: newProduct };
+      return { success: true, product: newProduct };
+    }
+
+    // admin/manager: 등록 요청 생성
+    const result = await createDeletionRequest(
+      {
+        entityType: "product_create",
+        entityId: "new",
+        reason: `${validated.sku} ${validated.name} 제품 등록 요청`,
+        changeData: validated,
+      },
+      user
+    );
+    if (result.success) {
+      revalidatePath("/products");
+    }
+    return {
+      success: result.success,
+      error: result.error,
+      isRequest: result.success ? true : undefined,
+    };
   } catch (error) {
     if (error instanceof z.ZodError) {
       const zodError = error as z.ZodError;
@@ -200,11 +223,13 @@ export async function createProduct(
 
 /**
  * 제품 수정
+ * - superadmin: 즉시 수정
+ * - admin/manager: 수정 요청 생성 → superadmin 승인 필요
  */
 export async function updateProduct(
   id: string,
   input: Partial<ProductInput>
-): Promise<{ success: boolean; product?: Product; error?: string }> {
+): Promise<{ success: boolean; product?: Product; error?: string; isRequest?: boolean }> {
   try {
     const user = await requireAuth();
 
@@ -222,28 +247,49 @@ export async function updateProduct(
       }
     }
 
-    // 수정
-    const [updated] = await db
-      .update(products)
-      .set({
-        ...input,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(products.id, id), eq(products.organizationId, user.organizationId)))
-      .returning();
+    // superadmin: 즉시 수정
+    if (user.isSuperadmin) {
+      const [updated] = await db
+        .update(products)
+        .set({
+          ...input,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(products.id, id), eq(products.organizationId, user.organizationId)))
+        .returning();
 
-    revalidatePath("/products");
-    revalidatePath(`/products/${id}`);
+      revalidatePath("/products");
+      revalidatePath(`/products/${id}`);
 
-    await logActivity({
-      user,
-      action: "UPDATE",
-      entityType: "product",
-      entityId: id,
-      description: `${updated.sku} ${updated.name} 제품 수정`,
-    });
+      await logActivity({
+        user,
+        action: "UPDATE",
+        entityType: "product",
+        entityId: id,
+        description: `${updated.sku} ${updated.name} 제품 수정`,
+      });
 
-    return { success: true, product: updated };
+      return { success: true, product: updated };
+    }
+
+    // admin/manager: 수정 요청 생성
+    const result = await createDeletionRequest(
+      {
+        entityType: "product_update",
+        entityId: id,
+        reason: `${existing.sku} ${existing.name} 제품 수정 요청`,
+        changeData: input,
+      },
+      user
+    );
+    if (result.success) {
+      revalidatePath("/products");
+    }
+    return {
+      success: result.success,
+      error: result.error,
+      isRequest: result.success ? true : undefined,
+    };
   } catch (error) {
     console.error("제품 수정 오류:", error);
     return {

@@ -112,7 +112,7 @@ export async function getDefaultWarehouse(): Promise<Warehouse | null> {
 }
 
 /**
- * 창고 생성
+ * 창고 생성 (SUPERADMIN만 가능)
  */
 export async function createWarehouse(
   input: z.infer<typeof createWarehouseSchema>
@@ -123,6 +123,9 @@ export async function createWarehouse(
 }> {
   try {
     const user = await requireAuth();
+    if (!user.isSuperadmin) {
+      return { success: false, error: "창고 생성은 슈퍼관리자만 가능합니다" };
+    }
     const validated = createWarehouseSchema.parse(input);
 
     // 코드 중복 체크
@@ -180,7 +183,7 @@ export async function createWarehouse(
 }
 
 /**
- * 창고 수정
+ * 창고 수정 (SUPERADMIN만 가능)
  */
 export async function updateWarehouse(
   id: string,
@@ -192,6 +195,9 @@ export async function updateWarehouse(
 }> {
   try {
     const user = await requireAuth();
+    if (!user.isSuperadmin) {
+      return { success: false, error: "창고 수정은 슈퍼관리자만 가능합니다" };
+    }
     const validated = updateWarehouseSchema.parse(input);
 
     // 창고 조회
@@ -273,7 +279,7 @@ export async function updateWarehouse(
 }
 
 /**
- * 창고 삭제
+ * 창고 삭제 (SUPERADMIN만 가능)
  */
 export async function deleteWarehouse(id: string): Promise<{
   success: boolean;
@@ -281,6 +287,9 @@ export async function deleteWarehouse(id: string): Promise<{
 }> {
   try {
     const user = await requireAuth();
+    if (!user.isSuperadmin) {
+      return { success: false, error: "창고 삭제는 슈퍼관리자만 가능합니다" };
+    }
 
     // 창고 조회
     const [warehouse] = await db

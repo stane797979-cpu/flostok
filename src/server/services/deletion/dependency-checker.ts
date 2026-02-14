@@ -301,7 +301,11 @@ export async function checkEntityDependencies(
     case "inventory":
       return checkInventoryDependencies(entityId, organizationId);
     case "inventory_adjustment":
-      // 재고 조정은 의존성 체크 불필요 — 항상 허용 (승인으로 통제)
+    case "product_create":
+    case "product_update":
+    case "supplier_create":
+    case "supplier_update":
+      // 생성/수정/조정 요청은 의존성 체크 불필요 — 항상 허용 (승인으로 통제)
       return {
         canDelete: true,
         impactLevel: "low",

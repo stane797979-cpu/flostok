@@ -16,8 +16,48 @@ import {
   type DependencyCheckResult,
 } from "./dependency-checker";
 
+/** 승인 요청 가능한 모든 엔티티 타입 */
+type ApprovalEntityType =
+  | "product" | "supplier" | "purchase_order" | "inventory"
+  | "inventory_adjustment"
+  | "product_create" | "product_update"
+  | "supplier_create" | "supplier_update";
+
+/** 활동 로그용 엔티티 타입 매핑 */
+function mapEntityTypeForLog(entityType: ApprovalEntityType): "product" | "supplier" | "purchase_order" {
+  switch (entityType) {
+    case "product":
+    case "product_create":
+    case "product_update":
+    case "inventory":
+    case "inventory_adjustment":
+      return "product";
+    case "supplier":
+    case "supplier_create":
+    case "supplier_update":
+      return "supplier";
+    case "purchase_order":
+      return "purchase_order";
+  }
+}
+
+/** 활동 로그용 액션 라벨 */
+function getActionLabel(entityType: ApprovalEntityType): string {
+  switch (entityType) {
+    case "product": return "삭제";
+    case "supplier": return "삭제";
+    case "purchase_order": return "삭제";
+    case "inventory": return "삭제";
+    case "inventory_adjustment": return "재고 조정";
+    case "product_create": return "등록";
+    case "product_update": return "수정";
+    case "supplier_create": return "등록";
+    case "supplier_update": return "수정";
+  }
+}
+
 interface CreateDeletionRequestInput {
-  entityType: "product" | "supplier" | "purchase_order" | "inventory" | "inventory_adjustment";
+  entityType: ApprovalEntityType;
   entityId: string;
   reason: string;
   notes?: string;
@@ -27,6 +67,9 @@ interface CreateDeletionRequestInput {
     quantity: number;
     warehouseId?: string;
   };
+  /** 생성/수정 요청 시 데이터 */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  changeData?: Record<string, any>;
 }
 
 interface CreateDeletionRequestResult {
@@ -160,6 +203,50 @@ export async function createDeletionRequest(
       entityName = `${adjProd.sku} ${adjProd.name} 재고 조정 (${adjLabel} ${adjInfo?.quantity ?? 0}개)`;
       break;
     }
+    case "product_create": {
+      // 제품 생성 요청: entityId = "new", changeData = 입력 데이터
+      entitySnapshot = { action: "create", data: input.changeData };
+      entityName = `${input.changeData?.sku || ""} ${input.changeData?.name || ""} 제품 등록`;
+      break;
+    }
+    case "product_update": {
+      // 제품 수정 요청: entityId = productId, changeData = 변경 데이터
+      const [existingProd] = await db
+        .select()
+        .from(products)
+        .where(
+          and(
+            eq(products.id, input.entityId),
+            eq(products.organizationId, user.organizationId)
+          )
+        );
+      if (!existingProd) return { success: false, error: "제품을 찾을 수 없습니다" };
+      entitySnapshot = { action: "update", before: existingProd, changes: input.changeData };
+      entityName = `${existingProd.sku} ${existingProd.name} 제품 수정`;
+      break;
+    }
+    case "supplier_create": {
+      // 공급업체 생성 요청
+      entitySnapshot = { action: "create", data: input.changeData };
+      entityName = `${input.changeData?.name || ""} 공급업체 등록`;
+      break;
+    }
+    case "supplier_update": {
+      // 공급업체 수정 요청
+      const [existingSup] = await db
+        .select()
+        .from(suppliers)
+        .where(
+          and(
+            eq(suppliers.id, input.entityId),
+            eq(suppliers.organizationId, user.organizationId)
+          )
+        );
+      if (!existingSup) return { success: false, error: "공급업체를 찾을 수 없습니다" };
+      entitySnapshot = { action: "update", before: existingSup, changes: input.changeData };
+      entityName = `${existingSup.name} 공급업체 수정`;
+      break;
+    }
   }
 
   // 삭제 요청 생성
@@ -182,12 +269,14 @@ export async function createDeletionRequest(
     .returning();
 
   // 활동 로그
+  const logEntityType = mapEntityTypeForLog(input.entityType);
+  const actionLabel = getActionLabel(input.entityType);
   await logActivity({
     user,
     action: "CREATE",
-    entityType: "product", // entityType을 활동 로그용으로 매핑
+    entityType: logEntityType,
     entityId: request.id,
-    description: `${entityName} 삭제 요청 생성 (사유: ${input.reason})`,
+    description: `${entityName} ${actionLabel} 요청 생성 (사유: ${input.reason})`,
     metadata: {
       deletionRequestId: request.id,
       targetEntityType: input.entityType,
@@ -377,12 +466,66 @@ export async function approveDeletionRequest(
             createdAt: now,
             updatedAt: now,
           },
-          skipActivityLog: true, // 별도 활동 로그 기록
+          skipActivityLog: true,
         }
       );
       if (!adjResult.success) {
         return { success: false, error: adjResult.error || "재고 조정 실행 실패" };
       }
+      break;
+    }
+    case "product_create": {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const createSnap = request.entitySnapshot as any;
+      const prodData = createSnap?.data;
+      if (!prodData) return { success: false, error: "제품 생성 데이터가 없습니다" };
+      await db.insert(products).values({
+        ...prodData,
+        organizationId: user.organizationId,
+      });
+      break;
+    }
+    case "product_update": {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const updateSnap = request.entitySnapshot as any;
+      const changes = updateSnap?.changes;
+      if (!changes) return { success: false, error: "제품 수정 데이터가 없습니다" };
+      await db
+        .update(products)
+        .set({ ...changes, updatedAt: now })
+        .where(
+          and(
+            eq(products.id, request.entityId),
+            eq(products.organizationId, user.organizationId)
+          )
+        );
+      break;
+    }
+    case "supplier_create": {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supCreateSnap = request.entitySnapshot as any;
+      const supData = supCreateSnap?.data;
+      if (!supData) return { success: false, error: "공급업체 생성 데이터가 없습니다" };
+      await db.insert(suppliers).values({
+        ...supData,
+        organizationId: user.organizationId,
+      });
+      break;
+    }
+    case "supplier_update": {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supUpdateSnap = request.entitySnapshot as any;
+      const supChanges = supUpdateSnap?.changes;
+      if (!supChanges) return { success: false, error: "공급업체 수정 데이터가 없습니다" };
+      await db
+        .update(suppliers)
+        .set({ ...supChanges, updatedAt: now })
+        .where(
+          and(
+            eq(suppliers.id, request.entityId),
+            eq(suppliers.organizationId, user.organizationId)
+          )
+        );
       break;
     }
   }
@@ -401,14 +544,14 @@ export async function approveDeletionRequest(
     .where(eq(deletionRequests.id, requestId));
 
   // 활동 로그
+  const approveLogEntityType = mapEntityTypeForLog(request.entityType as ApprovalEntityType);
+  const approveActionLabel = getActionLabel(request.entityType as ApprovalEntityType);
   await logActivity({
     user,
-    action: "DELETE",
-    entityType: (request.entityType === "inventory" || request.entityType === "inventory_adjustment" ? "product" : request.entityType) as "product" | "supplier" | "purchase_order",
+    action: request.entityType.includes("create") ? "CREATE" : request.entityType.includes("update") ? "UPDATE" : "DELETE",
+    entityType: approveLogEntityType,
     entityId: request.entityId,
-    description: request.entityType === "inventory_adjustment"
-      ? `${request.entityName} 승인 및 실행 (요청자: ${request.requestedByName})`
-      : `${request.entityName} 삭제 승인 및 실행 (요청자: ${request.requestedByName})`,
+    description: `${request.entityName} ${approveActionLabel} 승인 및 실행 (요청자: ${request.requestedByName})`,
     metadata: {
       deletionRequestId: requestId,
       beforeSnapshot: request.entitySnapshot,
@@ -466,14 +609,14 @@ export async function rejectDeletionRequest(
     .where(eq(deletionRequests.id, requestId));
 
   // 활동 로그
+  const rejectLogEntityType = mapEntityTypeForLog(request.entityType as ApprovalEntityType);
+  const rejectActionLabel = getActionLabel(request.entityType as ApprovalEntityType);
   await logActivity({
     user,
     action: "UPDATE",
-    entityType: (request.entityType === "inventory" || request.entityType === "inventory_adjustment" ? "product" : request.entityType) as "product" | "supplier" | "purchase_order",
+    entityType: rejectLogEntityType,
     entityId: request.entityId,
-    description: request.entityType === "inventory_adjustment"
-      ? `${request.entityName} 요청 거부 (사유: ${rejectionReason})`
-      : `${request.entityName} 삭제 요청 거부 (사유: ${rejectionReason})`,
+    description: `${request.entityName} ${rejectActionLabel} 요청 거부 (사유: ${rejectionReason})`,
     metadata: {
       deletionRequestId: requestId,
       rejectionReason,
