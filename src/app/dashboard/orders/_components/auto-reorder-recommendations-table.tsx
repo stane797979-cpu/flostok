@@ -549,10 +549,9 @@ export function AutoReorderRecommendationsTable({
       {pendingCount > 0 && (
         <Alert>
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>자동 발주 승인 안내</AlertTitle>
+          <AlertTitle>자동발주승인안내</AlertTitle>
           <AlertDescription>
-            추천된 발주를 승인하면 자동으로 발주서가 생성되어 공급자에게 전송됩니다. 승인 전에
-            수량과 공급자를 다시 한번 확인해주세요.
+            추천된 발주를 승인하기 전에 수량과 공급자를 다시 한번 확인해주세요.
           </AlertDescription>
         </Alert>
       )}
