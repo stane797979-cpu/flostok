@@ -394,6 +394,117 @@ export async function getOrganizationOrders(organizationId: string): Promise<Act
   }
 }
 
+// ========== 고객 모니터링 (멀티테넌시) ==========
+
+export interface OrgMonitoringData {
+  id: string
+  name: string
+  slug: string
+  plan: string
+  createdAt: Date
+  userCount: number
+  productCount: number
+  totalInventoryValue: number
+  stockoutCount: number
+  criticalCount: number
+  lowCount: number
+  normalCount: number
+  excessCount: number
+  monthlySalesAmount: number
+  monthlyOrderCount: number
+  pendingOrderCount: number
+  turnoverRate: number | null
+  stockoutRate: number | null
+}
+
+export async function getOrganizationsMonitoring(): Promise<ActionResponse<OrgMonitoringData[]>> {
+  try {
+    await requireSuperadmin()
+
+    const orgs = await db
+      .select()
+      .from(organizations)
+      .where(ne(organizations.id, SYSTEM_ORG_ID))
+      .orderBy(asc(organizations.name))
+
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0]
+
+    const results = await Promise.all(
+      orgs.map(async (org) => {
+        const orgId = org.id
+
+        const [
+          userCountResult,
+          productCountResult,
+          inventoryStats,
+          salesStats,
+          orderStats,
+          pendingOrders,
+          latestKpi,
+        ] = await Promise.all([
+          db.select({ value: count() }).from(users).where(eq(users.organizationId, orgId)).catch(() => [{ value: 0 }]),
+          db.select({ value: count() }).from(products).where(eq(products.organizationId, orgId)).catch(() => [{ value: 0 }]),
+          db.select({
+            totalValue: sql<number>`coalesce(sum(${inventory.inventoryValue}), 0)`,
+            stockout: sql<number>`count(case when ${inventory.status} = '품절' then 1 end)`,
+            critical: sql<number>`count(case when ${inventory.status} = '위험' then 1 end)`,
+            low: sql<number>`count(case when ${inventory.status} in ('부족', '주의') then 1 end)`,
+            normal: sql<number>`count(case when ${inventory.status} = '적정' then 1 end)`,
+            excess: sql<number>`count(case when ${inventory.status} in ('과다', '과잉') then 1 end)`,
+          }).from(inventory).where(eq(inventory.organizationId, orgId)).catch(() => [{ totalValue: 0, stockout: 0, critical: 0, low: 0, normal: 0, excess: 0 }]),
+          db.select({
+            totalAmount: sql<number>`coalesce(sum(${salesRecords.totalAmount}), 0)`,
+          }).from(salesRecords).where(
+            and(eq(salesRecords.organizationId, orgId), gte(salesRecords.date, thirtyDaysAgoStr))
+          ).catch(() => [{ totalAmount: 0 }]),
+          db.select({ value: count() }).from(purchaseOrders).where(
+            and(eq(purchaseOrders.organizationId, orgId), gte(purchaseOrders.createdAt, thirtyDaysAgo))
+          ).catch(() => [{ value: 0 }]),
+          db.select({ value: count() }).from(purchaseOrders).where(
+            and(eq(purchaseOrders.organizationId, orgId), eq(purchaseOrders.status, 'pending'))
+          ).catch(() => [{ value: 0 }]),
+          db.select({
+            turnoverRate: kpiMonthlySnapshots.turnoverRate,
+            stockoutRate: kpiMonthlySnapshots.stockoutRate,
+          }).from(kpiMonthlySnapshots).where(eq(kpiMonthlySnapshots.organizationId, orgId)).orderBy(desc(kpiMonthlySnapshots.period)).limit(1).catch(() => []),
+        ])
+
+        const inv = inventoryStats[0] || { totalValue: 0, stockout: 0, critical: 0, low: 0, normal: 0, excess: 0 }
+        const kpi = latestKpi[0]
+
+        return {
+          id: org.id,
+          name: org.name,
+          slug: org.slug,
+          plan: org.plan,
+          createdAt: org.createdAt,
+          userCount: userCountResult[0]?.value ?? 0,
+          productCount: productCountResult[0]?.value ?? 0,
+          totalInventoryValue: Number(inv.totalValue) || 0,
+          stockoutCount: Number(inv.stockout) || 0,
+          criticalCount: Number(inv.critical) || 0,
+          lowCount: Number(inv.low) || 0,
+          normalCount: Number(inv.normal) || 0,
+          excessCount: Number(inv.excess) || 0,
+          monthlySalesAmount: Number(salesStats[0]?.totalAmount) || 0,
+          monthlyOrderCount: orderStats[0]?.value ?? 0,
+          pendingOrderCount: pendingOrders[0]?.value ?? 0,
+          turnoverRate: kpi?.turnoverRate ? parseFloat(kpi.turnoverRate) : null,
+          stockoutRate: kpi?.stockoutRate ? parseFloat(kpi.stockoutRate) : null,
+        }
+      })
+    )
+
+    return { success: true, data: results }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : '고객 모니터링 데이터 조회 실패' }
+  }
+}
+
+// ========== 조직별 KPI ==========
+
 export interface AdminKpiItem {
   id: string
   period: string

@@ -137,13 +137,36 @@ export function MyAccount() {
     router.refresh();
   };
 
-  // 탈퇴 사전 확인 로드
-  const handleStartWithdrawal = async () => {
-    const result = await getWithdrawalPreCheck();
-    if (result.success) {
-      setWithdrawalPreCheck(result.data);
-      setWithdrawalStep('confirm');
-    }
+  // 탈퇴 관련 추가 상태
+  const [withdrawalError, setWithdrawalError] = useState('');
+
+  const DEFAULT_PRECHECK: WithdrawalPreCheck = {
+    hasActiveSubscription: false,
+    subscription: null,
+    refundInfo: null,
+    organizationUserCount: 1,
+    isLastAdmin: false,
+  };
+
+  // confirm 단계 진입 후 서버 데이터 비동기 로드
+  useEffect(() => {
+    if (withdrawalStep !== 'confirm') return;
+    let cancelled = false;
+    getWithdrawalPreCheck()
+      .then((result) => {
+        if (!cancelled && result.success) {
+          setWithdrawalPreCheck(result.data);
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [withdrawalStep]);
+
+  // 버튼 클릭 → 즉시 다음 단계로 전환
+  const handleStartWithdrawal = () => {
+    setWithdrawalError('');
+    setWithdrawalPreCheck(DEFAULT_PRECHECK);
+    setWithdrawalStep('confirm');
   };
 
   // 탈퇴 실행
@@ -165,11 +188,11 @@ export function MyAccount() {
         router.push('/login?withdrawn=true');
         router.refresh();
       } else {
-        setError(result.error);
+        setWithdrawalError(result.error);
         setWithdrawalStep('idle');
       }
     } catch {
-      setError('탈퇴 처리 중 오류가 발생했습니다.');
+      setWithdrawalError('탈퇴 처리 중 오류가 발생했습니다.');
       setWithdrawalStep('idle');
     } finally {
       setIsWithdrawing(false);
@@ -435,6 +458,12 @@ export function MyAccount() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {withdrawalError && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>{withdrawalError}</AlertDescription>
+            </Alert>
+          )}
           {withdrawalStep === 'idle' && (
             <>
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 space-y-2">
@@ -450,6 +479,7 @@ export function MyAccount() {
                 </ul>
               </div>
               <Button
+                type="button"
                 variant="outline"
                 className="text-destructive border-destructive hover:bg-destructive/10"
                 onClick={handleStartWithdrawal}

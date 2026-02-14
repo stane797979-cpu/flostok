@@ -32,7 +32,7 @@ export function QuickActions() {
       description: "발주서 생성",
       variant: "outline" as const,
       href: "/dashboard/orders",
-      className: "border-primary/30 bg-primary/10 hover:bg-primary/20 text-primary",
+      className: undefined,
     },
     {
       icon: Package,

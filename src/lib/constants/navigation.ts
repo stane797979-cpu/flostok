@@ -150,13 +150,6 @@ export const MAIN_SECTIONS: NavSection[] = [
         menuKey: "inventory",
       },
       {
-        title: "창고 관리",
-        href: "/dashboard/warehouses",
-        icon: Warehouse,
-        description: "창고 추가, 수정, 삭제 및 재고 이동",
-        menuKey: "warehouses",
-      },
-      {
         title: "결품관리",
         href: "/dashboard/stockout",
         icon: AlertOctagon,
@@ -189,6 +182,13 @@ export const MAIN_SECTIONS: NavSection[] = [
         icon: Factory,
         description: "공급업체 정보 및 연락처",
         menuKey: "suppliers",
+      },
+      {
+        title: "창고 관리",
+        href: "/dashboard/warehouses",
+        icon: Warehouse,
+        description: "창고 추가, 수정, 삭제 및 재고 이동",
+        menuKey: "warehouses",
       },
       {
         title: "KPI",

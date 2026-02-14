@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, CheckCircle2, Star } from "lucide-react";
+import { ArrowRight, CheckCircle2, Star, Headphones } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -11,6 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Check } from "lucide-react";
 import {
   COMPANY,
@@ -380,6 +381,222 @@ export default function SolutionPage() {
                 </CardFooter>
               </Card>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 컨설팅 패키지 */}
+      <section className="bg-white px-6 py-24 sm:py-32 lg:px-8">
+        <div className="mx-auto max-w-5xl">
+          <div className="mx-auto max-w-2xl text-center">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-primary-50 px-4 py-1.5 text-sm font-medium text-primary-700">
+              <Headphones className="h-4 w-4" />
+              SCM 전문가 컨설팅
+            </div>
+            <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+              솔루션 + 컨설팅, 함께하면 더 강력합니다
+            </h2>
+            <p className="mt-4 text-gray-600">
+              FloStok 솔루션에 22년 경력 SCM 전문가의 컨설팅을 결합하여
+              <br />
+              귀사의 공급망을 근본적으로 개선합니다
+            </p>
+          </div>
+
+          {/* 무료 진단 배너 */}
+          <div className="mt-12 rounded-2xl bg-gradient-to-r from-primary-600 to-indigo-600 p-8 text-center text-white sm:p-12">
+            <h3 className="text-2xl font-bold">무료 재고 진단</h3>
+            <p className="mt-2 text-primary-100">
+              귀사의 재고 현황을 진단하고 개선 가능성을 무료로 알려드립니다
+            </p>
+            <p className="mt-1 text-sm text-primary-200">
+              화상 1회 (2~3시간) + 간이 진단 보고서 제공
+            </p>
+            <Button
+              size="lg"
+              variant="secondary"
+              className="mt-6"
+              asChild
+            >
+              <Link href="/contact">무료 진단 신청하기</Link>
+            </Button>
+          </div>
+
+          {/* 컨설팅 패키지 카드 */}
+          <div className="mt-12 grid gap-6 lg:grid-cols-3">
+            {/* Light */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Light</CardTitle>
+                <CardDescription>
+                  연매출 5~15억 기업을 위한 기본 운영 패키지
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="mb-6">
+                  <div className="flex items-baseline gap-x-1">
+                    <span className="text-4xl font-bold tracking-tight text-gray-900">
+                      50
+                    </span>
+                    <span className="text-sm font-semibold text-gray-600">
+                      만원/월
+                    </span>
+                  </div>
+                </div>
+                <ul className="space-y-3 text-sm">
+                  {[
+                    "FloStok Pro 포함",
+                    "화상 컨설팅 월 1회",
+                    "월간 기본 리포트",
+                    "이메일 Q&A",
+                  ].map((f) => (
+                    <li key={f} className="flex gap-x-3">
+                      <Check className="h-5 w-5 flex-none text-primary-600" />
+                      <span className="text-gray-700">{f}</span>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+              <CardFooter>
+                <Button className="w-full" variant="outline" asChild>
+                  <Link href="/contact">문의하기</Link>
+                </Button>
+              </CardFooter>
+            </Card>
+
+            {/* Standard */}
+            <Card className="border-primary-600 ring-2 ring-primary-600">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg">Standard</CardTitle>
+                  <Badge className="bg-primary-600">추천</Badge>
+                </div>
+                <CardDescription>
+                  연매출 15~50억 기업을 위한 표준 운영 패키지
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="mb-6">
+                  <div className="flex items-baseline gap-x-1">
+                    <span className="text-4xl font-bold tracking-tight text-gray-900">
+                      80
+                    </span>
+                    <span className="text-sm font-semibold text-gray-600">
+                      만원/월
+                    </span>
+                  </div>
+                </div>
+                <ul className="space-y-3 text-sm">
+                  {[
+                    "FloStok Pro 포함",
+                    "화상 컨설팅 월 2회",
+                    "월간 KPI 분석 리포트",
+                    "분기 담당자 교육",
+                    "우선 이메일/전화 지원",
+                  ].map((f) => (
+                    <li key={f} className="flex gap-x-3">
+                      <Check className="h-5 w-5 flex-none text-primary-600" />
+                      <span className="text-gray-700">{f}</span>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+              <CardFooter>
+                <Button className="w-full" asChild>
+                  <Link href="/contact">문의하기</Link>
+                </Button>
+              </CardFooter>
+            </Card>
+
+            {/* Premium */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Premium</CardTitle>
+                <CardDescription>
+                  연매출 50억+ 기업을 위한 프리미엄 패키지
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="mb-6">
+                  <div className="flex items-baseline gap-x-1">
+                    <span className="text-4xl font-bold tracking-tight text-gray-900">
+                      120
+                    </span>
+                    <span className="text-sm font-semibold text-gray-600">
+                      만원/월
+                    </span>
+                  </div>
+                </div>
+                <ul className="space-y-3 text-sm">
+                  {[
+                    "FloStok Pro 포함",
+                    "방문 컨설팅 월 1회 + 화상 2회",
+                    "월간 심화 분석 리포트",
+                    "분기 담당자 교육",
+                    "S&OP 프로세스 설계",
+                    "24시간 긴급 지원",
+                  ].map((f) => (
+                    <li key={f} className="flex gap-x-3">
+                      <Check className="h-5 w-5 flex-none text-primary-600" />
+                      <span className="text-gray-700">{f}</span>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+              <CardFooter>
+                <Button className="w-full" variant="outline" asChild>
+                  <Link href="/contact">문의하기</Link>
+                </Button>
+              </CardFooter>
+            </Card>
+          </div>
+
+          {/* 가격 정당화 */}
+          <div className="mt-12 rounded-xl border bg-slate-50 p-6">
+            <h4 className="text-sm font-semibold text-gray-900">
+              왜 이 가격인가요?
+            </h4>
+            <div className="mt-3 grid gap-4 sm:grid-cols-2">
+              <div className="text-sm text-gray-600">
+                <p className="font-medium text-gray-900">
+                  Light 월 50만원
+                </p>
+                <p className="mt-1">
+                  월급 250만원 신입 SCM 담당자 대비 1/5 비용으로, AI 솔루션까지
+                  포함된 전문가 서비스를 받을 수 있습니다.
+                </p>
+              </div>
+              <div className="text-sm text-gray-600">
+                <p className="font-medium text-gray-900">
+                  Standard 월 80만원
+                </p>
+                <p className="mt-1">
+                  경력 SCM 담당자(월 400만+) 대비 1/5 비용으로, 파트타임
+                  전문가의 밀착 관리와 AI 분석을 동시에 제공합니다.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* 정부 바우처 안내 */}
+          <div className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-6">
+            <h4 className="text-sm font-semibold text-blue-900">
+              정부 바우처로 비용 부담을 줄이세요
+            </h4>
+            <p className="mt-2 text-sm text-blue-700">
+              혁신바우처, 스마트공장 등 정부 지원 사업을 활용하면 기업
+              자부담을 10~50%까지 줄일 수 있습니다. 정부 바우처 활용에
+              관심이 있으시면 문의해 주세요. 바우처 신청 절차 안내부터
+              프로젝트 설계까지 함께 준비해 드립니다.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="mt-3 border-blue-300 text-blue-700 hover:bg-blue-100"
+              asChild
+            >
+              <Link href="/contact">바우처 상담 문의</Link>
+            </Button>
           </div>
         </div>
       </section>
