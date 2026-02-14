@@ -23,8 +23,8 @@ const nextConfig: NextConfig = {
 
   // 컴파일러 최적화
   compiler: {
-    // 프로덕션에서 console 제거
-    removeConsole: process.env.NODE_ENV === "production",
+    // 프로덕션에서 console.log만 제거 (console.error는 유지하여 디버깅 가능)
+    removeConsole: process.env.NODE_ENV === "production" ? { exclude: ["error", "warn"] } : false,
   },
 
   // CI/CD에서 lint/type-check를 별도 실행하므로 빌드 시 생략 (메모리 절약)

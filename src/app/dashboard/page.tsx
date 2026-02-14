@@ -129,6 +129,17 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {/* 디버그: 데이터 로드 에러 표시 */}
+      {_debugErrors && (
+        <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
+          <p className="font-semibold">데이터 로드 오류 ({_debugErrors.length}건)</p>
+          <ul className="mt-1 list-inside list-disc">
+            {_debugErrors.map((err, i) => (
+              <li key={i}>{err}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       {/* KPI 카드 */}
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
