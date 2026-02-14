@@ -21,3 +21,4 @@ export * from "./kpi-snapshots";
 export * from "./psi-plans";
 export * from "./outbound-requests";
 export * from "./role-menu-permissions";
+export * from "./deletion-requests";

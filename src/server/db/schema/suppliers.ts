@@ -27,6 +27,11 @@ export const suppliers = pgTable("suppliers", {
   notes: text("notes"),
   metadata: jsonb("metadata").default({}),
   isActive: timestamp("is_active").defaultNow(), // null이면 비활성
+  // Soft Delete
+  deletedAt: timestamp("deleted_at", { withTimezone: true }), // null이면 활성
+  deletedBy: uuid("deleted_by"), // 삭제 실행자
+  deletionReason: text("deletion_reason"), // 삭제 사유
+  deletionMetadata: jsonb("deletion_metadata").default({}), // 삭제 전 스냅샷
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [

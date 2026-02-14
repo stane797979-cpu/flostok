@@ -2,11 +2,13 @@
 
 import { db } from "@/server/db";
 import { products, type Product } from "@/server/db/schema";
-import { eq, and, desc, asc, sql } from "drizzle-orm";
+import { eq, and, desc, asc, sql, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireAuth } from "./auth-helpers";
+import { requireAuth, requireManagerOrAbove } from "./auth-helpers";
 import { logActivity } from "@/server/services/activity-log";
+import { checkProductDependencies } from "@/server/services/deletion/dependency-checker";
+import { createDeletionRequest, immediateDeleteEntity } from "@/server/services/deletion/deletion-workflow";
 
 /**
  * 제품 입력 스키마
@@ -57,9 +59,9 @@ export async function getProducts(options?: {
     offset = 0,
   } = options || {};
 
-  // WHERE 조건 구성
+  // WHERE 조건 구성 (soft-deleted 제외)
   const user = await requireAuth();
-  const conditions = [eq(products.organizationId, user.organizationId)];
+  const conditions = [eq(products.organizationId, user.organizationId), isNull(products.deletedAt)];
 
   if (search) {
     conditions.push(
@@ -115,7 +117,7 @@ export async function getProductById(id: string): Promise<Product | null> {
   const result = await db
     .select()
     .from(products)
-    .where(and(eq(products.id, id), eq(products.organizationId, user.organizationId)))
+    .where(and(eq(products.id, id), eq(products.organizationId, user.organizationId), isNull(products.deletedAt)))
     .limit(1);
 
   return result[0] || null;
@@ -129,7 +131,7 @@ export async function getProductBySku(sku: string): Promise<Product | null> {
   const result = await db
     .select()
     .from(products)
-    .where(and(eq(products.sku, sku), eq(products.organizationId, user.organizationId)))
+    .where(and(eq(products.sku, sku), eq(products.organizationId, user.organizationId), isNull(products.deletedAt)))
     .limit(1);
 
   return result[0] || null;
@@ -252,31 +254,39 @@ export async function updateProduct(
 }
 
 /**
- * 제품 삭제
+ * 제품 삭제 (Soft Delete)
+ * - admin: 즉시 소프트 삭제 (의존성 체크 포함)
+ * - manager: 삭제 요청 생성 → admin 승인 필요
  */
-export async function deleteProduct(id: string): Promise<{ success: boolean; error?: string }> {
+export async function deleteProduct(
+  id: string,
+  reason: string = "관리자 삭제"
+): Promise<{ success: boolean; error?: string; requestId?: string }> {
   try {
-    const user = await requireAuth();
-    const existing = await getProductById(id);
-    if (!existing) {
-      return { success: false, error: "제품을 찾을 수 없습니다" };
+    const user = await requireManagerOrAbove();
+
+    if (user.role === "admin" || user.isSuperadmin) {
+      // admin은 즉시 soft delete
+      const result = await immediateDeleteEntity("product", id, reason, user);
+      if (result.success) {
+        revalidatePath("/products");
+      }
+      return result;
+    } else {
+      // manager는 삭제 요청 생성
+      const result = await createDeletionRequest(
+        { entityType: "product", entityId: id, reason },
+        user
+      );
+      if (result.success) {
+        revalidatePath("/products");
+      }
+      return {
+        success: result.success,
+        error: result.error,
+        requestId: result.requestId,
+      };
     }
-
-    await db
-      .delete(products)
-      .where(and(eq(products.id, id), eq(products.organizationId, user.organizationId)));
-
-    revalidatePath("/products");
-
-    await logActivity({
-      user,
-      action: "DELETE",
-      entityType: "product",
-      entityId: id,
-      description: `${existing.sku} ${existing.name} 제품 삭제`,
-    });
-
-    return { success: true };
   } catch (error) {
     console.error("제품 삭제 오류:", error);
     return {
@@ -287,32 +297,49 @@ export async function deleteProduct(id: string): Promise<{ success: boolean; err
 }
 
 /**
- * 제품 일괄 삭제
+ * 제품 일괄 삭제 (Soft Delete)
  */
 export async function deleteProducts(
-  ids: string[]
+  ids: string[],
+  reason: string = "일괄 삭제"
 ): Promise<{ success: boolean; deletedCount: number; error?: string }> {
   try {
-    const user = await requireAuth();
+    const user = await requireManagerOrAbove();
     if (ids.length === 0) {
       return { success: false, deletedCount: 0, error: "삭제할 제품이 없습니다" };
     }
 
-    const _result = await db
-      .delete(products)
-      .where(and(sql`${products.id} IN ${ids}`, eq(products.organizationId, user.organizationId)));
+    let successCount = 0;
+    const errors: string[] = [];
+
+    for (const id of ids) {
+      if (user.role === "admin" || user.isSuperadmin) {
+        const result = await immediateDeleteEntity("product", id, reason, user);
+        if (result.success) {
+          successCount++;
+        } else {
+          errors.push(result.error || "알 수 없는 오류");
+        }
+      } else {
+        const result = await createDeletionRequest(
+          { entityType: "product", entityId: id, reason },
+          user
+        );
+        if (result.success) {
+          successCount++;
+        } else {
+          errors.push(result.error || "알 수 없는 오류");
+        }
+      }
+    }
 
     revalidatePath("/products");
 
-    await logActivity({
-      user,
-      action: "DELETE",
-      entityType: "product",
-      entityId: ids.join(","),
-      description: `제품 ${ids.length}건 일괄 삭제`,
-    });
+    if (successCount === 0) {
+      return { success: false, deletedCount: 0, error: errors.join(", ") };
+    }
 
-    return { success: true, deletedCount: ids.length };
+    return { success: true, deletedCount: successCount };
   } catch (error) {
     console.error("제품 일괄 삭제 오류:", error);
     return {
@@ -324,6 +351,14 @@ export async function deleteProducts(
 }
 
 /**
+ * 제품 삭제 전 의존성 체크 (UI용)
+ */
+export async function checkProductDeleteDependencies(productId: string) {
+  const user = await requireAuth();
+  return checkProductDependencies(productId, user.organizationId);
+}
+
+/**
  * 카테고리 목록 조회
  */
 export async function getCategories(): Promise<string[]> {
@@ -331,7 +366,7 @@ export async function getCategories(): Promise<string[]> {
   const result = await db
     .selectDistinct({ category: products.category })
     .from(products)
-    .where(and(eq(products.organizationId, user.organizationId), sql`${products.category} IS NOT NULL`))
+    .where(and(eq(products.organizationId, user.organizationId), sql`${products.category} IS NOT NULL`, isNull(products.deletedAt)))
     .orderBy(asc(products.category));
 
   return result.map((r) => r.category).filter((c): c is string => c !== null);
@@ -347,18 +382,19 @@ export async function getProductStats(): Promise<{
   byCategory: Record<string, number>;
 }> {
   const user = await requireAuth();
+  const orgFilter = and(eq(products.organizationId, user.organizationId), isNull(products.deletedAt));
   const [totalResult, abcResult, xyzResult, categoryResult] = await Promise.all([
     db
       .select({ count: sql<number>`count(*)` })
       .from(products)
-      .where(eq(products.organizationId, user.organizationId)),
+      .where(orgFilter),
     db
       .select({
         grade: products.abcGrade,
         count: sql<number>`count(*)`,
       })
       .from(products)
-      .where(eq(products.organizationId, user.organizationId))
+      .where(orgFilter)
       .groupBy(products.abcGrade),
     db
       .select({
@@ -366,7 +402,7 @@ export async function getProductStats(): Promise<{
         count: sql<number>`count(*)`,
       })
       .from(products)
-      .where(eq(products.organizationId, user.organizationId))
+      .where(orgFilter)
       .groupBy(products.xyzGrade),
     db
       .select({
@@ -374,7 +410,7 @@ export async function getProductStats(): Promise<{
         count: sql<number>`count(*)`,
       })
       .from(products)
-      .where(eq(products.organizationId, user.organizationId))
+      .where(orgFilter)
       .groupBy(products.category),
   ]);
 

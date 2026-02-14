@@ -12,7 +12,7 @@ import {
   type PurchaseOrder,
   type PurchaseOrderItem,
 } from "@/server/db/schema";
-import { eq, and, desc, asc, sql, gte, lte, or } from "drizzle-orm";
+import { eq, and, desc, asc, sql, gte, lte, or, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { salesRecords, organizations } from "@/server/db/schema";
@@ -699,7 +699,7 @@ export async function getPurchaseOrders(options?: {
 
   const { status, supplierId, startDate, endDate, limit = 50, offset = 0 } = options || {};
 
-  const conditions = [eq(purchaseOrders.organizationId, orgId)];
+  const conditions = [eq(purchaseOrders.organizationId, orgId), isNull(purchaseOrders.deletedAt)];
 
   if (status) {
     conditions.push(

@@ -2,11 +2,13 @@
 
 import { db } from "@/server/db";
 import { suppliers, type Supplier } from "@/server/db/schema";
-import { eq, and, asc, desc, sql } from "drizzle-orm";
+import { eq, and, asc, desc, sql, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { getCurrentUser } from "./auth-helpers";
+import { getCurrentUser, requireManagerOrAbove } from "./auth-helpers";
 import { logActivity } from "@/server/services/activity-log";
+import { checkSupplierDependencies } from "@/server/services/deletion/dependency-checker";
+import { createDeletionRequest, immediateDeleteEntity } from "@/server/services/deletion/deletion-workflow";
 
 /**
  * 공급자 입력 스키마
@@ -48,7 +50,7 @@ export async function getSuppliers(options?: {
     return { suppliers: [], total: 0 };
   }
   const orgId = user.organizationId;
-  const conditions = [eq(suppliers.organizationId, orgId)];
+  const conditions = [eq(suppliers.organizationId, orgId), isNull(suppliers.deletedAt)];
 
   if (search) {
     conditions.push(
@@ -98,7 +100,7 @@ export async function getSupplierById(id: string): Promise<Supplier | null> {
   const result = await db
     .select()
     .from(suppliers)
-    .where(and(eq(suppliers.id, id), eq(suppliers.organizationId, orgId)))
+    .where(and(eq(suppliers.id, id), eq(suppliers.organizationId, orgId), isNull(suppliers.deletedAt)))
     .limit(1);
 
   return result[0] || null;
@@ -191,7 +193,7 @@ export async function updateSupplier(
     const [updated] = await db
       .update(suppliers)
       .set(updateData)
-      .where(and(eq(suppliers.id, id), eq(suppliers.organizationId, orgId)))
+      .where(and(eq(suppliers.id, id), eq(suppliers.organizationId, orgId), isNull(suppliers.deletedAt)))
       .returning();
 
     // 활동 로깅
@@ -217,81 +219,97 @@ export async function updateSupplier(
 }
 
 /**
- * 공급자 삭제
+ * 공급자 삭제 (Soft Delete)
+ * - admin: 즉시 소프트 삭제 (의존성 체크 포함)
+ * - manager: 삭제 요청 생성 → admin 승인 필요
  */
-export async function deleteSupplier(id: string): Promise<{ success: boolean; error?: string }> {
+export async function deleteSupplier(
+  id: string,
+  reason: string = "관리자 삭제"
+): Promise<{ success: boolean; error?: string; requestId?: string }> {
   try {
-    const user = await getCurrentUser();
-    if (!user?.organizationId) {
-      return { success: false, error: "인증이 필요합니다" };
-    }
-    const orgId = user.organizationId;
-    const existing = await getSupplierById(id);
-    if (!existing) {
-      return { success: false, error: "공급자를 찾을 수 없습니다" };
-    }
+    const user = await requireManagerOrAbove();
 
-    await db
-      .delete(suppliers)
-      .where(and(eq(suppliers.id, id), eq(suppliers.organizationId, orgId)));
-
-    // 활동 로깅
-    if (user) {
-      await logActivity({
-        user,
-        action: "DELETE",
-        entityType: "supplier",
-        entityId: id,
-        description: `공급업체 삭제`,
-      });
+    if (user.role === "admin" || user.isSuperadmin) {
+      const result = await immediateDeleteEntity("supplier", id, reason, user);
+      if (result.success) {
+        revalidatePath("/dashboard/suppliers");
+      }
+      return result;
+    } else {
+      const result = await createDeletionRequest(
+        { entityType: "supplier", entityId: id, reason },
+        user
+      );
+      if (result.success) {
+        revalidatePath("/dashboard/suppliers");
+      }
+      return {
+        success: result.success,
+        error: result.error,
+        requestId: result.requestId,
+      };
     }
-
-    revalidatePath("/dashboard/suppliers");
-    return { success: true };
   } catch (error) {
     console.error("공급자 삭제 오류:", error);
-    return { success: false, error: "공급자 삭제에 실패했습니다" };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "공급자 삭제에 실패했습니다",
+    };
   }
 }
 
 /**
- * 공급자 일괄 삭제
+ * 공급자 일괄 삭제 (Soft Delete)
  */
 export async function deleteSuppliers(
-  ids: string[]
+  ids: string[],
+  reason: string = "일괄 삭제"
 ): Promise<{ success: boolean; deletedCount: number; error?: string }> {
   try {
     if (ids.length === 0) {
       return { success: false, deletedCount: 0, error: "삭제할 공급자가 없습니다" };
     }
 
-    const user = await getCurrentUser();
-    if (!user?.organizationId) {
-      return { success: false, deletedCount: 0, error: "인증이 필요합니다" };
-    }
-    const orgId = user.organizationId;
+    const user = await requireManagerOrAbove();
+    let successCount = 0;
+    const errors: string[] = [];
 
-    await db
-      .delete(suppliers)
-      .where(and(sql`${suppliers.id} IN ${ids}`, eq(suppliers.organizationId, orgId)));
-
-    // 활동 로깅
-    if (user) {
-      await logActivity({
-        user,
-        action: "DELETE",
-        entityType: "supplier",
-        entityId: ids.join(","),
-        description: `공급업체 ${ids.length}건 일괄 삭제`,
-      });
+    for (const id of ids) {
+      if (user.role === "admin" || user.isSuperadmin) {
+        const result = await immediateDeleteEntity("supplier", id, reason, user);
+        if (result.success) successCount++;
+        else errors.push(result.error || "알 수 없는 오류");
+      } else {
+        const result = await createDeletionRequest(
+          { entityType: "supplier", entityId: id, reason },
+          user
+        );
+        if (result.success) successCount++;
+        else errors.push(result.error || "알 수 없는 오류");
+      }
     }
 
     revalidatePath("/dashboard/suppliers");
-    return { success: true, deletedCount: ids.length };
+
+    if (successCount === 0) {
+      return { success: false, deletedCount: 0, error: errors.join(", ") };
+    }
+
+    return { success: true, deletedCount: successCount };
   } catch (error) {
     console.error("공급자 일괄 삭제 오류:", error);
     return { success: false, deletedCount: 0, error: "공급자 삭제에 실패했습니다" };
   }
+}
+
+/**
+ * 공급자 삭제 전 의존성 체크 (UI용)
+ */
+export async function checkSupplierDeleteDependencies(supplierId: string) {
+  const user = await getCurrentUser();
+  if (!user?.organizationId) throw new Error("인증이 필요합니다");
+  return checkSupplierDependencies(supplierId, user.organizationId);
 }
 
 /**
@@ -314,7 +332,7 @@ export async function getSupplierStats(): Promise<{
       avgLeadTime: sql<number>`avg(${suppliers.avgLeadTime})`,
     })
     .from(suppliers)
-    .where(eq(suppliers.organizationId, orgId));
+    .where(and(eq(suppliers.organizationId, orgId), isNull(suppliers.deletedAt)));
 
   return {
     total: Number(result[0]?.count || 0),
@@ -338,7 +356,7 @@ export async function getSupplierOptions(): Promise<{ id: string; name: string }
       name: suppliers.name,
     })
     .from(suppliers)
-    .where(eq(suppliers.organizationId, orgId))
+    .where(and(eq(suppliers.organizationId, orgId), isNull(suppliers.deletedAt)))
     .orderBy(asc(suppliers.name));
 
   return result;
