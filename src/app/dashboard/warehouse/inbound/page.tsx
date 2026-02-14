@@ -1,5 +1,6 @@
 import { WarehouseInboundClient } from "./_components/warehouse-inbound-client";
 import { getWarehouseInboundOrders } from "@/server/actions/inbound";
+import { getWarehouses } from "@/server/actions/warehouses";
 
 export const metadata = {
   title: "입고예정 - Stock & Logis",
@@ -7,6 +8,15 @@ export const metadata = {
 };
 
 export default async function WarehouseInboundPage() {
-  const result = await getWarehouseInboundOrders().catch(() => ({ orders: [] }));
-  return <WarehouseInboundClient initialOrders={result.orders} />;
+  const [ordersResult, warehousesResult] = await Promise.all([
+    getWarehouseInboundOrders().catch(() => ({ orders: [] })),
+    getWarehouses().catch(() => ({ warehouses: [] })),
+  ]);
+
+  return (
+    <WarehouseInboundClient
+      initialOrders={ordersResult.orders}
+      warehouses={warehousesResult.warehouses.filter((w) => w.isActive)}
+    />
+  );
 }

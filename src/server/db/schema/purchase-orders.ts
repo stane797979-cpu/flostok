@@ -12,6 +12,7 @@ import {
 import { organizations } from "./organizations";
 import { suppliers } from "./suppliers";
 import { products } from "./products";
+import { warehouses } from "./warehouses";
 import { users } from "./users";
 
 // 발주서 상태
@@ -33,6 +34,9 @@ export const purchaseOrders = pgTable("purchase_orders", {
   id: uuid("id").primaryKey().defaultRandom(),
   organizationId: uuid("organization_id")
     .references(() => organizations.id, { onDelete: "cascade" })
+    .notNull(),
+  destinationWarehouseId: uuid("destination_warehouse_id")
+    .references(() => warehouses.id, { onDelete: "cascade" })
     .notNull(),
   orderNumber: text("order_number").notNull(), // 발주번호 (PO-2024-001)
   supplierId: uuid("supplier_id").references(() => suppliers.id, { onDelete: "set null" }),
@@ -64,6 +68,7 @@ export const purchaseOrders = pgTable("purchase_orders", {
   index("purchase_orders_org_status_idx").on(table.organizationId, table.status),
   index("purchase_orders_org_date_idx").on(table.organizationId, table.orderDate),
   index("purchase_orders_supplier_idx").on(table.supplierId),
+  index("purchase_orders_dest_warehouse_idx").on(table.destinationWarehouseId),
 ]);
 
 // 발주 항목

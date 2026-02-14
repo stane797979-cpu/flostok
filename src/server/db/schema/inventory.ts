@@ -12,6 +12,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 import { products } from "./products";
+import { warehouses } from "./warehouses";
 import { inboundRecords } from "./inbound-records";
 
 // 재고 상태 (7단계)
@@ -31,6 +32,9 @@ export const inventory = pgTable("inventory", {
   organizationId: uuid("organization_id")
     .references(() => organizations.id, { onDelete: "cascade" })
     .notNull(),
+  warehouseId: uuid("warehouse_id")
+    .references(() => warehouses.id, { onDelete: "cascade" })
+    .notNull(),
   productId: uuid("product_id")
     .references(() => products.id, { onDelete: "cascade" })
     .notNull(),
@@ -39,7 +43,7 @@ export const inventory = pgTable("inventory", {
   reservedStock: integer("reserved_stock").default(0), // 예약재고
   incomingStock: integer("incoming_stock").default(0), // 입고예정
   status: inventoryStatusEnum("status").default("optimal"),
-  location: text("location"), // 창고 위치
+  location: text("location"), // 창고 내 랙/선반 위치
   // 계산 필드 (캐싱)
   daysOfInventory: numeric("days_of_inventory", { precision: 8, scale: 2 }), // 재고일수
   inventoryValue: integer("inventory_value").default(0), // 재고금액 (원)
@@ -47,8 +51,13 @@ export const inventory = pgTable("inventory", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
-  uniqueIndex("inventory_org_product_idx").on(table.organizationId, table.productId),
+  uniqueIndex("inventory_org_warehouse_product_idx").on(
+    table.organizationId,
+    table.warehouseId,
+    table.productId
+  ),
   index("inventory_org_status_idx").on(table.organizationId, table.status),
+  index("inventory_warehouse_status_idx").on(table.warehouseId, table.status),
 ]);
 
 // 재고 이력 (변동 기록)
@@ -56,6 +65,9 @@ export const inventoryHistory = pgTable("inventory_history", {
   id: uuid("id").primaryKey().defaultRandom(),
   organizationId: uuid("organization_id")
     .references(() => organizations.id, { onDelete: "cascade" })
+    .notNull(),
+  warehouseId: uuid("warehouse_id")
+    .references(() => warehouses.id, { onDelete: "cascade" })
     .notNull(),
   productId: uuid("product_id")
     .references(() => products.id, { onDelete: "cascade" })
@@ -74,6 +86,7 @@ export const inventoryHistory = pgTable("inventory_history", {
   index("inventory_history_product_date_idx").on(table.productId, table.date),
   index("inventory_history_org_type_idx").on(table.organizationId, table.changeType),
   index("inventory_history_org_product_date_idx").on(table.organizationId, table.productId, table.date),
+  index("inventory_history_warehouse_date_idx").on(table.warehouseId, table.date),
 ]);
 
 // Lot 상태
@@ -88,6 +101,9 @@ export const inventoryLots = pgTable("inventory_lots", {
   id: uuid("id").primaryKey().defaultRandom(),
   organizationId: uuid("organization_id")
     .references(() => organizations.id, { onDelete: "cascade" })
+    .notNull(),
+  warehouseId: uuid("warehouse_id")
+    .references(() => warehouses.id, { onDelete: "cascade" })
     .notNull(),
   productId: uuid("product_id")
     .references(() => products.id, { onDelete: "cascade" })
@@ -106,6 +122,7 @@ export const inventoryLots = pgTable("inventory_lots", {
 }, (table) => [
   index("inventory_lots_org_product_idx").on(table.organizationId, table.productId),
   index("inventory_lots_product_status_idx").on(table.productId, table.status),
+  index("inventory_lots_warehouse_product_idx").on(table.warehouseId, table.productId),
 ]);
 
 export type Inventory = typeof inventory.$inferSelect;

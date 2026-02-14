@@ -9,6 +9,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 import { products } from "./products";
+import { warehouses } from "./warehouses";
 import { users } from "./users";
 
 // 출고요청 상태
@@ -26,6 +27,12 @@ export const outboundRequests = pgTable(
     organizationId: uuid("organization_id")
       .references(() => organizations.id, { onDelete: "cascade" })
       .notNull(),
+    sourceWarehouseId: uuid("source_warehouse_id")
+      .references(() => warehouses.id, { onDelete: "cascade" })
+      .notNull(),
+    targetWarehouseId: uuid("target_warehouse_id").references(() => warehouses.id, {
+      onDelete: "set null",
+    }),
     requestNumber: text("request_number").notNull(), // OR-YYYYMMDD-XXX
     status: outboundRequestStatusEnum("status").default("pending").notNull(),
     outboundType: text("outbound_type").notNull(), // OUTBOUND_SALE, OUTBOUND_TRANSFER 등
@@ -53,6 +60,7 @@ export const outboundRequests = pgTable(
       table.organizationId,
       table.createdAt
     ),
+    index("outbound_requests_source_warehouse_idx").on(table.sourceWarehouseId),
   ]
 );
 

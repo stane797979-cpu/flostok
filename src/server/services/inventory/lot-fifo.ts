@@ -18,6 +18,7 @@ export interface FIFODeduction {
 export interface DeductByFIFOParams {
   organizationId: string;
   productId: string;
+  warehouseId: string;
   quantity: number;
 }
 
@@ -38,13 +39,13 @@ export interface DeductByFIFOResult {
 export async function deductByFIFO(
   params: DeductByFIFOParams
 ): Promise<DeductByFIFOResult> {
-  const { organizationId, productId, quantity } = params;
+  const { organizationId, productId, warehouseId, quantity } = params;
 
   if (quantity <= 0) {
     return { success: false, deductions: [], error: "차감 수량은 1 이상이어야 합니다" };
   }
 
-  // 해당 제품의 active Lot 조회 (FIFO 순서)
+  // 해당 제품의 active Lot 조회 (창고별 FIFO 순서)
   const activeLots = await db
     .select()
     .from(inventoryLots)
@@ -52,6 +53,7 @@ export async function deductByFIFO(
       and(
         eq(inventoryLots.organizationId, organizationId),
         eq(inventoryLots.productId, productId),
+        eq(inventoryLots.warehouseId, warehouseId),
         eq(inventoryLots.status, "active"),
         gt(inventoryLots.remainingQuantity, 0)
       )

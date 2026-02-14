@@ -43,6 +43,7 @@ const inventoryTransactionSchema = z.object({
   referenceId: z.string().uuid().optional(),
   notes: z.string().optional(),
   location: z.string().optional(),
+  warehouseId: z.string().uuid().optional(),
 });
 
 export type InventoryTransactionInput = z.infer<typeof inventoryTransactionSchema>;
@@ -53,6 +54,7 @@ export type InventoryTransactionInput = z.infer<typeof inventoryTransactionSchem
 type InventoryListItem = {
   id: string;
   organizationId: string;
+  warehouseId: string;
   productId: string;
   currentStock: number;
   availableStock: number | null;
@@ -71,6 +73,7 @@ type InventoryListItem = {
 export async function getInventoryList(options?: {
   productId?: string;
   status?: string;
+  warehouseId?: string;
   limit?: number;
   offset?: number;
 }): Promise<{
@@ -78,7 +81,7 @@ export async function getInventoryList(options?: {
   total: number;
 }> {
   const user = await requireAuth();
-  const { productId, status, limit = 50, offset = 0 } = options || {};
+  const { productId, status, warehouseId, limit = 50, offset = 0 } = options || {};
 
   const conditions = [eq(inventory.organizationId, user.organizationId)];
 
@@ -87,6 +90,9 @@ export async function getInventoryList(options?: {
   }
   if (status) {
     conditions.push(eq(inventory.status, status as (typeof inventory.status.enumValues)[number]));
+  }
+  if (warehouseId) {
+    conditions.push(eq(inventory.warehouseId, warehouseId));
   }
 
   // 30일 전 날짜 (일평균출고량 계산용)
@@ -99,6 +105,7 @@ export async function getInventoryList(options?: {
       .select({
         id: inventory.id,
         organizationId: inventory.organizationId,
+        warehouseId: inventory.warehouseId,
         productId: inventory.productId,
         currentStock: inventory.currentStock,
         availableStock: inventory.availableStock,
@@ -164,6 +171,7 @@ export async function getInventoryList(options?: {
       return {
         id: row.id,
         organizationId: row.organizationId,
+        warehouseId: row.warehouseId,
         productId: row.productId,
         currentStock: row.currentStock,
         availableStock: row.availableStock,
@@ -184,14 +192,33 @@ export async function getInventoryList(options?: {
 }
 
 /**
- * 제품별 재고 조회
+ * 제품별 재고 조회 (다중 창고 대응)
  */
-export async function getInventoryByProductId(productId: string): Promise<Inventory | null> {
+export async function getInventoryByProductId(
+  productId: string,
+  warehouseId?: string
+): Promise<Inventory | null> {
   const user = await requireAuth();
+
+  // warehouseId 없으면 기본 창고 사용
+  let targetWarehouseId = warehouseId;
+  if (!targetWarehouseId) {
+    const { getDefaultWarehouse } = await import("./warehouses");
+    const dw = await getDefaultWarehouse();
+    if (!dw) return null;
+    targetWarehouseId = dw.id;
+  }
+
   const result = await db
     .select()
     .from(inventory)
-    .where(and(eq(inventory.productId, productId), eq(inventory.organizationId, user.organizationId)))
+    .where(
+      and(
+        eq(inventory.productId, productId),
+        eq(inventory.organizationId, user.organizationId),
+        eq(inventory.warehouseId, targetWarehouseId)
+      )
+    )
     .limit(1);
 
   return result[0] || null;
@@ -225,6 +252,15 @@ export async function processInventoryTransaction(
     // 유효성 검사
     const validated = inventoryTransactionSchema.parse(input);
 
+    // warehouseId 결정: 입력값 또는 기본 창고
+    let warehouseId = validated.warehouseId;
+    if (!warehouseId) {
+      const { getDefaultWarehouse } = await import("./warehouses");
+      const dw = await getDefaultWarehouse();
+      if (!dw) return { success: false, error: "기본 창고를 찾을 수 없습니다" };
+      warehouseId = dw.id;
+    }
+
     // 변동 유형 정보
     const changeTypeInfo = getChangeTypeInfo(validated.changeType as InventoryChangeTypeKey);
     const changeAmount = validated.quantity * changeTypeInfo.sign;
@@ -241,11 +277,17 @@ export async function processInventoryTransaction(
       return { success: false, error: "제품을 찾을 수 없습니다" };
     }
 
-    // 현재 재고 조회 (직접 조회 — requireAuth 중복 제거)
+    // 현재 재고 조회 (창고별)
     const invResult = await db
       .select()
       .from(inventory)
-      .where(and(eq(inventory.productId, validated.productId), eq(inventory.organizationId, user.organizationId)))
+      .where(
+        and(
+          eq(inventory.productId, validated.productId),
+          eq(inventory.organizationId, user.organizationId),
+          eq(inventory.warehouseId, warehouseId)
+        )
+      )
       .limit(1);
     let currentInventory: typeof inventory.$inferSelect | null = invResult[0] || null;
     const stockBefore = currentInventory?.currentStock || 0;
@@ -283,11 +325,12 @@ export async function processInventoryTransaction(
         })
         .where(eq(inventory.id, currentInventory.id));
     } else {
-      // 재고 생성
+      // 재고 생성 (창고 포함)
       const [newInventory] = await db
         .insert(inventory)
         .values({
           organizationId: user.organizationId,
+          warehouseId: warehouseId,
           productId: validated.productId,
           currentStock: stockAfter,
           availableStock: stockAfter,
@@ -304,6 +347,7 @@ export async function processInventoryTransaction(
       const fifoResult = await deductByFIFO({
         organizationId: user.organizationId,
         productId: validated.productId,
+        warehouseId: warehouseId,
         quantity: Math.abs(changeAmount),
       });
       if (fifoResult.success && fifoResult.deductions.length > 0) {
@@ -313,9 +357,10 @@ export async function processInventoryTransaction(
       // Lot 부족 시에도 총재고 차감은 진행 (기존 데이터 호환)
     }
 
-    // 재고 이력 기록
+    // 재고 이력 기록 (창고 포함)
     await db.insert(inventoryHistory).values({
       organizationId: user.organizationId,
+      warehouseId: warehouseId,
       productId: validated.productId,
       date: today,
       stockBefore,
@@ -417,7 +462,12 @@ export async function getInventoryHistory(options?: {
 /**
  * 재고 통계 내부 로직
  */
-async function _getInventoryStatsInternal(orgId: string) {
+async function _getInventoryStatsInternal(orgId: string, warehouseId?: string) {
+  const conditions = [eq(inventory.organizationId, orgId)];
+  if (warehouseId) {
+    conditions.push(eq(inventory.warehouseId, warehouseId));
+  }
+
   const result = await db
     .select({
       status: inventory.status,
@@ -425,7 +475,7 @@ async function _getInventoryStatsInternal(orgId: string) {
       totalValue: sql<number>`sum(${inventory.inventoryValue})`,
     })
     .from(inventory)
-    .where(eq(inventory.organizationId, orgId))
+    .where(and(...conditions))
     .groupBy(inventory.status);
 
   const stats = {
@@ -469,7 +519,7 @@ async function _getInventoryStatsInternal(orgId: string) {
 /**
  * 재고 통계 (30초 캐시)
  */
-export async function getInventoryStats(): Promise<{
+export async function getInventoryStats(warehouseId?: string): Promise<{
   totalProducts: number;
   outOfStock: number;
   critical: number;
@@ -479,9 +529,13 @@ export async function getInventoryStats(): Promise<{
   totalValue: number;
 }> {
   const user = await requireAuth();
+  const cacheKey = warehouseId
+    ? `inventory-stats-${user.organizationId}-${warehouseId}`
+    : `inventory-stats-${user.organizationId}`;
+
   return unstable_cache(
-    () => _getInventoryStatsInternal(user.organizationId),
-    [`inventory-stats-${user.organizationId}`],
+    () => _getInventoryStatsInternal(user.organizationId, warehouseId),
+    [cacheKey],
     { revalidate: 30, tags: [`inventory-${user.organizationId}`] }
   )();
 }
@@ -495,7 +549,13 @@ export async function initializeInventory(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const user = await requireAuth();
-    const existing = await getInventoryByProductId(productId);
+
+    // 기본 창고 조회
+    const { getDefaultWarehouse } = await import("./warehouses");
+    const warehouse = await getDefaultWarehouse();
+    if (!warehouse) return { success: false, error: "기본 창고를 찾을 수 없습니다" };
+
+    const existing = await getInventoryByProductId(productId, warehouse.id);
     if (existing) {
       return { success: true }; // 이미 존재
     }
@@ -518,6 +578,7 @@ export async function initializeInventory(
 
     await db.insert(inventory).values({
       organizationId: user.organizationId,
+      warehouseId: warehouse.id,
       productId,
       currentStock: initialStock,
       availableStock: initialStock,
@@ -547,6 +608,7 @@ async function _getInventoryListByStatusesInternal(
     .select({
       id: inventory.id,
       organizationId: inventory.organizationId,
+      warehouseId: inventory.warehouseId,
       productId: inventory.productId,
       currentStock: inventory.currentStock,
       availableStock: inventory.availableStock,
@@ -581,7 +643,7 @@ async function _getInventoryListByStatusesInternal(
 
   return items.map((row) => ({
     ...row,
-    daysOfInventory: row.daysOfInventory,
+    daysOfInventory: row.daysOfInventory ? Number(row.daysOfInventory) : null,
   }));
 }
 

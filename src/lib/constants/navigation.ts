@@ -19,6 +19,7 @@ import {
   PackageCheck,
   PackageX,
   Compass,
+  Warehouse,
   type LucideIcon,
 } from "lucide-react";
 
@@ -147,6 +148,13 @@ export const MAIN_SECTIONS: NavSection[] = [
         icon: Package,
         description: "재고 상태 및 수량 관리",
         menuKey: "inventory",
+      },
+      {
+        title: "창고 관리",
+        href: "/dashboard/warehouses",
+        icon: Warehouse,
+        description: "창고 추가, 수정, 삭제 및 재고 이동",
+        menuKey: "warehouses",
       },
       {
         title: "결품관리",

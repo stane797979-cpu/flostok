@@ -61,7 +61,7 @@ export async function confirmInbound(input: ConfirmInboundInput): Promise<{
     // 유효성 검사
     const validated = confirmInboundSchema.parse(input);
 
-    // 발주서 조회
+    // 발주서 조회 (destinationWarehouseId 포함)
     const [purchaseOrder] = await db
       .select()
       .from(purchaseOrders)
@@ -72,6 +72,16 @@ export async function confirmInbound(input: ConfirmInboundInput): Promise<{
 
     if (!purchaseOrder) {
       return { success: false, error: "발주서를 찾을 수 없습니다" };
+    }
+
+    // 입고 대상 창고 ID 결정
+    let destinationWarehouseId = purchaseOrder.destinationWarehouseId;
+    if (!destinationWarehouseId) {
+      // 발주서에 창고가 없으면 기본 창고 사용 (하위 호환)
+      const { getDefaultWarehouse } = await import("./warehouses");
+      const dw = await getDefaultWarehouse();
+      if (!dw) return { success: false, error: "입고 대상 창고를 찾을 수 없습니다" };
+      destinationWarehouseId = dw.id;
     }
 
     // 발주서가 입고 가능한 상태인지 확인
@@ -133,11 +143,12 @@ export async function confirmInbound(input: ConfirmInboundInput): Promise<{
         // Lot 번호: 입력값 또는 자동 생성
         const lotNum = item.lotNumber || `AUTO-${today.replace(/-/g, "")}-${Date.now().toString(36)}`;
 
-        // 1. 입고 기록 생성
+        // 1. 입고 기록 생성 (창고 포함)
         const [inboundRecord] = await tx
           .insert(inboundRecords)
           .values({
             organizationId: user.organizationId,
+            warehouseId: destinationWarehouseId,
             purchaseOrderId: validated.orderId,
             productId: item.productId,
             date: today,
@@ -155,9 +166,10 @@ export async function confirmInbound(input: ConfirmInboundInput): Promise<{
 
         recordIds.push(inboundRecord.id);
 
-        // 1-1. Lot 재고 생성
+        // 1-1. Lot 재고 생성 (창고 포함)
         await tx.insert(inventoryLots).values({
           organizationId: user.organizationId,
+          warehouseId: destinationWarehouseId,
           productId: item.productId,
           lotNumber: lotNum,
           expiryDate: item.expiryDate,
@@ -168,7 +180,7 @@ export async function confirmInbound(input: ConfirmInboundInput): Promise<{
           status: "active",
         });
 
-        // 2. 재고 증가 처리 (user + product 전달, revalidate/log는 루프 후 1회만)
+        // 2. 재고 증가 처리 (창고 지정 + user + product 전달, revalidate/log는 루프 후 1회만)
         const inventoryResult = await processInventoryTransaction(
           {
             productId: item.productId,
@@ -177,6 +189,7 @@ export async function confirmInbound(input: ConfirmInboundInput): Promise<{
             referenceId: validated.orderId,
             notes: `발주서 ${purchaseOrder.orderNumber} 입고`,
             location: item.location,
+            warehouseId: destinationWarehouseId,
           },
           {
             user,
@@ -368,14 +381,20 @@ export async function createOtherInbound(input: OtherInboundInput): Promise<{
     const user = await requireAuth();
     const validated = otherInboundSchema.parse(input);
 
+    // 기본 창고 조회
+    const { getDefaultWarehouse } = await import("./warehouses");
+    const warehouse = await getDefaultWarehouse();
+    if (!warehouse) return { success: false, error: "기본 창고를 찾을 수 없습니다" };
+
     const today = new Date().toISOString().split("T")[0];
     const lotNum = validated.lotNumber || `AUTO-${today.replace(/-/g, "")}-${Date.now().toString(36)}`;
 
-    // 1. 입고 기록 생성 (purchaseOrderId = null)
+    // 1. 입고 기록 생성 (purchaseOrderId = null, 기본 창고)
     const [record] = await db
       .insert(inboundRecords)
       .values({
         organizationId: user.organizationId,
+        warehouseId: warehouse.id,
         purchaseOrderId: null,
         productId: validated.productId,
         date: today,
@@ -391,9 +410,10 @@ export async function createOtherInbound(input: OtherInboundInput): Promise<{
       })
       .returning();
 
-    // 1-1. Lot 재고 생성
+    // 1-1. Lot 재고 생성 (창고 포함)
     await db.insert(inventoryLots).values({
       organizationId: user.organizationId,
+      warehouseId: warehouse.id,
       productId: validated.productId,
       lotNumber: lotNum,
       expiryDate: validated.expiryDate,
@@ -404,13 +424,14 @@ export async function createOtherInbound(input: OtherInboundInput): Promise<{
       status: "active",
     });
 
-    // 2. 재고 증가 처리
+    // 2. 재고 증가 처리 (창고 지정)
     const inventoryResult = await processInventoryTransaction({
       productId: validated.productId,
       changeType: validated.inboundType,
       quantity: validated.quantity,
       notes: validated.notes,
       location: validated.location,
+      warehouseId: warehouse.id,
     });
 
     if (!inventoryResult.success) {
@@ -707,7 +728,7 @@ export async function bulkConfirmInbound(
             error: result.error || "입고 처리 실패",
           });
         }
-      } catch (err) {
+      } catch {
         errors.push({
           orderId: order.id,
           orderNumber: order.orderNumber,

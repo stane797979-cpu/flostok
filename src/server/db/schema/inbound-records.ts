@@ -1,6 +1,7 @@
 import { pgTable, uuid, text, timestamp, integer, pgEnum, date, index } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 import { products } from "./products";
+import { warehouses } from "./warehouses";
 import { purchaseOrders } from "./purchase-orders";
 import { users } from "./users";
 
@@ -18,6 +19,9 @@ export const inboundRecords = pgTable("inbound_records", {
   organizationId: uuid("organization_id")
     .references(() => organizations.id, { onDelete: "cascade" })
     .notNull(),
+  warehouseId: uuid("warehouse_id")
+    .references(() => warehouses.id, { onDelete: "cascade" })
+    .notNull(),
   purchaseOrderId: uuid("purchase_order_id").references(() => purchaseOrders.id, {
     onDelete: "set null",
   }),
@@ -34,7 +38,7 @@ export const inboundRecords = pgTable("inbound_records", {
     onDelete: "set null",
   }),
   inspectedAt: timestamp("inspected_at", { withTimezone: true }),
-  location: text("location"), // 적치 위치
+  location: text("location"), // 창고 내 적치 위치
   lotNumber: text("lot_number"), // LOT 번호
   expiryDate: date("expiry_date"), // 유통기한 (해당시)
   notes: text("notes"),
@@ -43,6 +47,7 @@ export const inboundRecords = pgTable("inbound_records", {
   index("inbound_records_org_date_idx").on(table.organizationId, table.date),
   index("inbound_records_product_date_idx").on(table.productId, table.date),
   index("inbound_records_po_idx").on(table.purchaseOrderId),
+  index("inbound_records_warehouse_date_idx").on(table.warehouseId, table.date),
 ]);
 
 export type InboundRecord = typeof inboundRecords.$inferSelect;

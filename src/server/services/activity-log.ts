@@ -18,6 +18,7 @@ export type ActivityEntityType =
   | "product"
   | "supplier"
   | "inventory"
+  | "warehouse"
   | "purchase_order"
   | "sales_record"
   | "inbound_record"

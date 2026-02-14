@@ -47,6 +47,8 @@ function generateRequestNumber(): string {
  */
 const createOutboundRequestSchema = z.object({
   outboundType: z.string(),
+  sourceWarehouseId: z.string().uuid().optional(),
+  targetWarehouseId: z.string().uuid().optional(),
   items: z
     .array(
       z.object({
@@ -69,13 +71,24 @@ export async function createOutboundRequest(
     const user = await requireManagerOrAbove();
     const validated = createOutboundRequestSchema.parse(input);
 
+    // sourceWarehouseId 없으면 기본 창고 자동 할당
+    let sourceWarehouseId = validated.sourceWarehouseId;
+    if (!sourceWarehouseId) {
+      const { getDefaultWarehouse } = await import("./warehouses");
+      const dw = await getDefaultWarehouse();
+      if (!dw) return { success: false, error: "기본 창고를 찾을 수 없습니다" };
+      sourceWarehouseId = dw.id;
+    }
+
     const requestNumber = generateRequestNumber();
 
-    // 출고 요청 생성
+    // 출고 요청 생성 (창고 정보 포함)
     const [request] = await db
       .insert(outboundRequests)
       .values({
         organizationId: user.organizationId,
+        sourceWarehouseId: sourceWarehouseId,
+        targetWarehouseId: validated.targetWarehouseId || null,
         requestNumber,
         status: "pending",
         outboundType: validated.outboundType,
@@ -398,7 +411,8 @@ export async function confirmOutboundRequest(
       if (!requestItem) continue;
       if (item.confirmedQuantity === 0) continue;
 
-      const result = await processInventoryTransaction({
+      // 출발 창고에서 출고
+      const outboundResult = await processInventoryTransaction({
         productId: requestItem.productId,
         changeType: request.outboundType as
           | "OUTBOUND_SALE"
@@ -410,13 +424,33 @@ export async function confirmOutboundRequest(
         quantity: item.confirmedQuantity,
         referenceId: validated.requestId,
         notes: validated.notes,
+        warehouseId: request.sourceWarehouseId,
       });
 
-      if (!result.success) {
+      if (!outboundResult.success) {
         return {
           success: false,
-          error: `재고 차감 실패: ${result.error}`,
+          error: `출고 실패: ${outboundResult.error}`,
         };
+      }
+
+      // 이동 출고(OUTBOUND_TRANSFER)이면 도착 창고로 입고
+      if (request.outboundType === "OUTBOUND_TRANSFER" && request.targetWarehouseId) {
+        const inboundResult = await processInventoryTransaction({
+          productId: requestItem.productId,
+          changeType: "INBOUND_TRANSFER",
+          quantity: item.confirmedQuantity,
+          referenceId: validated.requestId,
+          notes: validated.notes,
+          warehouseId: request.targetWarehouseId,
+        });
+
+        if (!inboundResult.success) {
+          return {
+            success: false,
+            error: `입고 실패: ${inboundResult.error}`,
+          };
+        }
       }
     }
 

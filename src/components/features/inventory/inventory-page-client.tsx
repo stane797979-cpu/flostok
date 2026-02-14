@@ -5,6 +5,13 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Search, RefreshCw, Download, Loader2 } from "lucide-react";
 import { exportInventoryToExcel } from "@/server/actions/excel-export";
 import { useToast } from "@/hooks/use-toast";
@@ -24,18 +31,40 @@ interface InventoryStats {
   excess: number;
 }
 
+interface Warehouse {
+  id: string;
+  code: string;
+  name: string;
+}
+
 interface InventoryPageClientProps {
   items: InventoryItem[];
   stats: InventoryStats;
+  warehouses: Warehouse[];
+  selectedWarehouseId?: string;
 }
 
-export function InventoryPageClient({ items, stats }: InventoryPageClientProps) {
+export function InventoryPageClient({
+  items,
+  stats,
+  warehouses,
+  selectedWarehouseId,
+}: InventoryPageClientProps) {
   const [search, setSearch] = useState("");
   const [adjustTarget, setAdjustTarget] = useState<AdjustmentTarget | null>(null);
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
+
+  // 창고 필터 변경
+  const handleWarehouseChange = (value: string) => {
+    const url = new URLSearchParams();
+    if (value !== "all") {
+      url.set("warehouseId", value);
+    }
+    router.push(`/dashboard/inventory?${url.toString()}`);
+  };
 
   // 클라이언트 검색 필터링
   const filtered = search
@@ -147,18 +176,39 @@ export function InventoryPageClient({ items, stats }: InventoryPageClientProps) 
       </div>
 
       {/* 액션 바 */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative w-full sm:w-80">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <Input
-            type="search"
-            placeholder="제품명, SKU 검색..."
-            className="pl-9"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+      <div className="flex flex-col gap-4">
+        {/* 필터 영역 */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <div className="relative w-full sm:w-80">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              type="search"
+              placeholder="제품명, SKU 검색..."
+              className="pl-9"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <Select
+            value={selectedWarehouseId || "all"}
+            onValueChange={handleWarehouseChange}
+          >
+            <SelectTrigger className="w-full sm:w-[200px]">
+              <SelectValue placeholder="전체 창고" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 창고</SelectItem>
+              {warehouses.map((w) => (
+                <SelectItem key={w.id} value={w.id}>
+                  {w.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-        <div className="flex items-center gap-2">
+
+        {/* 액션 버튼 */}
+        <div className="flex items-center justify-end gap-2">
           <Button
             variant="outline"
             size="sm"

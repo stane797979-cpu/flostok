@@ -26,6 +26,7 @@ import { getInventoryStatus } from "@/lib/constants/inventory-status";
 export interface InventoryItem {
   id: string;
   productId: string;
+  warehouseId: string | null;
   currentStock: number;
   availableStock: number | null;
   daysOfInventory: number | null;
@@ -38,6 +39,11 @@ export interface InventoryItem {
     abcGrade: "A" | "B" | "C" | null;
     xyzGrade: "X" | "Y" | "Z" | null;
   };
+  warehouse: {
+    id: string;
+    name: string;
+    code: string;
+  } | null;
 }
 
 interface InventoryTableProps {
@@ -45,7 +51,7 @@ interface InventoryTableProps {
   onAdjust: (item: InventoryItem) => void;
 }
 
-type SortKey = "sku" | "name" | "status" | "abcXyzGrade" | "currentStock" | "safetyStock" | "reorderPoint" | "daysOfInventory" | "location";
+type SortKey = "sku" | "name" | "status" | "abcXyzGrade" | "currentStock" | "safetyStock" | "reorderPoint" | "daysOfInventory" | "warehouse" | "location";
 
 const ABC_XYZ_ORDER: Record<string, number> = {
   AX: 1, AY: 2, AZ: 3, BX: 4, BY: 5, BZ: 6, CX: 7, CY: 8, CZ: 9,
@@ -119,6 +125,8 @@ export const InventoryTable = memo(function InventoryTable({ items, onAdjust }: 
           return dir * ((a.product.reorderPoint ?? 0) - (b.product.reorderPoint ?? 0));
         case "daysOfInventory":
           return dir * ((a.daysOfInventory ?? 9999) - (b.daysOfInventory ?? 9999));
+        case "warehouse":
+          return dir * (a.warehouse?.name ?? "").localeCompare(b.warehouse?.name ?? "");
         case "location":
           return dir * (a.location ?? "").localeCompare(b.location ?? "");
         default:
@@ -268,6 +276,9 @@ export const InventoryTable = memo(function InventoryTable({ items, onAdjust }: 
               <TableHead className={cn("text-right", sortableHeadClass)} onClick={() => handleSort("daysOfInventory")}>
                 <div className="flex items-center justify-end gap-0.5">재고일수 <span className="text-[10px] text-primary-600">{sortLabel("daysOfInventory")}</span><SortIcon columnKey="daysOfInventory" /></div>
               </TableHead>
+              <TableHead className={cn("text-center", sortableHeadClass)} onClick={() => handleSort("warehouse")}>
+                <div className="flex items-center justify-center gap-0.5">창고 <span className="text-[10px] text-primary-600">{sortLabel("warehouse")}</span><SortIcon columnKey="warehouse" /></div>
+              </TableHead>
               <TableHead className={cn("text-center", sortableHeadClass)} onClick={() => handleSort("location")}>
                 <div className="flex items-center justify-center gap-0.5">위치 <span className="text-[10px] text-primary-600">{sortLabel("location")}</span><SortIcon columnKey="location" /></div>
               </TableHead>
@@ -277,7 +288,7 @@ export const InventoryTable = memo(function InventoryTable({ items, onAdjust }: 
           <TableBody>
             {sorted.length === 0 && (
               <TableRow>
-                <TableCell colSpan={11} className="h-24 text-center text-slate-500">
+                <TableCell colSpan={12} className="h-24 text-center text-slate-500">
                   재고 데이터가 없습니다
                 </TableCell>
               </TableRow>
@@ -349,6 +360,13 @@ export const InventoryTable = memo(function InventoryTable({ items, onAdjust }: 
                       >
                         {inventoryDays > 365 ? "365+" : inventoryDays}일
                       </span>
+                    ) : (
+                      <span className="text-slate-400">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-center text-sm">
+                    {item.warehouse ? (
+                      <span className="font-medium">{item.warehouse.name}</span>
                     ) : (
                       <span className="text-slate-400">-</span>
                     )}

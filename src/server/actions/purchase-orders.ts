@@ -414,6 +414,7 @@ const createPurchaseOrderSchema = z.object({
     )
     .min(1, "최소 1개 이상의 품목이 필요합니다"),
   supplierId: z.string().uuid("유효한 공급자 ID가 아닙니다"),
+  warehouseId: z.string().uuid().optional(),
   expectedDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -503,6 +504,15 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
     const sequence = (Number(todayOrders[0]?.count || 0) + 1).toString().padStart(3, "0");
     const orderNumber = `PO-${dateStr}-${sequence}`;
 
+    // warehouseId 결정: 입력값 또는 기본 창고
+    let warehouseId = validated.warehouseId;
+    if (!warehouseId) {
+      const { getDefaultWarehouse } = await import("./warehouses");
+      const dw = await getDefaultWarehouse();
+      if (!dw) return { success: false, error: "기본 창고를 찾을 수 없습니다" };
+      warehouseId = dw.id;
+    }
+
     // 예상입고일 계산 (리드타임 기반)
     let expectedDate = validated.expectedDate;
     if (!expectedDate) {
@@ -513,11 +523,12 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
 
     // 트랜잭션으로 발주서 및 발주 항목 생성
     const newOrder = await db.transaction(async (tx) => {
-      // 발주서 생성
+      // 발주서 생성 (destinationWarehouseId 포함)
       const [order] = await tx
         .insert(purchaseOrders)
         .values({
           organizationId: orgId,
+          destinationWarehouseId: warehouseId,
           orderNumber,
           supplierId: validated.supplierId,
           status: "ordered",
@@ -968,6 +979,7 @@ const createBulkPurchaseOrdersSchema = z.object({
       })
     )
     .min(1, "최소 1개 이상의 품목이 필요합니다"),
+  warehouseId: z.string().uuid().optional(),
   notes: z.string().optional(),
 });
 
@@ -1129,6 +1141,17 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
     }
     const orgId = user.organizationId;
 
+    // warehouseId 결정: 입력값 또는 기본 창고
+    let warehouseId = validated.warehouseId;
+    if (!warehouseId) {
+      const { getDefaultWarehouse } = await import("./warehouses");
+      const dw = await getDefaultWarehouse();
+      if (!dw) {
+        return { success: false, createdOrders: [], errors: [{ productId: "WAREHOUSE", error: "기본 창고를 찾을 수 없습니다" }] };
+      }
+      warehouseId = dw.id;
+    }
+
     // 1. 공급자별로 품목 그룹화
     const itemsBySupplier = new Map<string, typeof validated.items>();
     validated.items.forEach((item) => {
@@ -1224,11 +1247,12 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
 
         // 트랜잭션으로 발주서 및 발주 항목 생성
         const newOrder = await db.transaction(async (tx) => {
-          // 발주서 생성
+          // 발주서 생성 (destinationWarehouseId 포함)
           const [order] = await tx
             .insert(purchaseOrders)
             .values({
               organizationId: orgId,
+              destinationWarehouseId: warehouseId,
               orderNumber,
               supplierId,
               status: "ordered",

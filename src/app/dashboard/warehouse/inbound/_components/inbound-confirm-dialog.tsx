@@ -14,6 +14,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -52,10 +59,18 @@ interface OrderDetail {
   items: InboundItem[];
 }
 
+interface Warehouse {
+  id: string;
+  code: string;
+  name: string;
+  isDefault?: boolean;
+}
+
 interface InboundConfirmDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   orderId: string;
+  warehouses: Warehouse[];
   onSuccess: () => void;
 }
 
@@ -63,10 +78,12 @@ export function InboundConfirmDialog({
   open,
   onOpenChange,
   orderId,
+  warehouses,
   onSuccess,
 }: InboundConfirmDialogProps) {
   const [orderDetail, setOrderDetail] = useState<OrderDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState("");
   const [inboundQuantities, setInboundQuantities] = useState<Record<string, number>>({});
   const [locations, setLocations] = useState<Record<string, string>>({});
   const [lotNumbers, setLotNumbers] = useState<Record<string, string>>({});
@@ -86,6 +103,12 @@ export function InboundConfirmDialog({
     try {
       const result = await getWarehouseInboundOrderDetail(orderId);
       setOrderDetail(result);
+
+      // 기본 창고 설정 (발주서의 목적지 창고 또는 기본 창고)
+      const defaultWarehouse = warehouses.find((w) => w.isDefault);
+      if (defaultWarehouse && !selectedWarehouseId) {
+        setSelectedWarehouseId(defaultWarehouse.id);
+      }
 
       // 초기화
       setInboundQuantities({});
@@ -131,6 +154,16 @@ export function InboundConfirmDialog({
 
   // 입고 확인 처리
   const handleSubmit = () => {
+    // 창고 선택 검증
+    if (!selectedWarehouseId) {
+      toast({
+        title: "입고 실패",
+        description: "입고 창고를 선택해주세요",
+        variant: "destructive",
+      });
+      return;
+    }
+
     startTransition(async () => {
       // 입고 수량이 입력된 항목만 필터링
       const inboundItems = availableItems
@@ -147,6 +180,7 @@ export function InboundConfirmDialog({
             productId: item.productId,
             expectedQuantity: remainingQty,
             receivedQuantity: receivedQty,
+            warehouseId: selectedWarehouseId,
             location: locations[item.orderItemId],
             lotNumber: lotNumbers[item.orderItemId],
             expiryDate: expiryDates[item.orderItemId] || undefined,
@@ -281,9 +315,32 @@ export function InboundConfirmDialog({
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* 입고 창고 선택 */}
+          <div className="space-y-2">
+            <Label htmlFor="warehouse">
+              입고 창고 <span className="text-red-500">*</span>
+            </Label>
+            <Select
+              value={selectedWarehouseId}
+              onValueChange={setSelectedWarehouseId}
+              disabled={isPending}
+            >
+              <SelectTrigger id="warehouse">
+                <SelectValue placeholder="입고할 창고를 선택하세요" />
+              </SelectTrigger>
+              <SelectContent>
+                {warehouses.map((w) => (
+                  <SelectItem key={w.id} value={w.id}>
+                    {w.name} ({w.code})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* 전체 입고 버튼 */}
-          <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 p-4">
-            <div className="flex items-center gap-2 text-sm text-blue-900">
+          <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950">
+            <div className="flex items-center gap-2 text-sm text-blue-900 dark:text-blue-100">
               <Package className="h-5 w-5" />
               <span>전체 입고 처리를 원하시면 아래 버튼을 클릭하세요</span>
             </div>
