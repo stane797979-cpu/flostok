@@ -432,6 +432,7 @@ export async function cancelSubscriptionAction(params: {
  */
 export async function getSubscriptionInfo(): Promise<
   ActionResponse<{
+    organizationPlan: string
     subscription: {
       id: string
       plan: string
@@ -446,6 +447,13 @@ export async function getSubscriptionInfo(): Promise<
 > {
   try {
     const user = await requireAuth()
+
+    // 조직의 실제 플랜 조회 (Single Source of Truth)
+    const [org] = await db
+      .select({ plan: organizations.plan })
+      .from(organizations)
+      .where(eq(organizations.id, user.organizationId))
+      .limit(1)
 
     const [sub] = await db
       .select()
@@ -477,6 +485,7 @@ export async function getSubscriptionInfo(): Promise<
     return {
       success: true,
       data: {
+        organizationPlan: org?.plan ?? 'free',
         subscription: sub
           ? {
               id: sub.id,

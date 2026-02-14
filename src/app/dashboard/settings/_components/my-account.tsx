@@ -229,6 +229,7 @@ export function MyAccount() {
   };
 
   const sub = subscriptionData?.success ? subscriptionData.data.subscription : null;
+  const orgPlan = subscriptionData?.success ? subscriptionData.data.organizationPlan : 'free';
   const refundInfo = subscriptionData?.success ? subscriptionData.data.refundInfo : null;
 
   return (
@@ -419,9 +420,21 @@ export function MyAccount() {
               )}
             </>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              현재 무료 플랜을 사용 중입니다.
-            </p>
+            <div className="flex items-center justify-between rounded-lg border p-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg font-semibold">
+                    {PLAN_LABELS[orgPlan] || orgPlan} 플랜
+                  </span>
+                  <Badge variant="default">활성</Badge>
+                </div>
+                {orgPlan === 'free' && (
+                  <p className="text-sm text-muted-foreground">
+                    무료 플랜을 사용 중입니다.
+                  </p>
+                )}
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>
