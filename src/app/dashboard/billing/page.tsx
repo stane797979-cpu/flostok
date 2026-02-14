@@ -32,7 +32,7 @@ export default async function BillingPage() {
     const { data: profile } = await supabase
       .from("users")
       .select("organization_id, role")
-      .eq("id", user.id)
+      .eq("auth_id", user.id)
       .single();
 
     if (profile?.organization_id) {
