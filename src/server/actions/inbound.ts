@@ -37,6 +37,7 @@ const inboundItemSchema = z.object({
 const confirmInboundSchema = z.object({
   orderId: z.string().uuid("유효한 발주서 ID가 아닙니다"),
   items: z.array(inboundItemSchema).min(1, "최소 1개 이상의 입고 항목이 필요합니다"),
+  warehouseId: z.string().uuid("유효한 창고 ID가 아닙니다").optional(),
   notes: z.string().optional(),
 });
 
@@ -75,14 +76,31 @@ export async function confirmInbound(input: ConfirmInboundInput): Promise<{
       return { success: false, error: "발주서를 찾을 수 없습니다" };
     }
 
-    // 입고 대상 창고 ID 결정
-    let destinationWarehouseId = purchaseOrder.destinationWarehouseId;
+    // 입고 대상 창고 ID 결정 (사용자가 override한 경우 우선 적용)
+    const originalWarehouseId = purchaseOrder.destinationWarehouseId;
+    let destinationWarehouseId = validated.warehouseId || originalWarehouseId;
     if (!destinationWarehouseId) {
       // 발주서에 창고가 없으면 기본 창고 사용 (하위 호환)
       const { getDefaultWarehouse } = await import("./warehouses");
       const dw = await getDefaultWarehouse();
       if (!dw) return { success: false, error: "입고 대상 창고를 찾을 수 없습니다" };
       destinationWarehouseId = dw.id;
+    }
+
+    // 창고가 변경된 경우 이름 조회 (이력 기록용)
+    const warehouseChanged = validated.warehouseId && validated.warehouseId !== originalWarehouseId;
+    let warehouseChangeDescription = "";
+    if (warehouseChanged) {
+      const warehouseRows = await db
+        .select({ id: warehouses.id, name: warehouses.name })
+        .from(warehouses)
+        .where(
+          inArray(warehouses.id, [originalWarehouseId, validated.warehouseId!].filter(Boolean) as string[])
+        );
+      const whMap = new Map(warehouseRows.map(w => [w.id, w.name]));
+      const fromName = originalWarehouseId ? whMap.get(originalWarehouseId) || "미지정" : "미지정";
+      const toName = whMap.get(validated.warehouseId!) || "알 수 없음";
+      warehouseChangeDescription = `입고 창고 변경: ${fromName} → ${toName}`;
     }
 
     // 발주서가 입고 가능한 상태인지 확인
@@ -256,8 +274,22 @@ export async function confirmInbound(input: ConfirmInboundInput): Promise<{
       user,
       action: "CREATE",
       entityType: "inbound_record",
-      description: `입고 확인 처리`,
+      entityId: validated.orderId,
+      description: warehouseChangeDescription
+        ? `입고 확인 처리 (${warehouseChangeDescription})`
+        : `입고 확인 처리`,
     });
+
+    // 창고 변경 시 별도 이력 기록
+    if (warehouseChanged && warehouseChangeDescription) {
+      await logActivity({
+        user,
+        action: "UPDATE",
+        entityType: "purchase_order",
+        entityId: validated.orderId,
+        description: warehouseChangeDescription,
+      });
+    }
 
     revalidatePath("/dashboard/orders");
     revalidatePath("/dashboard/inventory");

@@ -26,6 +26,7 @@ import { getPurchaseOrderById, updatePurchaseOrderStatus, updatePurchaseOrderExp
 import { createImportShipment } from "@/server/actions/import-shipments";
 import { getInboundRecords } from "@/server/actions/inbound";
 import { getEntityActivityLogs } from "@/server/actions/activity-logs";
+import { getWarehouses } from "@/server/actions/warehouses";
 import type { ActivityLog } from "@/server/actions/activity-logs";
 import { InboundDialog, type InboundDialogItem } from "./inbound-dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -87,6 +88,7 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
     qualityResult: string | null;
   }>>([]);
   const [activityLogsList, setActivityLogsList] = useState<ActivityLog[]>([]);
+  const [warehousesList, setWarehousesList] = useState<Array<{ id: string; code: string; name: string; isDefault?: boolean }>>([]);
   const { toast } = useToast();
 
   // 발주서 데이터 로드
@@ -100,10 +102,11 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
   const loadOrderData = async () => {
     setIsLoading(true);
     try {
-      const [data, inboundResult, logs] = await Promise.all([
+      const [data, inboundResult, logs, whResult] = await Promise.all([
         getPurchaseOrderById(orderId),
         getInboundRecords({ orderId, limit: 100 }),
         getEntityActivityLogs(orderId, 30),
+        getWarehouses().catch(() => ({ warehouses: [] })),
       ]);
       setOrderData(data);
       setInboundRecordsList(
@@ -117,6 +120,12 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
         }))
       );
       setActivityLogsList(logs);
+      setWarehousesList(whResult.warehouses.map(w => ({
+        id: w.id,
+        code: w.code,
+        name: w.name,
+        isDefault: w.isDefault ?? false,
+      })));
     } catch (error) {
       console.error("발주서 조회 오류:", error);
       toast({
@@ -788,6 +797,8 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
           orderId={orderId}
           orderNumber={orderData.orderNumber}
           items={inboundItems}
+          warehouses={warehousesList}
+          defaultWarehouseId={orderData.destinationWarehouseId || undefined}
         />
       )}
     </>

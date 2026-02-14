@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -22,7 +22,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, CheckCircle2, Package } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { AlertCircle, CheckCircle2, Package, Warehouse } from "lucide-react";
 import { confirmInbound, closeOrderWithPartialInbound, type ConfirmInboundInput } from "@/server/actions/inbound";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -37,12 +44,21 @@ export interface InboundDialogItem {
   unitPrice: number;
 }
 
+interface WarehouseOption {
+  id: string;
+  code: string;
+  name: string;
+  isDefault?: boolean;
+}
+
 interface InboundDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   orderId: string;
   orderNumber: string;
   items: InboundDialogItem[];
+  warehouses?: WarehouseOption[];
+  defaultWarehouseId?: string; // 발주서에 설정된 입고 창고
 }
 
 export function InboundDialog({
@@ -51,15 +67,31 @@ export function InboundDialog({
   orderId,
   orderNumber,
   items,
+  warehouses = [],
+  defaultWarehouseId,
 }: InboundDialogProps) {
   const [inboundQuantities, setInboundQuantities] = useState<Record<string, number>>({});
   const [locations, setLocations] = useState<Record<string, string>>({});
   const [lotNumbers, setLotNumbers] = useState<Record<string, string>>({});
   const [expiryDates, setExpiryDates] = useState<Record<string, string>>({});
+  const [warehouseId, setWarehouseId] = useState(defaultWarehouseId || "");
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const { toast } = useToast();
+
+  // 발주서 창고 또는 기본 창고 pre-select
+  useEffect(() => {
+    if (open) {
+      if (defaultWarehouseId) {
+        setWarehouseId(defaultWarehouseId);
+      } else {
+        const defaultWh = warehouses.find((w) => w.isDefault);
+        if (defaultWh) setWarehouseId(defaultWh.id);
+        else if (warehouses.length > 0) setWarehouseId(warehouses[0].id);
+      }
+    }
+  }, [open, defaultWarehouseId, warehouses]);
 
   // 입고 가능한 항목만 필터링 (아직 전량 입고되지 않은 항목)
   const availableItems = items.filter(
@@ -138,6 +170,7 @@ export function InboundDialog({
       const input: ConfirmInboundInput = {
         orderId,
         items: inboundItems,
+        warehouseId: warehouseId || undefined,
         notes: notes || undefined,
       };
 
@@ -158,6 +191,7 @@ export function InboundDialog({
         setLocations({});
         setLotNumbers({});
         setExpiryDates({});
+        setWarehouseId(defaultWarehouseId || "");
         setNotes("");
         onOpenChange(false);
       } else {
@@ -258,6 +292,38 @@ export function InboundDialog({
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* 입고 창고 선택 */}
+          {warehouses.length > 0 && (
+            <div className="rounded-lg border bg-slate-50 p-4 space-y-2">
+              <div className="flex items-center gap-2">
+                <Warehouse className="h-4 w-4 text-slate-500" />
+                <Label className="font-medium">입고 창고</Label>
+                {warehouseId && defaultWarehouseId && warehouseId !== defaultWarehouseId && (
+                  <Badge variant="outline" className="text-[10px] border-orange-200 text-orange-600">
+                    변경됨
+                  </Badge>
+                )}
+              </div>
+              <Select value={warehouseId} onValueChange={setWarehouseId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="입고 창고를 선택하세요" />
+                </SelectTrigger>
+                <SelectContent>
+                  {warehouses.map((wh) => (
+                    <SelectItem key={wh.id} value={wh.id}>
+                      {wh.name} ({wh.code}){wh.isDefault ? " - 기본" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {warehouseId && defaultWarehouseId && warehouseId !== defaultWarehouseId && (
+                <p className="text-xs text-orange-600">
+                  발주서 지정 창고와 다른 창고로 입고됩니다. 변경 이력이 기록됩니다.
+                </p>
+              )}
+            </div>
+          )}
+
           {/* 전체 입고 버튼 */}
           <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 p-4">
             <div className="flex items-center gap-2 text-sm text-blue-900">
@@ -404,6 +470,12 @@ export function InboundDialog({
                   • 총 입고 수량:{" "}
                   {Object.values(inboundQuantities).reduce((sum, qty) => sum + qty, 0)}개
                 </p>
+                {warehouseId && warehouses.length > 0 && (
+                  <p>
+                    • 입고 창고: {warehouses.find(w => w.id === warehouseId)?.name || "-"}
+                    {warehouseId !== defaultWarehouseId && defaultWarehouseId && " (변경됨)"}
+                  </p>
+                )}
               </div>
             </div>
           )}
