@@ -23,6 +23,7 @@ const productSchema = z.object({
   costPrice: z.coerce.number().min(0).default(0),
   abcGrade: z.enum(["A", "B", "C"]).optional(),
   xyzGrade: z.enum(["X", "Y", "Z"]).optional(),
+  fmrGrade: z.enum(["F", "M", "R"]).optional(),
   moq: z.coerce.number().min(1).default(1),
   leadTime: z.coerce.number().min(0).default(7),
   safetyStock: z.coerce.number().min(0).default(0),

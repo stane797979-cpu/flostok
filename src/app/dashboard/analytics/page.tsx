@@ -8,6 +8,7 @@ import { getABCXYZAnalysis } from "@/server/actions/analytics";
 import { AnalyticsGradeChange } from "./_components/analytics-grade-change";
 import { AnalyticsFulfillment } from "./_components/analytics-fulfillment";
 import { AnalyticsTurnover } from "./_components/analytics-turnover";
+import { RefreshGradesButton } from "./_components/refresh-grades-button";
 import type { ProductAnalysis } from "./_components/abc-xyz-table";
 
 const ABCXYZClient = dynamic(
@@ -105,11 +106,14 @@ export default async function AnalyticsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">수요·공급 분석</h1>
-        <p className="mt-2 text-slate-500">
-          제품별 매출 기여도, 수요 변동성, 재고회전율을 분석하여 최적의 재고 관리 전략을 수립하세요
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">수요·공급 분석</h1>
+          <p className="mt-2 text-slate-500">
+            제품별 매출 기여도, 수요 변동성, 재고회전율을 분석하여 최적의 재고 관리 전략을 수립하세요
+          </p>
+        </div>
+        <RefreshGradesButton />
       </div>
 
       <Tabs defaultValue="abc-xyz" className="space-y-6">

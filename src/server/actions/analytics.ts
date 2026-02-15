@@ -509,3 +509,34 @@ export async function getDemandForecast(options?: {
     return { products: [], forecast: null }
   }
 }
+
+/**
+ * ABC-XYZ-FMR 등급 일괄 갱신 (수동 트리거)
+ */
+export async function refreshGrades() {
+  const user = await requireAuth()
+  if (!user.organizationId) {
+    return { success: false, error: '조직 정보가 없습니다' }
+  }
+
+  try {
+    const { refreshGradesForOrganization } = await import(
+      '@/server/services/scm/grade-refresh'
+    )
+    const result = await refreshGradesForOrganization(user.organizationId)
+
+    return {
+      success: true,
+      totalProducts: result.totalProducts,
+      updatedCount: result.updatedCount,
+      newProductCount: result.newProductCount,
+      errors: result.errors,
+    }
+  } catch (error) {
+    console.error('등급 갱신 오류:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : '등급 갱신에 실패했습니다',
+    }
+  }
+}

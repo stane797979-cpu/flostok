@@ -35,6 +35,12 @@ interface ProductFormDialogProps {
 const UNITS = ["EA", "BOX", "SET", "KG", "L", "M", "롤", "켤레"];
 const ABC_GRADES = ["A", "B", "C"] as const;
 const XYZ_GRADES = ["X", "Y", "Z"] as const;
+const FMR_GRADES = ["F", "M", "R"] as const;
+const FMR_LABELS: Record<string, string> = {
+  F: "F (고빈도)",
+  M: "M (중빈도)",
+  R: "R (저빈도)",
+};
 
 export function ProductFormDialog({
   open,
@@ -59,6 +65,7 @@ export function ProductFormDialog({
     costPrice: product?.costPrice || 0,
     abcGrade: product?.abcGrade || undefined,
     xyzGrade: product?.xyzGrade || undefined,
+    fmrGrade: product?.fmrGrade || undefined,
     moq: product?.moq || 1,
     leadTime: product?.leadTime || 7,
     safetyStock: product?.safetyStock || 0,
@@ -215,7 +222,7 @@ export function ProductFormDialog({
             </div>
 
             {/* 등급 */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label>ABC 등급</Label>
                 <Select
@@ -251,6 +258,26 @@ export function ProductFormDialog({
                     {XYZ_GRADES.map((grade) => (
                       <SelectItem key={grade} value={grade}>
                         {grade}등급
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>FMR 등급</Label>
+                <Select
+                  value={formData.fmrGrade || ""}
+                  onValueChange={(value) =>
+                    handleChange("fmrGrade", value as "F" | "M" | "R" | undefined)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="미지정" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FMR_GRADES.map((grade) => (
+                      <SelectItem key={grade} value={grade}>
+                        {FMR_LABELS[grade]}
                       </SelectItem>
                     ))}
                   </SelectContent>
