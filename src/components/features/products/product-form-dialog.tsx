@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Dialog,
@@ -55,24 +55,32 @@ export function ProductFormDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState<ProductInput>({
-    sku: product?.sku || "",
-    name: product?.name || "",
-    category: product?.category || "",
-    description: product?.description || "",
-    unit: product?.unit || "EA",
-    unitPrice: product?.unitPrice || 0,
-    costPrice: product?.costPrice || 0,
-    abcGrade: product?.abcGrade || undefined,
-    xyzGrade: product?.xyzGrade || undefined,
-    fmrGrade: product?.fmrGrade || undefined,
-    moq: product?.moq || 1,
-    leadTime: product?.leadTime || 7,
-    safetyStock: product?.safetyStock || 0,
-    reorderPoint: product?.reorderPoint || 0,
-    targetStock: product?.targetStock || undefined,
-    barcode: product?.barcode || "",
+  const buildFormData = (p?: Product | null): ProductInput => ({
+    sku: p?.sku || "",
+    name: p?.name || "",
+    category: p?.category || "",
+    description: p?.description || "",
+    unit: p?.unit || "EA",
+    unitPrice: p?.unitPrice || 0,
+    costPrice: p?.costPrice || 0,
+    abcGrade: p?.abcGrade || undefined,
+    xyzGrade: p?.xyzGrade || undefined,
+    fmrGrade: p?.fmrGrade || undefined,
+    moq: p?.moq || 1,
+    leadTime: p?.leadTime || 7,
+    safetyStock: p?.safetyStock || 0,
+    reorderPoint: p?.reorderPoint || 0,
+    targetStock: p?.targetStock || undefined,
+    barcode: p?.barcode || "",
   });
+
+  const [formData, setFormData] = useState<ProductInput>(buildFormData(product));
+
+  // product prop이 바뀌면(다른 제품 상세 클릭) formData를 해당 제품으로 동기화
+  useEffect(() => {
+    setFormData(buildFormData(product));
+    setError(null);
+  }, [product?.id, open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
