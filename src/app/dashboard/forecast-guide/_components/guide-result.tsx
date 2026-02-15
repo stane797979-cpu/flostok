@@ -50,8 +50,15 @@ export function GuideResult({ recommendation, productId, onReset }: GuideResultP
         </div>
         <h2 className="text-xl font-bold">분석이 완료되었습니다</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          입력하신 정보를 바탕으로 최적의 예측 방법과 공급 전략을 추천합니다
+          {productId
+            ? '선택한 제품의 정보를 바탕으로 최적의 예측 방법과 공급 전략을 추천합니다'
+            : '답변하신 내용을 바탕으로 일반적인 예측 방법과 공급 전략을 추천합니다'}
         </p>
+        {!productId && (
+          <p className="mt-1 text-xs text-amber-600">
+            * 특정 제품을 선택하지 않았으므로, 답변 내용 기반의 일반 분석 결과입니다
+          </p>
+        )}
       </div>
 
       {/* 섹션 A: 추천 예측 방법 */}
@@ -122,6 +129,9 @@ export function GuideResult({ recommendation, productId, onReset }: GuideResultP
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            {recommendation.combinedGrade[0]}등급(매출 비중) + {recommendation.combinedGrade[1]}등급(판매 패턴) — 답변 내용에서 도출
+          </p>
           <p className="text-sm font-medium">{recommendation.supplyStrategy.name}</p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="rounded-lg bg-slate-50 p-3">
