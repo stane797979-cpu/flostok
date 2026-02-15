@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -250,6 +251,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
   const orderUploadRef = useRef<HTMLInputElement>(null);
   const [isUploadingOrders, startUploadTransition] = useTransition();
 
+  const router = useRouter();
   const { toast } = useToast();
 
   // DB에서 발주 목록 불러오기
@@ -661,11 +663,11 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
       if (result.success && result.errors.length === 0) {
         toast({
           title: "자동 발주 승인 완료",
-          description: `${result.createdOrders.length}개의 발주서가 생성되었습니다`,
+          description: `${result.createdOrders.length}개의 발주서가 생성되었습니다. 발주 현황으로 이동합니다.`,
         });
         setSelectedAutoReorderIds([]);
-        loadPurchaseOrders();
-        loadReorderItems();
+        // 발주현황 페이지로 자동 이동
+        router.push("/dashboard/orders?tab=orders");
       } else if (result.success && result.errors.length > 0) {
         toast({
           title: "자동 발주 부분 완료",
@@ -673,8 +675,12 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
           variant: "destructive",
         });
         setSelectedAutoReorderIds([]);
-        loadPurchaseOrders();
-        loadReorderItems();
+        // 일부라도 생성되었으면 발주현황으로 이동
+        if (result.createdOrders.length > 0) {
+          router.push("/dashboard/orders?tab=orders");
+        } else {
+          loadReorderItems();
+        }
       } else {
         toast({
           title: "자동 발주 승인 실패",
