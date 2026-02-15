@@ -312,12 +312,12 @@ export function ProductTable({ products = [], onView, onEdit, onDelete, onBulkDe
                             </Badge>
                           </TooltipTrigger>
                           <TooltipContent side="top" className="max-w-xs">
-                            <p className="font-medium">
+                            <p className="font-semibold">
                               {product.fmrGrade === "F" && "Fast Moving (고빈도 출고)"}
                               {product.fmrGrade === "M" && "Medium Moving (중빈도 출고)"}
                               {product.fmrGrade === "R" && "Rare Moving (저빈도 출고)"}
                             </p>
-                            <p className="text-xs text-muted-foreground mt-1">
+                            <p className="text-xs text-slate-600 mt-1">
                               {product.fmrGrade === "F" && "월 10회 이상 출고 — 상시 재고 확보 필요"}
                               {product.fmrGrade === "M" && "월 4~9회 출고 — 정기 보충 관리"}
                               {product.fmrGrade === "R" && "월 3회 이하 출고 — 재고 최소화 또는 주문생산 검토"}
