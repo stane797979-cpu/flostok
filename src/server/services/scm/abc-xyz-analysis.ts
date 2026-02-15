@@ -1,10 +1,11 @@
 /**
- * ABC-XYZ 분석 서비스
+ * ABC-XYZ-FMR 분석 서비스
  * 재고 분류 및 관리 전략 수립의 핵심 도구
  */
 
 export type ABCGrade = "A" | "B" | "C";
 export type XYZGrade = "X" | "Y" | "Z";
+export type FMRGrade = "F" | "M" | "R";
 
 export interface ABCAnalysisItem {
   id: string;
@@ -267,4 +268,58 @@ export function getABCXYZGrade(
   }
 
   return { abc, xyz, combined: `${abc}${xyz}` };
+}
+
+// ── FMR 분석 (이동빈도 기반) ────────────────────────────────
+
+export interface FMRAnalysisItem {
+  id: string;
+  name: string;
+  /** 월별 출고 횟수 배열 (건수, 금액 아님) */
+  monthlyOutboundCounts: number[];
+}
+
+export interface FMRAnalysisResult {
+  id: string;
+  name: string;
+  /** 월평균 출고 횟수 */
+  avgMonthlyOutboundCount: number;
+  /** FMR 등급 */
+  grade: FMRGrade;
+}
+
+/**
+ * FMR 분석 수행
+ *
+ * 기준 (월평균 출고 횟수):
+ * - F (Fast Moving): 월 10회 이상 출고
+ * - M (Medium Moving): 월 4~9회 출고
+ * - R (Rare Moving): 월 3회 이하 출고
+ *
+ * @param items 분석 대상 품목 목록 (월별 출고 횟수)
+ * @param thresholds 등급 경계값 { f: 10, m: 4 }
+ */
+export function performFMRAnalysis(
+  items: FMRAnalysisItem[],
+  thresholds: { f: number; m: number } = { f: 10, m: 4 }
+): FMRAnalysisResult[] {
+  return items.map((item) => {
+    const avg = calculateMean(item.monthlyOutboundCounts);
+
+    let grade: FMRGrade;
+    if (avg >= thresholds.f) {
+      grade = "F";
+    } else if (avg >= thresholds.m) {
+      grade = "M";
+    } else {
+      grade = "R";
+    }
+
+    return {
+      id: item.id,
+      name: item.name,
+      avgMonthlyOutboundCount: Math.round(avg * 10) / 10,
+      grade,
+    };
+  });
 }

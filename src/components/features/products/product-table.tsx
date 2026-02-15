@@ -273,21 +273,36 @@ export function ProductTable({ products = [], onView, onEdit, onDelete, onBulkDe
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  {isNewProduct(product) ? (
-                    <Badge className="bg-blue-500 text-white border-blue-600 font-bold text-xs">
-                      NEW
-                    </Badge>
-                  ) : product.abcGrade && product.xyzGrade ? (
-                    <Badge variant="outline" className="font-mono">
-                      {product.abcGrade}{product.xyzGrade}
-                    </Badge>
-                  ) : product.abcGrade || product.xyzGrade ? (
-                    <Badge variant="outline" className="font-mono text-slate-400">
-                      {product.abcGrade || "?"}{product.xyzGrade || "?"}
-                    </Badge>
-                  ) : (
-                    <span className="text-slate-400">-</span>
-                  )}
+                  <div className="flex items-center gap-1">
+                    {isNewProduct(product) ? (
+                      <Badge className="bg-blue-500 text-white border-blue-600 font-bold text-xs">
+                        NEW
+                      </Badge>
+                    ) : product.abcGrade && product.xyzGrade ? (
+                      <Badge variant="outline" className="font-mono">
+                        {product.abcGrade}{product.xyzGrade}
+                      </Badge>
+                    ) : product.abcGrade || product.xyzGrade ? (
+                      <Badge variant="outline" className="font-mono text-slate-400">
+                        {product.abcGrade || "?"}{product.xyzGrade || "?"}
+                      </Badge>
+                    ) : (
+                      <span className="text-slate-400">-</span>
+                    )}
+                    {product.fmrGrade && (
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "font-mono text-[10px] px-1.5",
+                          product.fmrGrade === "F" && "border-red-300 bg-red-50 text-red-700",
+                          product.fmrGrade === "M" && "border-yellow-300 bg-yellow-50 text-yellow-700",
+                          product.fmrGrade === "R" && "border-slate-300 bg-slate-50 text-slate-500",
+                        )}
+                      >
+                        {product.fmrGrade}
+                      </Badge>
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell>
                   <DropdownMenu>

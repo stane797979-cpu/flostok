@@ -19,7 +19,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
-import type { ABCGrade, XYZGrade } from "@/server/services/scm/abc-xyz-analysis";
+import type { ABCGrade, XYZGrade, FMRGrade } from "@/server/services/scm/abc-xyz-analysis";
+import { cn } from "@/lib/utils";
 
 export interface ProductAnalysis {
   id: string;
@@ -27,6 +28,7 @@ export interface ProductAnalysis {
   name: string;
   abcGrade: ABCGrade;
   xyzGrade: XYZGrade;
+  fmrGrade?: FMRGrade | null;
   combinedGrade: string;
   revenue: number;
   variationRate: number;
@@ -53,9 +55,16 @@ const XYZ_BADGE_COLORS: Record<XYZGrade, string> = {
   Z: "bg-orange-100 text-orange-800 hover:bg-orange-100",
 };
 
+const FMR_BADGE_COLORS: Record<FMRGrade, string> = {
+  F: "border-red-300 bg-red-50 text-red-700",
+  M: "border-yellow-300 bg-yellow-50 text-yellow-700",
+  R: "border-slate-300 bg-slate-50 text-slate-500",
+};
+
 export function ABCXYZTable({ products, selectedGrade }: ABCXYZTableProps) {
   const [abcFilter, setAbcFilter] = useState<string>("all");
   const [xyzFilter, setXyzFilter] = useState<string>("all");
+  const [fmrFilter, setFmrFilter] = useState<string>("all");
   const [sortField, setSortField] = useState<SortField>("revenue");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
@@ -72,6 +81,10 @@ export function ABCXYZTable({ products, selectedGrade }: ABCXYZTableProps) {
 
   if (xyzFilter !== "all") {
     filteredProducts = filteredProducts.filter((p) => p.xyzGrade === xyzFilter);
+  }
+
+  if (fmrFilter !== "all") {
+    filteredProducts = filteredProducts.filter((p) => p.fmrGrade === fmrFilter);
   }
 
   // 정렬
@@ -150,6 +163,18 @@ export function ABCXYZTable({ products, selectedGrade }: ABCXYZTableProps) {
                 <SelectItem value="Z">Z등급</SelectItem>
               </SelectContent>
             </Select>
+
+            <Select value={fmrFilter} onValueChange={setFmrFilter}>
+              <SelectTrigger className="w-full sm:w-32">
+                <SelectValue placeholder="FMR 등급" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">전체</SelectItem>
+                <SelectItem value="F">F (고빈도)</SelectItem>
+                <SelectItem value="M">M (중빈도)</SelectItem>
+                <SelectItem value="R">R (저빈도)</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <p className="text-sm text-slate-500">총 {filteredProducts.length}개 제품</p>
@@ -187,6 +212,7 @@ export function ABCXYZTable({ products, selectedGrade }: ABCXYZTableProps) {
                     <SortIcon field="xyzGrade" />
                   </button>
                 </TableHead>
+                <TableHead className="text-center">FMR</TableHead>
                 <TableHead className="text-right">
                   <button
                     onClick={() => handleSort("revenue")}
@@ -211,7 +237,7 @@ export function ABCXYZTable({ products, selectedGrade }: ABCXYZTableProps) {
             <TableBody>
               {filteredProducts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-8 text-center text-slate-400">
+                  <TableCell colSpan={8} className="py-8 text-center text-slate-400">
                     조건에 맞는 제품이 없습니다
                   </TableCell>
                 </TableRow>
@@ -229,6 +255,18 @@ export function ABCXYZTable({ products, selectedGrade }: ABCXYZTableProps) {
                       <Badge className={XYZ_BADGE_COLORS[product.xyzGrade]}>
                         {product.xyzGrade}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {product.fmrGrade ? (
+                        <Badge
+                          variant="outline"
+                          className={cn("font-mono", FMR_BADGE_COLORS[product.fmrGrade])}
+                        >
+                          {product.fmrGrade}
+                        </Badge>
+                      ) : (
+                        <span className="text-slate-400">-</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-right font-mono">
                       {product.revenue.toLocaleString()}원

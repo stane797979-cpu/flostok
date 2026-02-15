@@ -1,19 +1,22 @@
 /**
- * ABC-XYZ 등급 갱신 서비스
+ * ABC-XYZ-FMR 등급 갱신 서비스
  *
- * - 판매 이력 3개월 미만: 신제품(NEW) 태그, 등급 미부여
+ * - 판매 이력 3개월 미만: 신제품(NEW) 태그, ABC-XYZ 등급 미부여
  * - 판매 이력 3개월 이상: ABC-XYZ 분석 수행, 등급 자동 부여
+ * - FMR: 출고 이력(inventory_history) 기반, 신제품 여부 무관하게 전 제품 산출
  * - products.metadata.gradeInfo에 메타데이터 저장 (스키마 변경 없음)
  */
 
 import { db } from "@/server/db";
-import { products, salesRecords, gradeHistory } from "@/server/db/schema";
+import { products, salesRecords, gradeHistory, inventoryHistory } from "@/server/db/schema";
 import { eq, and, sql, min } from "drizzle-orm";
 import {
   performABCAnalysis,
   performXYZAnalysis,
+  performFMRAnalysis,
   type ABCAnalysisItem,
   type XYZAnalysisItem,
+  type FMRAnalysisItem,
 } from "./abc-xyz-analysis";
 
 export interface GradeInfo {
@@ -109,7 +112,73 @@ export async function refreshGradesForOrganization(
 
     result.newProductCount = newProducts.length;
 
-    // 4. 신제품: 배치 metadata 업데이트 (등급은 null로 설정)
+    // 3.5. FMR 분석 — 전 제품 대상 (출고 이력 기반, 신제품 여부 무관)
+    const allProductIds = productList.map((p) => p.id);
+    let fmrMap = new Map<string, string | null>(); // productId → FMR grade
+
+    try {
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+      const fmrStartDate = sixMonthsAgo.toISOString().split("T")[0];
+
+      // 출고 건수 조회 (OUTBOUND_* changeType, 월별 건수)
+      const outboundData = await db
+        .select({
+          productId: inventoryHistory.productId,
+          date: inventoryHistory.date,
+        })
+        .from(inventoryHistory)
+        .where(
+          and(
+            eq(inventoryHistory.organizationId, organizationId),
+            sql`${inventoryHistory.changeType} LIKE 'OUTBOUND_%'`,
+            sql`${inventoryHistory.date} >= ${fmrStartDate}`
+          )
+        );
+
+      // 제품별 월별 출고 횟수 집계
+      const outboundByProduct = new Map<string, Map<string, number>>();
+      for (const row of outboundData) {
+        if (!outboundByProduct.has(row.productId)) {
+          outboundByProduct.set(row.productId, new Map());
+        }
+        const monthKey = row.date.substring(0, 7);
+        const monthly = outboundByProduct.get(row.productId)!;
+        monthly.set(monthKey, (monthly.get(monthKey) || 0) + 1);
+      }
+
+      // 최근 6개월의 월 키 생성
+      const fmrMonthKeys: string[] = [];
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date();
+        d.setMonth(d.getMonth() - i);
+        fmrMonthKeys.push(
+          `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+        );
+      }
+
+      const fmrItems: FMRAnalysisItem[] = allProductIds.map((id) => {
+        const productInfo = productList.find((p) => p.id === id);
+        const monthlyData = outboundByProduct.get(id);
+        const monthlyOutboundCounts = fmrMonthKeys.map(
+          (key) => monthlyData?.get(key) || 0
+        );
+        return {
+          id,
+          name: productInfo?.name || "",
+          monthlyOutboundCounts,
+        };
+      });
+
+      const fmrResults = performFMRAnalysis(fmrItems);
+      fmrMap = new Map(fmrResults.map((r) => [r.id, r.grade]));
+    } catch (error) {
+      result.errors.push(
+        `FMR 분석 실패: ${error instanceof Error ? error.message : "알 수 없는 오류"}`
+      );
+    }
+
+    // 4. 신제품: 배치 metadata 업데이트 (ABC-XYZ는 null, FMR은 설정)
     if (newProducts.length > 0) {
       try {
         // 각 제품별 gradeInfo JSON 생성
@@ -127,7 +196,8 @@ export async function refreshGradesForOrganization(
             salesMonths,
             lastGradeRefresh: now.toISOString(),
           };
-          return sql`(${productId}::uuid, ${JSON.stringify(gradeInfo)}::jsonb)`;
+          const fmrGrade = fmrMap.get(productId) || null;
+          return sql`(${productId}::uuid, ${JSON.stringify(gradeInfo)}::jsonb, ${fmrGrade})`;
         });
 
         // 단일 UPDATE ... FROM (VALUES ...) 쿼리로 배치 처리
@@ -136,9 +206,10 @@ export async function refreshGradesForOrganization(
           SET
             abc_grade = NULL,
             xyz_grade = NULL,
+            fmr_grade = v.fmr_grade::fmr_grade,
             metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('gradeInfo', v.grade_info),
             updated_at = ${now}
-          FROM (VALUES ${sql.join(valueRows, sql`, `)}) AS v(product_id, grade_info)
+          FROM (VALUES ${sql.join(valueRows, sql`, `)}) AS v(product_id, grade_info, fmr_grade)
           WHERE products.id = v.product_id
         `);
       } catch (error) {
@@ -238,14 +309,13 @@ export async function refreshGradesForOrganization(
       const abcMap = new Map(abcResults.map((r) => [r.id, r.grade]));
       const xyzMap = new Map(xyzResults.map((r) => [r.id, r]));
 
-      // 5-5a. products 배치 UPDATE (UPDATE ... FROM VALUES)
+      // 5-5a. products 배치 UPDATE (UPDATE ... FROM VALUES) — ABC-XYZ-FMR 모두 반영
       try {
-        const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-
         const updateRows = eligibleProducts.map((productId) => {
           const abcGrade = abcMap.get(productId) || null;
           const xyzResult = xyzMap.get(productId);
           const xyzGrade = xyzResult?.grade || null;
+          const fmrGrade = fmrMap.get(productId) || null;
 
           const firstSaleDate = firstSaleMap.get(productId);
           let salesMonths = 0;
@@ -262,7 +332,7 @@ export async function refreshGradesForOrganization(
             lastGradeRefresh: now.toISOString(),
           };
 
-          return sql`(${productId}::uuid, ${abcGrade}, ${xyzGrade}, ${JSON.stringify(gradeInfo)}::jsonb)`;
+          return sql`(${productId}::uuid, ${abcGrade}, ${xyzGrade}, ${fmrGrade}, ${JSON.stringify(gradeInfo)}::jsonb)`;
         });
 
         await db.execute(sql`
@@ -270,9 +340,10 @@ export async function refreshGradesForOrganization(
           SET
             abc_grade = v.abc_grade,
             xyz_grade = v.xyz_grade,
+            fmr_grade = v.fmr_grade::fmr_grade,
             metadata = COALESCE(products.metadata, '{}'::jsonb) || jsonb_build_object('gradeInfo', v.grade_info),
             updated_at = ${now}
-          FROM (VALUES ${sql.join(updateRows, sql`, `)}) AS v(product_id, abc_grade, xyz_grade, grade_info)
+          FROM (VALUES ${sql.join(updateRows, sql`, `)}) AS v(product_id, abc_grade, xyz_grade, fmr_grade, grade_info)
           WHERE products.id = v.product_id
         `);
 

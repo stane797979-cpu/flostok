@@ -38,9 +38,9 @@ async function _getABCXYZAnalysisInternal(orgId: string) {
 
   // 병렬 데이터 로드 (3개 직렬→병렬 최적화)
   const [allProducts, salesByProduct, monthlySales] = await Promise.all([
-    // 1. 전체 제품 목록 조회
+    // 1. 전체 제품 목록 조회 (FMR 등급 포함)
     db
-      .select({ id: products.id, sku: products.sku, name: products.name })
+      .select({ id: products.id, sku: products.sku, name: products.name, fmrGrade: products.fmrGrade })
       .from(products)
       .where(eq(products.organizationId, orgId)),
 
@@ -130,6 +130,7 @@ async function _getABCXYZAnalysisInternal(orgId: string) {
 
   // 7. UI에 전달할 형태로 변환
   const skuMap = new Map(allProducts.map((p) => [p.id, p.sku]))
+  const fmrMap = new Map(allProducts.map((p) => [p.id, p.fmrGrade]))
 
   const analysisProducts = combined.map((item) => {
     const xyzResult = xyzResults.find((x) => x.id === item.id)
@@ -139,6 +140,7 @@ async function _getABCXYZAnalysisInternal(orgId: string) {
       name: item.name,
       abcGrade: item.abcGrade,
       xyzGrade: item.xyzGrade,
+      fmrGrade: (fmrMap.get(item.id) || null) as 'F' | 'M' | 'R' | null,
       combinedGrade: item.combinedGrade,
       revenue: revenueMap.get(item.id) || 0,
       variationRate: xyzResult?.coefficientOfVariation || 0,
