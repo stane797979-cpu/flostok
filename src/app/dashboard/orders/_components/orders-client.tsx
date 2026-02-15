@@ -187,10 +187,15 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
     () => serverReorderItems.map(mapServerToClientReorderItem)
   );
 
-  // 자동발주 추천 생성 (발주 필요 품목 기반)
+  // 승인 완료된 productId 추적 (중복 발주 방지)
+  const [approvedProductIds, setApprovedProductIds] = useState<Set<string>>(new Set());
+
+  // 자동발주 추천 생성 (발주 필요 품목 기반, 승인된 품목 제외)
   const autoReorderRecommendations = useMemo(
-    () => generateAutoReorderRecommendations(reorderItems),
-    [reorderItems]
+    () => generateAutoReorderRecommendations(
+      reorderItems.filter((item) => !approvedProductIds.has(item.productId))
+    ),
+    [reorderItems, approvedProductIds]
   );
 
   // 발주 필요 품목 재조회
@@ -660,7 +665,12 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
 
       const result = await approveAutoReorders(ids, items);
 
+      // 승인 성공한 품목의 productId를 추출하여 목록에서 제거
+      const approvedPids = new Set(selectedRecs.map((r) => r.productId));
+
       if (result.success && result.errors.length === 0) {
+        // 승인된 품목 즉시 제거
+        setApprovedProductIds((prev) => new Set([...prev, ...approvedPids]));
         toast({
           title: "자동 발주 승인 완료",
           description: `${result.createdOrders.length}개의 발주서가 생성되었습니다. 발주 현황으로 이동합니다.`,
@@ -669,6 +679,12 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
         // 발주현황 페이지로 자동 이동
         router.push("/dashboard/orders?tab=orders");
       } else if (result.success && result.errors.length > 0) {
+        // 성공한 품목만 제거 (실패한 품목은 남김)
+        const failedPids = new Set(result.errors.map((e) => e.recommendationId));
+        const successPids = [...approvedPids].filter((pid) => !failedPids.has(pid));
+        if (successPids.length > 0) {
+          setApprovedProductIds((prev) => new Set([...prev, ...successPids]));
+        }
         toast({
           title: "자동 발주 부분 완료",
           description: `${result.createdOrders.length}개 생성, ${result.errors.length}개 실패 (${result.errors[0]?.error || "공급자 미지정"})`,
@@ -678,8 +694,6 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
         // 일부라도 생성되었으면 발주현황으로 이동
         if (result.createdOrders.length > 0) {
           router.push("/dashboard/orders?tab=orders");
-        } else {
-          loadReorderItems();
         }
       } else {
         toast({
