@@ -7,7 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { ChevronLeft, ChevronRight, Download, Loader2, PackagePlus, XCircle, PackageCheck, Upload } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ChevronLeft, ChevronRight, Download, Loader2, PackagePlus, XCircle, PackageCheck, Upload, Zap, ClipboardEdit } from "lucide-react";
 import type { DeliveryComplianceResult } from "@/server/services/scm/delivery-compliance";
 import { ReorderSummary } from "./reorder-summary";
 import { ReorderItemsTable, type ReorderItem } from "./reorder-items-table";
@@ -64,6 +65,7 @@ function mapServerToClientReorderItem(item: ServerReorderItem): ReorderItem {
 
 /**
  * 발주 필요 품목 → 자동발주 추천 변환
+ * 수동발주와 차별화: 시스템이 수요예측·리드타임·재고상태를 종합 분석하여 추천
  */
 function generateAutoReorderRecommendations(
   items: ReorderItem[]
@@ -72,11 +74,16 @@ function generateAutoReorderRecommendations(
     const expectedDate = new Date();
     expectedDate.setDate(expectedDate.getDate() + item.leadTime);
 
+    // 추천 근거: 수요예측 기반인지 발주점 기반인지 구분
+    const forecastLabel = item.forecastBased
+      ? `[수요예측 기반] ${item.forecastMethod || "분석"} 모델 적용`
+      : "[발주점 기반] 현재고 < 발주점";
+
     const statusReasons: Record<number, string> = {
-      0: `품절 상태 (현재고 ${item.currentStock}개)`,
-      1: `위험 상태 (재고일수 ${item.daysOfInventory.toFixed(1)}일)`,
-      2: `부족 상태 (재고일수 ${item.daysOfInventory.toFixed(1)}일)`,
-      3: `주의 상태 (발주점 도달)`,
+      0: `${forecastLabel} · 품절 (현재고 ${item.currentStock}개)`,
+      1: `${forecastLabel} · 위험 (재고일수 ${item.daysOfInventory.toFixed(1)}일)`,
+      2: `${forecastLabel} · 부족 (재고일수 ${item.daysOfInventory.toFixed(1)}일)`,
+      3: `${forecastLabel} · 주의 (발주점 도달)`,
     };
 
     return {
@@ -376,10 +383,16 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 긴급도별 카운트
-  const urgentCount = reorderItems.filter((item) => item.urgencyLevel <= 1).length;
-  const lowCount = reorderItems.filter((item) => item.urgencyLevel === 2).length;
-  const cautionCount = reorderItems.filter((item) => item.urgencyLevel === 3).length;
+  // 수동발주 탭에서도 발주 완료 품목 제외
+  const filteredReorderItems = useMemo(
+    () => reorderItems.filter((item) => !approvedProductIds.has(item.productId)),
+    [reorderItems, approvedProductIds]
+  );
+
+  // 긴급도별 카운트 (필터링된 목록 기준)
+  const urgentCount = filteredReorderItems.filter((item) => item.urgencyLevel <= 1).length;
+  const lowCount = filteredReorderItems.filter((item) => item.urgencyLevel === 2).length;
+  const cautionCount = filteredReorderItems.filter((item) => item.urgencyLevel === 3).length;
 
   const handleOrderClick = (item: ReorderItem) => {
     if (!item.supplierId) {
@@ -421,6 +434,9 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
       });
 
       if (result.success && result.createdOrders.length > 0) {
+        // 발주된 품목 즉시 목록에서 제거
+        const orderedPids = new Set(data.items.map((i) => i.productId));
+        setApprovedProductIds((prev) => new Set([...prev, ...orderedPids]));
         toast({
           title: "일괄 발주 완료",
           description: `${result.createdOrders.length}개의 발주서가 생성되었습니다`,
@@ -467,6 +483,8 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
       });
 
       if (result.success) {
+        // 발주된 품목 즉시 목록에서 제거
+        setApprovedProductIds((prev) => new Set([...prev, data.productId]));
         toast({
           title: "발주 완료",
           description: `${selectedProduct?.productName} ${data.quantity}개 발주가 생성되었습니다`,
@@ -742,8 +760,8 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
 
   // 페이지 제목 매핑
   const pageTitles: Record<string, { title: string; description: string }> = {
-    reorder: { title: "발주 필요", description: "재고 상태를 확인하고 발주를 진행하세요" },
-    "auto-reorder": { title: "자동발주", description: "AI가 분석한 자동 발주 추천 목록입니다" },
+    reorder: { title: "수동 발주", description: "발주점 이하 품목을 확인하고, 담당자가 직접 수량·공급자를 선택하여 발주합니다" },
+    "auto-reorder": { title: "자동발주 추천", description: "시스템이 재고 상태·수요예측·리드타임을 분석하여 최적 발주를 추천합니다. 승인만 하면 즉시 발주됩니다" },
     orders: { title: "발주 현황", description: "진행 중인 발주서 목록을 확인하세요" },
     inbound: { title: "입고 현황", description: "월별 입고 기록을 확인하세요" },
     delivery: { title: "납기분석", description: "납기 준수율과 공급자 성과를 분석하세요" },
@@ -761,6 +779,15 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
 
       {initialTab === "reorder" && (
         <div className="space-y-4">
+          {/* 자동발주와의 차이점 안내 */}
+          <Alert className="border-emerald-200 bg-emerald-50">
+            <ClipboardEdit className="h-4 w-4 text-emerald-600" />
+            <AlertTitle className="text-emerald-800">수동 발주란?</AlertTitle>
+            <AlertDescription className="text-emerald-700">
+              발주점 이하 품목을 확인하고, 담당자가 <strong>수량·공급자·납기를 직접 지정</strong>하여 발주합니다.
+              시스템이 자동으로 최적 수량을 계산해서 바로 승인하려면 <strong>자동발주 추천</strong> 탭을 이용하세요.
+            </AlertDescription>
+          </Alert>
           <ReorderSummary
             urgentCount={urgentCount}
             lowCount={lowCount}
@@ -819,7 +846,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
             </CardHeader>
             <CardContent>
               <ReorderItemsTable
-                items={reorderItems}
+                items={filteredReorderItems}
                 selectedIds={selectedIds}
                 onSelectChange={setSelectedIds}
                 onOrderClick={handleOrderClick}
@@ -832,11 +859,21 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
 
       {initialTab === "auto-reorder" && (
         <div className="space-y-4">
+          {/* 수동발주와의 차이점 안내 */}
+          <Alert className="border-blue-200 bg-blue-50">
+            <Zap className="h-4 w-4 text-blue-600" />
+            <AlertTitle className="text-blue-800">자동발주 추천이란?</AlertTitle>
+            <AlertDescription className="text-blue-700">
+              시스템이 <strong>재고 상태, 수요예측, 리드타임, 안전재고</strong>를 종합 분석하여 최적 수량을 자동 계산합니다.
+              담당자는 추천 내용을 확인 후 <strong>승인만 하면 즉시 발주서가 생성</strong>됩니다.
+              수량·공급자를 직접 지정하려면 <strong>수동 발주</strong> 탭을 이용하세요.
+            </AlertDescription>
+          </Alert>
           <Card>
             <CardHeader>
-              <CardTitle>자동 발주 추천</CardTitle>
+              <CardTitle>자동 발주 추천 목록</CardTitle>
               <CardDescription>
-                AI가 재고 상태와 수요 예측을 분석하여 자동으로 생성한 발주 추천 목록입니다
+                추천 수량과 공급자가 자동 지정되어 있습니다. 확인 후 승인/거부하세요.
               </CardDescription>
             </CardHeader>
             <CardContent>

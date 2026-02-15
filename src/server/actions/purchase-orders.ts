@@ -72,7 +72,7 @@ export async function getReorderItems(options?: {
     const orgSettings = orgData?.settings as OrganizationSettings | null;
     const supplyCoefficients = orgSettings?.orderPolicy?.supplyCoefficients;
 
-    // 발주 필요 제품 조회 (현재고 <= 발주점)
+    // 발주 필요 제품 조회 (현재고 <= 발주점, 활성 PO가 없는 제품만)
     const reorderCandidates = await db
       .select({
         product: {
@@ -108,7 +108,16 @@ export async function getReorderItems(options?: {
           or(
             sql`${inventory.currentStock} IS NULL`,
             sql`${inventory.currentStock} <= ${products.reorderPoint}`
-          )
+          ),
+          // 이미 활성 발주(진행 중)가 있는 제품은 제외 → 중복 발주 방지
+          sql`NOT EXISTS (
+            SELECT 1 FROM purchase_order_items poi
+            JOIN purchase_orders po ON po.id = poi.purchase_order_id
+            WHERE poi.product_id = ${products.id}
+              AND po.organization_id = ${orgId}
+              AND po.status NOT IN ('cancelled', 'received', 'completed')
+              AND po.deleted_at IS NULL
+          )`
         )
       );
 
