@@ -84,6 +84,13 @@ export function BulkGuideResult({ result, onReset }: BulkGuideResultProps) {
 
   const { summary, products, insufficientDataProducts: skippedProducts } = result
 
+  // 예측 월 레이블 (첫 번째 분석 제품의 forecast 배열 기준)
+  const forecastMonthLabels = products[0]?.forecast.map((f) => {
+    const [y, m] = f.month.split('-')
+    return `${y}.${parseInt(m)}월`
+  }) ?? []
+  const forecastPeriodCount = forecastMonthLabels.length
+
   // ABC-XYZ 매트릭스 데이터 계산
   const matrixData = {
     AX: 0, AY: 0, AZ: 0,
@@ -371,9 +378,9 @@ export function BulkGuideResult({ result, onReset }: BulkGuideResultProps) {
                   <TableHead>제품명</TableHead>
                   <TableHead>등급</TableHead>
                   <TableHead>추천방법</TableHead>
-                  <TableHead className="text-right">M+1</TableHead>
-                  <TableHead className="text-right">M+2</TableHead>
-                  <TableHead className="text-right">M+3</TableHead>
+                  {forecastMonthLabels.map((label) => (
+                    <TableHead key={label} className="text-right">{label}</TableHead>
+                  ))}
                   <TableHead className="text-right">MAPE</TableHead>
                   <TableHead>신뢰도</TableHead>
                   <TableHead>공급전략</TableHead>
@@ -412,15 +419,11 @@ export function BulkGuideResult({ result, onReset }: BulkGuideResultProps) {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-sm">{product.methodLabel}</TableCell>
-                        <TableCell className="text-right font-medium">
-                          {product.forecast[0]?.value?.toLocaleString() ?? '-'}
-                        </TableCell>
-                        <TableCell className="text-right font-medium">
-                          {product.forecast[1]?.value?.toLocaleString() ?? '-'}
-                        </TableCell>
-                        <TableCell className="text-right font-medium">
-                          {product.forecast[2]?.value?.toLocaleString() ?? '-'}
-                        </TableCell>
+                        {product.forecast.map((f, i) => (
+                          <TableCell key={i} className="text-right font-medium">
+                            {f.value?.toLocaleString() ?? '-'}
+                          </TableCell>
+                        ))}
                         <TableCell className="text-right">
                           <span
                             className={cn(
@@ -458,7 +461,7 @@ export function BulkGuideResult({ result, onReset }: BulkGuideResultProps) {
                       </TableRow>
                       {isExpanded && (
                         <TableRow>
-                          <TableCell colSpan={11} className="bg-muted/30">
+                          <TableCell colSpan={5 + forecastPeriodCount + 3} className="bg-muted/30">
                             <div className="p-4 space-y-2">
                               <h4 className="font-semibold">공급전략 상세</h4>
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">

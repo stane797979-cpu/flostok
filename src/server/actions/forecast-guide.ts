@@ -417,10 +417,10 @@ export async function getBulkForecastGuide(): Promise<BulkForecastResult> {
     }))
     const historyValues = historyPoints.map((h) => h.value)
 
-    // 자동 예측 실행
+    // 자동 예측 실행 (PSI 미래 6개월에 맞춤)
     const forecastResult = forecastDemand({
       history: historyPoints,
-      periods: 3,
+      periods: 6,
       abcGrade: product.abcGrade as ABCGrade | undefined,
       xyzGrade: product.xyzGrade as XYZGrade | undefined,
       turnoverRate,
