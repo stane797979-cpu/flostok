@@ -26,13 +26,11 @@ import { getPurchaseOrderById, updatePurchaseOrderStatus, updatePurchaseOrderExp
 import { createImportShipment } from "@/server/actions/import-shipments";
 import { getInboundRecords } from "@/server/actions/inbound";
 import { getEntityActivityLogs } from "@/server/actions/activity-logs";
-import { getWarehouses } from "@/server/actions/warehouses";
 import type { ActivityLog } from "@/server/actions/activity-logs";
-import { InboundDialog, type InboundDialogItem } from "./inbound-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { exportPurchaseOrderToExcel } from "@/server/actions/excel-export";
 
-// 상태별 다음 단계 정의 (단순화: 발주확정 → 입고 → 완료)
+// 상태별 다음 단계 정의 (발주확정 / 취소 / 완료만 — 입고는 입고관리에서 처리)
 const nextStatusActions: Record<string, { label: string; status: string; variant?: "default" | "outline" }[]> = {
   draft: [
     { label: "발주 확정", status: "ordered" },
@@ -62,7 +60,6 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
   );
   const [isLoading, setIsLoading] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
-  const [inboundDialogOpen, setInboundDialogOpen] = useState(false);
   const [showShipmentForm, setShowShipmentForm] = useState(false);
   const [isCreatingShipment, setIsCreatingShipment] = useState(false);
   const [shipmentForm, setShipmentForm] = useState({
@@ -88,7 +85,6 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
     qualityResult: string | null;
   }>>([]);
   const [activityLogsList, setActivityLogsList] = useState<ActivityLog[]>([]);
-  const [warehousesList, setWarehousesList] = useState<Array<{ id: string; code: string; name: string; isDefault?: boolean }>>([]);
   const { toast } = useToast();
 
   // 발주서 데이터 로드
@@ -102,11 +98,10 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
   const loadOrderData = async () => {
     setIsLoading(true);
     try {
-      const [data, inboundResult, logs, whResult] = await Promise.all([
+      const [data, inboundResult, logs] = await Promise.all([
         getPurchaseOrderById(orderId),
         getInboundRecords({ orderId, limit: 100 }),
         getEntityActivityLogs(orderId, 30),
-        getWarehouses().catch(() => ({ warehouses: [] })),
       ]);
       setOrderData(data);
       setInboundRecordsList(
@@ -120,12 +115,6 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
         }))
       );
       setActivityLogsList(logs);
-      setWarehousesList(whResult.warehouses.map(w => ({
-        id: w.id,
-        code: w.code,
-        name: w.name,
-        isDefault: w.isDefault ?? false,
-      })));
     } catch (error) {
       console.error("발주서 조회 오류:", error);
       toast({
@@ -238,18 +227,6 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
     }
   };
 
-  const handleInboundClick = () => {
-    setInboundDialogOpen(true);
-  };
-
-  const handleInboundClose = (success?: boolean) => {
-    setInboundDialogOpen(false);
-    if (success) {
-      loadOrderData();
-      onStatusChange?.();
-    }
-  };
-
   const handleDownloadClick = async () => {
     try {
       const result = await exportPurchaseOrderToExcel(orderId);
@@ -329,22 +306,10 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
     }).format(amount);
   };
 
-  // 입고 가능 여부 확인
-  const canReceive =
+  // 발주 진행 중 여부 (입항스케줄, 예상입고일 편집 등에 사용)
+  const isInProgress =
     orderData &&
     ["ordered", "confirmed", "shipped", "partially_received"].includes(orderData.status);
-
-  // 입고 다이얼로그용 데이터 변환
-  const inboundItems: InboundDialogItem[] =
-    orderData?.items.map((item) => ({
-      orderItemId: item.id,
-      productId: item.productId,
-      productSku: item.product.sku,
-      productName: item.product.name,
-      orderedQuantity: item.quantity,
-      receivedQuantity: item.receivedQuantity || 0,
-      unitPrice: item.unitPrice,
-    })) || [];
 
   return (
     <>
@@ -439,7 +404,7 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
                               입항스케줄
                             </Badge>
                           )}
-                          {canReceive && (
+                          {isInProgress && (
                             <Button
                               variant="ghost"
                               size="icon"
@@ -549,7 +514,7 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
               </div>
 
               {/* 입항스케줄 등록 */}
-              {canReceive && (
+              {isInProgress && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <h4 className="font-semibold flex items-center gap-2">
@@ -776,31 +741,12 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
                     <Download className="mr-2 h-4 w-4" />
                     Excel 다운로드
                   </Button>
-                  {canReceive && (
-                    <Button size="sm" onClick={handleInboundClick}>
-                      <Package className="mr-2 h-4 w-4" />
-                      입고 확인
-                    </Button>
-                  )}
                 </div>
               </div>
             </div>
           )}
         </DialogContent>
       </Dialog>
-
-      {/* 입고 확인 다이얼로그 */}
-      {orderData && (
-        <InboundDialog
-          open={inboundDialogOpen}
-          onOpenChange={(open) => handleInboundClose(!open)}
-          orderId={orderId}
-          orderNumber={orderData.orderNumber}
-          items={inboundItems}
-          warehouses={warehousesList}
-          defaultWarehouseId={orderData.destinationWarehouseId || undefined}
-        />
-      )}
     </>
   );
 }

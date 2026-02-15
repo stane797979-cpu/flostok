@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { ChevronLeft, ChevronRight, Download, Loader2, PackagePlus, XCircle, PackageCheck, Upload, Zap, ClipboardEdit } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Loader2, PackagePlus, XCircle, Upload, Zap, ClipboardEdit } from "lucide-react";
 import type { DeliveryComplianceResult } from "@/server/services/scm/delivery-compliance";
 import { ReorderSummary } from "./reorder-summary";
 import { ReorderItemsTable, type ReorderItem } from "./reorder-items-table";
@@ -38,7 +38,7 @@ import {
   uploadPurchaseOrderExcel,
 } from "@/server/actions/purchase-orders";
 import { exportPurchaseOrderToExcel, exportInboundRecordsToExcel } from "@/server/actions/excel-export";
-import { getInboundRecords, bulkConfirmInbound } from "@/server/actions/inbound";
+import { getInboundRecords } from "@/server/actions/inbound";
 import type { ReorderItem as ServerReorderItem } from "@/server/services/scm/reorder-recommendation";
 
 /**
@@ -246,7 +246,6 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
   // 발주 현황 체크박스
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [isCancellingOrders, setIsCancellingOrders] = useState(false);
-  const [isConfirmingInbound, setIsConfirmingInbound] = useState(false);
   const [hideReceived, setHideReceived] = useState(false);
 
   // 입고 현황 상태
@@ -618,57 +617,6 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
     e.target.value = "";
   };
 
-  const handleBulkInbound = async () => {
-    if (selectedOrderIds.length === 0) return;
-
-    // 입고 가능한 상태의 발주만 필터
-    const inboundCapableStatuses = ["ordered", "pending_receipt"];
-    const inboundableIds = purchaseOrders
-      .filter((o) => selectedOrderIds.includes(o.id) && inboundCapableStatuses.includes(o.status))
-      .map((o) => o.id);
-
-    if (inboundableIds.length === 0) {
-      toast({
-        title: "입고 처리 불가",
-        description: "선택된 발주서 중 입고 가능한 발주서가 없습니다 (발주완료/입고대기 상태만 가능)",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsConfirmingInbound(true);
-    try {
-      const result = await bulkConfirmInbound(inboundableIds);
-
-      if (result.success) {
-        toast({
-          title: "일괄 입고 완료",
-          description: `${result.processedCount}건의 발주서가 전량 입고 처리되었습니다`,
-        });
-        setSelectedOrderIds([]);
-        loadPurchaseOrders();
-        loadReorderItems();
-      }
-
-      if (result.errors.length > 0) {
-        toast({
-          title: result.processedCount > 0 ? "일부 입고 실패" : "입고 실패",
-          description: result.errors[0]?.error || "입고 처리에 실패한 발주서가 있습니다",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      console.error("일괄 입고확인 오류:", error);
-      toast({
-        title: "오류",
-        description: "일괄 입고확인 처리 중 오류가 발생했습니다",
-        variant: "destructive",
-      });
-    } finally {
-      setIsConfirmingInbound(false);
-    }
-  };
-
   const handleApproveAutoReorders = async (ids: string[]) => {
     try {
       // 선택된 추천 목록에서 발주 데이터 추출
@@ -913,22 +861,10 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                 {selectedOrderIds.length > 0 && (
                   <div className="flex gap-2">
                     <Button
-                      size="sm"
-                      onClick={handleBulkInbound}
-                      disabled={isConfirmingInbound || isCancellingOrders}
-                    >
-                      {isConfirmingInbound ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <PackageCheck className="mr-2 h-4 w-4" />
-                      )}
-                      {selectedOrderIds.length}건 일괄 입고확인
-                    </Button>
-                    <Button
                       variant="destructive"
                       size="sm"
                       onClick={handleBulkCancel}
-                      disabled={isCancellingOrders || isConfirmingInbound}
+                      disabled={isCancellingOrders}
                     >
                       {isCancellingOrders ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
