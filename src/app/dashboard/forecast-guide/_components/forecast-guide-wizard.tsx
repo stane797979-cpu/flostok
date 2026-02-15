@@ -11,10 +11,13 @@ import { StepTrend } from './step-trend';
 import { StepImportance } from './step-importance';
 import { StepContext } from './step-context';
 import { GuideResult } from './guide-result';
+import { BulkGuideResult } from './bulk-guide-result';
 import {
   getGuideRecommendation,
+  getBulkForecastGuide,
   type GuideAnswers,
   type GuideRecommendation,
+  type BulkForecastResult,
   type ProductOption,
 } from '@/server/actions/forecast-guide';
 
@@ -26,9 +29,11 @@ export function ForecastGuideWizard({ products }: ForecastGuideWizardProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [answers, setAnswers] = useState<Partial<GuideAnswers>>({});
   const [result, setResult] = useState<GuideRecommendation | null>(null);
+  const [bulkResult, setBulkResult] = useState<BulkForecastResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isBulkLoading, setIsBulkLoading] = useState(false);
 
-  const isResultStep = result !== null;
+  const isResultStep = result !== null || bulkResult !== null;
 
   // 현재 단계가 완료되었는지 확인
   const isStepComplete = (): boolean => {
@@ -69,22 +74,36 @@ export function ForecastGuideWizard({ products }: ForecastGuideWizardProps) {
     setCurrentStep(0);
     setAnswers({});
     setResult(null);
+    setBulkResult(null);
   };
 
   const handleProductSelect = (productId: string) => {
     setAnswers((prev) => ({ ...prev, productId }));
   };
 
-  const handleSkipProduct = () => {
-    setAnswers((prev) => {
-      const { productId: _, ...rest } = prev;
-      return rest;
-    });
-    setCurrentStep(1);
+  const handleSkipProduct = async () => {
+    setIsBulkLoading(true);
+    try {
+      const bulk = await getBulkForecastGuide();
+      setBulkResult(bulk);
+    } catch {
+      // 실패 시 기존 질문 흐름으로 폴백
+      setAnswers((prev) => {
+        const { productId: _, ...rest } = prev;
+        return rest;
+      });
+      setCurrentStep(1);
+    } finally {
+      setIsBulkLoading(false);
+    }
   };
 
   const renderStep = () => {
-    if (isResultStep) {
+    if (bulkResult) {
+      return <BulkGuideResult result={bulkResult} onReset={handleReset} />;
+    }
+
+    if (result) {
       return (
         <GuideResult
           recommendation={result}
@@ -96,7 +115,17 @@ export function ForecastGuideWizard({ products }: ForecastGuideWizardProps) {
 
     switch (currentStep) {
       case 0:
-        return (
+        return isBulkLoading ? (
+          <div className="flex flex-col items-center justify-center py-12 space-y-4">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <div className="text-center">
+              <p className="text-lg font-semibold">전체 SKU 수요예측 분석 중...</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                판매 데이터를 기반으로 최적의 예측 모델을 선택하고 있습니다
+              </p>
+            </div>
+          </div>
+        ) : (
           <StepProductSelect
             products={products}
             selectedProductId={answers.productId}

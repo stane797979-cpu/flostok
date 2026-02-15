@@ -8,10 +8,16 @@
  */
 
 import { db } from '@/server/db'
-import { products } from '@/server/db/schema'
-import { eq } from 'drizzle-orm'
+import { products, salesRecords, inventory, demandForecasts } from '@/server/db/schema'
+import { eq, and, gte, sql } from 'drizzle-orm'
+import { revalidatePath } from 'next/cache'
 import { requireAuth } from './auth-helpers'
 import { selectMethodByRules } from '@/server/services/scm/demand-forecast/selector'
+import {
+  forecastDemand,
+  backtestForecast,
+  type TimeSeriesDataPoint,
+} from '@/server/services/scm/demand-forecast'
 import type { ForecastMetadata, ForecastMethodType } from '@/server/services/scm/demand-forecast/types'
 import type { ABCGrade, XYZGrade } from '@/server/services/scm/abc-xyz-analysis'
 
@@ -263,5 +269,330 @@ export async function getGuideRecommendation(answers: GuideAnswers): Promise<Gui
     supplyStrategy: SUPPLY_STRATEGIES[combinedGrade] || DEFAULT_STRATEGY,
     combinedGrade,
     warnings: buildWarnings(metadata, answers),
+  }
+}
+
+// ===== 전체 SKU 일괄 분석 타입 =====
+
+export interface BulkForecastProduct {
+  productId: string
+  sku: string
+  name: string
+  abcGrade: string | null
+  xyzGrade: string | null
+  combinedGrade: string
+  method: ForecastMethodType
+  methodLabel: string
+  forecast: Array<{ month: string; value: number }>
+  mape: number
+  confidence: 'high' | 'medium' | 'low'
+  selectionReason: string
+  supplyStrategy: SupplyStrategy
+  currentStock: number
+  safetyStock: number
+  dataMonths: number
+}
+
+export interface BulkForecastResult {
+  summary: {
+    totalProducts: number
+    analyzedProducts: number
+    skippedProducts: number
+    avgMape: number
+    gradeMatrix: Record<string, number>
+  }
+  products: BulkForecastProduct[]
+  insufficientDataProducts: Array<{
+    productId: string
+    sku: string
+    name: string
+    dataMonths: number
+    reason: string
+  }>
+}
+
+/**
+ * 전체 SKU 일괄 수요예측 분석
+ * 과거 판매 데이터 기반으로 모든 제품의 수요예측·등급·공급전략을 산출
+ */
+export async function getBulkForecastGuide(): Promise<BulkForecastResult> {
+  const user = await requireAuth()
+  const orgId = user.organizationId
+
+  const twelveMonthsAgo = new Date()
+  twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12)
+  const startDate = twelveMonthsAgo.toISOString().split('T')[0]
+
+  // 1. 병렬 DB 쿼리 3개
+  const [allProducts, allSales, allInventory] = await Promise.all([
+    db
+      .select({
+        id: products.id,
+        sku: products.sku,
+        name: products.name,
+        abcGrade: products.abcGrade,
+        xyzGrade: products.xyzGrade,
+        safetyStock: products.safetyStock,
+      })
+      .from(products)
+      .where(eq(products.organizationId, orgId)),
+    db
+      .select({
+        productId: salesRecords.productId,
+        month: sql<string>`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`,
+        totalQuantity: sql<number>`COALESCE(SUM(${salesRecords.quantity}), 0)`,
+      })
+      .from(salesRecords)
+      .where(and(eq(salesRecords.organizationId, orgId), gte(salesRecords.date, startDate)))
+      .groupBy(salesRecords.productId, sql`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`)
+      .orderBy(salesRecords.productId, sql`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`),
+    db
+      .select({ productId: inventory.productId, currentStock: inventory.currentStock })
+      .from(inventory)
+      .where(eq(inventory.organizationId, orgId)),
+  ])
+
+  if (allProducts.length === 0) {
+    return {
+      summary: { totalProducts: 0, analyzedProducts: 0, skippedProducts: 0, avgMape: 0, gradeMatrix: {} },
+      products: [],
+      insufficientDataProducts: [],
+    }
+  }
+
+  // 2. 판매 데이터 productId별 그룹핑
+  const salesByProduct = new Map<string, Array<{ month: string; quantity: number }>>()
+  for (const row of allSales) {
+    if (!salesByProduct.has(row.productId)) salesByProduct.set(row.productId, [])
+    salesByProduct.get(row.productId)!.push({ month: row.month, quantity: Number(row.totalQuantity) })
+  }
+
+  // 3. 재고 맵
+  const inventoryMap = new Map<string, number>()
+  for (const row of allInventory) {
+    inventoryMap.set(row.productId, row.currentStock)
+  }
+
+  // 4. 각 제품별 예측 실행
+  const analyzedProducts: BulkForecastProduct[] = []
+  const insufficientDataProducts: BulkForecastResult['insufficientDataProducts'] = []
+  const gradeMatrix: Record<string, number> = {}
+
+  for (const product of allProducts) {
+    const monthlySales = salesByProduct.get(product.id) || []
+
+    if (monthlySales.length < 2) {
+      insufficientDataProducts.push({
+        productId: product.id,
+        sku: product.sku,
+        name: product.name,
+        dataMonths: monthlySales.length,
+        reason: monthlySales.length === 0 ? '판매 데이터 없음' : '최소 2개월 이상 데이터 필요',
+      })
+      continue
+    }
+
+    const currentStock = inventoryMap.get(product.id) ?? 0
+    const safetyStock = product.safetyStock ?? 0
+    const isOverstock = safetyStock > 0 && currentStock >= safetyStock * 3
+
+    // 회전율 계산
+    const totalSalesQty = monthlySales.reduce((s, r) => s + r.quantity, 0)
+    const annualizedSales = (totalSalesQty / monthlySales.length) * 12
+    const turnoverRate = currentStock > 0 ? annualizedSales / currentStock : undefined
+
+    // 성장률 계산 (6개월+)
+    let yoyGrowthRate: number | undefined
+    if (monthlySales.length >= 6) {
+      const halfLen = Math.floor(monthlySales.length / 2)
+      const firstAvg = monthlySales.slice(0, halfLen).reduce((s, r) => s + r.quantity, 0) / halfLen
+      const secondAvg = monthlySales.slice(halfLen).reduce((s, r) => s + r.quantity, 0) / (monthlySales.length - halfLen)
+      if (firstAvg > 0) yoyGrowthRate = ((secondAvg - firstAvg) / firstAvg) * 100
+    }
+
+    // TimeSeriesDataPoint 구성
+    const historyPoints: TimeSeriesDataPoint[] = monthlySales.map((r) => ({
+      date: new Date(`${r.month}-01`),
+      value: r.quantity,
+    }))
+    const historyValues = historyPoints.map((h) => h.value)
+
+    // 자동 예측 실행
+    const forecastResult = forecastDemand({
+      history: historyPoints,
+      periods: 3,
+      abcGrade: product.abcGrade as ABCGrade | undefined,
+      xyzGrade: product.xyzGrade as XYZGrade | undefined,
+      turnoverRate,
+      yoyGrowthRate,
+      isOverstock,
+    })
+
+    // 백테스트
+    const backtestResult = backtestForecast(historyValues, 3, forecastResult.method)
+    const mape = Math.round((forecastResult.mape ?? backtestResult.mape) * 10) / 10
+    const confidence = forecastResult.confidence ?? backtestResult.confidence
+
+    // 예측 날짜 매핑
+    const lastDate = historyPoints[historyPoints.length - 1].date
+    const predictedMonths = forecastResult.forecast.map((value, i) => {
+      const d = new Date(lastDate)
+      d.setMonth(d.getMonth() + i + 1)
+      return {
+        month: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+        value: Math.round(value),
+      }
+    })
+
+    // 등급 매핑
+    const abcGrade = product.abcGrade || 'B'
+    const xyzGrade = product.xyzGrade || 'Y'
+    const combinedGrade = `${abcGrade}${xyzGrade}`
+
+    // 매트릭스 카운트
+    gradeMatrix[combinedGrade] = (gradeMatrix[combinedGrade] || 0) + 1
+
+    analyzedProducts.push({
+      productId: product.id,
+      sku: product.sku,
+      name: product.name,
+      abcGrade: product.abcGrade,
+      xyzGrade: product.xyzGrade,
+      combinedGrade,
+      method: forecastResult.method,
+      methodLabel: METHOD_BUSINESS_NAMES[forecastResult.method],
+      forecast: predictedMonths,
+      mape: mape === 999 ? 0 : mape,
+      confidence,
+      selectionReason: forecastResult.selectionReason ?? '자동 선택',
+      supplyStrategy: SUPPLY_STRATEGIES[combinedGrade] || DEFAULT_STRATEGY,
+      currentStock,
+      safetyStock,
+      dataMonths: monthlySales.length,
+    })
+  }
+
+  // 5. 평균 MAPE
+  const validMapes = analyzedProducts.filter((p) => p.mape > 0 && p.mape < 999)
+  const avgMape = validMapes.length > 0
+    ? Math.round((validMapes.reduce((s, p) => s + p.mape, 0) / validMapes.length) * 10) / 10
+    : 0
+
+  return {
+    summary: {
+      totalProducts: allProducts.length,
+      analyzedProducts: analyzedProducts.length,
+      skippedProducts: insufficientDataProducts.length,
+      avgMape,
+      gradeMatrix,
+    },
+    products: analyzedProducts,
+    insufficientDataProducts,
+  }
+}
+
+/**
+ * 전체 SKU 수요예측 결과를 DB에 저장 (PSI 연동)
+ */
+export async function saveBulkForecastsToDB(
+  forecasts: Array<{
+    productId: string
+    method: ForecastMethodType
+    forecast: Array<{ month: string; value: number }>
+    mape: number
+  }>
+): Promise<{ success: boolean; message: string; savedCount: number }> {
+  try {
+    const user = await requireAuth()
+    const orgId = user.organizationId
+
+    const methodDbMap: Record<string, string> = {
+      SMA: 'sma_3',
+      SES: 'ses',
+      Holts: 'holt',
+    }
+
+    // 전체 기간 목록 추출
+    const allPeriods = new Set<string>()
+    for (const f of forecasts) {
+      for (const pm of f.forecast) {
+        allPeriods.add(`${pm.month}-01`)
+      }
+    }
+    const periodsArray = [...allPeriods]
+
+    // 기존 데이터 한 번에 조회
+    const productIds = forecasts.map((f) => f.productId)
+    const existingRows = periodsArray.length > 0 && productIds.length > 0
+      ? await db
+          .select({ id: demandForecasts.id, productId: demandForecasts.productId, period: demandForecasts.period })
+          .from(demandForecasts)
+          .where(
+            and(
+              eq(demandForecasts.organizationId, orgId),
+              sql`${demandForecasts.productId} IN (${sql.join(productIds.map(id => sql`${id}`), sql`, `)})`,
+              sql`${demandForecasts.period} IN (${sql.join(periodsArray.map(p => sql`${p}`), sql`, `)})`
+            )
+          )
+      : []
+
+    // 기존 데이터 맵: "productId-period" → id
+    const existingMap = new Map<string, string>()
+    for (const row of existingRows) {
+      existingMap.set(`${row.productId}-${row.period}`, row.id)
+    }
+
+    // UPDATE/INSERT 병렬 처리
+    const ops: Promise<unknown>[] = []
+    let savedCount = 0
+
+    for (const f of forecasts) {
+      const dbMethod = methodDbMap[f.method] || 'sma_3'
+      const mapeStr = String(Math.round(f.mape * 10) / 10)
+
+      for (const pm of f.forecast) {
+        const periodDate = `${pm.month}-01`
+        const key = `${f.productId}-${periodDate}`
+        const existId = existingMap.get(key)
+
+        if (existId) {
+          ops.push(
+            db.update(demandForecasts).set({
+              method: dbMethod as typeof demandForecasts.method.enumValues[number],
+              forecastQuantity: pm.value,
+              mape: mapeStr,
+              notes: '수요예측 가이드 일괄 분석',
+              updatedAt: new Date(),
+            }).where(eq(demandForecasts.id, existId))
+          )
+        } else {
+          ops.push(
+            db.insert(demandForecasts).values({
+              organizationId: orgId,
+              productId: f.productId,
+              period: periodDate,
+              method: dbMethod as typeof demandForecasts.method.enumValues[number],
+              forecastQuantity: pm.value,
+              mape: mapeStr,
+              notes: '수요예측 가이드 일괄 분석',
+            })
+          )
+        }
+        savedCount++
+      }
+    }
+
+    // 500건씩 batch 처리
+    const BATCH_SIZE = 500
+    for (let i = 0; i < ops.length; i += BATCH_SIZE) {
+      await Promise.all(ops.slice(i, i + BATCH_SIZE))
+    }
+
+    revalidatePath('/dashboard/psi')
+
+    return { success: true, message: `${forecasts.length}개 제품의 수요예측이 PSI에 반영되었습니다`, savedCount }
+  } catch (error) {
+    console.error('수요예측 일괄 저장 오류:', error)
+    return { success: false, message: '수요예측 저장 중 오류가 발생했습니다', savedCount: 0 }
   }
 }

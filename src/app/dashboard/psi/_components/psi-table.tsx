@@ -69,8 +69,9 @@ function StockCell({ value, safetyStock, italic }: { value: number; safetyStock:
   );
 }
 
-/** 월별 7개 서브컬럼 정의 */
+/** 월별 8개 서브컬럼 정의 */
 const SUB_COLUMNS = [
+  { key: "forecast", label: "수요예측(F/C)", shortLabel: "F/C" },
   { key: "sop", label: "SCM 가이드", shortLabel: "SCM" },
   { key: "inboundPlan", label: "입고(계획)", shortLabel: "입고P" },
   { key: "inboundActual", label: "입고(실적)", shortLabel: "입고A" },
@@ -204,7 +205,7 @@ export function PSITable({ products, periods }: PSITableProps) {
                   "text-center border-r py-1",
                   period === currentPeriod && "bg-blue-50 dark:bg-blue-950"
                 )}
-                colSpan={7}
+                colSpan={8}
               >
                 <span className="font-bold text-xs">{formatPeriodLabel(period)}</span>
               </TableHead>
@@ -222,7 +223,7 @@ export function PSITable({ products, periods }: PSITableProps) {
                       period === currentPeriod && "bg-blue-50 dark:bg-blue-950",
                       idx === SUB_COLUMNS.length - 1 && "border-r",
                       // 계획컬럼 배경
-                      (col.key === "sop" || col.key === "inboundPlan" || col.key === "outboundPlan" || col.key === "endingPlan") && "bg-purple-50/50 dark:bg-purple-950/30",
+                      (col.key === "forecast" || col.key === "sop" || col.key === "inboundPlan" || col.key === "outboundPlan" || col.key === "endingPlan") && "bg-purple-50/50 dark:bg-purple-950/30",
                     )}
                   >
                     {col.shortLabel}
@@ -278,6 +279,27 @@ export function PSITable({ products, periods }: PSITableProps) {
 
                 return (
                   <Fragment key={month.period}>
+                    {/* 수요예측 (F/C) */}
+                    <TableCell className={cn("text-center p-0.5", bg, planBg)}>
+                      {month.forecast !== null || month.manualForecast !== null ? (
+                        <span className="flex items-center justify-center gap-0.5">
+                          <span className={cn(
+                            "tabular-nums text-[11px] italic",
+                            month.manualForecast !== null ? "text-amber-600" : "text-sky-600"
+                          )}>
+                            {(month.manualForecast ?? month.forecast ?? 0).toLocaleString()}
+                          </span>
+                          <span className={cn(
+                            "text-[8px] font-bold leading-none",
+                            month.manualForecast !== null ? "text-amber-500" : "text-sky-500"
+                          )}>
+                            {month.manualForecast !== null ? "M" : "A"}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="text-slate-300 text-[11px]">-</span>
+                      )}
+                    </TableCell>
                     {/* SCM (AI 가이드 수량) */}
                     <TableCell className={cn("text-center p-0.5", bg, planBg)}>
                       <NumCell value={month.sopQuantity} color="text-purple-600" italic />

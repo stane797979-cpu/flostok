@@ -381,6 +381,14 @@ export function PSIClient({ data }: PSIClientProps) {
           <Badge variant="outline" className="text-[9px] px-1 py-0 border-green-300 text-green-700 bg-green-50">정기</Badge>
           정기발주
         </span>
+        <span className="flex items-center gap-1">
+          <span className="text-[9px] font-bold text-sky-500">A</span>
+          <span>자동예측(F/C)</span>
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="text-[9px] font-bold text-amber-500">M</span>
+          <span>수동예측(F/C)</span>
+        </span>
         <span>SCM = AI가이드 · P = 계획 · A = 실적</span>
       </div>
 

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Package, Search, Sparkles, ArrowRight } from 'lucide-react';
+import { Package, Search, BarChart3, ArrowRight } from 'lucide-react';
 import type { ProductOption } from '@/server/actions/forecast-guide';
 
 interface StepProductSelectProps {
@@ -33,7 +33,7 @@ export function StepProductSelect({
       <div className="text-center">
         <h2 className="text-xl font-bold">분석할 제품을 선택하세요</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          등록된 제품이 있으면 실제 데이터를 기반으로 더 정확한 추천을 받을 수 있습니다
+          특정 제품을 선택하면 해당 제품의 상세 추천을, 선택하지 않으면 전체 SKU 데이터 기반 일괄 분석을 실행합니다
         </p>
       </div>
 
@@ -106,8 +106,8 @@ export function StepProductSelect({
 
       <div className="flex justify-center">
         <Button variant="ghost" onClick={onSkip}>
-          <Sparkles className="mr-2 h-4 w-4" />
-          제품 없이 직접 답변하기
+          <BarChart3 className="mr-2 h-4 w-4" />
+          전체 SKU 데이터 분석
           <ArrowRight className="ml-2 h-4 w-4" />
         </Button>
       </div>
