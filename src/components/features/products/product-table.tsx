@@ -12,6 +12,12 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { MoreHorizontal, Eye, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import {
   DropdownMenu,
@@ -290,17 +296,35 @@ export function ProductTable({ products = [], onView, onEdit, onDelete, onBulkDe
                       <span className="text-slate-400">-</span>
                     )}
                     {product.fmrGrade && (
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          "font-mono text-[10px] px-1.5",
-                          product.fmrGrade === "F" && "border-red-300 bg-red-50 text-red-700",
-                          product.fmrGrade === "M" && "border-yellow-300 bg-yellow-50 text-yellow-700",
-                          product.fmrGrade === "R" && "border-slate-300 bg-slate-50 text-slate-500",
-                        )}
-                      >
-                        {product.fmrGrade}
-                      </Badge>
+                      <TooltipProvider delayDuration={200}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "font-mono text-[10px] px-1.5 cursor-help",
+                                product.fmrGrade === "F" && "border-red-300 bg-red-50 text-red-700",
+                                product.fmrGrade === "M" && "border-yellow-300 bg-yellow-50 text-yellow-700",
+                                product.fmrGrade === "R" && "border-slate-300 bg-slate-50 text-slate-500",
+                              )}
+                            >
+                              {product.fmrGrade}
+                            </Badge>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs">
+                            <p className="font-medium">
+                              {product.fmrGrade === "F" && "Fast Moving (고빈도 출고)"}
+                              {product.fmrGrade === "M" && "Medium Moving (중빈도 출고)"}
+                              {product.fmrGrade === "R" && "Rare Moving (저빈도 출고)"}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {product.fmrGrade === "F" && "월 10회 이상 출고 — 상시 재고 확보 필요"}
+                              {product.fmrGrade === "M" && "월 4~9회 출고 — 정기 보충 관리"}
+                              {product.fmrGrade === "R" && "월 3회 이하 출고 — 재고 최소화 또는 주문생산 검토"}
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     )}
                   </div>
                 </TableCell>

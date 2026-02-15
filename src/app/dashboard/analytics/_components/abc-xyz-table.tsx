@@ -21,6 +21,12 @@ import {
 import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import type { ABCGrade, XYZGrade, FMRGrade } from "@/server/services/scm/abc-xyz-analysis";
 import { cn } from "@/lib/utils";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export interface ProductAnalysis {
   id: string;
@@ -212,7 +218,22 @@ export function ABCXYZTable({ products, selectedGrade }: ABCXYZTableProps) {
                     <SortIcon field="xyzGrade" />
                   </button>
                 </TableHead>
-                <TableHead className="text-center">FMR</TableHead>
+                <TableHead className="text-center">
+                  <TooltipProvider delayDuration={200}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="cursor-help border-b border-dashed border-slate-400">FMR</span>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-xs">
+                        <p className="font-medium">출고 빈도 분석 (Fast-Medium-Rare)</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          ABC가 &quot;얼마나 많이 팔리는가&quot;(금액)라면,
+                          FMR은 &quot;얼마나 자주 출고되는가&quot;(횟수)를 측정합니다.
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </TableHead>
                 <TableHead className="text-right">
                   <button
                     onClick={() => handleSort("revenue")}
@@ -258,12 +279,30 @@ export function ABCXYZTable({ products, selectedGrade }: ABCXYZTableProps) {
                     </TableCell>
                     <TableCell className="text-center">
                       {product.fmrGrade ? (
-                        <Badge
-                          variant="outline"
-                          className={cn("font-mono", FMR_BADGE_COLORS[product.fmrGrade])}
-                        >
-                          {product.fmrGrade}
-                        </Badge>
+                        <TooltipProvider delayDuration={200}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge
+                                variant="outline"
+                                className={cn("font-mono cursor-help", FMR_BADGE_COLORS[product.fmrGrade])}
+                              >
+                                {product.fmrGrade}
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-xs">
+                              <p className="font-medium">
+                                {product.fmrGrade === "F" && "Fast Moving (고빈도 출고)"}
+                                {product.fmrGrade === "M" && "Medium Moving (중빈도 출고)"}
+                                {product.fmrGrade === "R" && "Rare Moving (저빈도 출고)"}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {product.fmrGrade === "F" && "월 10회 이상 출고"}
+                                {product.fmrGrade === "M" && "월 4~9회 출고"}
+                                {product.fmrGrade === "R" && "월 3회 이하 출고"}
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       ) : (
                         <span className="text-slate-400">-</span>
                       )}

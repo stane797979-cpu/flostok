@@ -132,12 +132,17 @@ export function ABCXYZPolicyGuide() {
           <h4 className="mb-2 text-sm font-medium text-blue-900">분류 기준 설명</h4>
           <div className="space-y-2 text-xs text-blue-800">
             <div>
-              <span className="font-medium">ABC 분석:</span> 매출액 기준 누적 비율 (A: 상위 80%, B:
-              80-95%, C: 95-100%)
+              <span className="font-medium">ABC 분석 (매출 기여도):</span> 매출액 기준 누적 비율 — A: 상위 80%, B:
+              80-95%, C: 95-100%
             </div>
             <div>
-              <span className="font-medium">XYZ 분석:</span> 수요 변동계수 기준 (X: CV&lt;0.5, Y:
-              0.5≤CV&lt;1.0, Z: CV≥1.0)
+              <span className="font-medium">XYZ 분석 (수요 안정성):</span> 수요 변동계수(CV) 기준 — X: CV&lt;0.5 (안정), Y:
+              0.5≤CV&lt;1.0 (변동), Z: CV≥1.0 (불안정)
+            </div>
+            <div>
+              <span className="font-medium">FMR 분석 (출고 빈도):</span> 월평균 출고 건수 기준 — F: 10회 이상 (고빈도), M:
+              4~9회 (중빈도), R: 3회 이하 (저빈도). ABC가 &quot;얼마나 많이 팔리는가&quot;(금액)라면, FMR은
+              &quot;얼마나 자주 출고되는가&quot;(횟수)를 측정합니다.
             </div>
           </div>
         </div>
