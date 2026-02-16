@@ -420,6 +420,254 @@ export async function processInventoryTransaction(
   }
 }
 
+// ===== 배치 재고 처리 (N+1 쿼리 제거용) =====
+
+export interface BatchInventoryItem {
+  productId: string;
+  changeType: InventoryChangeTypeKey;
+  quantity: number;
+  referenceId?: string;
+  notes?: string;
+  location?: string;
+  warehouseId?: string;
+}
+
+/**
+ * 배치 재고 처리 — 여러 제품의 재고를 한 번에 처리
+ *
+ * 단건 processInventoryTransaction을 N번 호출하는 대신,
+ * 배치 SELECT → 메모리 계산 → 배치 UPDATE/INSERT로 쿼리 수를 최소화합니다.
+ *
+ * 주의: FIFO Lot 차감은 제품별로 순차 처리해야 하므로 출고 시에는 여전히 개별 호출합니다.
+ * 입고(sign=+1)인 경우에만 완전한 배치 최적화가 적용됩니다.
+ */
+export async function processBatchInventoryTransactions(
+  items: BatchInventoryItem[],
+  context?: {
+    user?: AuthUser;
+    productsMap?: Map<string, typeof products.$inferSelect>;
+    warehouseId?: string;
+    skipRevalidate?: boolean;
+    skipActivityLog?: boolean;
+  }
+): Promise<{ success: boolean; results: Array<{ productId: string; success: boolean; stockAfter?: number; error?: string }> }> {
+  if (items.length === 0) return { success: true, results: [] };
+
+  try {
+    const user = context?.user ?? await requireAuth();
+
+    // warehouseId 결정 (공통 또는 아이템별)
+    let defaultWarehouseId = context?.warehouseId;
+    if (!defaultWarehouseId) {
+      const { getDefaultWarehouse } = await import("./warehouses");
+      const dw = await getDefaultWarehouse();
+      if (!dw) return { success: false, results: items.map(i => ({ productId: i.productId, success: false, error: "기본 창고 없음" })) };
+      defaultWarehouseId = dw.id;
+    }
+
+    // 1. 고유 productId 추출
+    const uniqueProductIds = [...new Set(items.map(i => i.productId))];
+
+    // 2. 배치 제품 조회 (context에 없는 경우만)
+    let productsMap = context?.productsMap ?? new Map<string, typeof products.$inferSelect>();
+    if (!context?.productsMap && uniqueProductIds.length > 0) {
+      const rows = await db
+        .select()
+        .from(products)
+        .where(and(inArray(products.id, uniqueProductIds), eq(products.organizationId, user.organizationId)));
+      productsMap = new Map(rows.map(p => [p.id, p]));
+    }
+
+    // 3. 배치 현재 재고 조회
+    const existingInventory = uniqueProductIds.length > 0
+      ? await db
+          .select()
+          .from(inventory)
+          .where(
+            and(
+              inArray(inventory.productId, uniqueProductIds),
+              eq(inventory.organizationId, user.organizationId),
+              eq(inventory.warehouseId, defaultWarehouseId)
+            )
+          )
+      : [];
+    const inventoryMap = new Map(existingInventory.map(inv => [inv.productId, inv]));
+
+    // 4. 제품별 변동량 집계 (동일 제품 여러 번 등장 가능)
+    const changesByProduct = new Map<string, { totalChange: number; items: BatchInventoryItem[] }>();
+    for (const item of items) {
+      const info = getChangeTypeInfo(item.changeType);
+      const change = item.quantity * info.sign;
+      const existing = changesByProduct.get(item.productId);
+      if (existing) {
+        existing.totalChange += change;
+        existing.items.push(item);
+      } else {
+        changesByProduct.set(item.productId, { totalChange: change, items: [item] });
+      }
+    }
+
+    // 5. 출고(음수) 포함 제품은 FIFO가 필요하므로 개별 처리 목록 분리
+    const batchUpdates: Array<{
+      productId: string;
+      stockBefore: number;
+      stockAfter: number;
+      invId?: string;
+      newStatus: string;
+    }> = [];
+    const historyInserts: Array<{
+      organizationId: string;
+      warehouseId: string;
+      productId: string;
+      date: string;
+      stockBefore: number;
+      stockAfter: number;
+      changeAmount: number;
+      changeType: string;
+      referenceId?: string;
+      referenceType: string;
+      notes: string | null;
+    }> = [];
+    const results: Array<{ productId: string; success: boolean; stockAfter?: number; error?: string }> = [];
+    const today = new Date().toISOString().split("T")[0];
+
+    // 출고가 포함된 제품: FIFO 필요 → 기존 단건 호출
+    const fifoNeededProducts: string[] = [];
+
+    for (const [productId, data] of changesByProduct.entries()) {
+      const product = productsMap.get(productId);
+      if (!product) {
+        results.push({ productId, success: false, error: "제품을 찾을 수 없습니다" });
+        continue;
+      }
+
+      const hasOutbound = data.items.some(i => getChangeTypeInfo(i.changeType).sign < 0);
+
+      if (hasOutbound) {
+        // FIFO 필요: 기존 단건 처리로 폴백 (하지만 product 캐싱 활용)
+        fifoNeededProducts.push(productId);
+        for (const item of data.items) {
+          const wId = item.warehouseId || defaultWarehouseId;
+          const result = await processInventoryTransaction(
+            { ...item, warehouseId: wId },
+            { user, product, skipRevalidate: true, skipActivityLog: true }
+          );
+          results.push({ productId, success: result.success, stockAfter: result.stockAfter, error: result.error });
+        }
+        continue;
+      }
+
+      // 입고만 있는 경우: 배치 최적화
+      const currentInv = inventoryMap.get(productId);
+      const stockBefore = currentInv?.currentStock || 0;
+      const stockAfter = stockBefore + data.totalChange;
+
+      if (stockAfter < 0) {
+        results.push({ productId, success: false, error: `재고 부족: 현재고 ${stockBefore}, 변동 ${data.totalChange}` });
+        continue;
+      }
+
+      const statusResult = classifyInventoryStatus({
+        currentStock: stockAfter,
+        safetyStock: product.safetyStock || 0,
+        reorderPoint: product.reorderPoint || 0,
+      });
+
+      batchUpdates.push({
+        productId,
+        stockBefore,
+        stockAfter,
+        invId: currentInv?.id,
+        newStatus: statusResult.key,
+      });
+
+      // 이력 생성 (각 item별)
+      for (const item of data.items) {
+        const info = getChangeTypeInfo(item.changeType);
+        const change = item.quantity * info.sign;
+        historyInserts.push({
+          organizationId: user.organizationId,
+          warehouseId: defaultWarehouseId,
+          productId,
+          date: today,
+          stockBefore,
+          stockAfter,
+          changeAmount: change,
+          changeType: info.key,
+          referenceId: item.referenceId,
+          referenceType: info.referenceType,
+          notes: item.notes || null,
+        });
+      }
+
+      results.push({ productId, success: true, stockAfter });
+    }
+
+    // 6. 배치 UPDATE/INSERT 실행
+    if (batchUpdates.length > 0) {
+      const updateOps: Promise<unknown>[] = [];
+      const insertValues: Array<typeof inventory.$inferInsert> = [];
+
+      for (const upd of batchUpdates) {
+        if (upd.invId) {
+          updateOps.push(
+            db.update(inventory).set({
+              currentStock: upd.stockAfter,
+              availableStock: upd.stockAfter,
+              status: upd.newStatus as (typeof inventory.status.enumValues)[number],
+              lastUpdatedAt: new Date(),
+              updatedAt: new Date(),
+            }).where(eq(inventory.id, upd.invId))
+          );
+        } else {
+          insertValues.push({
+            organizationId: user.organizationId,
+            warehouseId: defaultWarehouseId,
+            productId: upd.productId,
+            currentStock: upd.stockAfter,
+            availableStock: upd.stockAfter,
+            status: upd.newStatus as (typeof inventory.status.enumValues)[number],
+          });
+        }
+      }
+
+      // 병렬 UPDATE + 배치 INSERT
+      await Promise.all([
+        ...updateOps,
+        ...(insertValues.length > 0 ? [db.insert(inventory).values(insertValues)] : []),
+      ]);
+    }
+
+    // 7. 배치 이력 INSERT
+    if (historyInserts.length > 0) {
+      await db.insert(inventoryHistory).values(historyInserts);
+    }
+
+    // 8. 알림 트리거 (fire-and-forget)
+    for (const upd of batchUpdates) {
+      checkAndCreateInventoryAlert({
+        organizationId: user.organizationId,
+        productId: upd.productId,
+        stockBefore: upd.stockBefore,
+        stockAfter: upd.stockAfter,
+        newStatus: upd.newStatus,
+      }).catch(() => {});
+    }
+
+    if (!context?.skipRevalidate) {
+      revalidatePath("/dashboard/inventory");
+      revalidateTag(`inventory-${user.organizationId}`);
+      revalidateTag(`kpi-${user.organizationId}`);
+      revalidateTag(`analytics-${user.organizationId}`);
+    }
+
+    return { success: results.every(r => r.success), results };
+  } catch (error) {
+    console.error("배치 재고 처리 오류:", error);
+    return { success: false, results: items.map(i => ({ productId: i.productId, success: false, error: "배치 처리 실패" })) };
+  }
+}
+
 /**
  * 재고 수동 조정 (승인 워크플로우 적용)
  * - superadmin: 즉시 조정 (processInventoryTransaction 직접 호출)

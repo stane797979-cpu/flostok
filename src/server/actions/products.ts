@@ -362,19 +362,26 @@ export async function deleteProducts(
     let successCount = 0;
     const errors: string[] = [];
 
-    for (const id of ids) {
-      if (user.isSuperadmin) {
-        const result = await immediateDeleteEntity("product", id, reason, user);
-        if (result.success) successCount++;
-        else errors.push(result.error || "알 수 없는 오류");
-      } else {
-        const result = await createDeletionRequest(
-          { entityType: "product", entityId: id, reason },
-          user
-        );
-        if (result.success) successCount++;
-        else errors.push(result.error || "알 수 없는 오류");
-      }
+    // 병렬 삭제 처리 (N+1 → Promise.all)
+    const results = await Promise.all(
+      ids.map(async (id) => {
+        try {
+          if (user.isSuperadmin) {
+            return await immediateDeleteEntity("product", id, reason, user);
+          } else {
+            return await createDeletionRequest(
+              { entityType: "product", entityId: id, reason },
+              user
+            );
+          }
+        } catch {
+          return { success: false, error: "삭제 처리 중 오류" };
+        }
+      })
+    );
+    for (const result of results) {
+      if (result.success) successCount++;
+      else errors.push(result.error || "알 수 없는 오류");
     }
 
     revalidatePath("/products");

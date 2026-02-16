@@ -74,9 +74,10 @@ export async function deductByFIFO(
     };
   }
 
-  // 순차 차감
+  // 차감 계산 (메모리)
   let remaining = quantity;
   const deductions: FIFODeduction[] = [];
+  const updateOps: Promise<unknown>[] = [];
 
   for (const lot of activeLots) {
     if (remaining <= 0) break;
@@ -85,14 +86,16 @@ export async function deductByFIFO(
     const newRemaining = lot.remainingQuantity - deductQty;
     const newStatus = newRemaining === 0 ? "depleted" : "active";
 
-    await db
-      .update(inventoryLots)
-      .set({
-        remainingQuantity: newRemaining,
-        status: newStatus as "active" | "depleted" | "expired",
-        updatedAt: new Date(),
-      })
-      .where(eq(inventoryLots.id, lot.id));
+    updateOps.push(
+      db
+        .update(inventoryLots)
+        .set({
+          remainingQuantity: newRemaining,
+          status: newStatus as "active" | "depleted" | "expired",
+          updatedAt: new Date(),
+        })
+        .where(eq(inventoryLots.id, lot.id))
+    );
 
     deductions.push({
       lotId: lot.id,
@@ -102,6 +105,11 @@ export async function deductByFIFO(
     });
 
     remaining -= deductQty;
+  }
+
+  // 병렬 UPDATE (N개 로트를 동시에 업데이트)
+  if (updateOps.length > 0) {
+    await Promise.all(updateOps);
   }
 
   return { success: true, deductions };

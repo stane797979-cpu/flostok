@@ -6,7 +6,7 @@ import { db } from "@/server/db";
 import { products, salesRecords } from "@/server/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import type { SalesRowData } from "../validators/sales-validator";
-import { processInventoryTransaction } from "@/server/actions/inventory";
+import { processBatchInventoryTransactions, type BatchInventoryItem } from "@/server/actions/inventory";
 
 export interface ImportResult {
   success: boolean;
@@ -128,22 +128,18 @@ export async function importSalesData(
         await db.insert(salesRecords).values(batchRecords);
         imported += batchRecords.length;
 
-        // 재고 차감 처리
-        if (deductInventory) {
-          for (const record of batchRecords) {
-            try {
-              await processInventoryTransaction({
-                productId: record.productId,
-                changeType: "OUTBOUND_SALE",
-                quantity: record.quantity,
-                notes: `판매 임포트: ${record.date}`,
-              });
-            } catch (error) {
-              console.warn(
-                `재고 차감 실패 (${record.productId}):`,
-                error instanceof Error ? error.message : error
-              );
-            }
+        // 재고 차감 배치 처리 (N+1 → 배치)
+        if (deductInventory && batchRecords.length > 0) {
+          const batchItems: BatchInventoryItem[] = batchRecords.map(record => ({
+            productId: record.productId,
+            changeType: "OUTBOUND_SALE" as const,
+            quantity: record.quantity,
+            notes: `판매 임포트: ${record.date}`,
+          }));
+          try {
+            await processBatchInventoryTransactions(batchItems, { skipRevalidate: true, skipActivityLog: true });
+          } catch (error) {
+            console.warn("재고 차감 배치 처리 실패:", error instanceof Error ? error.message : error);
           }
         }
       }
