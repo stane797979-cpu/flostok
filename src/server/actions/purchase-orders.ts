@@ -1424,16 +1424,25 @@ export async function uploadPurchaseOrderExcel(
     const skipped: string[] = [];
 
     // supplier_products 배치 조회 (N+1 제거) — productId → supplierId Map
-    const supplierProductMappings = await db
-      .select({
-        productId: sql<string>`product_id`,
-        supplierId: sql<string>`supplier_id`,
-      })
-      .from(sql`supplier_products`)
-      .where(sql`product_id IN (${sql.join(productList.map((p) => sql`${p.id}`), sql`, `)})`);
-    const productToSupplier = new Map(
-      supplierProductMappings.map((m) => [m.productId, m.supplierId])
-    );
+    // productList 전체가 아닌, 엑셀에 있는 SKU의 productId만 조회
+    const excelProductIds = rows
+      .map((row) => skuMap.get(String(row[skuCol] || "").trim()))
+      .filter((id): id is string => !!id);
+    const uniqueExcelProductIds = [...new Set(excelProductIds)];
+
+    const productToSupplier = new Map<string, string>();
+    if (uniqueExcelProductIds.length > 0) {
+      const supplierProductMappings = await db
+        .select({
+          productId: sql<string>`product_id`,
+          supplierId: sql<string>`supplier_id`,
+        })
+        .from(sql`supplier_products`)
+        .where(sql`product_id IN ${uniqueExcelProductIds}`);
+      for (const m of supplierProductMappings) {
+        productToSupplier.set(m.productId, m.supplierId);
+      }
+    }
 
     for (const row of rows) {
       const sku = String(row[skuCol] || "").trim();
@@ -1527,6 +1536,7 @@ export async function uploadPurchaseOrderExcel(
     };
   } catch (error) {
     console.error("발주 엑셀 업로드 실패:", error);
-    return { success: false, message: "업로드 중 오류가 발생했습니다", createdCount: 0 };
+    const detail = error instanceof Error ? error.message : "알 수 없는 오류";
+    return { success: false, message: `업로드 중 오류가 발생했습니다: ${detail}`, createdCount: 0 };
   }
 }
