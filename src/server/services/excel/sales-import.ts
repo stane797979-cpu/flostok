@@ -13,7 +13,6 @@ import {
   parseNumber,
 } from "./parser";
 import type { ExcelImportResult, ExcelImportError, SalesRecordExcelRow } from "./types";
-import { processBatchInventoryTransactions, type BatchInventoryItem } from "@/server/actions/inventory";
 import type { InventoryChangeTypeKey } from "@/server/services/inventory/types";
 
 let _xlsx: typeof import("xlsx") | null = null;
@@ -334,7 +333,7 @@ export async function importSalesData(
 
     // 7. 재고 차감 배치 처리 (순차 → 배치로 변경하여 타임아웃 방지)
     if (inventoryOps.length > 0) {
-      const batchItems: BatchInventoryItem[] = inventoryOps.map(({ productId, data }) => ({
+      const batchItems = inventoryOps.map(({ productId, data }) => ({
         productId,
         changeType: (data.outboundType
           ? OUTBOUND_TYPE_MAP[data.outboundType] || "OUTBOUND_SALE"
@@ -343,6 +342,8 @@ export async function importSalesData(
         notes: `출고 임포트: ${data.sku} / ${data.date} [${data.outboundType || "판매"}]`,
       }));
       try {
+        // 동적 import: "use server" 모듈 경계 문제 방지
+        const { processBatchInventoryTransactions } = await import("@/server/actions/inventory");
         await processBatchInventoryTransactions(batchItems, { skipRevalidate: true, skipActivityLog: true });
       } catch (error) {
         console.warn("재고 차감 배치 처리 실패:", error instanceof Error ? error.message : error);
