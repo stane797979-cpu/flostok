@@ -511,6 +511,56 @@ export async function getDemandForecast(options?: {
 }
 
 /**
+ * 판매 추이 데이터 조회
+ * - 최근 N일간 일별 판매액/수량 집계
+ * - 실제 salesRecords 데이터 기반
+ */
+export async function getSalesTrend(days: number = 30): Promise<{
+  data: Array<{ date: string; sales: number; quantity: number }>
+  hasData: boolean
+}> {
+  try {
+    const user = await requireAuth()
+    const orgId = user.organizationId
+
+    const startDate = new Date()
+    startDate.setDate(startDate.getDate() - days)
+    const startDateStr = startDate.toISOString().split('T')[0]
+
+    const dailySales = await db
+      .select({
+        date: salesRecords.date,
+        totalSales: sql<number>`COALESCE(SUM(${salesRecords.totalAmount}), 0)`,
+        totalQuantity: sql<number>`COALESCE(SUM(${salesRecords.quantity}), 0)`,
+      })
+      .from(salesRecords)
+      .where(
+        and(
+          eq(salesRecords.organizationId, orgId),
+          gte(salesRecords.date, startDateStr)
+        )
+      )
+      .groupBy(salesRecords.date)
+      .orderBy(salesRecords.date)
+
+    if (dailySales.length === 0) {
+      return { data: [], hasData: false }
+    }
+
+    const data = dailySales.map((row) => ({
+      date: String(row.date),
+      sales: Number(row.totalSales),
+      quantity: Number(row.totalQuantity),
+    }))
+
+    return { data, hasData: true }
+  } catch (error) {
+    console.error('판매 추이 조회 오류:', error)
+    return { data: [], hasData: false }
+  }
+}
+
+/**
  * ABC-XYZ-FMR 등급 일괄 갱신 (수동 트리거)
  */
 export async function refreshGrades() {

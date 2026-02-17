@@ -31,7 +31,7 @@ import {
   warehouses,
 } from '@/server/db/schema'
 import { eq } from 'drizzle-orm'
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { requireAdmin } from './auth-helpers'
 import { logActivity } from '@/server/services/activity-log'
 
@@ -101,7 +101,10 @@ export async function resetOrganizationData(): Promise<ResetResult> {
       metadata: { deletedCounts },
     }).catch(() => {}) // 로그 실패는 무시
 
-    // 캐시 무효화
+    // 캐시 무효화 (unstable_cache 태그 + 페이지 캐시)
+    revalidateTag(`kpi-${orgId}`)
+    revalidateTag(`kpi-summary-${orgId}`)
+    revalidateTag(`analytics-${orgId}`)
     revalidatePath('/dashboard', 'layout')
 
     return { success: true, deletedCounts }
