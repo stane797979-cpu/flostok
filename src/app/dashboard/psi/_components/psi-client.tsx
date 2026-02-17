@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, useTransition } from "react";
+import { useState, useMemo, useRef, useTransition, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,10 +22,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Upload, Download, Calculator } from "lucide-react";
+import { Upload, Download, Calculator, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { PSIFilters } from "./psi-filters";
 import { PSITable } from "./psi-table";
-import { uploadPSIPlanExcel, generateSOPQuantities, type SOPMethod } from "@/server/actions/psi";
+import { uploadPSIPlanExcel, generateSOPQuantities, getPSIData, type SOPMethod } from "@/server/actions/psi";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import type { PSIResult } from "@/server/services/scm/psi-aggregation";
@@ -62,7 +62,10 @@ const SOP_METHODS: Array<{ value: SOPMethod; label: string; description: string 
   },
 ];
 
-export function PSIClient({ data }: PSIClientProps) {
+export function PSIClient({ data: initialData }: PSIClientProps) {
+  const [data, setData] = useState(initialData);
+  const [monthOffset, setMonthOffset] = useState(0);
+  const [isLoadingPSI, setIsLoadingPSI] = useState(false);
   const [search, setSearch] = useState("");
   const [abcFilter, setAbcFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -75,6 +78,33 @@ export function PSIClient({ data }: PSIClientProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const router = useRouter();
+
+  // 월 이동 (기간 창 이동)
+  const loadPSIWithOffset = useCallback(async (offset: number) => {
+    setIsLoadingPSI(true);
+    try {
+      const result = await getPSIData(offset);
+      setData(result);
+      setMonthOffset(offset);
+    } catch (error) {
+      console.error("PSI 데이터 조회 오류:", error);
+      toast({ title: "오류", description: "PSI 데이터를 불러오지 못했습니다", variant: "destructive" });
+    } finally {
+      setIsLoadingPSI(false);
+    }
+  }, [toast]);
+
+  const handlePrevPeriod = useCallback(() => {
+    loadPSIWithOffset(monthOffset - 3);
+  }, [monthOffset, loadPSIWithOffset]);
+
+  const handleNextPeriod = useCallback(() => {
+    loadPSIWithOffset(monthOffset + 3);
+  }, [monthOffset, loadPSIWithOffset]);
+
+  const handleResetPeriod = useCallback(() => {
+    loadPSIWithOffset(0);
+  }, [loadPSIWithOffset]);
 
   // 카테고리 목록 추출
   const categories = useMemo(() => {
@@ -407,10 +437,31 @@ export function PSIClient({ data }: PSIClientProps) {
             <CardTitle className="text-sm font-medium">조회 기간</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{data.periods.length}개월</div>
-            <p className="text-xs text-muted-foreground">
-              {data.periods[0]} ~ {data.periods[data.periods.length - 1]}
-            </p>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="icon" className="h-7 w-7" onClick={handlePrevPeriod} disabled={isLoadingPSI}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <div className="flex-1 text-center">
+                {isLoadingPSI ? (
+                  <Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-400" />
+                ) : (
+                  <>
+                    <div className="text-lg font-bold">{data.periods.length}개월</div>
+                    <p className="text-xs text-muted-foreground">
+                      {data.periods[0]} ~ {data.periods[data.periods.length - 1]}
+                    </p>
+                  </>
+                )}
+              </div>
+              <Button variant="outline" size="icon" className="h-7 w-7" onClick={handleNextPeriod} disabled={isLoadingPSI}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+            {monthOffset !== 0 && (
+              <Button variant="ghost" size="sm" className="mt-1 h-6 w-full text-xs text-muted-foreground" onClick={handleResetPeriod} disabled={isLoadingPSI}>
+                현재로 돌아가기
+              </Button>
+            )}
           </CardContent>
         </Card>
         <Card className="border-red-200">

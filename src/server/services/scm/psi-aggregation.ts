@@ -49,13 +49,15 @@ export interface PSIResult {
 
 /**
  * 월 목록 생성 (과거 pastMonths ~ 미래 futureMonths)
+ * @param offsetMonths 기준월을 이동 (음수=과거, 양수=미래)
  */
-export function generatePeriods(pastMonths: number = 6, futureMonths: number = 6): string[] {
+export function generatePeriods(pastMonths: number = 6, futureMonths: number = 6, offsetMonths: number = 0): string[] {
   const periods: string[] = [];
   const now = new Date();
+  const ref = new Date(now.getFullYear(), now.getMonth() + offsetMonths, 1);
 
   for (let i = -pastMonths; i <= futureMonths; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    const d = new Date(ref.getFullYear(), ref.getMonth() + i, 1);
     periods.push(
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
     );

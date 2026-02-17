@@ -15,8 +15,8 @@ import { revalidatePath, unstable_cache, revalidateTag } from "next/cache";
 /**
  * PSI 데이터 조회 내부 로직 (캐싱 대상)
  */
-async function _getPSIDataInternal(orgId: string): Promise<PSIResult> {
-  const periods = generatePeriods(1, 6);
+async function _getPSIDataInternal(orgId: string, monthOffset: number = 0): Promise<PSIResult> {
+  const periods = generatePeriods(1, 6, monthOffset);
   const firstPeriod = periods[0]; // YYYY-MM
   const lastPeriod = periods[periods.length - 1];
   const startDate = `${firstPeriod}-01`;
@@ -217,18 +217,23 @@ async function _getPSIDataInternal(orgId: string): Promise<PSIResult> {
  * PSI 데이터 조회 (8개월: 전월1 + 현재 + 미래6)
  * unstable_cache로 60초간 캐싱
  */
-export async function getPSIData(): Promise<PSIResult> {
+export async function getPSIData(monthOffset: number = 0): Promise<PSIResult> {
   const user = await getCurrentUser();
   const orgId = user?.organizationId;
   if (!orgId) {
     return { products: [], periods: [], totalProducts: 0 };
   }
 
-  return unstable_cache(
-    () => _getPSIDataInternal(orgId),
-    [`psi-data-${orgId}`],
-    { revalidate: 60, tags: [`psi-${orgId}`] }
-  )();
+  // monthOffset가 0이면 기존 캐시 사용, 아니면 동적 조회
+  if (monthOffset === 0) {
+    return unstable_cache(
+      () => _getPSIDataInternal(orgId, 0),
+      [`psi-data-${orgId}`],
+      { revalidate: 60, tags: [`psi-${orgId}`] }
+    )();
+  }
+
+  return _getPSIDataInternal(orgId, monthOffset);
 }
 
 /**
