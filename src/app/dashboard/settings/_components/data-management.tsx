@@ -95,10 +95,10 @@ export function DataManagement({ isAdmin }: DataManagementProps) {
           variant: "destructive",
         });
       }
-    } catch {
+    } catch (err) {
       toast({
         title: "오류",
-        description: "리셋 중 오류가 발생했습니다",
+        description: err instanceof Error ? err.message : "리셋 중 오류가 발생했습니다",
         variant: "destructive",
       });
     } finally {
