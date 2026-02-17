@@ -4,7 +4,7 @@ import { getInboundRecords } from "@/server/actions/inbound";
 import { getWarehouses } from "@/server/actions/warehouses";
 import { OrdersClient } from "./_components/orders-client";
 
-const VALID_TABS = ["reorder", "auto-reorder", "orders", "inbound", "delivery", "import-shipment"] as const;
+const VALID_TABS = ["reorder", "auto-reorder", "orders", "order-history", "inbound", "delivery", "import-shipment"] as const;
 type OrderTab = (typeof VALID_TABS)[number];
 
 export default async function OrdersPage({
@@ -32,10 +32,16 @@ export default async function OrdersPage({
     promises.push(getDeliveryComplianceData().catch(() => null));
   }
 
-  // orders 탭: 발주 현황
+  // orders 탭: 발주 현황 (취소 제외)
   if (resolvedTab === "orders") {
     keys.push("orders");
-    promises.push(getPurchaseOrders({ limit: 50 }).catch(() => ({ orders: [], total: 0 })));
+    promises.push(getPurchaseOrders({ limit: 50, excludeStatus: "cancelled" }).catch(() => ({ orders: [], total: 0 })));
+  }
+
+  // order-history 탭: 발주 이력 (취소된 발주)
+  if (resolvedTab === "order-history") {
+    keys.push("orderHistory");
+    promises.push(getPurchaseOrders({ limit: 50, status: "cancelled" }).catch(() => ({ orders: [], total: 0 })));
   }
 
   // inbound 탭: 입고 현황 (현재 월)
@@ -69,6 +75,10 @@ export default async function OrdersPage({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const serverInboundTotal = (dataMap.inbound as any)?.total ?? 0;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const serverOrderHistory = (dataMap.orderHistory as any)?.orders ?? undefined;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const serverOrderHistoryTotal = (dataMap.orderHistory as any)?.total ?? 0;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const warehousesList = (dataMap.warehouses as any)?.warehouses ?? [];
 
   return (
@@ -82,6 +92,8 @@ export default async function OrdersPage({
       serverPurchaseOrdersTotal={serverPurchaseOrdersTotal}
       serverInboundRecords={serverInboundRecords}
       serverInboundTotal={serverInboundTotal}
+      serverOrderHistory={serverOrderHistory}
+      serverOrderHistoryTotal={serverOrderHistoryTotal}
       warehouses={warehousesList}
       preselectedProductIds={preselectedProductIds}
     />

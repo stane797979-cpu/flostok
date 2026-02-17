@@ -12,7 +12,7 @@ import {
   type PurchaseOrder,
   type PurchaseOrderItem,
 } from "@/server/db/schema";
-import { eq, and, desc, asc, sql, gte, lte, or, isNull } from "drizzle-orm";
+import { eq, and, desc, asc, sql, gte, lte, or, isNull, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { salesRecords, organizations } from "@/server/db/schema";
@@ -691,6 +691,7 @@ export async function updatePurchaseOrderStatus(
  */
 export async function getPurchaseOrders(options?: {
   status?: string;
+  excludeStatus?: string;
   supplierId?: string;
   startDate?: string;
   endDate?: string;
@@ -709,13 +710,18 @@ export async function getPurchaseOrders(options?: {
   }
   const orgId = user.organizationId;
 
-  const { status, supplierId, startDate, endDate, limit = 50, offset = 0 } = options || {};
+  const { status, excludeStatus, supplierId, startDate, endDate, limit = 50, offset = 0 } = options || {};
 
   const conditions = [eq(purchaseOrders.organizationId, orgId), isNull(purchaseOrders.deletedAt)];
 
   if (status) {
     conditions.push(
       eq(purchaseOrders.status, status as (typeof purchaseOrders.status.enumValues)[number])
+    );
+  }
+  if (excludeStatus) {
+    conditions.push(
+      ne(purchaseOrders.status, excludeStatus as (typeof purchaseOrders.status.enumValues)[number])
     );
   }
   if (supplierId) {

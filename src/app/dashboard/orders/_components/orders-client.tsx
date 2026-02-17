@@ -160,7 +160,7 @@ interface WarehouseOption {
 }
 
 interface OrdersClientProps {
-  initialTab?: "reorder" | "auto-reorder" | "orders" | "inbound" | "delivery" | "import-shipment";
+  initialTab?: "reorder" | "auto-reorder" | "orders" | "order-history" | "inbound" | "delivery" | "import-shipment";
   serverReorderItems?: ServerReorderItem[];
   serverReorderTotal?: number;
   preselectedProductIds?: string[];
@@ -168,6 +168,18 @@ interface OrdersClientProps {
   warehouses?: WarehouseOption[];
   serverPurchaseOrdersTotal?: number;
   serverInboundTotal?: number;
+  serverOrderHistoryTotal?: number;
+  serverOrderHistory?: Array<{
+    id: string;
+    orderNumber: string;
+    supplier?: { name: string } | null;
+    itemsCount: number;
+    totalAmount: number | null;
+    status: string;
+    orderDate: string | null;
+    expectedDate: string | null;
+    createdAt?: string | null;
+  }>;
   serverPurchaseOrders?: Array<{
     id: string;
     orderNumber: string;
@@ -198,7 +210,7 @@ interface OrdersClientProps {
   }>;
 }
 
-export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], serverReorderTotal = 0, deliveryComplianceData = null, serverPurchaseOrders, serverPurchaseOrdersTotal = 0, serverInboundRecords, serverInboundTotal = 0, warehouses = [], preselectedProductIds }: OrdersClientProps) {
+export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], serverReorderTotal = 0, deliveryComplianceData = null, serverPurchaseOrders, serverPurchaseOrdersTotal = 0, serverInboundRecords, serverInboundTotal = 0, serverOrderHistory, serverOrderHistoryTotal = 0, warehouses = [], preselectedProductIds }: OrdersClientProps) {
   // 발주 필요 품목 (발주 후 재조회 가능하도록 state로 관리)
   const [reorderItems, setReorderItems] = useState<ReorderItem[]>(
     () => serverReorderItems.map(mapServerToClientReorderItem)
@@ -272,6 +284,26 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
   const [ordersTotalItems, setOrdersTotalItems] = useState(serverPurchaseOrdersTotal);
   const ordersTotalPages = Math.max(1, Math.ceil(ordersTotalItems / ordersPageSize));
 
+  // 발주 이력 (취소된 발주)
+  const [orderHistory, setOrderHistory] = useState<PurchaseOrderListItem[]>(() => {
+    if (!serverOrderHistory) return [];
+    return serverOrderHistory.map((order) => ({
+      id: order.id,
+      orderNumber: order.orderNumber,
+      supplierName: order.supplier?.name || "미지정",
+      itemsCount: order.itemsCount,
+      totalAmount: order.totalAmount || 0,
+      status: mapOrderStatus(order.status),
+      orderDate: order.orderDate || (order.createdAt ? new Date(order.createdAt).toISOString().split("T")[0] : ""),
+      expectedDate: order.expectedDate || null,
+    }));
+  });
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyPageSize, setHistoryPageSize] = useState(50);
+  const [historyTotalItems, setHistoryTotalItems] = useState(serverOrderHistoryTotal);
+  const historyTotalPages = Math.max(1, Math.ceil(historyTotalItems / historyPageSize));
+
   // 입고 현황 상태
   const [inboundMonth, setInboundMonth] = useState<Date>(() => new Date());
   const [inboundRecords, setInboundRecords] = useState<InboundRecord[]>(() => {
@@ -295,12 +327,12 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
   const router = useRouter();
   const { toast } = useToast();
 
-  // DB에서 발주 목록 불러오기
+  // DB에서 발주 목록 불러오기 (취소 제외)
   const loadPurchaseOrders = useCallback(async (page = ordersPage, size = ordersPageSize) => {
     setIsLoadingOrders(true);
     try {
       const offset = (page - 1) * size;
-      const result = await getPurchaseOrders({ limit: size, offset });
+      const result = await getPurchaseOrders({ limit: size, offset, excludeStatus: "cancelled" });
       const mapped: PurchaseOrderListItem[] = result.orders.map((order) => ({
         id: order.id,
         orderNumber: order.orderNumber,
@@ -319,6 +351,31 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
       setIsLoadingOrders(false);
     }
   }, [ordersPage, ordersPageSize]);
+
+  // DB에서 발주 이력 불러오기 (취소된 발주)
+  const loadOrderHistory = useCallback(async (page = historyPage, size = historyPageSize) => {
+    setIsLoadingHistory(true);
+    try {
+      const offset = (page - 1) * size;
+      const result = await getPurchaseOrders({ limit: size, offset, status: "cancelled" });
+      const mapped: PurchaseOrderListItem[] = result.orders.map((order) => ({
+        id: order.id,
+        orderNumber: order.orderNumber,
+        supplierName: order.supplier?.name || "미지정",
+        itemsCount: order.itemsCount,
+        totalAmount: order.totalAmount || 0,
+        status: mapOrderStatus(order.status),
+        orderDate: order.orderDate || (order.createdAt ? new Date(order.createdAt).toISOString().split("T")[0] : ""),
+        expectedDate: order.expectedDate || null,
+      }));
+      setOrderHistory(mapped);
+      setHistoryTotalItems(result.total);
+    } catch (error) {
+      console.error("발주 이력 조회 오류:", error);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  }, [historyPage, historyPageSize]);
 
   // 입고 기록 조회
   const loadInboundRecords = useCallback(async (month: Date, page = 1, size = inboundPageSize) => {
@@ -372,6 +429,19 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
     setOrdersPage(1);
     loadPurchaseOrders(1, newSize);
   }, [loadPurchaseOrders]);
+
+  // 발주이력 페이지 이동
+  const handleHistoryPageChange = useCallback((page: number) => {
+    setHistoryPage(page);
+    loadOrderHistory(page);
+  }, [loadOrderHistory]);
+
+  const handleHistoryPageSizeChange = useCallback((size: string) => {
+    const newSize = Number(size);
+    setHistoryPageSize(newSize);
+    setHistoryPage(1);
+    loadOrderHistory(1, newSize);
+  }, [loadOrderHistory]);
 
   // 입고현황 페이지 이동
   const handleInboundPageChange = useCallback((page: number) => {
@@ -438,6 +508,8 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
   useEffect(() => {
     if (initialTab === "orders" && !serverPurchaseOrders) {
       loadPurchaseOrders();
+    } else if (initialTab === "order-history" && !serverOrderHistory) {
+      loadOrderHistory();
     } else if (initialTab === "inbound" && !serverInboundRecords) {
       loadInboundRecords(inboundMonth);
     }
@@ -789,6 +861,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
     reorder: { title: "수동 발주", description: "발주점 이하 품목을 확인하고, 담당자가 직접 수량·공급자를 선택하여 발주합니다" },
     "auto-reorder": { title: "자동발주 추천", description: "시스템이 재고 상태·수요예측·리드타임을 분석하여 최적 발주를 추천합니다. 승인만 하면 즉시 발주됩니다" },
     orders: { title: "발주 현황", description: "진행 중인 발주서 목록을 확인하세요" },
+    "order-history": { title: "발주 이력", description: "취소된 발주서 이력을 확인하세요" },
     inbound: { title: "입고 현황", description: "월별 입고 기록을 확인하세요" },
     delivery: { title: "납기분석", description: "납기 준수율과 공급자 성과를 분석하세요" },
     "import-shipment": { title: "입항스케줄", description: "수입 화물 입항 일정을 관리하세요" },
@@ -1065,6 +1138,80 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                           size="sm"
                           disabled={ordersPage >= ordersTotalPages}
                           onClick={() => handleOrdersPageChange(ordersPage + 1)}
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {initialTab === "order-history" && (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div>
+                <CardTitle>발주 이력</CardTitle>
+                <CardDescription>취소된 발주서 이력입니다</CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLoadingHistory ? (
+                <div className="flex h-48 items-center justify-center text-slate-400">
+                  발주 이력을 불러오는 중...
+                </div>
+              ) : orderHistory.length === 0 ? (
+                <div className="flex h-48 items-center justify-center text-slate-400">
+                  취소된 발주서가 없습니다
+                </div>
+              ) : (
+                <>
+                  <PurchaseOrdersTable
+                    orders={orderHistory}
+                    onViewClick={handleViewOrder}
+                    onDownloadClick={handleDownloadOrder}
+                  />
+                  {historyTotalItems > 0 && (
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-center gap-2 text-sm text-slate-500">
+                        <span>전체 {historyTotalItems.toLocaleString()}건</span>
+                        <span>·</span>
+                        <div className="flex items-center gap-1">
+                          <span>표시</span>
+                          <Select value={String(historyPageSize)} onValueChange={handleHistoryPageSizeChange}>
+                            <SelectTrigger className="h-8 w-[80px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="50">50개</SelectItem>
+                              <SelectItem value="100">100개</SelectItem>
+                              <SelectItem value="200">200개</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={historyPage <= 1}
+                          onClick={() => handleHistoryPageChange(historyPage - 1)}
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <span className="text-sm font-medium">
+                          {historyPage} / {historyTotalPages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={historyPage >= historyTotalPages}
+                          onClick={() => handleHistoryPageChange(historyPage + 1)}
                         >
                           <ChevronRight className="h-4 w-4" />
                         </Button>

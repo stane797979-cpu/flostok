@@ -103,6 +103,7 @@ export const MAIN_SECTIONS: NavSection[] = [
           { title: "수동발주", href: "/dashboard/orders?tab=reorder", menuKey: "orders" },
           { title: "자동발주추천", href: "/dashboard/orders?tab=auto-reorder", menuKey: "orders" },
           { title: "발주현황", href: "/dashboard/orders?tab=orders", menuKey: "orders" },
+          { title: "발주이력", href: "/dashboard/orders?tab=order-history", menuKey: "orders" },
         ],
       },
       {
