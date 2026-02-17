@@ -20,7 +20,10 @@ async function _getPSIDataInternal(orgId: string, monthOffset: number = 0): Prom
   const firstPeriod = periods[0]; // YYYY-MM
   const lastPeriod = periods[periods.length - 1];
   const startDate = `${firstPeriod}-01`;
-  const endDate = `${lastPeriod}-31`;
+  // 월말 날짜를 정확히 계산 (2월=28/29, 4/6/9/11=30 등)
+  const [endY, endM] = lastPeriod.split("-").map(Number);
+  const lastDay = new Date(endY, endM, 0).getDate();
+  const endDate = `${lastPeriod}-${String(lastDay).padStart(2, "0")}`;
 
   // 병렬 데이터 로드
   const [productRows, inventoryRows, outboundRows, inboundRows, forecastRows, planRows, poInboundPlanRows] = await Promise.all([
