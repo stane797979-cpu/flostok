@@ -12,10 +12,10 @@ import {
   type PurchaseOrder,
   type PurchaseOrderItem,
 } from "@/server/db/schema";
-import { eq, and, desc, asc, sql, gte, lte, or, isNull, inArray } from "drizzle-orm";
+import { eq, and, desc, asc, sql, gte, lte, or, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { salesRecords, organizations, supplierProducts } from "@/server/db/schema";
+import { salesRecords, organizations } from "@/server/db/schema";
 import {
   convertToReorderItem,
   sortReorderItems,
@@ -1394,9 +1394,9 @@ export async function uploadPurchaseOrderExcel(
     const containerCol = headers.find((h) => ["컨테이너", "컨테이너번호", "CNTR", "container", "Container"].includes(h.trim()));
     const notesCol = headers.find((h) => ["메모", "비고", "notes", "Notes", "memo"].includes(h.trim()));
 
-    // SKU → productId 매핑
+    // SKU → productId + primarySupplierId 매핑
     const productList = await db
-      .select({ id: products.id, sku: products.sku })
+      .select({ id: products.id, sku: products.sku, primarySupplierId: products.primarySupplierId })
       .from(products)
       .where(eq(products.organizationId, orgId));
     const skuMap = new Map(productList.map((p) => [p.sku, p.id]));
@@ -1422,24 +1422,11 @@ export async function uploadPurchaseOrderExcel(
     const itemsBySupplier = new Map<string, ParsedItem[]>();
     const skipped: string[] = [];
 
-    // supplier_products 배치 조회 (N+1 제거) — productId → supplierId Map
-    // productList 전체가 아닌, 엑셀에 있는 SKU의 productId만 조회
-    const excelProductIds = rows
-      .map((row) => skuMap.get(String(row[skuCol] || "").trim()))
-      .filter((id): id is string => !!id);
-    const uniqueExcelProductIds = [...new Set(excelProductIds)];
-
+    // productId → primarySupplierId 매핑 (products 테이블에서 직접)
     const productToSupplier = new Map<string, string>();
-    if (uniqueExcelProductIds.length > 0) {
-      const supplierProductMappings = await db
-        .select({
-          productId: supplierProducts.productId,
-          supplierId: supplierProducts.supplierId,
-        })
-        .from(supplierProducts)
-        .where(inArray(supplierProducts.productId, uniqueExcelProductIds));
-      for (const m of supplierProductMappings) {
-        productToSupplier.set(m.productId, m.supplierId);
+    for (const p of productList) {
+      if (p.primarySupplierId) {
+        productToSupplier.set(p.id, p.primarySupplierId);
       }
     }
 
