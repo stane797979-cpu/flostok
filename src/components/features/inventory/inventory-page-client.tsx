@@ -32,7 +32,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Search, RefreshCw, Download, Loader2, Trash2, AlertTriangle } from "lucide-react";
+import { Search, RefreshCw, Download, Loader2, Trash2, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { exportInventoryToExcel } from "@/server/actions/excel-export";
 import { deleteInventoryItem, deleteInventoryItems, deleteAllInventory } from "@/server/actions/inventory";
 import { useToast } from "@/hooks/use-toast";
@@ -63,6 +63,10 @@ interface InventoryPageClientProps {
   stats: InventoryStats;
   warehouses: Warehouse[];
   selectedWarehouseId?: string;
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  pageSize: number;
 }
 
 export function InventoryPageClient({
@@ -70,6 +74,10 @@ export function InventoryPageClient({
   stats,
   warehouses,
   selectedWarehouseId,
+  currentPage,
+  totalPages,
+  totalItems,
+  pageSize,
 }: InventoryPageClientProps) {
   const [search, setSearch] = useState("");
   const [adjustTarget, setAdjustTarget] = useState<AdjustmentTarget | null>(null);
@@ -89,13 +97,31 @@ export function InventoryPageClient({
   const router = useRouter();
   const { toast } = useToast();
 
+  // URL 쿼리 빌더 (창고, 페이지, 사이즈 유지)
+  const buildUrl = (overrides: { warehouseId?: string; page?: number; size?: number }) => {
+    const url = new URLSearchParams();
+    const wh = overrides.warehouseId !== undefined ? overrides.warehouseId : selectedWarehouseId;
+    const pg = overrides.page ?? currentPage;
+    const sz = overrides.size ?? pageSize;
+    if (wh && wh !== "all") url.set("warehouseId", wh);
+    if (pg > 1) url.set("page", String(pg));
+    if (sz !== 50) url.set("size", String(sz));
+    return `/dashboard/inventory?${url.toString()}`;
+  };
+
   // 창고 필터 변경
   const handleWarehouseChange = (value: string) => {
-    const url = new URLSearchParams();
-    if (value !== "all") {
-      url.set("warehouseId", value);
-    }
-    router.push(`/dashboard/inventory?${url.toString()}`);
+    router.push(buildUrl({ warehouseId: value, page: 1 }));
+  };
+
+  // 페이지 이동
+  const handlePageChange = (page: number) => {
+    router.push(buildUrl({ page }));
+  };
+
+  // 페이지 사이즈 변경
+  const handlePageSizeChange = (size: string) => {
+    router.push(buildUrl({ size: Number(size), page: 1 }));
   };
 
   // 클라이언트 검색 필터링
@@ -366,6 +392,50 @@ export function InventoryPageClient({
         selectedIds={selectedIds}
         onSelectionChange={setSelectedIds}
       />
+
+      {/* 페이지네이션 */}
+      {totalItems > 0 && (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2 text-sm text-slate-500">
+            <span>전체 {totalItems.toLocaleString()}건</span>
+            <span>·</span>
+            <div className="flex items-center gap-1">
+              <span>표시</span>
+              <Select value={String(pageSize)} onValueChange={handlePageSizeChange}>
+                <SelectTrigger className="h-8 w-[80px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="50">50개</SelectItem>
+                  <SelectItem value="100">100개</SelectItem>
+                  <SelectItem value="200">200개</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={currentPage <= 1}
+              onClick={() => handlePageChange(currentPage - 1)}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm font-medium">
+              {currentPage} / {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={currentPage >= totalPages}
+              onClick={() => handlePageChange(currentPage + 1)}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* 재고 조정 다이얼로그 */}
       <InventoryAdjustmentDialog
