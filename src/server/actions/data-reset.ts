@@ -21,7 +21,6 @@ import {
   salesRecords,
   demandForecasts,
   alerts,
-  supplierProducts,
   inventory,
   purchaseOrders,
   outboundRequests,
@@ -59,7 +58,7 @@ const DELETE_STEPS: Array<{ name: string; table: any; column: string }> = [
   { name: '판매 기록', table: salesRecords, column: 'organizationId' },
   { name: '수요 예측', table: demandForecasts, column: 'organizationId' },
   { name: '알림', table: alerts, column: 'organizationId' },
-  { name: '공급자-제품 매핑', table: supplierProducts, column: 'organizationId' },
+  // supplierProducts는 organizationId 없음 — products/suppliers 삭제 시 cascade
   // 3단계: 운영 데이터 (cascade → 하위 항목 자동 삭제)
   { name: '현재 재고', table: inventory, column: 'organizationId' },
   { name: '발주서', table: purchaseOrders, column: 'organizationId' },
@@ -78,7 +77,6 @@ export async function resetOrganizationData(): Promise<ResetResult> {
     const orgId = user.organizationId
 
     const deletedCounts: Record<string, number> = {}
-    let failedAt = ''
 
     // 트랜잭션 없이 순차 삭제 (PgBouncer 타임아웃 방지)
     for (const step of DELETE_STEPS) {
@@ -88,7 +86,6 @@ export async function resetOrganizationData(): Promise<ResetResult> {
           .where(eq(step.table[step.column], orgId))
         deletedCounts[step.name] = Number(result.rowCount ?? 0)
       } catch (err) {
-        failedAt = step.name
         console.error(`[데이터 리셋] ${step.name} 삭제 실패:`, err)
         throw new Error(`${step.name} 삭제 중 오류: ${err instanceof Error ? err.message : '알 수 없는 오류'}`)
       }
