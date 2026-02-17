@@ -2,6 +2,7 @@ import { memo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { INVENTORY_STATUS } from "@/lib/constants/inventory-status";
 import { cn } from "@/lib/utils";
+import { PeriodBadge } from "./period-badge";
 
 // Tailwind JIT를 위한 정적 색상 매핑
 const strokeColorMap: Record<string, string> = {
@@ -109,8 +110,13 @@ export const InventoryStatusChart = memo<InventoryStatusChartProps>(function Inv
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center gap-2">
         <CardTitle>재고상태 분포</CardTitle>
+        <PeriodBadge
+          period="실시간"
+          description="현재 재고 수량 기준으로 상태를 분류합니다."
+          formula="7단계: 품절 → 위험 → 부족 → 주의 → 적정 → 과다 → 과잉"
+        />
       </CardHeader>
       <CardContent>
         <div className="flex flex-col items-center gap-4">

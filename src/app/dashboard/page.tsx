@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Package, AlertTriangle, TrendingDown, Archive, ShoppingCart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
+import { PeriodBadge } from "@/components/features/dashboard/period-badge";
 import { InventoryStatusChart } from "@/components/features/dashboard/inventory-status-chart";
 import { RecentActivityFeed } from "@/components/features/dashboard/recent-activity-feed";
 import { QuickActions } from "@/components/features/dashboard/quick-actions";
@@ -140,7 +141,15 @@ export default async function DashboardPage() {
           </ul>
         </div>
       )}
-      {/* KPI 카드 */}
+      {/* 재고 현황 요약 */}
+      <div className="flex items-center gap-2">
+        <h2 className="text-lg font-semibold text-slate-700">재고 현황 요약</h2>
+        <PeriodBadge
+          period="실시간"
+          description="현재 시점의 재고 상태를 기준으로 집계합니다."
+          formula="품절·위험·부족·과재고는 현재고와 안전재고 비교 기준"
+        />
+      </div>
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -195,7 +204,14 @@ export default async function DashboardPage() {
       {/* 주요 KPI 요약 */}
       <div>
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-semibold">주요 성과 지표</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-semibold">주요 성과 지표</h2>
+            <PeriodBadge
+              period="최근 12개월"
+              description="최근 12개월간의 판매·재고·발주 데이터를 기반으로 산출합니다."
+              formula="재고회전율 = 연간COGS ÷ 평균재고금액 | 적시발주율 = 정시입고 ÷ 총입고"
+            />
+          </div>
           <Button variant="outline" size="sm" asChild>
             <Link href="/dashboard/kpi">전체 KPI 보기</Link>
           </Button>
@@ -236,7 +252,14 @@ export default async function DashboardPage() {
         {/* 발주 필요 품목 */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>발주 필요 품목</CardTitle>
+            <div className="flex items-center gap-2">
+              <CardTitle>발주 필요 품목</CardTitle>
+              <PeriodBadge
+                period="실시간"
+                description="현재 재고가 안전재고 이하인 품목 TOP10입니다."
+                formula="품절(0) + 위험(안전재고×0.5 미만) + 부족(안전재고 미만)"
+              />
+            </div>
             <Button variant="outline" size="sm" asChild>
               <Link href="/dashboard/orders">전체 보기</Link>
             </Button>
@@ -287,7 +310,14 @@ export default async function DashboardPage() {
 
       {/* 회전율 TOP5 */}
       <div>
-        <h2 className="mb-4 text-xl font-semibold">재고 회전율 TOP5</h2>
+        <div className="mb-4 flex items-center gap-2">
+          <h2 className="text-xl font-semibold">재고 회전율 TOP5</h2>
+          <PeriodBadge
+            period="최근 12개월"
+            description="최근 12개월간 판매 및 재고 데이터 기반 회전율 순위입니다."
+            formula="회전율 = 연간판매원가(COGS) ÷ 평균재고금액"
+          />
+        </div>
         <TurnoverTop5Card fastest={turnoverTop5.fastest} slowest={turnoverTop5.slowest} />
       </div>
 

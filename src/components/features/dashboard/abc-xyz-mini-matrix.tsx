@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { PeriodBadge } from "./period-badge";
 
 interface ABCXYZMiniMatrixProps {
   matrixData: { grade: string; count: number }[];
@@ -31,7 +32,14 @@ export function ABCXYZMiniMatrix({ matrixData }: ABCXYZMiniMatrixProps) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-3">
-        <CardTitle className="text-base">ABC-XYZ 분포</CardTitle>
+        <div className="flex items-center gap-2">
+          <CardTitle className="text-base">ABC-XYZ 분포</CardTitle>
+          <PeriodBadge
+            period="최근 6개월"
+            description="최근 6개월간 판매 데이터 기반 ABC-XYZ 등급 분류입니다."
+            formula="ABC: 매출액 상위 분류 | XYZ: 판매량 변동계수(CV) 기준"
+          />
+        </div>
         <Button variant="outline" size="sm" asChild>
           <Link href="/dashboard/analytics">상세 분석</Link>
         </Button>
