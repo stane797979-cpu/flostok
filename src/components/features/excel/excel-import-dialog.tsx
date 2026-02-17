@@ -39,7 +39,7 @@ export function ExcelImportDialog({
   const [result, setResult] = useState<ImportExcelResult | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
 
-  const typeLabel = importType === "sales" ? "판매 데이터" : "제품 데이터";
+  const typeLabel = importType === "sales" ? "판매 데이터" : importType === "suppliers" ? "공급자 데이터" : "제품 데이터";
   const displayTitle = title || `${typeLabel} 임포트`;
   const displayDescription = description || `Excel 파일(.xlsx)을 업로드하여 ${typeLabel}를 일괄 등록합니다.`;
 
@@ -129,7 +129,8 @@ export function ExcelImportDialog({
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `${importType === "sales" ? "판매데이터" : "제품마스터"}_템플릿.xlsx`;
+      const fileNames: Record<string, string> = { sales: "판매데이터", products: "제품마스터", suppliers: "공급자" };
+      link.download = `${fileNames[importType] || "데이터"}_템플릿.xlsx`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

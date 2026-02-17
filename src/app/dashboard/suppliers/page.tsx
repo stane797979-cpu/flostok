@@ -11,7 +11,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Search, LayoutGrid, LayoutList, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Search, LayoutGrid, LayoutList, Loader2, ChevronLeft, ChevronRight, Upload } from "lucide-react";
+import { ExcelImportDialog } from "@/components/features/excel/excel-import-dialog";
 import { SupplierTable } from "@/components/features/suppliers/supplier-table";
 import { SupplierCardView } from "@/components/features/suppliers/supplier-card-view";
 import { SupplierFormDialog } from "@/components/features/suppliers/supplier-form-dialog";
@@ -24,6 +25,7 @@ const DEFAULT_PAGE_SIZE = 50;
 export default function SuppliersPage() {
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -110,10 +112,16 @@ export default function SuppliersPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <Button size="sm" onClick={() => setIsDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          공급자 추가
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => setIsImportDialogOpen(true)}>
+            <Upload className="mr-2 h-4 w-4" />
+            엑셀 업로드
+          </Button>
+          <Button size="sm" onClick={() => setIsDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            공급자 추가
+          </Button>
+        </div>
       </div>
 
       {/* 뷰 전환 탭 */}
@@ -203,6 +211,14 @@ export default function SuppliersPage() {
         open={isDialogOpen}
         onOpenChange={handleDialogClose}
         supplier={editingSupplier}
+      />
+
+      {/* 엑셀 임포트 다이얼로그 */}
+      <ExcelImportDialog
+        open={isImportDialogOpen}
+        onOpenChange={setIsImportDialogOpen}
+        importType="suppliers"
+        onSuccess={() => fetchSuppliers()}
       />
     </div>
   );

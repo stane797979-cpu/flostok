@@ -13,5 +13,6 @@ export * from "./types";
 export * from "./parser";
 export * from "./sales-import";
 export * from "./product-import";
+export * from "./supplier-import";
 export * from "./order-export";
 export * from "./data-export";

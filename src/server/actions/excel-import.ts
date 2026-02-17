@@ -4,13 +4,20 @@
  * Excel 데이터 임포트 Server Actions
  */
 
-import { importSalesData, importProductData, createSalesTemplate, createProductTemplate } from "@/server/services/excel";
-import type { ExcelImportResult, SalesRecordExcelRow, ProductExcelRow } from "@/server/services/excel";
+import {
+  importSalesData,
+  importProductData,
+  importSupplierData,
+  createSalesTemplate,
+  createProductTemplate,
+  createSupplierTemplate,
+} from "@/server/services/excel";
+import type { ExcelImportResult, SalesRecordExcelRow, ProductExcelRow, SupplierExcelRow } from "@/server/services/excel";
 import { parseExcelBuffer, sheetToJson } from "@/server/services/excel/parser";
 import { requireAuth } from "./auth-helpers";
 import { logActivity } from "@/server/services/activity-log";
 
-export type ImportType = "sales" | "products";
+export type ImportType = "sales" | "products" | "suppliers";
 
 export interface ImportExcelInput {
   type: ImportType;
@@ -64,7 +71,7 @@ export async function importExcelFile(input: ImportExcelInput): Promise<ImportEx
       };
     }
 
-    let result: ExcelImportResult<SalesRecordExcelRow | ProductExcelRow>;
+    let result: ExcelImportResult<SalesRecordExcelRow | ProductExcelRow | SupplierExcelRow>;
 
     if (input.type === "sales") {
       result = await importSalesData({
@@ -73,6 +80,13 @@ export async function importExcelFile(input: ImportExcelInput): Promise<ImportEx
         sheetName: input.sheetName,
         duplicateHandling: input.duplicateHandling,
         deductInventory: true,
+      });
+    } else if (input.type === "suppliers") {
+      result = await importSupplierData({
+        organizationId: user.organizationId,
+        buffer,
+        sheetName: input.sheetName,
+        duplicateHandling: input.duplicateHandling,
       });
     } else {
       result = await importProductData({
@@ -83,7 +97,8 @@ export async function importExcelFile(input: ImportExcelInput): Promise<ImportEx
       });
     }
 
-    const typeLabel = input.type === "sales" ? "판매 데이터" : "제품 데이터";
+    const typeLabels: Record<ImportType, string> = { sales: "판매 데이터", products: "제품 데이터", suppliers: "공급자 데이터" };
+    const typeLabel = typeLabels[input.type];
 
     // 활동 로그 기록 (성공 건수가 있을 때만)
     if (result.success && result.successCount > 0) {
@@ -135,6 +150,8 @@ export async function getExcelTemplateBase64(type: ImportType): Promise<string> 
 
   if (type === "sales") {
     buffer = await createSalesTemplate();
+  } else if (type === "suppliers") {
+    buffer = await createSupplierTemplate();
   } else {
     buffer = await createProductTemplate();
   }
