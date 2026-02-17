@@ -6,6 +6,7 @@
 
 import { importSalesData, importProductData, createSalesTemplate, createProductTemplate } from "@/server/services/excel";
 import type { ExcelImportResult, SalesRecordExcelRow, ProductExcelRow } from "@/server/services/excel";
+import { parseExcelBuffer, sheetToJson } from "@/server/services/excel/parser";
 import { requireAuth } from "./auth-helpers";
 import { logActivity } from "@/server/services/activity-log";
 
@@ -48,17 +49,15 @@ export async function importExcelFile(input: ImportExcelInput): Promise<ImportEx
     }
     const buffer = bytes.buffer;
 
-    // 행 수 체크 (500행 제한)
+    // 행 수 체크 (500행 제한) — 기존 parser.ts의 안정적인 함수 재사용
     const MAX_UPLOAD_ROWS = 500;
-    const XLSX = await import("xlsx");
-    const workbook = XLSX.read(buffer, { type: "array", sheetRows: MAX_UPLOAD_ROWS + 2 });
-    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-    const previewRows = XLSX.utils.sheet_to_json(firstSheet);
-    if (previewRows.length > MAX_UPLOAD_ROWS) {
+    const checkWorkbook = await parseExcelBuffer(buffer);
+    const checkRows = await sheetToJson(checkWorkbook, input.sheetName);
+    if (checkRows.length > MAX_UPLOAD_ROWS) {
       return {
         success: false,
-        message: `한 번에 최대 ${MAX_UPLOAD_ROWS}행까지 업로드 가능합니다. 파일을 나누어 업로드해 주세요.`,
-        totalRows: previewRows.length,
+        message: `한 번에 최대 ${MAX_UPLOAD_ROWS}행까지 업로드 가능합니다. 현재 ${checkRows.length}행입니다. 파일을 나누어 업로드해 주세요.`,
+        totalRows: checkRows.length,
         successCount: 0,
         errorCount: 0,
         errors: [],

@@ -27,6 +27,7 @@ import {
 } from "@/server/services/scm/reorder-recommendation";
 import { getCurrentUser } from "./auth-helpers";
 import { logActivity } from "@/server/services/activity-log";
+import { parseExcelBuffer, sheetToJson } from "@/server/services/excel/parser";
 import type { OrganizationSettings } from "@/types/organization-settings";
 
 /**
@@ -1367,11 +1368,9 @@ export async function uploadPurchaseOrderExcel(
     const file = formData.get("file") as File;
     if (!file) return { success: false, message: "파일이 없습니다", createdCount: 0 };
 
-    const XLSX = await import("xlsx");
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const workbook = XLSX.read(buffer, { type: "buffer" });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
+    const buffer = await file.arrayBuffer();
+    const workbook = await parseExcelBuffer(buffer);
+    const rows = await sheetToJson<Record<string, unknown>>(workbook);
 
     if (rows.length === 0) return { success: false, message: "데이터가 없습니다", createdCount: 0 };
 
