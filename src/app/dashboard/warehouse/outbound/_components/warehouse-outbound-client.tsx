@@ -174,10 +174,14 @@ export function WarehouseOutboundClient() {
                     className: "bg-slate-600",
                   };
                   return (
-                    <div key={req.id} className="rounded-lg border bg-white p-4 space-y-3">
+                    <div
+                      key={req.id}
+                      className={`rounded-lg border bg-white p-4 space-y-3 ${req.status === "pending" ? "cursor-pointer hover:border-primary/50 hover:bg-slate-50 transition-colors" : ""}`}
+                      onClick={() => req.status === "pending" && handleConfirmClick(req.id)}
+                    >
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="font-medium">{req.requestNumber}</p>
+                          <p className="font-medium text-primary">{req.requestNumber}</p>
                           <p className="text-sm text-slate-500">{req.requestedByName || "-"}</p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -236,8 +240,12 @@ export function WarehouseOutboundClient() {
                       };
 
                       return (
-                        <TableRow key={req.id}>
-                          <TableCell className="font-medium">
+                        <TableRow
+                          key={req.id}
+                          className={req.status === "pending" ? "cursor-pointer hover:bg-slate-50" : ""}
+                          onClick={() => req.status === "pending" && handleConfirmClick(req.id)}
+                        >
+                          <TableCell className="font-medium text-primary">
                             {req.requestNumber}
                           </TableCell>
                           <TableCell>
