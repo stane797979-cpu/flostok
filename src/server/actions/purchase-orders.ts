@@ -1408,6 +1408,22 @@ export async function uploadPurchaseOrderExcel(
       .where(eq(suppliers.organizationId, orgId));
     const supplierNameMap = new Map(supplierList.map((s) => [s.name, s.id]));
 
+    // 엑셀에 있는 공급자명 중 DB에 없는 것은 자동 생성
+    if (supplierCol) {
+      const excelSupplierNames = new Set(
+        rows.map((row) => String(row[supplierCol] || "").trim()).filter(Boolean)
+      );
+      for (const name of excelSupplierNames) {
+        if (!supplierNameMap.has(name)) {
+          const [created] = await db
+            .insert(suppliers)
+            .values({ organizationId: orgId, name })
+            .returning({ id: suppliers.id });
+          supplierNameMap.set(name, created.id);
+        }
+      }
+    }
+
     // 행 파싱 및 공급자별 그룹화
     type ParsedItem = {
       productId: string;
@@ -1443,7 +1459,7 @@ export async function uploadPurchaseOrderExcel(
       const quantity = Number(row[qtyCol]) || 0;
       if (quantity <= 0) continue;
 
-      // 공급자: 엑셀에 있으면 매칭, 없으면 supplier_products Map에서 조회
+      // 공급자: 엑셀에 있으면 매칭, 없으면 primarySupplierId에서 조회
       let supplierId = "";
       if (supplierCol && row[supplierCol]) {
         const supplierName = String(row[supplierCol]).trim();
