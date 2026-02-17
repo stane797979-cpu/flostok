@@ -1375,6 +1375,11 @@ export async function uploadPurchaseOrderExcel(
 
     if (rows.length === 0) return { success: false, message: "데이터가 없습니다", createdCount: 0 };
 
+    const MAX_UPLOAD_ROWS = 500;
+    if (rows.length > MAX_UPLOAD_ROWS) {
+      return { success: false, message: `한 번에 최대 ${MAX_UPLOAD_ROWS}행까지 업로드 가능합니다. 현재 ${rows.length}행입니다. 파일을 나누어 업로드해 주세요.`, createdCount: 0 };
+    }
+
     // 헤더 파싱
     const headers = Object.keys(rows[0]);
     const skuCol = headers.find((h) => ["sku", "SKU", "품번", "제품코드", "품목코드"].includes(h.trim()));

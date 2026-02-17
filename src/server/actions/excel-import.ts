@@ -48,6 +48,23 @@ export async function importExcelFile(input: ImportExcelInput): Promise<ImportEx
     }
     const buffer = bytes.buffer;
 
+    // 행 수 체크 (500행 제한)
+    const MAX_UPLOAD_ROWS = 500;
+    const XLSX = await import("xlsx");
+    const workbook = XLSX.read(buffer, { type: "buffer", sheetRows: MAX_UPLOAD_ROWS + 2 });
+    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+    const previewRows = XLSX.utils.sheet_to_json(firstSheet);
+    if (previewRows.length > MAX_UPLOAD_ROWS) {
+      return {
+        success: false,
+        message: `한 번에 최대 ${MAX_UPLOAD_ROWS}행까지 업로드 가능합니다. 파일을 나누어 업로드해 주세요.`,
+        totalRows: previewRows.length,
+        successCount: 0,
+        errorCount: 0,
+        errors: [],
+      };
+    }
+
     let result: ExcelImportResult<SalesRecordExcelRow | ProductExcelRow>;
 
     if (input.type === "sales") {

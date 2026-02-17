@@ -72,8 +72,6 @@ export function ExcelImportDialog({
     }
   };
 
-  const MAX_ROWS = 500;
-
   const handleImport = async () => {
     if (!file) return;
 
@@ -82,25 +80,6 @@ export function ExcelImportDialog({
       // File -> Base64
       const buffer = await file.arrayBuffer();
       const bytes = new Uint8Array(buffer);
-
-      // 행 수 체크 (500행 제한)
-      const { read, utils } = await import("xlsx");
-      const workbook = read(buffer, { type: "array", sheetRows: MAX_ROWS + 2 });
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = utils.sheet_to_json(sheet);
-      if (rows.length > MAX_ROWS) {
-        setResult({
-          success: false,
-          message: `한 번에 최대 ${MAX_ROWS}행까지 업로드 가능합니다. 현재 파일의 데이터 행 수가 ${MAX_ROWS}행을 초과합니다. 파일을 나누어 업로드해 주세요.`,
-          totalRows: rows.length,
-          successCount: 0,
-          errorCount: 0,
-          errors: [],
-        });
-        setIsPending(false);
-        return;
-      }
-
       let binary = "";
       for (let i = 0; i < bytes.length; i++) {
         binary += String.fromCharCode(bytes[i]);
