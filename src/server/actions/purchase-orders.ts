@@ -12,10 +12,10 @@ import {
   type PurchaseOrder,
   type PurchaseOrderItem,
 } from "@/server/db/schema";
-import { eq, and, desc, asc, sql, gte, lte, or, isNull } from "drizzle-orm";
+import { eq, and, desc, asc, sql, gte, lte, or, isNull, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { salesRecords, organizations } from "@/server/db/schema";
+import { salesRecords, organizations, supplierProducts } from "@/server/db/schema";
 import {
   convertToReorderItem,
   sortReorderItems,
@@ -1433,11 +1433,11 @@ export async function uploadPurchaseOrderExcel(
     if (uniqueExcelProductIds.length > 0) {
       const supplierProductMappings = await db
         .select({
-          productId: sql<string>`product_id`,
-          supplierId: sql<string>`supplier_id`,
+          productId: supplierProducts.productId,
+          supplierId: supplierProducts.supplierId,
         })
-        .from(sql`supplier_products`)
-        .where(sql`product_id IN ${uniqueExcelProductIds}`);
+        .from(supplierProducts)
+        .where(inArray(supplierProducts.productId, uniqueExcelProductIds));
       for (const m of supplierProductMappings) {
         productToSupplier.set(m.productId, m.supplierId);
       }
