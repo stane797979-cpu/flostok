@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -19,8 +20,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { RefreshCw, PackageX, Clock } from "lucide-react";
-import { getOutboundRequests } from "@/server/actions/outbound-requests";
+import { RefreshCw, PackageX, Clock, CheckCircle2, Loader2 } from "lucide-react";
+import { getOutboundRequests, bulkConfirmOutboundRequests } from "@/server/actions/outbound-requests";
 import { OutboundConfirmDialog } from "./outbound-confirm-dialog";
 import { useToast } from "@/hooks/use-toast";
 
@@ -65,10 +66,20 @@ export function WarehouseOutboundClient() {
   const [statusFilter, setStatusFilter] = useState<string>("pending");
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  // 체크박스 선택 상태
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBulkConfirming, setIsBulkConfirming] = useState(false);
+
   const { toast } = useToast();
+
+  const pendingRequests = requests.filter((r) => r.status === "pending");
+  const allPendingSelected = pendingRequests.length > 0 && pendingRequests.every((r) => selectedIds.has(r.id));
+  const somePendingSelected = pendingRequests.some((r) => selectedIds.has(r.id));
 
   const loadRequests = useCallback(async () => {
     setIsLoading(true);
+    setSelectedIds(new Set());
     try {
       const result = await getOutboundRequests({
         status: statusFilter === "all" ? undefined : statusFilter,
@@ -90,6 +101,29 @@ export function WarehouseOutboundClient() {
     loadRequests();
   }, [loadRequests]);
 
+  // 전체 선택/해제
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedIds(new Set(pendingRequests.map((r) => r.id)));
+    } else {
+      setSelectedIds(new Set());
+    }
+  };
+
+  // 개별 선택/해제
+  const handleSelectOne = (id: string, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) {
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
+      return next;
+    });
+  };
+
+  // 개별 확정 다이얼로그 (요청번호 클릭 시)
   const handleConfirmClick = (requestId: string) => {
     setSelectedRequestId(requestId);
     setDialogOpen(true);
@@ -105,11 +139,45 @@ export function WarehouseOutboundClient() {
     handleDialogClose();
   };
 
+  // 선택 일괄 확정
+  const handleBulkConfirm = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+
+    setIsBulkConfirming(true);
+    try {
+      const result = await bulkConfirmOutboundRequests(ids);
+      if (result.confirmedCount > 0) {
+        toast({
+          title: "일괄 출고 확정 완료",
+          description: `${result.confirmedCount}건 출고 확정됨${result.errors.length > 0 ? `, ${result.errors.length}건 오류` : ""}`,
+        });
+      }
+      if (result.errors.length > 0) {
+        toast({
+          title: "일부 오류 발생",
+          description: result.errors.slice(0, 3).join("\n"),
+          variant: "destructive",
+        });
+      }
+      loadRequests();
+    } catch (error) {
+      console.error("일괄 확정 오류:", error);
+      toast({
+        title: "오류",
+        description: "일괄 출고 확정 중 오류가 발생했습니다",
+        variant: "destructive",
+      });
+    } finally {
+      setIsBulkConfirming(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">출고예정</h1>
-        <p className="mt-2 text-slate-500">출고 요청 목록을 확인하고 출고를 확정하세요</p>
+        <h1 className="text-3xl font-bold tracking-tight">출고확정(창고)</h1>
+        <p className="mt-2 text-slate-500">출고 요청을 선택하고 일괄 확정하세요</p>
       </div>
 
       <Card>
@@ -118,7 +186,7 @@ export function WarehouseOutboundClient() {
             <div>
               <CardTitle>출고 요청 목록</CardTitle>
               <CardDescription>
-                백오피스에서 등록된 출고 요청을 확인하고 출고 처리합니다
+                체크박스로 선택 후 일괄 확정하거나, 요청번호를 클릭하여 개별 확정할 수 있습니다
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
@@ -162,6 +230,27 @@ export function WarehouseOutboundClient() {
             </div>
           ) : (
             <>
+              {/* 선택 상태 바 */}
+              {selectedIds.size > 0 && (
+                <div className="mb-3 flex items-center justify-between rounded-lg border border-primary/30 bg-primary/5 px-4 py-2">
+                  <span className="text-sm font-medium">
+                    {selectedIds.size}건 선택됨
+                  </span>
+                  <Button
+                    size="sm"
+                    onClick={handleBulkConfirm}
+                    disabled={isBulkConfirming}
+                  >
+                    {isBulkConfirming ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="mr-2 h-4 w-4" />
+                    )}
+                    선택 일괄 확정
+                  </Button>
+                </div>
+              )}
+
               <div className="mb-3 text-sm text-slate-500">
                 총 {requests.length}건
               </div>
@@ -173,15 +262,29 @@ export function WarehouseOutboundClient() {
                     label: req.status,
                     className: "bg-slate-600",
                   };
+                  const isSelected = selectedIds.has(req.id);
                   return (
                     <div
                       key={req.id}
-                      className={`rounded-lg border bg-white p-4 space-y-3 ${req.status === "pending" ? "cursor-pointer hover:border-primary/50 hover:bg-slate-50 transition-colors" : ""}`}
-                      onClick={() => req.status === "pending" && handleConfirmClick(req.id)}
+                      className={`rounded-lg border p-4 space-y-3 transition-colors ${
+                        isSelected ? "border-primary bg-primary/5" : "bg-white"
+                      }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium text-primary">{req.requestNumber}</p>
+                      <div className="flex items-center gap-3">
+                        {req.status === "pending" && (
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={(checked) => handleSelectOne(req.id, !!checked)}
+                          />
+                        )}
+                        <div className="flex-1">
+                          <button
+                            type="button"
+                            className="font-medium text-primary hover:underline"
+                            onClick={() => req.status === "pending" && handleConfirmClick(req.id)}
+                          >
+                            {req.requestNumber}
+                          </button>
                           <p className="text-sm text-slate-500">{req.requestedByName || "-"}</p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -189,7 +292,7 @@ export function WarehouseOutboundClient() {
                           <Badge className={config.className}>{config.label}</Badge>
                         </div>
                       </div>
-                      <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center justify-between text-sm pl-7">
                         <div className="space-y-1">
                           {req.sourceWarehouseName && (
                             <p className="text-slate-600 font-medium">
@@ -203,13 +306,6 @@ export function WarehouseOutboundClient() {
                             {formatTimeAgo(req.createdAt)}
                           </div>
                         </div>
-                        {req.status === "pending" ? (
-                          <Button size="sm" onClick={() => handleConfirmClick(req.id)}>
-                            출고 확정
-                          </Button>
-                        ) : (
-                          <span className="text-sm text-slate-400">{config.label}</span>
-                        )}
                       </div>
                     </div>
                   );
@@ -221,6 +317,14 @@ export function WarehouseOutboundClient() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-12">
+                        {pendingRequests.length > 0 && (
+                          <Checkbox
+                            checked={allPendingSelected ? true : somePendingSelected ? "indeterminate" : false}
+                            onCheckedChange={(checked) => handleSelectAll(checked === true)}
+                          />
+                        )}
+                      </TableHead>
                       <TableHead>요청번호</TableHead>
                       <TableHead>출고유형</TableHead>
                       <TableHead>상태</TableHead>
@@ -229,7 +333,6 @@ export function WarehouseOutboundClient() {
                       <TableHead className="text-center">품목수</TableHead>
                       <TableHead className="text-center">총수량</TableHead>
                       <TableHead>요청시간</TableHead>
-                      <TableHead className="text-right">작업</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -238,15 +341,37 @@ export function WarehouseOutboundClient() {
                         label: req.status,
                         className: "bg-slate-600",
                       };
+                      const isSelected = selectedIds.has(req.id);
 
                       return (
                         <TableRow
                           key={req.id}
-                          className={req.status === "pending" ? "cursor-pointer hover:bg-slate-50" : ""}
-                          onClick={() => req.status === "pending" && handleConfirmClick(req.id)}
+                          className={`${isSelected ? "bg-primary/5" : ""} ${req.status === "pending" ? "cursor-pointer hover:bg-slate-50" : ""}`}
                         >
-                          <TableCell className="font-medium text-primary">
-                            {req.requestNumber}
+                          <TableCell>
+                            {req.status === "pending" ? (
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={(checked) => handleSelectOne(req.id, !!checked)}
+                              />
+                            ) : (
+                              <span className="block w-4" />
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {req.status === "pending" ? (
+                              <button
+                                type="button"
+                                className="font-medium text-primary hover:underline"
+                                onClick={() => handleConfirmClick(req.id)}
+                              >
+                                {req.requestNumber}
+                              </button>
+                            ) : (
+                              <span className="font-medium text-slate-500">
+                                {req.requestNumber}
+                              </span>
+                            )}
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline">
@@ -278,20 +403,6 @@ export function WarehouseOutboundClient() {
                               <Clock className="h-3.5 w-3.5" />
                               {formatTimeAgo(req.createdAt)}
                             </div>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {req.status === "pending" ? (
-                              <Button
-                                size="sm"
-                                onClick={() => handleConfirmClick(req.id)}
-                              >
-                                출고 확정
-                              </Button>
-                            ) : (
-                              <span className="text-sm text-slate-400">
-                                {config.label}
-                              </span>
-                            )}
                           </TableCell>
                         </TableRow>
                       );

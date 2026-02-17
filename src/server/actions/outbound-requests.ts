@@ -499,6 +499,119 @@ export async function confirmOutboundRequest(
 }
 
 /**
+ * 출고 요청 일괄 확정 (요청수량 = 확정수량으로 자동 처리)
+ */
+export async function bulkConfirmOutboundRequests(
+  requestIds: string[]
+): Promise<{ success: boolean; confirmedCount: number; errors: string[] }> {
+  try {
+    const user = await requireWarehouseOrAbove();
+    const errors: string[] = [];
+    let confirmedCount = 0;
+
+    for (const requestId of requestIds) {
+      // 요청 정보 확인
+      const [request] = await db
+        .select()
+        .from(outboundRequests)
+        .where(
+          and(
+            eq(outboundRequests.id, requestId),
+            eq(outboundRequests.organizationId, user.organizationId)
+          )
+        )
+        .limit(1);
+
+      if (!request || request.status !== "pending") {
+        errors.push(`${request?.requestNumber || requestId}: 이미 처리됨`);
+        continue;
+      }
+
+      // 항목 조회
+      const items = await db
+        .select()
+        .from(outboundRequestItems)
+        .where(eq(outboundRequestItems.outboundRequestId, requestId));
+
+      if (items.length === 0) {
+        errors.push(`${request.requestNumber}: 항목 없음`);
+        continue;
+      }
+
+      // confirmedQuantity = requestedQuantity 일괄 설정
+      for (const item of items) {
+        await db
+          .update(outboundRequestItems)
+          .set({ confirmedQuantity: item.requestedQuantity })
+          .where(eq(outboundRequestItems.id, item.id));
+      }
+
+      // 재고 차감 순차 실행
+      let hasError = false;
+      for (const item of items) {
+        if (item.requestedQuantity === 0) continue;
+
+        const outboundResult = await processInventoryTransaction({
+          productId: item.productId,
+          changeType: request.outboundType as
+            | "OUTBOUND_SALE"
+            | "OUTBOUND_DISPOSAL"
+            | "OUTBOUND_TRANSFER"
+            | "OUTBOUND_SAMPLE"
+            | "OUTBOUND_LOSS"
+            | "OUTBOUND_RETURN",
+          quantity: item.requestedQuantity,
+          referenceId: requestId,
+          warehouseId: request.sourceWarehouseId,
+        });
+
+        if (!outboundResult.success) {
+          errors.push(`${request.requestNumber}: ${outboundResult.error}`);
+          hasError = true;
+          break;
+        }
+
+        // 이동 출고면 도착 창고 입고
+        if (request.outboundType === "OUTBOUND_TRANSFER" && request.targetWarehouseId) {
+          await processInventoryTransaction({
+            productId: item.productId,
+            changeType: "INBOUND_TRANSFER",
+            quantity: item.requestedQuantity,
+            referenceId: requestId,
+            warehouseId: request.targetWarehouseId,
+          });
+        }
+      }
+
+      if (!hasError) {
+        await db
+          .update(outboundRequests)
+          .set({
+            status: "confirmed",
+            confirmedById: user.id,
+            confirmedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(outboundRequests.id, requestId));
+        confirmedCount++;
+      }
+    }
+
+    revalidatePath("/dashboard/outbound");
+    revalidatePath("/dashboard/warehouse/outbound");
+
+    return { success: errors.length === 0, confirmedCount, errors };
+  } catch (error) {
+    console.error("일괄 출고 확정 오류:", error);
+    return {
+      success: false,
+      confirmedCount: 0,
+      errors: [error instanceof Error ? error.message : "일괄 출고 확정 실패"],
+    };
+  }
+}
+
+/**
  * 출고 요청 취소
  */
 export async function cancelOutboundRequest(requestId: string): Promise<{
