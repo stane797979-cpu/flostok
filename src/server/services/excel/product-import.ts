@@ -3,10 +3,44 @@
  */
 
 import { db } from "@/server/db";
-import { products, inventory } from "@/server/db/schema";
-import { eq } from "drizzle-orm";
+import { products, inventory, warehouses } from "@/server/db/schema";
+import { eq, and } from "drizzle-orm";
 import { parseExcelBuffer, sheetToJson, parseNumber } from "./parser";
 import type { ExcelImportResult, ExcelImportError, ProductExcelRow } from "./types";
+
+/**
+ * 조직의 기본 창고 ID 조회 (없으면 자동 생성)
+ */
+async function getOrCreateDefaultWarehouseId(organizationId: string): Promise<string> {
+  const [existing] = await db
+    .select({ id: warehouses.id })
+    .from(warehouses)
+    .where(
+      and(
+        eq(warehouses.organizationId, organizationId),
+        eq(warehouses.isDefault, true),
+        eq(warehouses.isActive, true)
+      )
+    )
+    .limit(1);
+
+  if (existing) return existing.id;
+
+  // 기본 창고가 없으면 생성
+  const [created] = await db
+    .insert(warehouses)
+    .values({
+      organizationId,
+      code: "MAIN",
+      name: "본사 창고",
+      type: "MAIN",
+      isDefault: true,
+      isActive: true,
+    })
+    .returning({ id: warehouses.id });
+
+  return created.id;
+}
 
 let _xlsx: typeof import("xlsx") | null = null;
 async function getXLSX() {
@@ -142,6 +176,9 @@ export async function importProductData(
       };
     }
 
+    // 기본 창고 ID 조회 (재고 생성 시 필요)
+    const defaultWarehouseId = await getOrCreateDefaultWarehouseId(organizationId);
+
     // 기존 제품 조회
     const existingProducts = await db
       .select({ id: products.id, sku: products.sku })
@@ -240,11 +277,12 @@ export async function importProductData(
       successData.push(data);
     }
 
-    // 재고 배치 INSERT (신규)
+    // 재고 배치 INSERT (신규) — warehouseId 필수
     if (inventoryInserts.length > 0) {
       await db.insert(inventory).values(
         inventoryInserts.map((item) => ({
           organizationId,
+          warehouseId: defaultWarehouseId,
           productId: item.productId,
           currentStock: item.currentStock,
           availableStock: item.currentStock,
