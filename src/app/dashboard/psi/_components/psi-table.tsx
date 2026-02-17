@@ -171,7 +171,7 @@ export function PSITable({ products, periods }: PSITableProps) {
                 <SortIcon field="productName" currentField={sortField} currentDirection={sortDirection} />
               </button>
             </TableHead>
-            <TableHead rowSpan={2} className="text-center min-w-[36px] border-r">
+            <TableHead rowSpan={2} className="sticky left-[160px] z-20 bg-white dark:bg-slate-950 text-center min-w-[36px] border-r">
               <button
                 className="flex items-center justify-center w-full hover:text-foreground transition-colors"
                 onClick={() => handleSort("abcXyzGrade")}
@@ -180,7 +180,7 @@ export function PSITable({ products, periods }: PSITableProps) {
                 <SortIcon field="abcXyzGrade" currentField={sortField} currentDirection={sortDirection} />
               </button>
             </TableHead>
-            <TableHead rowSpan={2} className="text-center min-w-[32px] border-r">
+            <TableHead rowSpan={2} className="sticky left-[196px] z-20 bg-white dark:bg-slate-950 text-center min-w-[32px] border-r">
               <button
                 className="flex items-center justify-center w-full hover:text-foreground transition-colors"
                 onClick={() => handleSort("orderMethod")}
@@ -189,7 +189,7 @@ export function PSITable({ products, periods }: PSITableProps) {
                 <SortIcon field="orderMethod" currentField={sortField} currentDirection={sortDirection} />
               </button>
             </TableHead>
-            <TableHead rowSpan={2} className="text-center min-w-[50px] border-r">
+            <TableHead rowSpan={2} className="sticky left-[228px] z-20 bg-white dark:bg-slate-950 text-center min-w-[50px] border-r">
               <button
                 className="flex items-center justify-center w-full hover:text-foreground transition-colors"
                 onClick={() => handleSort("currentStock")}
@@ -242,7 +242,7 @@ export function PSITable({ products, periods }: PSITableProps) {
               <TableCell className="sticky left-[70px] z-10 bg-white dark:bg-slate-950 text-[11px] max-w-[90px] truncate border-r">
                 {product.productName}
               </TableCell>
-              <TableCell className="text-center border-r">
+              <TableCell className="sticky left-[160px] z-10 bg-white dark:bg-slate-950 text-center border-r">
                 {product.abcGrade && product.xyzGrade ? (
                   <Badge variant="outline" className={cn(
                     "font-mono text-[9px] px-0.5 py-0",
@@ -256,7 +256,7 @@ export function PSITable({ products, periods }: PSITableProps) {
                   <span className="text-muted-foreground text-[10px]">-</span>
                 )}
               </TableCell>
-              <TableCell className="text-center border-r">
+              <TableCell className="sticky left-[196px] z-10 bg-white dark:bg-slate-950 text-center border-r">
                 {product.orderMethod ? (
                   <Badge variant="outline" className={cn(
                     "font-mono text-[9px] px-0.5 py-0",
@@ -269,7 +269,7 @@ export function PSITable({ products, periods }: PSITableProps) {
                   <span className="text-muted-foreground text-[10px]">-</span>
                 )}
               </TableCell>
-              <TableCell className="text-center border-r">
+              <TableCell className="sticky left-[228px] z-10 bg-white dark:bg-slate-950 text-center border-r">
                 <StockCell value={product.currentStock} safetyStock={product.safetyStock} />
               </TableCell>
               {product.months.map((month) => {
