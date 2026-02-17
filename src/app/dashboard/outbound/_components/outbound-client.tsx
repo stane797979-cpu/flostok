@@ -236,7 +236,7 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
 
   const pageTitle = initialTab === "upload" ? "출고 업로드" : "출고 현황";
   const pageDescription = initialTab === "upload"
-    ? "판매(출고) 데이터를 엑셀로 업로드하세요"
+    ? "출고 데이터를 엑셀로 업로드하면 출고 요청이 생성됩니다"
     : "월별 출고 기록을 확인하고 재고 수불부를 다운로드하세요";
 
   return (
@@ -249,9 +249,9 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
       {initialTab === "upload" && (
         <Card>
             <CardHeader>
-              <CardTitle>판매/출고 데이터 업로드</CardTitle>
+              <CardTitle>출고 데이터 업로드</CardTitle>
               <CardDescription>
-                판매(출고) 데이터를 엑셀로 업로드하세요. 업로드된 데이터는 판매 기록에 저장됩니다.
+                출고 데이터를 엑셀로 업로드하면 출고 요청이 생성됩니다. 창고에서 확정 후 재고가 차감됩니다.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -260,9 +260,9 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
                   <Upload className="h-10 w-10 text-slate-400" />
                 </div>
                 <div className="text-center">
-                  <p className="font-medium">엑셀 파일로 판매 데이터를 업로드합니다</p>
+                  <p className="font-medium">엑셀 파일로 출고 데이터를 업로드합니다</p>
                   <p className="mt-1 text-sm text-slate-500">
-                    필수 컬럼: SKU, 날짜, 판매수량
+                    필수 컬럼: SKU, 날짜, 수량 (선택: 출고유형, 채널, 비고)
                   </p>
                 </div>
                 <Button onClick={() => setImportDialogOpen(true)}>
@@ -382,15 +382,14 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
       <ExcelImportDialog
         open={importDialogOpen}
         onOpenChange={setImportDialogOpen}
-        importType="sales"
-        title="판매/출고 데이터 업로드"
-        description="판매(출고) 데이터를 엑셀 파일로 업로드하세요"
+        importType="outbound"
+        title="출고 데이터 업로드"
+        description="출고 데이터를 엑셀로 업로드하면 출고 요청이 생성됩니다. 창고에서 확정 후 재고가 차감됩니다."
         onSuccess={() => {
           toast({
-            title: "업로드 완료",
-            description: "판매 데이터가 성공적으로 업로드되었습니다",
+            title: "출고 요청 생성 완료",
+            description: "출고 요청이 생성되었습니다. 창고에서 확정해주세요.",
           });
-          loadOutboundRecords(outboundMonth);
         }}
       />
 

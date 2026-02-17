@@ -16,3 +16,4 @@ export * from "./product-import";
 export * from "./supplier-import";
 export * from "./order-export";
 export * from "./data-export";
+export * from "./outbound-import";

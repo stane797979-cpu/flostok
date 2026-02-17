@@ -8,16 +8,18 @@ import {
   importSalesData,
   importProductData,
   importSupplierData,
+  importOutboundData,
   createSalesTemplate,
   createProductTemplate,
   createSupplierTemplate,
+  createOutboundTemplate,
 } from "@/server/services/excel";
 import type { ExcelImportResult, SalesRecordExcelRow, ProductExcelRow, SupplierExcelRow } from "@/server/services/excel";
 import { parseExcelBuffer, sheetToJson } from "@/server/services/excel/parser";
 import { requireAuth } from "./auth-helpers";
 import { logActivity } from "@/server/services/activity-log";
 
-export type ImportType = "sales" | "products" | "suppliers";
+export type ImportType = "sales" | "products" | "suppliers" | "outbound";
 
 export interface ImportExcelInput {
   type: ImportType;
@@ -73,7 +75,29 @@ export async function importExcelFile(input: ImportExcelInput): Promise<ImportEx
 
     let result: ExcelImportResult<SalesRecordExcelRow | ProductExcelRow | SupplierExcelRow>;
 
-    if (input.type === "sales") {
+    if (input.type === "outbound") {
+      // 출고: outbound_requests (pending) 생성 — 재고 차감 안 함
+      const { getDefaultWarehouse } = await import("./warehouses");
+      const defaultWarehouse = await getDefaultWarehouse();
+      if (!defaultWarehouse) {
+        return {
+          success: false,
+          message: "기본 창고를 찾을 수 없습니다. 창고를 먼저 등록해주세요.",
+          totalRows: 0,
+          successCount: 0,
+          errorCount: 1,
+          errors: [{ row: 0, message: "기본 창고 없음" }],
+        };
+      }
+
+      result = await importOutboundData({
+        organizationId: user.organizationId,
+        userId: user.id,
+        buffer,
+        sheetName: input.sheetName,
+        sourceWarehouseId: defaultWarehouse.id,
+      });
+    } else if (input.type === "sales") {
       result = await importSalesData({
         organizationId: user.organizationId,
         buffer,
@@ -97,7 +121,7 @@ export async function importExcelFile(input: ImportExcelInput): Promise<ImportEx
       });
     }
 
-    const typeLabels: Record<ImportType, string> = { sales: "판매 데이터", products: "제품 데이터", suppliers: "공급자 데이터" };
+    const typeLabels: Record<ImportType, string> = { sales: "판매 데이터", products: "제품 데이터", suppliers: "공급자 데이터", outbound: "출고 데이터" };
     const typeLabel = typeLabels[input.type];
 
     // 활동 로그 기록 (성공 건수가 있을 때만)
@@ -113,7 +137,9 @@ export async function importExcelFile(input: ImportExcelInput): Promise<ImportEx
     return {
       success: result.success,
       message: result.success
-        ? `${typeLabel} ${result.successCount}건 임포트 완료`
+        ? input.type === "outbound"
+          ? `출고 요청 ${result.successCount}건 생성 완료 (창고 확정 대기)`
+          : `${typeLabel} ${result.successCount}건 임포트 완료`
         : `${typeLabel} 임포트 중 ${result.errorCount}건 오류 발생`,
       totalRows: result.totalRows,
       successCount: result.successCount,
@@ -148,7 +174,9 @@ export async function importExcelFile(input: ImportExcelInput): Promise<ImportEx
 export async function getExcelTemplateBase64(type: ImportType): Promise<string> {
   let buffer: ArrayBuffer;
 
-  if (type === "sales") {
+  if (type === "outbound") {
+    buffer = await createOutboundTemplate();
+  } else if (type === "sales") {
     buffer = await createSalesTemplate();
   } else if (type === "suppliers") {
     buffer = await createSupplierTemplate();
