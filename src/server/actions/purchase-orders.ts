@@ -1367,7 +1367,7 @@ export async function uploadPurchaseOrderExcel(
     const file = formData.get("file") as File;
     if (!file) return { success: false, message: "파일이 없습니다", createdCount: 0 };
 
-    const { default: XLSX } = await import("xlsx");
+    const XLSX = await import("xlsx");
     const buffer = Buffer.from(await file.arrayBuffer());
     const workbook = XLSX.read(buffer, { type: "buffer" });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];

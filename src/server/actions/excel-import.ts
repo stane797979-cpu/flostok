@@ -50,8 +50,8 @@ export async function importExcelFile(input: ImportExcelInput): Promise<ImportEx
 
     // 행 수 체크 (500행 제한)
     const MAX_UPLOAD_ROWS = 500;
-    const { default: XLSX } = await import("xlsx");
-    const workbook = XLSX.read(buffer, { type: "buffer", sheetRows: MAX_UPLOAD_ROWS + 2 });
+    const XLSX = await import("xlsx");
+    const workbook = XLSX.read(buffer, { type: "array", sheetRows: MAX_UPLOAD_ROWS + 2 });
     const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
     const previewRows = XLSX.utils.sheet_to_json(firstSheet);
     if (previewRows.length > MAX_UPLOAD_ROWS) {
