@@ -82,114 +82,122 @@ export async function getInventoryList(options?: {
   total: number;
 }> {
   const user = await requireAuth();
-  const { productId, status, warehouseId, limit = 50, offset = 0 } = options || {};
+  const orgId = user.organizationId;
+  const { productId, status, warehouseId, limit: lim = 50, offset: off = 0 } = options || {};
+  const filterKey = JSON.stringify({ productId, status, warehouseId, lim, off });
 
-  const conditions = [eq(inventory.organizationId, user.organizationId)];
+  return unstable_cache(
+    async () => {
+      const conditions = [eq(inventory.organizationId, orgId)];
 
-  if (productId) {
-    conditions.push(eq(inventory.productId, productId));
-  }
-  if (status) {
-    conditions.push(eq(inventory.status, status as (typeof inventory.status.enumValues)[number]));
-  }
-  if (warehouseId) {
-    conditions.push(eq(inventory.warehouseId, warehouseId));
-  }
+      if (productId) {
+        conditions.push(eq(inventory.productId, productId));
+      }
+      if (status) {
+        conditions.push(eq(inventory.status, status as (typeof inventory.status.enumValues)[number]));
+      }
+      if (warehouseId) {
+        conditions.push(eq(inventory.warehouseId, warehouseId));
+      }
 
-  // 30일 전 날짜 (일평균출고량 계산용)
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split("T")[0];
+      // 30일 전 날짜 (일평균출고량 계산용)
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split("T")[0];
 
-  const [items, countResult, outboundData] = await Promise.all([
-    db
-      .select({
-        id: inventory.id,
-        organizationId: inventory.organizationId,
-        warehouseId: inventory.warehouseId,
-        productId: inventory.productId,
-        currentStock: inventory.currentStock,
-        availableStock: inventory.availableStock,
-        reservedStock: inventory.reservedStock,
-        incomingStock: inventory.incomingStock,
-        status: inventory.status,
-        location: inventory.location,
-        inventoryValue: inventory.inventoryValue,
-        daysOfInventory: inventory.daysOfInventory,
-        lastUpdatedAt: inventory.lastUpdatedAt,
-        updatedAt: inventory.updatedAt,
-        createdAt: inventory.createdAt,
-        product: {
-          sku: products.sku,
-          name: products.name,
-          safetyStock: products.safetyStock,
-          reorderPoint: products.reorderPoint,
-          abcGrade: products.abcGrade,
-          xyzGrade: products.xyzGrade,
-        },
-      })
-      .from(inventory)
-      .innerJoin(products, eq(inventory.productId, products.id))
-      .where(and(...conditions))
-      .orderBy(desc(inventory.updatedAt))
-      .limit(limit)
-      .offset(offset),
-    db
-      .select({ count: sql<number>`count(*)` })
-      .from(inventory)
-      .where(and(...conditions)),
-    // 최근 30일 제품별 총 출고수량 (inventory_history에서 음수 변동 합산)
-    db
-      .select({
-        productId: inventoryHistory.productId,
-        totalOutbound: sql<number>`coalesce(sum(abs(${inventoryHistory.changeAmount})), 0)`,
-      })
-      .from(inventoryHistory)
-      .where(
-        and(
-          eq(inventoryHistory.organizationId, user.organizationId),
-          gte(inventoryHistory.date, thirtyDaysAgoStr),
-          sql`${inventoryHistory.changeAmount} < 0`
-        )
-      )
-      .groupBy(inventoryHistory.productId),
-  ]);
+      const [items, countResult, outboundData] = await Promise.all([
+        db
+          .select({
+            id: inventory.id,
+            organizationId: inventory.organizationId,
+            warehouseId: inventory.warehouseId,
+            productId: inventory.productId,
+            currentStock: inventory.currentStock,
+            availableStock: inventory.availableStock,
+            reservedStock: inventory.reservedStock,
+            incomingStock: inventory.incomingStock,
+            status: inventory.status,
+            location: inventory.location,
+            inventoryValue: inventory.inventoryValue,
+            daysOfInventory: inventory.daysOfInventory,
+            lastUpdatedAt: inventory.lastUpdatedAt,
+            updatedAt: inventory.updatedAt,
+            createdAt: inventory.createdAt,
+            product: {
+              sku: products.sku,
+              name: products.name,
+              safetyStock: products.safetyStock,
+              reorderPoint: products.reorderPoint,
+              abcGrade: products.abcGrade,
+              xyzGrade: products.xyzGrade,
+            },
+          })
+          .from(inventory)
+          .innerJoin(products, eq(inventory.productId, products.id))
+          .where(and(...conditions))
+          .orderBy(desc(inventory.updatedAt))
+          .limit(lim)
+          .offset(off),
+        db
+          .select({ count: sql<number>`count(*)` })
+          .from(inventory)
+          .where(and(...conditions)),
+        // 최근 30일 제품별 총 출고수량 (inventory_history에서 음수 변동 합산)
+        db
+          .select({
+            productId: inventoryHistory.productId,
+            totalOutbound: sql<number>`coalesce(sum(abs(${inventoryHistory.changeAmount})), 0)`,
+          })
+          .from(inventoryHistory)
+          .where(
+            and(
+              eq(inventoryHistory.organizationId, orgId),
+              gte(inventoryHistory.date, thirtyDaysAgoStr),
+              sql`${inventoryHistory.changeAmount} < 0`
+            )
+          )
+          .groupBy(inventoryHistory.productId),
+      ]);
 
-  // 제품별 일평균출고량 매핑
-  const avgDailyOutboundMap = new Map<string, number>();
-  for (const row of outboundData) {
-    avgDailyOutboundMap.set(row.productId, Math.round((Number(row.totalOutbound) / 30) * 100) / 100);
-  }
-
-  return {
-    items: items.map((row) => {
-      const avgDailyOutbound = avgDailyOutboundMap.get(row.productId) ?? 0;
-      const calculatedDoi =
-        avgDailyOutbound > 0
-          ? Math.round((row.currentStock / avgDailyOutbound) * 100) / 100
-          : null;
+      // 제품별 일평균출고량 매핑
+      const avgDailyOutboundMap = new Map<string, number>();
+      for (const row of outboundData) {
+        avgDailyOutboundMap.set(row.productId, Math.round((Number(row.totalOutbound) / 30) * 100) / 100);
+      }
 
       return {
-        id: row.id,
-        organizationId: row.organizationId,
-        warehouseId: row.warehouseId,
-        productId: row.productId,
-        currentStock: row.currentStock,
-        availableStock: row.availableStock,
-        reservedStock: row.reservedStock,
-        incomingStock: row.incomingStock,
-        status: row.status,
-        location: row.location,
-        inventoryValue: row.inventoryValue,
-        daysOfInventory: calculatedDoi,
-        lastUpdatedAt: row.lastUpdatedAt,
-        updatedAt: row.updatedAt,
-        createdAt: row.createdAt,
-        product: row.product,
+        items: items.map((row) => {
+          const avgDailyOutbound = avgDailyOutboundMap.get(row.productId) ?? 0;
+          const calculatedDoi =
+            avgDailyOutbound > 0
+              ? Math.round((row.currentStock / avgDailyOutbound) * 100) / 100
+              : null;
+
+          return {
+            id: row.id,
+            organizationId: row.organizationId,
+            warehouseId: row.warehouseId,
+            productId: row.productId,
+            currentStock: row.currentStock,
+            availableStock: row.availableStock,
+            reservedStock: row.reservedStock,
+            incomingStock: row.incomingStock,
+            status: row.status,
+            location: row.location,
+            inventoryValue: row.inventoryValue,
+            daysOfInventory: calculatedDoi,
+            lastUpdatedAt: row.lastUpdatedAt,
+            updatedAt: row.updatedAt,
+            createdAt: row.createdAt,
+            product: row.product,
+          };
+        }),
+        total: Number(countResult[0]?.count || 0),
       };
-    }),
-    total: Number(countResult[0]?.count || 0),
-  };
+    },
+    [`inventory-list-${orgId}-${filterKey}`],
+    { revalidate: 15, tags: [`inventory-${orgId}`] }
+  )();
 }
 
 /**

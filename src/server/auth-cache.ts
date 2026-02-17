@@ -10,7 +10,7 @@ import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/server/db";
 import { users } from "@/server/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 
 export type AuthUser = {
   id: string;
@@ -67,39 +67,33 @@ export const getCachedCurrentUser = cache(
         return null;
       }
 
-      // DB에서 사용자 정보 조회 (authId로)
+      // DB에서 사용자 정보 조회 (authId OR email 단일 쿼리)
+      const whereCondition = user.email
+        ? or(eq(users.authId, user.id), eq(users.email, user.email))
+        : eq(users.authId, user.id);
+
       const [dbUser] = await db
         .select()
         .from(users)
-        .where(eq(users.authId, user.id))
+        .where(whereCondition)
         .limit(1);
 
-      if (dbUser) {
-        // 탈퇴한 사용자 차단
-        if (dbUser.deletedAt) return null;
-        return dbUser;
+      if (!dbUser) return null;
+
+      // 탈퇴한 사용자 차단
+      if (dbUser.deletedAt) return null;
+
+      // authId 동기화 필요 시 (email로 매칭된 경우) 비차단 업데이트
+      if (dbUser.authId !== user.id) {
+        db.update(users)
+          .set({ authId: user.id, updatedAt: new Date() })
+          .where(eq(users.id, dbUser.id))
+          .then(() => {})
+          .catch(() => {});
+        return { ...dbUser, authId: user.id };
       }
 
-      // authId로 못 찾으면, 이메일로 찾아서 authId 자동 동기화
-      if (user.email) {
-        const [emailUser] = await db
-          .select()
-          .from(users)
-          .where(eq(users.email, user.email))
-          .limit(1);
-
-        if (emailUser) {
-          // 탈퇴한 사용자 차단
-          if (emailUser.deletedAt) return null;
-          await db
-            .update(users)
-            .set({ authId: user.id, updatedAt: new Date() })
-            .where(eq(users.id, emailUser.id));
-          return { ...emailUser, authId: user.id };
-        }
-      }
-
-      return null;
+      return dbUser;
     } catch (error) {
       console.error("getCurrentUser 오류:", error);
       return null;
