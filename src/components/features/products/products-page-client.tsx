@@ -3,15 +3,16 @@
 import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, Download, Upload, Loader2 } from "lucide-react";
+import { Plus, Search, Download, FileUp, Loader2 } from "lucide-react";
 import { ProductTable, type ProductWithStatus } from "@/components/features/products/product-table";
 import { ProductFilters } from "@/components/features/products/product-filters";
 import { ProductFormDialog } from "@/components/features/products/product-form-dialog";
 import { ProductDeleteDialog } from "@/components/features/products/product-delete-dialog";
 import { ProductDetailDialog } from "@/components/features/products/product-detail-dialog";
+import { ExcelImportDialog } from "@/components/features/excel/excel-import-dialog";
 import { type Product } from "@/server/db/schema";
-import { getExcelTemplateBase64 } from "@/server/actions/excel-import";
 import { exportProductsToExcel } from "@/server/actions/data-export";
+import { useRouter } from "next/navigation";
 
 interface ProductsPageClientProps {
   initialProducts: (Product & {
@@ -31,10 +32,12 @@ export function ProductsPageClient({
   initialProducts,
   categories,
 }: ProductsPageClientProps) {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [formDialogOpen, setFormDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [viewingProduct, setViewingProduct] = useState<ProductWithStatus | null>(null);
   const [deletingProductIds, setDeletingProductIds] = useState<string[]>([]);
@@ -89,15 +92,6 @@ export function ProductsPageClient({
     URL.revokeObjectURL(url);
   };
 
-  const handleTemplateDownload = async () => {
-    try {
-      const base64 = await getExcelTemplateBase64("products");
-      downloadBase64(base64, "제품_임포트_양식.xlsx");
-    } catch {
-      alert("양식 다운로드에 실패했습니다");
-    }
-  };
-
   const handleExportDownload = async () => {
     setDownloading(true);
     try {
@@ -138,9 +132,9 @@ export function ProductsPageClient({
           />
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleTemplateDownload}>
-            <Upload className="mr-2 h-4 w-4" />
-            양식 다운로드
+          <Button variant="outline" size="sm" onClick={() => setImportDialogOpen(true)}>
+            <FileUp className="mr-2 h-4 w-4" />
+            엑셀 업로드
           </Button>
           <Button variant="outline" size="sm" onClick={handleExportDownload} disabled={downloading}>
             {downloading ? (
@@ -190,6 +184,14 @@ export function ProductsPageClient({
         onOpenChange={setDeleteDialogOpen}
         productIds={deletingProductIds}
         productNames={deletingProductNames}
+      />
+
+      {/* 엑셀 임포트 다이얼로그 */}
+      <ExcelImportDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        importType="products"
+        onSuccess={() => router.refresh()}
       />
     </div>
   );
