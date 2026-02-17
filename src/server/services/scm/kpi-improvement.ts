@@ -36,15 +36,35 @@ export interface ImprovementProposal {
 }
 
 /**
+ * KPI 데이터가 실제로 존재하는지 확인
+ * metrics가 전부 0/기본값이면 데이터가 없는 것
+ */
+export function hasKPIData(metrics: KPIMetrics): boolean {
+  return (
+    metrics.inventoryTurnoverRate > 0 ||
+    metrics.stockoutRate > 0 ||
+    metrics.onTimeOrderRate > 0 ||
+    metrics.averageLeadTime > 0 ||
+    metrics.orderFulfillmentRate > 0 ||
+    metrics.averageInventoryDays < 999
+  );
+}
+
+/**
  * KPI 기반 개선 제안 생성
  * @param metrics 현재 KPI 지표
  * @param targets 목표 KPI 지표
- * @returns 개선 제안 목록
+ * @returns 개선 제안 목록 (데이터 없으면 빈 배열)
  */
 export function generateKPIImprovementProposals(
   metrics: KPIMetrics,
   targets: KPITarget
 ): ImprovementProposal[] {
+  // 데이터가 없으면 빈 배열 반환 — 컴포넌트에서 "데이터 없음" 안내 표시
+  if (!hasKPIData(metrics)) {
+    return [];
+  }
+
   const proposals: ImprovementProposal[] = [];
 
   // 재고회전율 개선 제안

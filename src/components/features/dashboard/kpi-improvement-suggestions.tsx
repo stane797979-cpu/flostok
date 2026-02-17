@@ -15,11 +15,12 @@ import {
   generateKPIImprovementProposals,
   sortProposalsByPriority,
   filterProposalsByCategory,
+  hasKPIData,
   type KPIMetrics,
   type KPITarget,
 } from '@/server/services/scm/kpi-improvement';
 import { KPIImprovementCard } from './kpi-improvement-card';
-import { AlertCircle, Lightbulb, BarChart3, ClipboardList, TrendingUp, Clock, CheckCircle2, CircleDot } from 'lucide-react';
+import { AlertCircle, Lightbulb, BarChart3, ClipboardList, TrendingUp, Clock, CheckCircle2, CircleDot, Database } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -62,6 +63,33 @@ export function KPIImprovementSuggestions({
   const highPriorityCount = proposals.filter((p) => p.priority === 'high').length;
   const mediumPriorityCount = proposals.filter((p) => p.priority === 'medium').length;
   const lowPriorityCount = proposals.filter((p) => p.priority === 'low').length;
+
+  const noData = !hasKPIData(metrics);
+
+  if (noData) {
+    return (
+      <Card className={className}>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Lightbulb className="h-5 w-5 text-yellow-500" />
+            KPI 개선 제안
+          </CardTitle>
+          <CardDescription>현재 KPI 현황에 기반한 맞춤형 개선 제안</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 py-12 dark:border-slate-700">
+            <Database className="h-8 w-8 text-slate-400" />
+            <p className="mt-2 text-center text-sm text-slate-500">
+              분석할 데이터가 없습니다
+            </p>
+            <p className="mt-1 text-center text-xs text-slate-400">
+              제품, 재고, 판매, 발주 데이터를 등록하면 KPI 기반 개선 제안이 생성됩니다.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (proposals.length === 0) {
     return (
