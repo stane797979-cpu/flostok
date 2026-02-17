@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
+// Checkbox 미사용 — 텍스트 확인만으로 충분
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { FileSpreadsheet, Upload, Download, Package, ShoppingCart, Loader2, RotateCcw, AlertTriangle, CheckCircle } from "lucide-react";
 import { ExcelImportDialog } from "@/components/features/excel";
@@ -72,12 +72,11 @@ export function DataManagement({ isAdmin }: DataManagementProps) {
 
   // 리셋 관련 상태
   const [resetConfirmText, setResetConfirmText] = useState("");
-  const [resetAgreed, setResetAgreed] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [resetResult, setResetResult] = useState<Record<string, number> | null>(null);
 
   const handleReset = async () => {
-    if (resetConfirmText !== "리셋합니다" || !resetAgreed) return;
+    if (resetConfirmText !== "리셋합니다") return;
     setIsResetting(true);
     setResetResult(null);
     try {
@@ -85,7 +84,6 @@ export function DataManagement({ isAdmin }: DataManagementProps) {
       if (result.success) {
         setResetResult(result.deletedCounts ?? {});
         setResetConfirmText("");
-        setResetAgreed(false);
         toast({
           title: "리셋 완료",
           description: "모든 조직 데이터가 삭제되었습니다.",
@@ -334,23 +332,10 @@ export function DataManagement({ isAdmin }: DataManagementProps) {
               />
             </div>
 
-            {/* 동의 체크박스 */}
-            <div className="flex items-start gap-2">
-              <Checkbox
-                id="resetAgreed"
-                checked={resetAgreed}
-                onCheckedChange={(c) => setResetAgreed(!!c)}
-                disabled={isResetting}
-              />
-              <label htmlFor="resetAgreed" className="text-sm leading-5 cursor-pointer">
-                이 작업은 되돌릴 수 없으며, 조직의 모든 비즈니스 데이터가 영구 삭제됨을 확인합니다.
-              </label>
-            </div>
-
             {/* 리셋 버튼 */}
             <Button
               variant="destructive"
-              disabled={resetConfirmText !== "리셋합니다" || !resetAgreed || isResetting}
+              disabled={resetConfirmText !== "리셋합니다" || isResetting}
               onClick={handleReset}
             >
               {isResetting ? (
