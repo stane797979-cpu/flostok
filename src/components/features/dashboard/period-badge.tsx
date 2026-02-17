@@ -25,7 +25,7 @@ export function PeriodBadge({ period, description, formula }: PeriodBadgeProps) 
         <TooltipTrigger asChild>
           <Badge
             variant="secondary"
-            className="cursor-help gap-1 text-xs font-normal text-slate-500"
+            className="cursor-help gap-1 text-xs font-normal bg-slate-700 text-white hover:bg-slate-600"
           >
             {period}
             <Info className="h-3 w-3" />

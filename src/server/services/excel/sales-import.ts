@@ -13,7 +13,7 @@ import {
   parseNumber,
 } from "./parser";
 import type { ExcelImportResult, ExcelImportError, SalesRecordExcelRow } from "./types";
-import { processInventoryTransaction } from "@/server/actions/inventory";
+import { processBatchInventoryTransactions, type BatchInventoryItem } from "@/server/actions/inventory";
 import type { InventoryChangeTypeKey } from "@/server/services/inventory/types";
 
 let _xlsx: typeof import("xlsx") | null = null;
@@ -332,23 +332,20 @@ export async function importSalesData(
       await db.insert(salesRecords).values(batch);
     }
 
-    // 7. 재고 차감 처리 (순차 — 재고 무결성)
-    for (const { productId, data } of inventoryOps) {
-      const changeType = (data.outboundType
-        ? OUTBOUND_TYPE_MAP[data.outboundType] || "OUTBOUND_SALE"
-        : "OUTBOUND_SALE") as InventoryChangeTypeKey;
+    // 7. 재고 차감 배치 처리 (순차 → 배치로 변경하여 타임아웃 방지)
+    if (inventoryOps.length > 0) {
+      const batchItems: BatchInventoryItem[] = inventoryOps.map(({ productId, data }) => ({
+        productId,
+        changeType: (data.outboundType
+          ? OUTBOUND_TYPE_MAP[data.outboundType] || "OUTBOUND_SALE"
+          : "OUTBOUND_SALE") as InventoryChangeTypeKey,
+        quantity: data.quantity,
+        notes: `출고 임포트: ${data.sku} / ${data.date} [${data.outboundType || "판매"}]`,
+      }));
       try {
-        await processInventoryTransaction({
-          productId,
-          changeType,
-          quantity: data.quantity,
-          notes: `출고 임포트: ${data.sku} / ${data.date} [${data.outboundType || "판매"}]`,
-        });
+        await processBatchInventoryTransactions(batchItems, { skipRevalidate: true, skipActivityLog: true });
       } catch (error) {
-        console.warn(
-          `재고 차감 실패 (${data.sku}):`,
-          error instanceof Error ? error.message : error
-        );
+        console.warn("재고 차감 배치 처리 실패:", error instanceof Error ? error.message : error);
       }
     }
 
