@@ -48,7 +48,7 @@ export interface InventoryItem {
 
 interface InventoryTableProps {
   items: InventoryItem[];
-  onAdjust: (item: InventoryItem) => void;
+  onAdjust?: (item: InventoryItem) => void;
   onDelete?: (item: InventoryItem) => void;
   onBulkDelete?: (ids: string[]) => void;
   selectedIds?: string[];
@@ -220,10 +220,12 @@ export const InventoryTable = memo(function InventoryTable({ items, onAdjust, on
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      {onAdjust && (
                       <DropdownMenuItem onClick={() => onAdjust(item)}>
                         <Settings2 className="mr-2 h-4 w-4" />
                         재고 조정
                       </DropdownMenuItem>
+                      )}
                       {onDelete && (
                         <DropdownMenuItem
                           onClick={() => onDelete(item)}

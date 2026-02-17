@@ -201,6 +201,107 @@ export async function getInventoryList(options?: {
 }
 
 /**
+ * 특정 기준일 시점의 재고 현황 조회
+ * inventory_history에서 해당 날짜 이전 마지막 stockAfter를 조회하여 복원
+ */
+export async function getInventoryAsOfDate(asOfDate: string, options?: {
+  warehouseId?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<{
+  items: InventoryListItem[];
+  total: number;
+  stats: { totalProducts: number; totalStock: number };
+}> {
+  const user = await requireAuth();
+  const orgId = user.organizationId;
+  const { warehouseId, limit: lim = 50, offset: off = 0 } = options || {};
+
+  // 기준일까지의 제품별 마지막 재고를 서브쿼리로 조회
+  const warehouseCondition = warehouseId
+    ? sql`AND ih.warehouse_id = ${warehouseId}`
+    : sql``;
+
+  const historicalData = await db.execute(sql`
+    WITH latest_history AS (
+      SELECT DISTINCT ON (ih.product_id)
+        ih.product_id,
+        ih.warehouse_id,
+        ih.stock_after,
+        ih.date
+      FROM inventory_history ih
+      WHERE ih.organization_id = ${orgId}
+        AND ih.date <= ${asOfDate}
+        ${warehouseCondition}
+      ORDER BY ih.product_id, ih.date DESC, ih.created_at DESC
+    )
+    SELECT
+      lh.product_id,
+      lh.warehouse_id,
+      lh.stock_after as current_stock,
+      lh.date as last_date,
+      p.sku,
+      p.name as product_name,
+      p.safety_stock,
+      p.reorder_point,
+      p.abc_grade,
+      p.xyz_grade
+    FROM latest_history lh
+    INNER JOIN products p ON p.id = lh.product_id
+    ORDER BY p.sku ASC
+  `);
+
+  const allRows = historicalData as Array<{
+    product_id: string;
+    warehouse_id: string;
+    current_stock: number;
+    last_date: string;
+    sku: string;
+    product_name: string;
+    safety_stock: number | null;
+    reorder_point: number | null;
+    abc_grade: string | null;
+    xyz_grade: string | null;
+  }>;
+
+  const total = allRows.length;
+  const paginatedRows = allRows.slice(off, off + lim);
+  const totalStock = allRows.reduce((sum, r) => sum + Number(r.current_stock), 0);
+
+  const items: InventoryListItem[] = paginatedRows.map((row) => ({
+    id: `hist-${row.product_id}`,
+    organizationId: orgId,
+    warehouseId: row.warehouse_id,
+    productId: row.product_id,
+    currentStock: Number(row.current_stock),
+    availableStock: Number(row.current_stock),
+    reservedStock: 0,
+    incomingStock: 0,
+    status: null,
+    location: null,
+    inventoryValue: 0,
+    daysOfInventory: null,
+    lastUpdatedAt: null,
+    updatedAt: null,
+    createdAt: null,
+    product: {
+      sku: row.sku,
+      name: row.product_name,
+      safetyStock: Number(row.safety_stock) || 0,
+      reorderPoint: Number(row.reorder_point) || 0,
+      abcGrade: row.abc_grade,
+      xyzGrade: row.xyz_grade,
+    },
+  }));
+
+  return {
+    items,
+    total,
+    stats: { totalProducts: total, totalStock },
+  };
+}
+
+/**
  * 제품별 재고 조회 (다중 창고 대응)
  */
 export async function getInventoryByProductId(

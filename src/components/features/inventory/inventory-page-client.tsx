@@ -32,9 +32,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Search, RefreshCw, Download, Loader2, Trash2, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, RefreshCw, Download, Loader2, Trash2, AlertTriangle, ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { exportInventoryToExcel } from "@/server/actions/excel-export";
-import { deleteInventoryItem, deleteInventoryItems, deleteAllInventory } from "@/server/actions/inventory";
+import { deleteInventoryItem, deleteInventoryItems, deleteAllInventory, getInventoryAsOfDate } from "@/server/actions/inventory";
 import { useToast } from "@/hooks/use-toast";
 import {
   InventoryTable,
@@ -84,6 +85,12 @@ export function InventoryPageClient({
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  // 기준일 선택 (과거 재고 조회)
+  const [asOfDate, setAsOfDate] = useState("");
+  const [historicalItems, setHistoricalItems] = useState<InventoryItem[] | null>(null);
+  const [historicalStats, setHistoricalStats] = useState<{ totalProducts: number; totalStock: number } | null>(null);
+  const [isLoadingHistorical, setIsLoadingHistorical] = useState(false);
 
   // 삭제 관련 상태
   const [deleteTarget, setDeleteTarget] = useState<InventoryItem | null>(null);
@@ -145,8 +152,60 @@ export function InventoryPageClient({
 
   const handleRefresh = () => {
     setSelectedIds([]);
+    setAsOfDate("");
+    setHistoricalItems(null);
+    setHistoricalStats(null);
     router.refresh();
   };
+
+  // 기준일 변경 시 과거 재고 조회
+  const handleAsOfDateChange = useCallback(async (dateStr: string) => {
+    setAsOfDate(dateStr);
+
+    if (!dateStr) {
+      setHistoricalItems(null);
+      setHistoricalStats(null);
+      return;
+    }
+
+    // 오늘 날짜면 현재 재고 표시
+    const today = new Date().toISOString().split("T")[0];
+    if (dateStr >= today) {
+      setHistoricalItems(null);
+      setHistoricalStats(null);
+      return;
+    }
+
+    setIsLoadingHistorical(true);
+    try {
+      const result = await getInventoryAsOfDate(dateStr, { limit: 500 });
+      const mapped: InventoryItem[] = result.items.map((item) => ({
+        id: item.id,
+        productId: item.productId,
+        warehouseId: item.warehouseId,
+        currentStock: item.currentStock,
+        availableStock: item.availableStock,
+        daysOfInventory: null,
+        location: null,
+        product: {
+          sku: item.product.sku,
+          name: item.product.name,
+          safetyStock: item.product.safetyStock,
+          reorderPoint: item.product.reorderPoint,
+          abcGrade: (item.product.abcGrade as "A" | "B" | "C" | null),
+          xyzGrade: (item.product.xyzGrade as "X" | "Y" | "Z" | null),
+        },
+        warehouse: null,
+      }));
+      setHistoricalItems(mapped);
+      setHistoricalStats(result.stats);
+    } catch (error) {
+      console.error("기준일 재고 조회 오류:", error);
+      toast({ title: "오류", description: "기준일 재고를 조회하지 못했습니다", variant: "destructive" });
+    } finally {
+      setIsLoadingHistorical(false);
+    }
+  }, [toast]);
 
   // 개별 삭제
   const handleDeleteClick = (item: InventoryItem) => {
@@ -277,6 +336,19 @@ export function InventoryPageClient({
 
   return (
     <div className="space-y-6">
+      {/* 기준일 표시 */}
+      {historicalItems && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2">
+          <CalendarDays className="h-4 w-4 text-amber-600" />
+          <span className="text-sm font-medium text-amber-800">
+            {asOfDate} 기준 과거 재고를 조회하고 있습니다
+          </span>
+          <Badge variant="outline" className="border-amber-300 text-amber-700">
+            {historicalStats?.totalProducts || 0}개 제품 · 총 {(historicalStats?.totalStock || 0).toLocaleString()}개
+          </Badge>
+        </div>
+      )}
+
       {/* 요약 카드 */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -284,7 +356,7 @@ export function InventoryPageClient({
             <CardTitle className="text-sm font-medium text-slate-500">총 SKU</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalProducts}</div>
+            <div className="text-2xl font-bold">{historicalStats ? historicalStats.totalProducts : stats.totalProducts}</div>
           </CardContent>
         </Card>
         <Card className="border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950">
@@ -345,6 +417,22 @@ export function InventoryPageClient({
               ))}
             </SelectContent>
           </Select>
+          <div className="flex items-center gap-2">
+            <CalendarDays className="h-4 w-4 text-slate-400 shrink-0" />
+            <Input
+              type="date"
+              className="w-[160px]"
+              value={asOfDate}
+              max={new Date().toISOString().split("T")[0]}
+              onChange={(e) => handleAsOfDateChange(e.target.value)}
+              title="기준일 선택 (과거 재고 조회)"
+            />
+            {asOfDate && (
+              <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={handleRefresh}>
+                현재로
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* 액션 버튼 */}
@@ -384,14 +472,21 @@ export function InventoryPageClient({
       </div>
 
       {/* 재고 테이블 */}
-      <InventoryTable
-        items={filtered}
-        onAdjust={handleAdjust}
-        onDelete={handleDeleteClick}
-        onBulkDelete={handleBulkDeleteClick}
-        selectedIds={selectedIds}
-        onSelectionChange={setSelectedIds}
-      />
+      {isLoadingHistorical ? (
+        <div className="flex h-48 items-center justify-center text-slate-400">
+          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+          {asOfDate} 기준 재고를 조회하는 중...
+        </div>
+      ) : (
+        <InventoryTable
+          items={historicalItems ?? filtered}
+          onAdjust={historicalItems ? undefined : handleAdjust}
+          onDelete={historicalItems ? undefined : handleDeleteClick}
+          onBulkDelete={historicalItems ? undefined : handleBulkDeleteClick}
+          selectedIds={historicalItems ? [] : selectedIds}
+          onSelectionChange={historicalItems ? undefined : setSelectedIds}
+        />
+      )}
 
       {/* 페이지네이션 */}
       {totalItems > 0 && (
