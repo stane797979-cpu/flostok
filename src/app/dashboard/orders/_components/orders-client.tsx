@@ -162,6 +162,7 @@ interface WarehouseOption {
 interface OrdersClientProps {
   initialTab?: "reorder" | "auto-reorder" | "orders" | "inbound" | "delivery" | "import-shipment";
   serverReorderItems?: ServerReorderItem[];
+  serverReorderTotal?: number;
   preselectedProductIds?: string[];
   deliveryComplianceData?: DeliveryComplianceResult | null;
   warehouses?: WarehouseOption[];
@@ -197,7 +198,7 @@ interface OrdersClientProps {
   }>;
 }
 
-export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], deliveryComplianceData = null, serverPurchaseOrders, serverPurchaseOrdersTotal = 0, serverInboundRecords, serverInboundTotal = 0, warehouses = [], preselectedProductIds }: OrdersClientProps) {
+export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], serverReorderTotal = 0, deliveryComplianceData = null, serverPurchaseOrders, serverPurchaseOrdersTotal = 0, serverInboundRecords, serverInboundTotal = 0, warehouses = [], preselectedProductIds }: OrdersClientProps) {
   // 발주 필요 품목 (발주 후 재조회 가능하도록 state로 관리)
   const [reorderItems, setReorderItems] = useState<ReorderItem[]>(
     () => serverReorderItems.map(mapServerToClientReorderItem)
@@ -880,7 +881,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
               {reorderTotalItems > 0 && (
                 <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-2 text-sm text-slate-500">
-                    <span>전체 {reorderTotalItems.toLocaleString()}건</span>
+                    <span>전체 {serverReorderTotal > reorderTotalItems ? `${serverReorderTotal.toLocaleString()}건 중 상위 ${reorderTotalItems.toLocaleString()}` : reorderTotalItems.toLocaleString()}건</span>
                     <span>·</span>
                     <div className="flex items-center gap-1">
                       <span>표시</span>

@@ -23,7 +23,7 @@ export default async function OrdersPage({
   // reorder/auto-reorder 탭: 발주 필요 품목 (productIds가 있으면 reorder 탭도 로드)
   if (resolvedTab === "reorder" || resolvedTab === "auto-reorder" || preselectedProductIds) {
     keys.push("reorder");
-    promises.push(getReorderItems().catch(() => ({ items: [] })));
+    promises.push(getReorderItems().catch(() => ({ items: [], total: 0 })));
   }
 
   // delivery 탭: 납기 분석
@@ -57,6 +57,8 @@ export default async function OrdersPage({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const serverReorderItems = (dataMap.reorder as any)?.items ?? [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const serverReorderTotal = (dataMap.reorder as any)?.total ?? 0;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const deliveryComplianceData = (dataMap.compliance as any) ?? null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const serverPurchaseOrders = (dataMap.orders as any)?.orders ?? undefined;
@@ -74,6 +76,7 @@ export default async function OrdersPage({
       key={resolvedTab}
       initialTab={preselectedProductIds ? "reorder" : resolvedTab}
       serverReorderItems={serverReorderItems}
+      serverReorderTotal={serverReorderTotal}
       deliveryComplianceData={deliveryComplianceData}
       serverPurchaseOrders={serverPurchaseOrders}
       serverPurchaseOrdersTotal={serverPurchaseOrdersTotal}
