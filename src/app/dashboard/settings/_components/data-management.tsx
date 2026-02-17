@@ -4,10 +4,16 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FileSpreadsheet, Upload, Download, Package, ShoppingCart, Loader2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FileSpreadsheet, Upload, Download, Package, ShoppingCart, Loader2, RotateCcw, AlertTriangle, CheckCircle } from "lucide-react";
 import { ExcelImportDialog } from "@/components/features/excel";
 import type { ImportType } from "@/server/actions/excel-import";
 import { exportProductsToExcel, exportSalesToExcel } from "@/server/actions/data-export";
+import { resetOrganizationData } from "@/server/actions/data-reset";
+import { useToast } from "@/hooks/use-toast";
 
 interface ImportOption {
   type: ImportType;
@@ -53,11 +59,54 @@ function downloadBase64File(base64: string, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export function DataManagement() {
+interface DataManagementProps {
+  isAdmin?: boolean;
+}
+
+export function DataManagement({ isAdmin }: DataManagementProps) {
+  const { toast } = useToast();
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [selectedImportType, setSelectedImportType] = useState<ImportType>("sales");
   const [exportingProducts, setExportingProducts] = useState(false);
   const [exportingSales, setExportingSales] = useState(false);
+
+  // 리셋 관련 상태
+  const [resetConfirmText, setResetConfirmText] = useState("");
+  const [resetAgreed, setResetAgreed] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const [resetResult, setResetResult] = useState<Record<string, number> | null>(null);
+
+  const handleReset = async () => {
+    if (resetConfirmText !== "리셋합니다" || !resetAgreed) return;
+    setIsResetting(true);
+    setResetResult(null);
+    try {
+      const result = await resetOrganizationData();
+      if (result.success) {
+        setResetResult(result.deletedCounts ?? {});
+        setResetConfirmText("");
+        setResetAgreed(false);
+        toast({
+          title: "리셋 완료",
+          description: "모든 조직 데이터가 삭제되었습니다.",
+        });
+      } else {
+        toast({
+          title: "리셋 실패",
+          description: result.error || "데이터 리셋에 실패했습니다",
+          variant: "destructive",
+        });
+      }
+    } catch {
+      toast({
+        title: "오류",
+        description: "리셋 중 오류가 발생했습니다",
+        variant: "destructive",
+      });
+    } finally {
+      setIsResetting(false);
+    }
+  };
 
   const handleImportClick = (type: ImportType) => {
     setSelectedImportType(type);
@@ -214,6 +263,111 @@ export function DataManagement() {
           </div>
         </CardContent>
       </Card>
+
+      {/* 데이터 전체 리셋 */}
+      {isAdmin && (
+        <Card className="border-red-200">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-red-700">
+              <RotateCcw className="h-5 w-5" />
+              데이터 전체 리셋
+            </CardTitle>
+            <CardDescription>
+              조직의 모든 비즈니스 데이터를 삭제합니다. 이 작업은 되돌릴 수 없습니다.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* 삭제 대상 안내 */}
+            <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 space-y-2">
+              <div className="flex items-center gap-2 font-medium">
+                <AlertTriangle className="h-4 w-4" />
+                다음 데이터가 모두 삭제됩니다
+              </div>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>제품 마스터 및 공급업체 정보</li>
+                <li>현재 재고 및 재고 변동 이력</li>
+                <li>발주서 및 발주 항목</li>
+                <li>입고/출고 기록</li>
+                <li>판매 기록 및 수요 예측</li>
+                <li>알림, KPI 스냅샷, PSI 계획</li>
+                <li>창고 정보</li>
+              </ul>
+              <p className="mt-2 font-medium">
+                ※ 사용자 계정, 조직 정보, 결제 내역은 유지됩니다.
+              </p>
+            </div>
+
+            {/* 리셋 결과 표시 */}
+            {resetResult && (
+              <Alert className="border-green-200 bg-green-50">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <AlertDescription className="text-green-800">
+                  <p className="font-medium mb-2">리셋 완료</p>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                    {Object.entries(resetResult)
+                      .filter(([, count]) => count > 0)
+                      .map(([name, count]) => (
+                        <div key={name} className="flex justify-between">
+                          <span>{name}</span>
+                          <span className="font-mono">{count}건</span>
+                        </div>
+                      ))}
+                  </div>
+                  {Object.values(resetResult).every((c) => c === 0) && (
+                    <p className="text-xs">삭제할 데이터가 없었습니다.</p>
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* 확인 입력 */}
+            <div className="space-y-2">
+              <Label htmlFor="resetConfirm" className="text-sm font-medium">
+                확인: 아래에 &quot;리셋합니다&quot;를 정확히 입력하세요
+              </Label>
+              <Input
+                id="resetConfirm"
+                placeholder="리셋합니다"
+                value={resetConfirmText}
+                onChange={(e) => setResetConfirmText(e.target.value)}
+                disabled={isResetting}
+              />
+            </div>
+
+            {/* 동의 체크박스 */}
+            <div className="flex items-start gap-2">
+              <Checkbox
+                id="resetAgreed"
+                checked={resetAgreed}
+                onCheckedChange={(c) => setResetAgreed(!!c)}
+                disabled={isResetting}
+              />
+              <label htmlFor="resetAgreed" className="text-sm leading-5 cursor-pointer">
+                이 작업은 되돌릴 수 없으며, 조직의 모든 비즈니스 데이터가 영구 삭제됨을 확인합니다.
+              </label>
+            </div>
+
+            {/* 리셋 버튼 */}
+            <Button
+              variant="destructive"
+              disabled={resetConfirmText !== "리셋합니다" || !resetAgreed || isResetting}
+              onClick={handleReset}
+            >
+              {isResetting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  리셋 처리 중...
+                </>
+              ) : (
+                <>
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  전체 데이터 리셋
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* 임포트 다이얼로그 */}
       <ExcelImportDialog

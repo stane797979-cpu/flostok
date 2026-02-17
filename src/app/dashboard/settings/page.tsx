@@ -72,7 +72,7 @@ export default async function SettingsPage({
         </TabsContent>
 
         <TabsContent value="data" className="space-y-4">
-          <DataManagement />
+          <DataManagement isAdmin={user?.role === "admin"} />
         </TabsContent>
 
         <TabsContent value="organization" className="space-y-4">
