@@ -3,7 +3,14 @@
 import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, Download, FileUp, Loader2 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Plus, Search, Download, FileUp, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { ProductTable, type ProductWithStatus } from "@/components/features/products/product-table";
 import { ProductFilters } from "@/components/features/products/product-filters";
 import { ProductFormDialog } from "@/components/features/products/product-form-dialog";
@@ -26,11 +33,19 @@ interface ProductsPageClientProps {
     };
   })[];
   categories: string[];
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  pageSize: number;
 }
 
 export function ProductsPageClient({
   initialProducts,
   categories,
+  currentPage,
+  totalPages,
+  totalItems,
+  pageSize,
 }: ProductsPageClientProps) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
@@ -42,6 +57,24 @@ export function ProductsPageClient({
   const [viewingProduct, setViewingProduct] = useState<ProductWithStatus | null>(null);
   const [deletingProductIds, setDeletingProductIds] = useState<string[]>([]);
   const [deletingProductNames, setDeletingProductNames] = useState<string[]>([]);
+
+  // URL 쿼리 빌더
+  const buildUrl = (overrides: { page?: number; size?: number }) => {
+    const url = new URLSearchParams();
+    const pg = overrides.page ?? currentPage;
+    const sz = overrides.size ?? pageSize;
+    if (pg > 1) url.set("page", String(pg));
+    if (sz !== 50) url.set("size", String(sz));
+    return `/dashboard/products?${url.toString()}`;
+  };
+
+  const handlePageChange = (page: number) => {
+    router.push(buildUrl({ page }));
+  };
+
+  const handlePageSizeChange = (size: string) => {
+    router.push(buildUrl({ size: Number(size), page: 1 }));
+  };
 
   const handleAddProduct = useCallback(() => {
     setEditingProduct(null);
@@ -162,6 +195,50 @@ export function ProductsPageClient({
         onDelete={handleDeleteProduct}
         onBulkDelete={handleBulkDelete}
       />
+
+      {/* 페이지네이션 */}
+      {totalItems > 0 && (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2 text-sm text-slate-500">
+            <span>전체 {totalItems.toLocaleString()}건</span>
+            <span>·</span>
+            <div className="flex items-center gap-1">
+              <span>표시</span>
+              <Select value={String(pageSize)} onValueChange={handlePageSizeChange}>
+                <SelectTrigger className="h-8 w-[80px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="50">50개</SelectItem>
+                  <SelectItem value="100">100개</SelectItem>
+                  <SelectItem value="200">200개</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={currentPage <= 1}
+              onClick={() => handlePageChange(currentPage - 1)}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm font-medium">
+              {currentPage} / {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={currentPage >= totalPages}
+              onClick={() => handlePageChange(currentPage + 1)}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* 제품 상세보기 다이얼로그 */}
       <ProductDetailDialog

@@ -13,6 +13,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ChevronLeft, ChevronRight, Download, Loader2, PackageMinus, Upload } from "lucide-react";
 import { OutboundRecordsTable } from "./outbound-records-table";
 import { OutboundEditDialog } from "./outbound-edit-dialog";
@@ -21,6 +28,9 @@ import { ExcelImportDialog } from "@/components/features/excel/excel-import-dial
 import { useToast } from "@/hooks/use-toast";
 import { getOutboundRecords, deleteOutboundRecord, type OutboundRecord } from "@/server/actions/outbound";
 import { exportInventoryMovementToExcel } from "@/server/actions/excel-export";
+
+const VALID_PAGE_SIZES = [50, 100, 200];
+const DEFAULT_PAGE_SIZE = 50;
 
 /**
  * 월의 시작일/종료일 계산
@@ -50,6 +60,12 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
   const [isLoadingRecords, setIsLoadingRecords] = useState(false);
   const [isDownloadingMovement, setIsDownloadingMovement] = useState(false);
 
+  // 페이지네이션 상태
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [totalItems, setTotalItems] = useState(0);
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+
   // 출고 업로드/요청 상태
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
@@ -64,29 +80,32 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
   const { toast } = useToast();
 
   // 출고 기록 조회
-  const loadOutboundRecords = useCallback(async (month: Date) => {
+  const loadOutboundRecords = useCallback(async (month: Date, page = 1, size = pageSize) => {
     setIsLoadingRecords(true);
     try {
       const { startDate, endDate } = getMonthRange(month);
-      const result = await getOutboundRecords({ startDate, endDate, limit: 500 });
+      const offset = (page - 1) * size;
+      const result = await getOutboundRecords({ startDate, endDate, limit: size, offset });
       setOutboundRecords(
         result.records.map((r) => ({
           ...r,
           createdAt: new Date(r.createdAt),
         }))
       );
+      setTotalItems(result.total);
     } catch (error) {
       console.error("출고 기록 조회 오류:", error);
     } finally {
       setIsLoadingRecords(false);
     }
-  }, []);
+  }, [pageSize]);
 
   // 월 이동
   const handlePrevMonth = useCallback(() => {
     setOutboundMonth((prev) => {
       const next = new Date(prev.getFullYear(), prev.getMonth() - 1, 1);
-      loadOutboundRecords(next);
+      setCurrentPage(1);
+      loadOutboundRecords(next, 1);
       return next;
     });
   }, [loadOutboundRecords]);
@@ -94,10 +113,25 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
   const handleNextMonth = useCallback(() => {
     setOutboundMonth((prev) => {
       const next = new Date(prev.getFullYear(), prev.getMonth() + 1, 1);
-      loadOutboundRecords(next);
+      setCurrentPage(1);
+      loadOutboundRecords(next, 1);
       return next;
     });
   }, [loadOutboundRecords]);
+
+  // 페이지 이동
+  const handlePageChange = useCallback((page: number) => {
+    setCurrentPage(page);
+    loadOutboundRecords(outboundMonth, page);
+  }, [loadOutboundRecords, outboundMonth]);
+
+  // 페이지 사이즈 변경
+  const handlePageSizeChange = useCallback((size: string) => {
+    const newSize = Number(size);
+    setPageSize(newSize);
+    setCurrentPage(1);
+    loadOutboundRecords(outboundMonth, 1, newSize);
+  }, [loadOutboundRecords, outboundMonth]);
 
   // 재고 수불부 다운로드
   const handleDownloadMovement = useCallback(async () => {
@@ -170,7 +204,7 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
           title: "삭제 완료",
           description: `${deleteTarget.productSku} 출고 기록이 삭제되었습니다. 재고가 복원됩니다.`,
         });
-        loadOutboundRecords(outboundMonth);
+        loadOutboundRecords(outboundMonth, currentPage);
       } else {
         toast({
           title: "삭제 실패",
@@ -291,14 +325,53 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
                 </div>
               ) : (
                 <>
-                  <div className="mb-3 text-sm text-slate-500">
-                    총 {outboundRecords.length}건
-                  </div>
                   <OutboundRecordsTable
                     records={outboundRecords}
                     onEdit={handleEdit}
                     onDelete={handleDeleteRequest}
                   />
+                  {totalItems > 0 && (
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-center gap-2 text-sm text-slate-500">
+                        <span>전체 {totalItems.toLocaleString()}건</span>
+                        <span>·</span>
+                        <div className="flex items-center gap-1">
+                          <span>표시</span>
+                          <Select value={String(pageSize)} onValueChange={handlePageSizeChange}>
+                            <SelectTrigger className="h-8 w-[80px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="50">50개</SelectItem>
+                              <SelectItem value="100">100개</SelectItem>
+                              <SelectItem value="200">200개</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={currentPage <= 1}
+                          onClick={() => handlePageChange(currentPage - 1)}
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <span className="text-sm font-medium">
+                          {currentPage} / {totalPages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={currentPage >= totalPages}
+                          onClick={() => handlePageChange(currentPage + 1)}
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </CardContent>

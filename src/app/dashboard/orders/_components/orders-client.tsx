@@ -8,6 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ChevronLeft, ChevronRight, Download, Loader2, PackagePlus, XCircle, Upload, Zap, ClipboardEdit } from "lucide-react";
 import type { DeliveryComplianceResult } from "@/server/services/scm/delivery-compliance";
 import { ReorderSummary } from "./reorder-summary";
@@ -158,6 +165,8 @@ interface OrdersClientProps {
   preselectedProductIds?: string[];
   deliveryComplianceData?: DeliveryComplianceResult | null;
   warehouses?: WarehouseOption[];
+  serverPurchaseOrdersTotal?: number;
+  serverInboundTotal?: number;
   serverPurchaseOrders?: Array<{
     id: string;
     orderNumber: string;
@@ -188,7 +197,7 @@ interface OrdersClientProps {
   }>;
 }
 
-export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], deliveryComplianceData = null, serverPurchaseOrders, serverInboundRecords, warehouses = [], preselectedProductIds }: OrdersClientProps) {
+export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], deliveryComplianceData = null, serverPurchaseOrders, serverPurchaseOrdersTotal = 0, serverInboundRecords, serverInboundTotal = 0, warehouses = [], preselectedProductIds }: OrdersClientProps) {
   // 발주 필요 품목 (발주 후 재조회 가능하도록 state로 관리)
   const [reorderItems, setReorderItems] = useState<ReorderItem[]>(
     () => serverReorderItems.map(mapServerToClientReorderItem)
@@ -248,6 +257,12 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
   const [isCancellingOrders, setIsCancellingOrders] = useState(false);
   const [hideReceived, setHideReceived] = useState(false);
 
+  // 발주현황 페이지네이션
+  const [ordersPage, setOrdersPage] = useState(1);
+  const [ordersPageSize, setOrdersPageSize] = useState(50);
+  const [ordersTotalItems, setOrdersTotalItems] = useState(serverPurchaseOrdersTotal);
+  const ordersTotalPages = Math.max(1, Math.ceil(ordersTotalItems / ordersPageSize));
+
   // 입고 현황 상태
   const [inboundMonth, setInboundMonth] = useState<Date>(() => new Date());
   const [inboundRecords, setInboundRecords] = useState<InboundRecord[]>(() => {
@@ -258,6 +273,12 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
   const [isDownloadingInbound, setIsDownloadingInbound] = useState(false);
   const [otherInboundOpen, setOtherInboundOpen] = useState(false);
 
+  // 입고현황 페이지네이션
+  const [inboundPage, setInboundPage] = useState(1);
+  const [inboundPageSize, setInboundPageSize] = useState(50);
+  const [inboundTotalItems, setInboundTotalItems] = useState(serverInboundTotal);
+  const inboundTotalPages = Math.max(1, Math.ceil(inboundTotalItems / inboundPageSize));
+
   // 발주 엑셀 업로드
   const orderUploadRef = useRef<HTMLInputElement>(null);
   const [isUploadingOrders, startUploadTransition] = useTransition();
@@ -266,10 +287,11 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
   const { toast } = useToast();
 
   // DB에서 발주 목록 불러오기
-  const loadPurchaseOrders = useCallback(async () => {
+  const loadPurchaseOrders = useCallback(async (page = ordersPage, size = ordersPageSize) => {
     setIsLoadingOrders(true);
     try {
-      const result = await getPurchaseOrders({ limit: 100 });
+      const offset = (page - 1) * size;
+      const result = await getPurchaseOrders({ limit: size, offset });
       const mapped: PurchaseOrderListItem[] = result.orders.map((order) => ({
         id: order.id,
         orderNumber: order.orderNumber,
@@ -281,37 +303,41 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
         expectedDate: order.expectedDate || null,
       }));
       setPurchaseOrders(mapped);
+      setOrdersTotalItems(result.total);
     } catch (error) {
       console.error("발주 목록 조회 오류:", error);
     } finally {
       setIsLoadingOrders(false);
     }
-  }, []);
+  }, [ordersPage, ordersPageSize]);
 
   // 입고 기록 조회
-  const loadInboundRecords = useCallback(async (month: Date) => {
+  const loadInboundRecords = useCallback(async (month: Date, page = 1, size = inboundPageSize) => {
     setIsLoadingInbound(true);
     try {
       const { startDate, endDate } = getMonthRange(month);
-      const result = await getInboundRecords({ startDate, endDate, limit: 500 });
+      const offset = (page - 1) * size;
+      const result = await getInboundRecords({ startDate, endDate, limit: size, offset });
       setInboundRecords(
         result.records.map((r) => ({
           ...r,
           createdAt: new Date(r.createdAt),
         }))
       );
+      setInboundTotalItems(result.total);
     } catch (error) {
       console.error("입고 기록 조회 오류:", error);
     } finally {
       setIsLoadingInbound(false);
     }
-  }, []);
+  }, [inboundPageSize]);
 
   // 월 이동
   const handlePrevMonth = useCallback(() => {
     setInboundMonth((prev) => {
       const next = new Date(prev.getFullYear(), prev.getMonth() - 1, 1);
-      loadInboundRecords(next);
+      setInboundPage(1);
+      loadInboundRecords(next, 1);
       return next;
     });
   }, [loadInboundRecords]);
@@ -319,10 +345,37 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
   const handleNextMonth = useCallback(() => {
     setInboundMonth((prev) => {
       const next = new Date(prev.getFullYear(), prev.getMonth() + 1, 1);
-      loadInboundRecords(next);
+      setInboundPage(1);
+      loadInboundRecords(next, 1);
       return next;
     });
   }, [loadInboundRecords]);
+
+  // 발주현황 페이지 이동
+  const handleOrdersPageChange = useCallback((page: number) => {
+    setOrdersPage(page);
+    loadPurchaseOrders(page);
+  }, [loadPurchaseOrders]);
+
+  const handleOrdersPageSizeChange = useCallback((size: string) => {
+    const newSize = Number(size);
+    setOrdersPageSize(newSize);
+    setOrdersPage(1);
+    loadPurchaseOrders(1, newSize);
+  }, [loadPurchaseOrders]);
+
+  // 입고현황 페이지 이동
+  const handleInboundPageChange = useCallback((page: number) => {
+    setInboundPage(page);
+    loadInboundRecords(inboundMonth, page);
+  }, [loadInboundRecords, inboundMonth]);
+
+  const handleInboundPageSizeChange = useCallback((size: string) => {
+    const newSize = Number(size);
+    setInboundPageSize(newSize);
+    setInboundPage(1);
+    loadInboundRecords(inboundMonth, 1, newSize);
+  }, [loadInboundRecords, inboundMonth]);
 
   // 입고 엑셀 다운로드
   const handleDownloadInbound = useCallback(async () => {
@@ -883,13 +936,57 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                   발주 목록을 불러오는 중...
                 </div>
               ) : (
-                <PurchaseOrdersTable
-                  orders={hideReceived ? purchaseOrders.filter((o) => o.status !== "received") : purchaseOrders}
-                  onViewClick={handleViewOrder}
-                  onDownloadClick={handleDownloadOrder}
-                  selectedIds={selectedOrderIds}
-                  onSelectChange={setSelectedOrderIds}
-                />
+                <>
+                  <PurchaseOrdersTable
+                    orders={hideReceived ? purchaseOrders.filter((o) => o.status !== "received") : purchaseOrders}
+                    onViewClick={handleViewOrder}
+                    onDownloadClick={handleDownloadOrder}
+                    selectedIds={selectedOrderIds}
+                    onSelectChange={setSelectedOrderIds}
+                  />
+                  {ordersTotalItems > 0 && (
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-center gap-2 text-sm text-slate-500">
+                        <span>전체 {ordersTotalItems.toLocaleString()}건</span>
+                        <span>·</span>
+                        <div className="flex items-center gap-1">
+                          <span>표시</span>
+                          <Select value={String(ordersPageSize)} onValueChange={handleOrdersPageSizeChange}>
+                            <SelectTrigger className="h-8 w-[80px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="50">50개</SelectItem>
+                              <SelectItem value="100">100개</SelectItem>
+                              <SelectItem value="200">200개</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={ordersPage <= 1}
+                          onClick={() => handleOrdersPageChange(ordersPage - 1)}
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <span className="text-sm font-medium">
+                          {ordersPage} / {ordersTotalPages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={ordersPage >= ordersTotalPages}
+                          onClick={() => handleOrdersPageChange(ordersPage + 1)}
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>
@@ -946,10 +1043,49 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                 </div>
               ) : (
                 <>
-                  <div className="mb-3 text-sm text-slate-500">
-                    총 {inboundRecords.length}건
-                  </div>
                   <InboundRecordsTable records={inboundRecords} />
+                  {inboundTotalItems > 0 && (
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-center gap-2 text-sm text-slate-500">
+                        <span>전체 {inboundTotalItems.toLocaleString()}건</span>
+                        <span>·</span>
+                        <div className="flex items-center gap-1">
+                          <span>표시</span>
+                          <Select value={String(inboundPageSize)} onValueChange={handleInboundPageSizeChange}>
+                            <SelectTrigger className="h-8 w-[80px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="50">50개</SelectItem>
+                              <SelectItem value="100">100개</SelectItem>
+                              <SelectItem value="200">200개</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={inboundPage <= 1}
+                          onClick={() => handleInboundPageChange(inboundPage - 1)}
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <span className="text-sm font-medium">
+                          {inboundPage} / {inboundTotalPages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={inboundPage >= inboundTotalPages}
+                          onClick={() => handleInboundPageChange(inboundPage + 1)}
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </CardContent>

@@ -3,14 +3,23 @@
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Search, LayoutGrid, LayoutList, Loader2 } from "lucide-react";
+import { Plus, Search, LayoutGrid, LayoutList, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { SupplierTable } from "@/components/features/suppliers/supplier-table";
 import { SupplierCardView } from "@/components/features/suppliers/supplier-card-view";
 import { SupplierFormDialog } from "@/components/features/suppliers/supplier-form-dialog";
 import { getSuppliers, deleteSupplier } from "@/server/actions/suppliers";
 import { type Supplier } from "@/server/db/schema";
 import { useToast } from "@/hooks/use-toast";
+
+const DEFAULT_PAGE_SIZE = 50;
 
 export default function SuppliersPage() {
   const { toast } = useToast();
@@ -20,27 +29,48 @@ export default function SuppliersPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
 
-  const fetchSuppliers = useCallback(async () => {
+  // 페이지네이션 상태
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [totalItems, setTotalItems] = useState(0);
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+
+  const fetchSuppliers = useCallback(async (page = currentPage, size = pageSize) => {
     try {
       setIsLoading(true);
-      const result = await getSuppliers({ search: search || undefined });
+      const offset = (page - 1) * size;
+      const result = await getSuppliers({ search: search || undefined, limit: size, offset });
       setSuppliers(result.suppliers);
+      setTotalItems(result.total);
     } catch {
       toast({ title: "오류", description: "공급자 목록을 불러오는데 실패했습니다.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
-  }, [search, toast]);
+  }, [search, currentPage, pageSize, toast]);
 
   useEffect(() => {
     fetchSuppliers();
   }, [fetchSuppliers]);
 
+  // 검색 시 페이지 리셋
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search]);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handlePageSizeChange = (size: string) => {
+    setPageSize(Number(size));
+    setCurrentPage(1);
+  };
+
   const handleDialogClose = (open: boolean) => {
     setIsDialogOpen(open);
     if (!open) {
       setEditingSupplier(null);
-      // 다이얼로그 닫힐 때 목록 갱신
       fetchSuppliers();
     }
   };
@@ -123,6 +153,50 @@ export default function SuppliersPage() {
           </>
         )}
       </Tabs>
+
+      {/* 페이지네이션 */}
+      {totalItems > 0 && (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2 text-sm text-slate-500">
+            <span>전체 {totalItems.toLocaleString()}건</span>
+            <span>·</span>
+            <div className="flex items-center gap-1">
+              <span>표시</span>
+              <Select value={String(pageSize)} onValueChange={handlePageSizeChange}>
+                <SelectTrigger className="h-8 w-[80px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="50">50개</SelectItem>
+                  <SelectItem value="100">100개</SelectItem>
+                  <SelectItem value="200">200개</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={currentPage <= 1}
+              onClick={() => handlePageChange(currentPage - 1)}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm font-medium">
+              {currentPage} / {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={currentPage >= totalPages}
+              onClick={() => handlePageChange(currentPage + 1)}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* 공급자 추가/수정 다이얼로그 */}
       <SupplierFormDialog

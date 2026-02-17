@@ -3,23 +3,27 @@ import { getProducts, getCategories } from "@/server/actions/products";
 import { getInventoryList } from "@/server/actions/inventory";
 import { getInventoryStatus } from "@/lib/constants/inventory-status";
 
-/**
- * 제품 관리 페이지
- *
- * DB에서 제품 목록 + 재고 현황을 조회하여 표시
- */
-export default async function ProductsPage() {
-  let products: Parameters<typeof ProductsPageClient>[0]["initialProducts"] = [];
-  let categories: string[] = [];
+const VALID_PAGE_SIZES = [50, 100, 200];
+const DEFAULT_PAGE_SIZE = 50;
 
+interface ProductsPageProps {
+  searchParams: Promise<{ page?: string; size?: string }>;
+}
+
+export default async function ProductsPage({ searchParams }: ProductsPageProps) {
   try {
+    const params = await searchParams;
+    const pageSize = VALID_PAGE_SIZES.includes(Number(params.size)) ? Number(params.size) : DEFAULT_PAGE_SIZE;
+    const currentPage = Math.max(1, parseInt(params.page || "1", 10) || 1);
+    const offset = (currentPage - 1) * pageSize;
+
     const [productsResult, categoriesResult, inventoryResult] = await Promise.all([
-      getProducts({ limit: 500 }),
+      getProducts({ limit: pageSize, offset }),
       getCategories(),
       getInventoryList({ limit: 1000 }),
     ]);
 
-    categories = categoriesResult;
+    const totalPages = Math.max(1, Math.ceil(productsResult.total / pageSize));
 
     // 재고 데이터를 productId 기준으로 맵핑
     const inventoryMap = new Map(
@@ -27,7 +31,7 @@ export default async function ProductsPage() {
     );
 
     // 제품별 재고 상태 계산
-    products = productsResult.products.map((p) => {
+    const products = productsResult.products.map((p) => {
       const currentStock = inventoryMap.get(p.id) ?? 0;
       const safetyStock = p.safetyStock ?? 0;
       const reorderPoint = p.reorderPoint ?? 0;
@@ -45,9 +49,28 @@ export default async function ProductsPage() {
         },
       };
     });
+
+    return (
+      <ProductsPageClient
+        initialProducts={products}
+        categories={categoriesResult}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        totalItems={productsResult.total}
+        pageSize={pageSize}
+      />
+    );
   } catch (error) {
     console.error("제품 목록 조회 오류:", error);
+    return (
+      <ProductsPageClient
+        initialProducts={[]}
+        categories={[]}
+        currentPage={1}
+        totalPages={1}
+        totalItems={0}
+        pageSize={DEFAULT_PAGE_SIZE}
+      />
+    );
   }
-
-  return <ProductsPageClient initialProducts={products} categories={categories} />;
 }

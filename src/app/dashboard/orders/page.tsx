@@ -35,7 +35,7 @@ export default async function OrdersPage({
   // orders 탭: 발주 현황
   if (resolvedTab === "orders") {
     keys.push("orders");
-    promises.push(getPurchaseOrders({ limit: 100 }).catch(() => ({ orders: [] })));
+    promises.push(getPurchaseOrders({ limit: 50 }).catch(() => ({ orders: [], total: 0 })));
   }
 
   // inbound 탭: 입고 현황 (현재 월)
@@ -44,7 +44,7 @@ export default async function OrdersPage({
     const startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
     const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0];
     keys.push("inbound");
-    promises.push(getInboundRecords({ startDate, endDate, limit: 500 }).catch(() => ({ records: [] })));
+    promises.push(getInboundRecords({ startDate, endDate, limit: 50 }).catch(() => ({ records: [], total: 0 })));
   }
 
   // 창고 목록은 항상 로드 (발주 시 창고 선택 필요)
@@ -61,7 +61,11 @@ export default async function OrdersPage({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const serverPurchaseOrders = (dataMap.orders as any)?.orders ?? undefined;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const serverPurchaseOrdersTotal = (dataMap.orders as any)?.total ?? 0;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const serverInboundRecords = (dataMap.inbound as any)?.records ?? undefined;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const serverInboundTotal = (dataMap.inbound as any)?.total ?? 0;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const warehousesList = (dataMap.warehouses as any)?.warehouses ?? [];
 
@@ -72,7 +76,9 @@ export default async function OrdersPage({
       serverReorderItems={serverReorderItems}
       deliveryComplianceData={deliveryComplianceData}
       serverPurchaseOrders={serverPurchaseOrders}
+      serverPurchaseOrdersTotal={serverPurchaseOrdersTotal}
       serverInboundRecords={serverInboundRecords}
+      serverInboundTotal={serverInboundTotal}
       warehouses={warehousesList}
       preselectedProductIds={preselectedProductIds}
     />
