@@ -674,14 +674,30 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
     }
   };
 
+  const MAX_UPLOAD_ROWS = 500;
+
   const handleOrderExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const formData = new FormData();
-    formData.append("file", file);
-
     startUploadTransition(async () => {
+      // 행 수 체크 (500행 제한)
+      const buffer = await file.arrayBuffer();
+      const { read, utils } = await import("xlsx");
+      const workbook = read(buffer, { type: "array", sheetRows: MAX_UPLOAD_ROWS + 2 });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = utils.sheet_to_json(sheet);
+      if (rows.length > MAX_UPLOAD_ROWS) {
+        toast({
+          title: "업로드 제한",
+          description: `한 번에 최대 ${MAX_UPLOAD_ROWS}행까지 업로드 가능합니다. 파일을 나누어 업로드해 주세요.`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("file", file);
       const result = await uploadPurchaseOrderExcel(formData);
       if (result.success) {
         toast({ title: "업로드 완료", description: result.message });
@@ -881,7 +897,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
               {reorderTotalItems > 0 && (
                 <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-2 text-sm text-slate-500">
-                    <span>전체 {serverReorderTotal > reorderTotalItems ? `${serverReorderTotal.toLocaleString()}건 중 상위 ${reorderTotalItems.toLocaleString()}` : reorderTotalItems.toLocaleString()}건</span>
+                    <span>전체 {reorderTotalItems.toLocaleString()}건</span>
                     <span>·</span>
                     <div className="flex items-center gap-1">
                       <span>표시</span>

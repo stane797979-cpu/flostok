@@ -35,7 +35,7 @@ import type { OrganizationSettings } from "@/types/organization-settings";
 const reorderOptionsSchema = z.object({
   urgencyLevel: z.number().min(0).max(3).optional(),
   abcGrade: z.enum(["A", "B", "C"]).optional(),
-  limit: z.number().min(1).max(2000).optional(),
+  limit: z.number().min(1).max(500).optional(),
 });
 
 /**
@@ -61,7 +61,7 @@ export async function getReorderItems(options?: {
 
     // 옵션 유효성 검사
     const validatedOptions = reorderOptionsSchema.parse(options || {});
-    const { urgencyLevel, abcGrade, limit = 2000 } = validatedOptions;
+    const { urgencyLevel, abcGrade, limit = 500 } = validatedOptions;
 
     // 조직 설정에서 보정계수 로드
     const [orgData] = await db
@@ -72,70 +72,56 @@ export async function getReorderItems(options?: {
     const orgSettings = orgData?.settings as OrganizationSettings | null;
     const supplyCoefficients = orgSettings?.orderPolicy?.supplyCoefficients;
 
-    // 발주 필요 제품 조건 (재사용)
-    const reorderCondition = and(
-      eq(products.organizationId, orgId),
-      // 현재고 <= 발주점
-      or(
-        sql`${inventory.currentStock} IS NULL`,
-        sql`${inventory.currentStock} <= ${products.reorderPoint}`
-      ),
-      // 이미 활성 발주(진행 중)가 있는 제품은 제외 → 중복 발주 방지
-      sql`NOT EXISTS (
-        SELECT 1 FROM purchase_order_items poi
-        JOIN purchase_orders po ON po.id = poi.purchase_order_id
-        WHERE poi.product_id = ${products.id}
-          AND po.organization_id = ${orgId}
-          AND po.status NOT IN ('cancelled', 'received', 'completed')
-          AND po.deleted_at IS NULL
-      )`
-    );
-
-    // 전체 후보 수 + 상위 N건 후보를 병렬 조회 (대용량 데이터 대비)
-    const MAX_CANDIDATES = 2000; // IN 절 크기 제한
-    const [countResult, reorderCandidates] = await Promise.all([
-      db
-        .select({ count: sql<number>`count(*)` })
-        .from(products)
-        .leftJoin(inventory, eq(products.id, inventory.productId))
-        .where(reorderCondition),
-      db
-        .select({
-          product: {
-            id: products.id,
-            sku: products.sku,
-            name: products.name,
-            safetyStock: products.safetyStock,
-            reorderPoint: products.reorderPoint,
-            moq: products.moq,
-            leadTime: products.leadTime,
-            unitPrice: products.unitPrice,
-            costPrice: products.costPrice,
-            abcGrade: products.abcGrade,
-            xyzGrade: products.xyzGrade,
-            primarySupplierId: products.primarySupplierId,
-          },
-          inventory: {
-            currentStock: inventory.currentStock,
-          },
-          supplier: {
-            id: suppliers.id,
-            name: suppliers.name,
-            avgLeadTime: suppliers.avgLeadTime,
-          },
-        })
-        .from(products)
-        .leftJoin(inventory, eq(products.id, inventory.productId))
-        .leftJoin(suppliers, eq(products.primarySupplierId, suppliers.id))
-        .where(reorderCondition)
-        // 긴급도순 정렬: 재고비율(현재고/발주점) 낮을수록 우선, ABC등급 A→B→C
-        .orderBy(
-          asc(sql`COALESCE(${inventory.currentStock}, 0)::float / NULLIF(${products.reorderPoint}, 0)`),
-          asc(sql`CASE ${products.abcGrade} WHEN 'A' THEN 1 WHEN 'B' THEN 2 WHEN 'C' THEN 3 ELSE 4 END`)
+    // 발주 필요 제품 조회 (현재고 <= 발주점, 활성 PO가 없는 제품만, 최대 500건)
+    const MAX_CANDIDATES = 500;
+    const reorderCandidates = await db
+      .select({
+        product: {
+          id: products.id,
+          sku: products.sku,
+          name: products.name,
+          safetyStock: products.safetyStock,
+          reorderPoint: products.reorderPoint,
+          moq: products.moq,
+          leadTime: products.leadTime,
+          unitPrice: products.unitPrice,
+          costPrice: products.costPrice,
+          abcGrade: products.abcGrade,
+          xyzGrade: products.xyzGrade,
+          primarySupplierId: products.primarySupplierId,
+        },
+        inventory: {
+          currentStock: inventory.currentStock,
+        },
+        supplier: {
+          id: suppliers.id,
+          name: suppliers.name,
+          avgLeadTime: suppliers.avgLeadTime,
+        },
+      })
+      .from(products)
+      .leftJoin(inventory, eq(products.id, inventory.productId))
+      .leftJoin(suppliers, eq(products.primarySupplierId, suppliers.id))
+      .where(
+        and(
+          eq(products.organizationId, orgId),
+          // 현재고 <= 발주점
+          or(
+            sql`${inventory.currentStock} IS NULL`,
+            sql`${inventory.currentStock} <= ${products.reorderPoint}`
+          ),
+          // 이미 활성 발주(진행 중)가 있는 제품은 제외 → 중복 발주 방지
+          sql`NOT EXISTS (
+            SELECT 1 FROM purchase_order_items poi
+            JOIN purchase_orders po ON po.id = poi.purchase_order_id
+            WHERE poi.product_id = ${products.id}
+              AND po.organization_id = ${orgId}
+              AND po.status NOT IN ('cancelled', 'received', 'completed')
+              AND po.deleted_at IS NULL
+          )`
         )
-        .limit(MAX_CANDIDATES),
-    ]);
-    const totalCandidates = Number(countResult[0]?.count || 0);
+      )
+      .limit(MAX_CANDIDATES);
 
     // 일평균 판매량을 단일 그룹 쿼리로 일괄 조회 (N+1 쿼리 제거)
     const productIds = reorderCandidates.map((r) => r.product.id);
@@ -144,7 +130,7 @@ export async function getReorderItems(options?: {
     const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split("T")[0];
     const todayStr = new Date().toISOString().split("T")[0];
 
-    // 실적 기반 일평균 + 수요예측 기반 일평균을 배치 조회 (대용량 IN절 방지)
+    // 실적 기반 일평균 + 수요예측 기반 일평균을 병렬 조회
     const avgSalesMap = new Map<string, number>();
     const forecastMap = new Map<string, { dailySales: number; method: string }>();
 
@@ -157,68 +143,58 @@ export async function getReorderItems(options?: {
       const forecastStartStr = forecastStart.toISOString().split("T")[0];
       const forecastEndStr = forecastEnd.toISOString().split("T")[0];
 
-      // 500개씩 배치 처리 (IN 절 파라미터 수 제한)
-      const BATCH_SIZE = 500;
-      const batches: string[][] = [];
-      for (let i = 0; i < productIds.length; i += BATCH_SIZE) {
-        batches.push(productIds.slice(i, i + BATCH_SIZE));
+      const [salesData, forecastData] = await Promise.all([
+        // 실적 기반: 최근 30일 판매량
+        db
+          .select({
+            productId: salesRecords.productId,
+            totalQuantity: sql<number>`coalesce(sum(${salesRecords.quantity}), 0)`,
+          })
+          .from(salesRecords)
+          .where(
+            and(
+              eq(salesRecords.organizationId, orgId),
+              sql`${salesRecords.productId} IN ${productIds}`,
+              gte(salesRecords.date, thirtyDaysAgoStr),
+              lte(salesRecords.date, todayStr)
+            )
+          )
+          .groupBy(salesRecords.productId),
+
+        // 수요예측 기반: 향후 3개월 예측 월평균 → 일평균 환산
+        db
+          .select({
+            productId: demandForecasts.productId,
+            avgMonthlyForecast: sql<number>`coalesce(avg(${demandForecasts.forecastQuantity}), 0)`,
+            method: sql<string>`(array_agg(${demandForecasts.method} ORDER BY ${demandForecasts.updatedAt} DESC))[1]`,
+          })
+          .from(demandForecasts)
+          .where(
+            and(
+              eq(demandForecasts.organizationId, orgId),
+              sql`${demandForecasts.productId} IN ${productIds}`,
+              gte(demandForecasts.period, forecastStartStr),
+              lte(demandForecasts.period, forecastEndStr)
+            )
+          )
+          .groupBy(demandForecasts.productId),
+      ]);
+
+      for (const row of salesData) {
+        avgSalesMap.set(row.productId, Math.round((Number(row.totalQuantity) / 30) * 100) / 100);
       }
 
-      // 배치별로 순차 실행 (커넥션 풀 부하 방지)
-      for (const batch of batches) {
-        const [salesData, forecastData] = await Promise.all([
-          // 실적 기반: 최근 30일 판매량
-          db
-            .select({
-              productId: salesRecords.productId,
-              totalQuantity: sql<number>`coalesce(sum(${salesRecords.quantity}), 0)`,
-            })
-            .from(salesRecords)
-            .where(
-              and(
-                eq(salesRecords.organizationId, orgId),
-                sql`${salesRecords.productId} IN ${batch}`,
-                gte(salesRecords.date, thirtyDaysAgoStr),
-                lte(salesRecords.date, todayStr)
-              )
-            )
-            .groupBy(salesRecords.productId),
-
-          // 수요예측 기반: 향후 3개월 예측 월평균 → 일평균 환산
-          db
-            .select({
-              productId: demandForecasts.productId,
-              avgMonthlyForecast: sql<number>`coalesce(avg(${demandForecasts.forecastQuantity}), 0)`,
-              method: sql<string>`(array_agg(${demandForecasts.method} ORDER BY ${demandForecasts.updatedAt} DESC))[1]`,
-            })
-            .from(demandForecasts)
-            .where(
-              and(
-                eq(demandForecasts.organizationId, orgId),
-                sql`${demandForecasts.productId} IN ${batch}`,
-                gte(demandForecasts.period, forecastStartStr),
-                lte(demandForecasts.period, forecastEndStr)
-              )
-            )
-            .groupBy(demandForecasts.productId),
-        ]);
-
-        for (const row of salesData) {
-          avgSalesMap.set(row.productId, Math.round((Number(row.totalQuantity) / 30) * 100) / 100);
-        }
-
-        // 수요예측: 월 평균 예측량 → 일평균 (÷30)
-        const methodLabelMap: Record<string, string> = {
-          sma_3: "SMA", sma_6: "SMA", ses: "SES", holt: "Holt's", wma: "WMA", holt_winters: "Holt-Winters",
-        };
-        for (const row of forecastData) {
-          const monthlyAvg = Number(row.avgMonthlyForecast);
-          if (monthlyAvg > 0) {
-            forecastMap.set(row.productId, {
-              dailySales: Math.round((monthlyAvg / 30) * 100) / 100,
-              method: methodLabelMap[row.method] || row.method,
-            });
-          }
+      // 수요예측: 월 평균 예측량 → 일평균 (÷30)
+      const methodLabelMap: Record<string, string> = {
+        sma_3: "SMA", sma_6: "SMA", ses: "SES", holt: "Holt's", wma: "WMA", holt_winters: "Holt-Winters",
+      };
+      for (const row of forecastData) {
+        const monthlyAvg = Number(row.avgMonthlyForecast);
+        if (monthlyAvg > 0) {
+          forecastMap.set(row.productId, {
+            dailySales: Math.round((monthlyAvg / 30) * 100) / 100,
+            method: methodLabelMap[row.method] || row.method,
+          });
         }
       }
     }
@@ -280,7 +256,7 @@ export async function getReorderItems(options?: {
 
     return {
       items: limitedItems,
-      total: totalCandidates,
+      total: filteredItems.length,
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
