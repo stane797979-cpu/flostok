@@ -36,8 +36,8 @@ export function ABCXYZMiniMatrix({ matrixData }: ABCXYZMiniMatrixProps) {
           <CardTitle className="text-base">ABC-XYZ 분포</CardTitle>
           <PeriodBadge
             period="최근 6개월"
-            description="최근 6개월간 판매 데이터 기반 ABC-XYZ 등급 분류입니다."
-            formula="ABC: 매출액 상위 분류 | XYZ: 판매량 변동계수(CV) 기준"
+            description="판매 데이터 기반 ABC-XYZ 등급 분류"
+            formula="ABC: 매출액 순위 | XYZ: 변동계수(CV)"
           />
         </div>
         <Button variant="outline" size="sm" asChild>

@@ -114,8 +114,8 @@ export const InventoryStatusChart = memo<InventoryStatusChartProps>(function Inv
         <CardTitle>재고상태 분포</CardTitle>
         <PeriodBadge
           period="실시간"
-          description="현재 재고 수량 기준으로 상태를 분류합니다."
-          formula="7단계: 품절 → 위험 → 부족 → 주의 → 적정 → 과다 → 과잉"
+          description="현재 재고 수량 기준 7단계 분류"
+          formula="품절→위험→부족→주의→적정→과다→과잉"
         />
       </CardHeader>
       <CardContent>

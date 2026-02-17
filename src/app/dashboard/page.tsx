@@ -146,8 +146,8 @@ export default async function DashboardPage() {
         <h2 className="text-lg font-semibold text-slate-700">재고 현황 요약</h2>
         <PeriodBadge
           period="실시간"
-          description="현재 시점의 재고 상태를 기준으로 집계합니다."
-          formula="품절·위험·부족·과재고는 현재고와 안전재고 비교 기준"
+          description="현재 재고 상태 기준 집계"
+          formula="현재고 vs 안전재고 비교"
         />
       </div>
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
@@ -208,8 +208,8 @@ export default async function DashboardPage() {
             <h2 className="text-xl font-semibold">주요 성과 지표</h2>
             <PeriodBadge
               period="최근 12개월"
-              description="최근 12개월간의 판매·재고·발주 데이터를 기반으로 산출합니다."
-              formula="재고회전율 = 연간COGS ÷ 평균재고금액 | 적시발주율 = 정시입고 ÷ 총입고"
+              description="판매·재고·발주 데이터 기반 산출"
+              formula="회전율=COGS÷평균재고 | 적시발주율=정시입고÷총입고"
             />
           </div>
           <Button variant="outline" size="sm" asChild>
@@ -256,8 +256,8 @@ export default async function DashboardPage() {
               <CardTitle>발주 필요 품목</CardTitle>
               <PeriodBadge
                 period="실시간"
-                description="현재 재고가 안전재고 이하인 품목 TOP10입니다."
-                formula="품절(0) + 위험(안전재고×0.5 미만) + 부족(안전재고 미만)"
+                description="안전재고 이하 품목 TOP10"
+                formula="품절(0) + 위험(<50%) + 부족(<100%)"
               />
             </div>
             <Button variant="outline" size="sm" asChild>
@@ -314,8 +314,8 @@ export default async function DashboardPage() {
           <h2 className="text-xl font-semibold">재고 회전율 TOP5</h2>
           <PeriodBadge
             period="최근 12개월"
-            description="최근 12개월간 판매 및 재고 데이터 기반 회전율 순위입니다."
-            formula="회전율 = 연간판매원가(COGS) ÷ 평균재고금액"
+            description="판매·재고 데이터 기반 회전율 순위"
+            formula="회전율 = COGS ÷ 평균재고금액"
           />
         </div>
         <TurnoverTop5Card fastest={turnoverTop5.fastest} slowest={turnoverTop5.slowest} />
