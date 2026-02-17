@@ -257,6 +257,14 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
   const [isCancellingOrders, setIsCancellingOrders] = useState(false);
   const [hideReceived, setHideReceived] = useState(false);
 
+  // 수동발주 페이지네이션 (클라이언트)
+  const [reorderPage, setReorderPage] = useState(1);
+  const [reorderPageSize, setReorderPageSize] = useState(50);
+
+  // 자동발주 페이지네이션 (클라이언트)
+  const [autoReorderPage, setAutoReorderPage] = useState(1);
+  const [autoReorderPageSize, setAutoReorderPageSize] = useState(50);
+
   // 발주현황 페이지네이션
   const [ordersPage, setOrdersPage] = useState(1);
   const [ordersPageSize, setOrdersPageSize] = useState(50);
@@ -439,6 +447,22 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
   const filteredReorderItems = useMemo(
     () => reorderItems.filter((item) => !approvedProductIds.has(item.productId)),
     [reorderItems, approvedProductIds]
+  );
+
+  // 수동발주 페이지네이션 계산
+  const reorderTotalItems = filteredReorderItems.length;
+  const reorderTotalPages = Math.max(1, Math.ceil(reorderTotalItems / reorderPageSize));
+  const paginatedReorderItems = useMemo(
+    () => filteredReorderItems.slice((reorderPage - 1) * reorderPageSize, reorderPage * reorderPageSize),
+    [filteredReorderItems, reorderPage, reorderPageSize]
+  );
+
+  // 자동발주 페이지네이션 계산
+  const autoReorderTotalItems = autoReorderRecommendations.length;
+  const autoReorderTotalPages = Math.max(1, Math.ceil(autoReorderTotalItems / autoReorderPageSize));
+  const paginatedAutoReorderRecommendations = useMemo(
+    () => autoReorderRecommendations.slice((autoReorderPage - 1) * autoReorderPageSize, autoReorderPage * autoReorderPageSize),
+    [autoReorderRecommendations, autoReorderPage, autoReorderPageSize]
   );
 
   // 긴급도별 카운트 (필터링된 목록 기준)
@@ -847,12 +871,42 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
             </CardHeader>
             <CardContent>
               <ReorderItemsTable
-                items={filteredReorderItems}
+                items={paginatedReorderItems}
                 selectedIds={selectedIds}
                 onSelectChange={setSelectedIds}
                 onOrderClick={handleOrderClick}
                 onBulkOrderClick={handleBulkOrderClick}
               />
+              {reorderTotalItems > 0 && (
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-2 text-sm text-slate-500">
+                    <span>전체 {reorderTotalItems.toLocaleString()}건</span>
+                    <span>·</span>
+                    <div className="flex items-center gap-1">
+                      <span>표시</span>
+                      <Select value={String(reorderPageSize)} onValueChange={(v) => { setReorderPageSize(Number(v)); setReorderPage(1); }}>
+                        <SelectTrigger className="h-8 w-[80px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="50">50개</SelectItem>
+                          <SelectItem value="100">100개</SelectItem>
+                          <SelectItem value="200">200개</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" disabled={reorderPage <= 1} onClick={() => setReorderPage(reorderPage - 1)}>
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="text-sm font-medium">{reorderPage} / {reorderTotalPages}</span>
+                    <Button variant="outline" size="sm" disabled={reorderPage >= reorderTotalPages} onClick={() => setReorderPage(reorderPage + 1)}>
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -879,12 +933,42 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
             </CardHeader>
             <CardContent>
               <AutoReorderRecommendationsTable
-                recommendations={autoReorderRecommendations}
+                recommendations={paginatedAutoReorderRecommendations}
                 selectedIds={selectedAutoReorderIds}
                 onSelectChange={setSelectedAutoReorderIds}
                 onApprove={handleApproveAutoReorders}
                 onReject={handleRejectAutoReorders}
               />
+              {autoReorderTotalItems > 0 && (
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-2 text-sm text-slate-500">
+                    <span>전체 {autoReorderTotalItems.toLocaleString()}건</span>
+                    <span>·</span>
+                    <div className="flex items-center gap-1">
+                      <span>표시</span>
+                      <Select value={String(autoReorderPageSize)} onValueChange={(v) => { setAutoReorderPageSize(Number(v)); setAutoReorderPage(1); }}>
+                        <SelectTrigger className="h-8 w-[80px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="50">50개</SelectItem>
+                          <SelectItem value="100">100개</SelectItem>
+                          <SelectItem value="200">200개</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" disabled={autoReorderPage <= 1} onClick={() => setAutoReorderPage(autoReorderPage - 1)}>
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="text-sm font-medium">{autoReorderPage} / {autoReorderTotalPages}</span>
+                    <Button variant="outline" size="sm" disabled={autoReorderPage >= autoReorderTotalPages} onClick={() => setAutoReorderPage(autoReorderPage + 1)}>
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
