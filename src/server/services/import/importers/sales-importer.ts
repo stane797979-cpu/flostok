@@ -108,14 +108,15 @@ export async function importSalesData(
           continue;
         }
 
-        const unitPrice = row.unitPrice ?? productPriceMap.get(productId) ?? 0;
-        const totalAmount = unitPrice * row.quantity;
+        const unitPrice = Math.round(row.unitPrice ?? productPriceMap.get(productId) ?? 0);
+        const qty = Math.round(row.quantity);
+        const totalAmount = Math.round(qty * unitPrice);
 
         batchRecords.push({
           organizationId: organizationId,
           productId,
           date: row.date,
-          quantity: row.quantity,
+          quantity: qty,
           unitPrice,
           totalAmount,
           channel: row.channel || null,

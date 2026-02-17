@@ -109,9 +109,10 @@ async function parseSalesRow(
     });
   }
 
-  // 수량 필수
+  // 수량 필수 (integer 컬럼이므로 반올림)
   const quantityValue = getColumnValue(row, "quantity");
-  const quantity = parseNumber(quantityValue);
+  const quantityRaw = parseNumber(quantityValue);
+  const quantity = quantityRaw !== null ? Math.round(quantityRaw) : null;
   if (quantity === null || quantity < 0) {
     errors.push({
       row: rowNum,
@@ -126,9 +127,10 @@ async function parseSalesRow(
     return { data: null, errors };
   }
 
-  // 선택 필드
+  // 선택 필드 (integer 컬럼이므로 반올림)
   const unitPriceValue = getColumnValue(row, "unitPrice");
-  const unitPrice = parseNumber(unitPriceValue);
+  const unitPriceRaw = parseNumber(unitPriceValue);
+  const unitPrice = unitPriceRaw !== null ? Math.round(unitPriceRaw) : null;
 
   const channel = getColumnValue(row, "channel");
   const outboundTypeValue = getColumnValue(row, "outboundType");
@@ -283,13 +285,13 @@ export async function importSalesData(
         }
 
         // update: 기존 데이터 업데이트
-        const unitPrice = data.unitPrice ?? product.unitPrice ?? 0;
+        const unitPrice = Math.round(data.unitPrice ?? product.unitPrice ?? 0);
         await db
           .update(salesRecords)
           .set({
-            quantity: data.quantity,
+            quantity: Math.round(data.quantity),
             unitPrice,
-            totalAmount: data.quantity * unitPrice,
+            totalAmount: Math.round(data.quantity * unitPrice),
             channel: data.channel,
             notes: data.notes,
           })
@@ -304,14 +306,14 @@ export async function importSalesData(
       }
 
       // 신규 데이터 — 배치 INSERT용 배열에 추가
-      const unitPrice = data.unitPrice ?? product.unitPrice ?? 0;
+      const unitPrice = Math.round(data.unitPrice ?? product.unitPrice ?? 0);
       newInsertValues.push({
         organizationId,
         productId,
         date: data.date,
-        quantity: data.quantity,
+        quantity: Math.round(data.quantity),
         unitPrice,
-        totalAmount: data.quantity * unitPrice,
+        totalAmount: Math.round(data.quantity * unitPrice),
         channel: data.channel,
         notes: data.notes,
       });
@@ -323,9 +325,11 @@ export async function importSalesData(
       successData.push(data);
     }
 
-    // 6. 배치 INSERT (신규 판매 기록)
-    if (newInsertValues.length > 0) {
-      await db.insert(salesRecords).values(newInsertValues);
+    // 6. 배치 INSERT (신규 판매 기록) — 100건씩 분할하여 PG 파라미터 한도 방지
+    const BATCH_SIZE = 100;
+    for (let i = 0; i < newInsertValues.length; i += BATCH_SIZE) {
+      const batch = newInsertValues.slice(i, i + BATCH_SIZE);
+      await db.insert(salesRecords).values(batch);
     }
 
     // 7. 재고 차감 처리 (순차 — 재고 무결성)
