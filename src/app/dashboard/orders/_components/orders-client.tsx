@@ -424,7 +424,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
   }, [loadPurchaseOrders]);
 
   const handleOrdersPageSizeChange = useCallback((size: string) => {
-    const newSize = Number(size);
+    const newSize = size === "all" ? 9999 : Number(size);
     setOrdersPageSize(newSize);
     setOrdersPage(1);
     loadPurchaseOrders(1, newSize);
@@ -437,7 +437,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
   }, [loadOrderHistory]);
 
   const handleHistoryPageSizeChange = useCallback((size: string) => {
-    const newSize = Number(size);
+    const newSize = size === "all" ? 9999 : Number(size);
     setHistoryPageSize(newSize);
     setHistoryPage(1);
     loadOrderHistory(1, newSize);
@@ -1109,7 +1109,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                         <span>·</span>
                         <div className="flex items-center gap-1">
                           <span>표시</span>
-                          <Select value={String(ordersPageSize)} onValueChange={handleOrdersPageSizeChange}>
+                          <Select value={ordersPageSize >= 9999 ? "all" : String(ordersPageSize)} onValueChange={handleOrdersPageSizeChange}>
                             <SelectTrigger className="h-8 w-[80px]">
                               <SelectValue />
                             </SelectTrigger>
@@ -1117,6 +1117,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                               <SelectItem value="50">50개</SelectItem>
                               <SelectItem value="100">100개</SelectItem>
                               <SelectItem value="200">200개</SelectItem>
+                              <SelectItem value="all">전체</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -1183,7 +1184,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                         <span>·</span>
                         <div className="flex items-center gap-1">
                           <span>표시</span>
-                          <Select value={String(historyPageSize)} onValueChange={handleHistoryPageSizeChange}>
+                          <Select value={historyPageSize >= 9999 ? "all" : String(historyPageSize)} onValueChange={handleHistoryPageSizeChange}>
                             <SelectTrigger className="h-8 w-[80px]">
                               <SelectValue />
                             </SelectTrigger>
@@ -1191,6 +1192,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                               <SelectItem value="50">50개</SelectItem>
                               <SelectItem value="100">100개</SelectItem>
                               <SelectItem value="200">200개</SelectItem>
+                              <SelectItem value="all">전체</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
