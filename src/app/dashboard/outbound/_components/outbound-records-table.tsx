@@ -26,7 +26,7 @@ interface OutboundRecordsTableProps {
   onDelete?: (record: OutboundRecord) => void;
 }
 
-type SortField = "date" | "productSku" | "productName" | "changeTypeLabel" | "changeAmount" | "stockBefore" | "stockAfter";
+type SortField = "date" | "referenceNumber" | "productSku" | "productName" | "changeTypeLabel" | "changeAmount" | "stockBefore" | "stockAfter";
 type SortDirection = "asc" | "desc" | null;
 
 function SortIcon({ field, sortField, sortDirection }: { field: SortField; sortField: SortField; sortDirection: SortDirection }) {
@@ -99,6 +99,12 @@ export function OutboundRecordsTable({ records, onEdit, onDelete }: OutboundReco
                 <SortIcon field="date" sortField={sortField} sortDirection={sortDirection} />
               </button>
             </TableHead>
+            <TableHead>
+              <button onClick={() => handleSort("referenceNumber")} className="flex items-center gap-1 hover:text-slate-900">
+                요청번호
+                <SortIcon field="referenceNumber" sortField={sortField} sortDirection={sortDirection} />
+              </button>
+            </TableHead>
             <TableHead className="w-[100px]">
               <button onClick={() => handleSort("productSku")} className="flex items-center gap-1 hover:text-slate-900">
                 SKU
@@ -143,6 +149,9 @@ export function OutboundRecordsTable({ records, onEdit, onDelete }: OutboundReco
           {sortedRecords.map((record) => (
             <TableRow key={record.id}>
               <TableCell className="font-mono text-sm">{record.date}</TableCell>
+              <TableCell className="font-mono text-xs text-slate-500">
+                {record.referenceNumber || "-"}
+              </TableCell>
               <TableCell className="font-mono text-sm">{record.productSku}</TableCell>
               <TableCell className="font-medium">{record.productName}</TableCell>
               <TableCell>

@@ -6,7 +6,7 @@
  */
 
 import { db } from "@/server/db";
-import { products, outboundRequests, outboundRequestItems } from "@/server/db/schema";
+import { products, outboundRequests, outboundRequestItems, warehouses } from "@/server/db/schema";
 import { eq } from "drizzle-orm";
 import {
   parseExcelBuffer,
@@ -34,7 +34,8 @@ const COLUMN_ALIASES: Record<string, string[]> = {
   channel: ["채널", "channel", "판매채널", "Channel"],
   outboundType: ["출고유형", "유형", "outboundType", "type", "Type"],
   customerType: ["고객유형", "B2B/B2C", "customerType", "거래유형"],
-  sourceWarehouse: ["발송지", "출고창고", "발송창고", "sourceWarehouse"],
+  sourceWarehouse: ["발송지", "출고창고", "발송창고", "출발창고", "sourceWarehouse"],
+  targetWarehouse: ["도착창고", "도착지창고", "입고창고", "목적지창고", "targetWarehouse"],
   recipientCompany: ["상호", "수령업체", "업체명", "recipientCompany", "회사명"],
   recipientName: ["수령인", "받는분", "수취인", "recipientName"],
   recipientAddress: ["주소", "배송주소", "도착지주소", "recipientAddress", "address"],
@@ -53,6 +54,8 @@ const OUTBOUND_TYPE_MAP: Record<string, string> = {
   "폐기": "OUTBOUND_DISPOSAL",
   "이동": "OUTBOUND_TRANSFER",
   "이동출고": "OUTBOUND_TRANSFER",
+  "창고이동": "OUTBOUND_TRANSFER",
+  "재고이동": "OUTBOUND_TRANSFER",
   "손망실": "OUTBOUND_LOSS",
   "반품": "OUTBOUND_RETURN",
   "반품출고": "OUTBOUND_RETURN",
@@ -125,6 +128,14 @@ export async function importOutboundData(
 
     const skuToProduct = new Map(orgProducts.map((p) => [p.sku, p]));
 
+    // 2-1. 조직의 창고 목록 조회 (이름 → warehouseId 매핑, 창고이동용)
+    const orgWarehouses = await db
+      .select({ id: warehouses.id, name: warehouses.name })
+      .from(warehouses)
+      .where(eq(warehouses.organizationId, organizationId));
+
+    const warehouseNameToId = new Map(orgWarehouses.map((w) => [w.name, w.id]));
+
     // 3. 행 파싱 + 유효성 검사
     interface ParsedItem {
       productId: string;
@@ -132,6 +143,9 @@ export async function importOutboundData(
       outboundTypeKey: string; // OUTBOUND_SALE 등
       date: string;
       notes?: string;
+      // 창고이동용
+      sourceWarehouseIdOverride?: string; // 엑셀에서 발송지 지정 시
+      targetWarehouseId?: string;
       // 배송 정보 (그룹 키로 사용)
       customerType?: string;
       recipientCompany?: string;
@@ -195,6 +209,42 @@ export async function importOutboundData(
         outboundTypeKey = mapped;
       }
 
+      // 창고이동(OUTBOUND_TRANSFER)일 때 출발/도착 창고 처리
+      let sourceWarehouseIdOverride: string | undefined;
+      let targetWarehouseId: string | undefined;
+
+      if (outboundTypeKey === "OUTBOUND_TRANSFER") {
+        // 도착창고 필수
+        const targetWarehouseValue = getColumnValue(row, "targetWarehouse");
+        if (!targetWarehouseValue || String(targetWarehouseValue).trim() === "") {
+          allErrors.push({ row: rowNum, column: "도착창고", value: targetWarehouseValue, message: "창고이동 시 도착창고는 필수입니다" });
+          continue;
+        }
+        const targetName = String(targetWarehouseValue).trim();
+        const targetId = warehouseNameToId.get(targetName);
+        if (!targetId) {
+          allErrors.push({ row: rowNum, column: "도착창고", value: targetName, message: `존재하지 않는 창고입니다: ${targetName} (등록된 창고: ${orgWarehouses.map(w => w.name).join(", ")})` });
+          continue;
+        }
+        targetWarehouseId = targetId;
+
+        // 발송지(출발창고) — 있으면 override
+        const sourceWarehouseValue = getColumnValue(row, "sourceWarehouse");
+        if (sourceWarehouseValue && String(sourceWarehouseValue).trim() !== "") {
+          const sourceName = String(sourceWarehouseValue).trim();
+          const sourceId = warehouseNameToId.get(sourceName);
+          if (!sourceId) {
+            allErrors.push({ row: rowNum, column: "발송지", value: sourceName, message: `존재하지 않는 창고입니다: ${sourceName} (등록된 창고: ${orgWarehouses.map(w => w.name).join(", ")})` });
+            continue;
+          }
+          if (sourceId === targetWarehouseId) {
+            allErrors.push({ row: rowNum, column: "도착창고", value: targetName, message: "출발창고와 도착창고가 같을 수 없습니다" });
+            continue;
+          }
+          sourceWarehouseIdOverride = sourceId;
+        }
+      }
+
       const dateStr = formatDateToString(parsedDate!);
       const notes = getColumnValue(row, "notes");
       const channel = getColumnValue(row, "channel");
@@ -227,6 +277,8 @@ export async function importOutboundData(
           channel ? `채널: ${String(channel).trim()}` : null,
           notes ? String(notes).trim() : null,
         ].filter(Boolean).join(" | "),
+        sourceWarehouseIdOverride,
+        targetWarehouseId,
         customerType: customerType ? String(customerType).trim() : undefined,
         recipientCompany: recipientCompany ? String(recipientCompany).trim() : undefined,
         recipientName: recipientName ? String(recipientName).trim() : undefined,
@@ -255,6 +307,8 @@ export async function importOutboundData(
     for (const item of parsedItems) {
       const groupKey = [
         item.outboundTypeKey,
+        item.sourceWarehouseIdOverride || "",
+        item.targetWarehouseId || "",
         item.customerType || "",
         item.recipientCompany || "",
         item.recipientName || "",
@@ -275,7 +329,8 @@ export async function importOutboundData(
         .insert(outboundRequests)
         .values({
           organizationId,
-          sourceWarehouseId,
+          sourceWarehouseId: first.sourceWarehouseIdOverride || sourceWarehouseId,
+          targetWarehouseId: first.targetWarehouseId || null,
           requestNumber,
           status: "pending",
           outboundType: first.outboundTypeKey,
@@ -363,9 +418,10 @@ export async function createOutboundTemplate(): Promise<ArrayBuffer> {
       날짜: "2026-01-15",
       수량: 100,
       출고유형: "판매",
-      "고객유형": "B2C",
+      고객유형: "B2C",
       채널: "온라인",
       발송지: "",
+      도착창고: "",
       상호: "",
       수령인: "홍길동",
       주소: "서울시 강남구 테헤란로 123",
@@ -379,9 +435,10 @@ export async function createOutboundTemplate(): Promise<ArrayBuffer> {
       날짜: "2026-01-15",
       수량: 30,
       출고유형: "판매",
-      "고객유형": "B2B",
+      고객유형: "B2B",
       채널: "",
       발송지: "",
+      도착창고: "",
       상호: "(주)ABC상사",
       수령인: "김철수",
       주소: "부산시 해운대구 센텀로 45",
@@ -393,11 +450,29 @@ export async function createOutboundTemplate(): Promise<ArrayBuffer> {
     {
       SKU: "SKU-A003",
       날짜: "2026-01-16",
+      수량: 200,
+      출고유형: "창고이동",
+      고객유형: "",
+      채널: "",
+      발송지: "본사창고",
+      도착창고: "부산창고",
+      상호: "",
+      수령인: "",
+      주소: "",
+      연락처: "",
+      택배사: "",
+      송장번호: "",
+      비고: "부산 물류센터 이동",
+    },
+    {
+      SKU: "SKU-A004",
+      날짜: "2026-01-16",
       수량: 5,
       출고유형: "샘플",
-      "고객유형": "",
+      고객유형: "",
       채널: "",
       발송지: "",
+      도착창고: "",
       상호: "",
       수령인: "",
       주소: "",
@@ -418,7 +493,8 @@ export async function createOutboundTemplate(): Promise<ArrayBuffer> {
     { wch: 12 }, // 출고유형
     { wch: 10 }, // 고객유형
     { wch: 10 }, // 채널
-    { wch: 12 }, // 발송지
+    { wch: 14 }, // 발송지(출발창고)
+    { wch: 14 }, // 도착창고
     { wch: 16 }, // 상호
     { wch: 10 }, // 수령인
     { wch: 30 }, // 주소
