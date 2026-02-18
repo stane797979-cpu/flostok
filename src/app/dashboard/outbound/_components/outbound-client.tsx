@@ -251,9 +251,9 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
     }
   }, [toast]);
 
-  const pageTitle = initialTab === "upload" ? "출고 업로드" : "출고 현황";
+  const pageTitle = initialTab === "upload" ? "출고요청" : "출고현황";
   const pageDescription = initialTab === "upload"
-    ? "출고 데이터를 엑셀로 업로드하면 출고 요청이 생성됩니다"
+    ? "출고 데이터를 엑셀로 업로드하거나 직접 출고 요청을 생성합니다"
     : "월별 출고 기록을 확인하고 재고 수불부를 다운로드하세요";
 
   return (
