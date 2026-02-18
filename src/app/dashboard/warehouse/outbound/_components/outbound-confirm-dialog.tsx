@@ -43,11 +43,18 @@ interface RequestDetail {
   status: string;
   outboundType: string;
   outboundTypeLabel: string;
+  customerType: string | null;
   requestedByName: string | null;
   confirmedByName: string | null;
   confirmedAt: Date | null;
   sourceWarehouseName: string | null;
   targetWarehouseName: string | null;
+  recipientCompany: string | null;
+  recipientName: string | null;
+  recipientAddress: string | null;
+  recipientPhone: string | null;
+  courierName: string | null;
+  trackingNumber: string | null;
   notes: string | null;
   createdAt: Date;
   items: Array<{
@@ -222,9 +229,16 @@ export function OutboundConfirmDialog({
               </div>
               <div>
                 <p className="text-sm font-medium text-slate-500">출고유형</p>
-                <Badge variant="outline" className="mt-1">
-                  {request.outboundTypeLabel}
-                </Badge>
+                <div className="mt-1 flex items-center gap-2">
+                  <Badge variant="outline">
+                    {request.outboundTypeLabel}
+                  </Badge>
+                  {request.customerType && (
+                    <Badge variant="outline" className={request.customerType === "B2B" ? "border-blue-300 text-blue-700" : "border-green-300 text-green-700"}>
+                      {request.customerType}
+                    </Badge>
+                  )}
+                </div>
               </div>
               <div>
                 <p className="text-sm font-medium text-slate-500">출고 창고</p>
@@ -236,15 +250,42 @@ export function OutboundConfirmDialog({
                 </p>
               </div>
               <div>
-                <p className="text-sm font-medium text-slate-500">요청자</p>
-                <p className="mt-1">{request.requestedByName || "알 수 없음"}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-slate-500">요청시간</p>
+                <p className="text-sm font-medium text-slate-500">요청일</p>
                 <p className="mt-1">
-                  {new Date(request.createdAt).toLocaleString("ko-KR")}
+                  {new Date(request.createdAt).toLocaleDateString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit" })}
                 </p>
               </div>
+              {(request.recipientName || request.recipientCompany) && (
+                <>
+                  <div>
+                    <p className="text-sm font-medium text-slate-500">수령인</p>
+                    <p className="mt-1">
+                      {request.recipientCompany && <span className="font-medium">{request.recipientCompany} </span>}
+                      {request.recipientName || "-"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-500">연락처</p>
+                    <p className="mt-1">{request.recipientPhone || "-"}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-sm font-medium text-slate-500">주소</p>
+                    <p className="mt-1 text-sm">{request.recipientAddress || "-"}</p>
+                  </div>
+                </>
+              )}
+              {(request.courierName || request.trackingNumber) && (
+                <>
+                  <div>
+                    <p className="text-sm font-medium text-slate-500">택배사</p>
+                    <p className="mt-1">{request.courierName || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-500">송장번호</p>
+                    <p className="mt-1">{request.trackingNumber || "-"}</p>
+                  </div>
+                </>
+              )}
               {request.notes && (
                 <div className="col-span-2">
                   <p className="text-sm font-medium text-slate-500">요청 메모</p>

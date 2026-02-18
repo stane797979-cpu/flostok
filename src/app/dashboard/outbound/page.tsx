@@ -6,7 +6,7 @@ export default async function OutboundPage({
   searchParams: Promise<{ tab?: string }>;
 }) {
   const { tab } = await searchParams;
-  const resolvedTab = tab === "upload" ? "upload" : "records";
+  const resolvedTab = tab === "upload" ? "upload" : tab === "transfer" ? "transfer" : "records";
 
   return <OutboundClient key={resolvedTab} initialTab={resolvedTab} />;
 }

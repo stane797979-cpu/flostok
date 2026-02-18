@@ -33,6 +33,14 @@ const COLUMN_ALIASES: Record<string, string[]> = {
   unitPrice: ["단가", "unitPrice", "판매단가", "UnitPrice", "Price"],
   channel: ["채널", "channel", "판매채널", "Channel"],
   outboundType: ["출고유형", "유형", "outboundType", "type", "Type"],
+  customerType: ["고객유형", "B2B/B2C", "customerType", "거래유형"],
+  sourceWarehouse: ["발송지", "출고창고", "발송창고", "sourceWarehouse"],
+  recipientCompany: ["상호", "수령업체", "업체명", "recipientCompany", "회사명"],
+  recipientName: ["수령인", "받는분", "수취인", "recipientName"],
+  recipientAddress: ["주소", "배송주소", "도착지주소", "recipientAddress", "address"],
+  recipientPhone: ["연락처", "전화번호", "수령인연락처", "recipientPhone", "phone"],
+  courierName: ["택배사", "배송업체", "courierName", "courier"],
+  trackingNumber: ["송장번호", "운송장번호", "trackingNumber", "tracking"],
   notes: ["비고", "notes", "메모", "Notes", "Memo"],
 };
 
@@ -124,6 +132,14 @@ export async function importOutboundData(
       outboundTypeKey: string; // OUTBOUND_SALE 등
       date: string;
       notes?: string;
+      // 배송 정보 (그룹 키로 사용)
+      customerType?: string;
+      recipientCompany?: string;
+      recipientName?: string;
+      recipientAddress?: string;
+      recipientPhone?: string;
+      courierName?: string;
+      trackingNumber?: string;
       row: SalesRecordExcelRow;
     }
     const parsedItems: ParsedItem[] = [];
@@ -183,6 +199,15 @@ export async function importOutboundData(
       const notes = getColumnValue(row, "notes");
       const channel = getColumnValue(row, "channel");
 
+      // 배송 관련 필드
+      const customerType = getColumnValue(row, "customerType");
+      const recipientCompany = getColumnValue(row, "recipientCompany");
+      const recipientName = getColumnValue(row, "recipientName");
+      const recipientAddress = getColumnValue(row, "recipientAddress");
+      const recipientPhone = getColumnValue(row, "recipientPhone");
+      const courierName = getColumnValue(row, "courierName");
+      const trackingNumber = getColumnValue(row, "trackingNumber");
+
       const rowData: SalesRecordExcelRow = {
         sku: skuStr,
         date: dateStr,
@@ -202,6 +227,13 @@ export async function importOutboundData(
           channel ? `채널: ${String(channel).trim()}` : null,
           notes ? String(notes).trim() : null,
         ].filter(Boolean).join(" | "),
+        customerType: customerType ? String(customerType).trim() : undefined,
+        recipientCompany: recipientCompany ? String(recipientCompany).trim() : undefined,
+        recipientName: recipientName ? String(recipientName).trim() : undefined,
+        recipientAddress: recipientAddress ? String(recipientAddress).trim() : undefined,
+        recipientPhone: recipientPhone ? String(recipientPhone).trim() : undefined,
+        courierName: courierName ? String(courierName).trim() : undefined,
+        trackingNumber: trackingNumber ? String(trackingNumber).trim() : undefined,
         row: rowData,
       });
     }
@@ -217,16 +249,26 @@ export async function importOutboundData(
       };
     }
 
-    // 4. 출고유형별 그룹화 → 유형당 1개 outbound_request 생성
-    const groupedByType = new Map<string, ParsedItem[]>();
+    // 4. 출고유형 + 수령인별 그룹화 → 그룹당 1개 outbound_request 생성
+    //    같은 유형이라도 수령인이 다르면 별도 요청
+    const groupedByKey = new Map<string, ParsedItem[]>();
     for (const item of parsedItems) {
-      const existing = groupedByType.get(item.outboundTypeKey) || [];
+      const groupKey = [
+        item.outboundTypeKey,
+        item.customerType || "",
+        item.recipientCompany || "",
+        item.recipientName || "",
+        item.recipientAddress || "",
+        item.recipientPhone || "",
+      ].join("||");
+      const existing = groupedByKey.get(groupKey) || [];
       existing.push(item);
-      groupedByType.set(item.outboundTypeKey, existing);
+      groupedByKey.set(groupKey, existing);
     }
 
-    // 5. 유형별 outbound_request + items 생성
-    for (const [outboundType, items] of groupedByType) {
+    // 5. 그룹별 outbound_request + items 생성
+    for (const [, items] of groupedByKey) {
+      const first = items[0];
       const requestNumber = generateRequestNumber();
 
       const [request] = await db
@@ -236,9 +278,16 @@ export async function importOutboundData(
           sourceWarehouseId,
           requestNumber,
           status: "pending",
-          outboundType,
+          outboundType: first.outboundTypeKey,
           requestedById: userId,
           notes: `엑셀 업로드 (${items.length}건)`,
+          customerType: first.customerType || null,
+          recipientCompany: first.recipientCompany || null,
+          recipientName: first.recipientName || null,
+          recipientAddress: first.recipientAddress || null,
+          recipientPhone: first.recipientPhone || null,
+          courierName: first.courierName || null,
+          trackingNumber: first.trackingNumber || null,
         })
         .returning({ id: outboundRequests.id });
 
@@ -314,23 +363,47 @@ export async function createOutboundTemplate(): Promise<ArrayBuffer> {
       날짜: "2026-01-15",
       수량: 100,
       출고유형: "판매",
+      "고객유형": "B2C",
       채널: "온라인",
+      발송지: "",
+      상호: "",
+      수령인: "홍길동",
+      주소: "서울시 강남구 테헤란로 123",
+      연락처: "010-1234-5678",
+      택배사: "CJ대한통운",
+      송장번호: "1234567890",
       비고: "예시 데이터",
     },
     {
       SKU: "SKU-A002",
       날짜: "2026-01-15",
       수량: 30,
-      출고유형: "폐기",
+      출고유형: "판매",
+      "고객유형": "B2B",
       채널: "",
-      비고: "유통기한 만료",
+      발송지: "",
+      상호: "(주)ABC상사",
+      수령인: "김철수",
+      주소: "부산시 해운대구 센텀로 45",
+      연락처: "051-123-4567",
+      택배사: "로젠택배",
+      송장번호: "9876543210",
+      비고: "B2B 거래처 출고",
     },
     {
       SKU: "SKU-A003",
       날짜: "2026-01-16",
       수량: 5,
       출고유형: "샘플",
+      "고객유형": "",
       채널: "",
+      발송지: "",
+      상호: "",
+      수령인: "",
+      주소: "",
+      연락처: "",
+      택배사: "",
+      송장번호: "",
       비고: "거래처 샘플 발송",
     },
   ];
@@ -343,7 +416,15 @@ export async function createOutboundTemplate(): Promise<ArrayBuffer> {
     { wch: 12 }, // 날짜
     { wch: 8 },  // 수량
     { wch: 12 }, // 출고유형
+    { wch: 10 }, // 고객유형
     { wch: 10 }, // 채널
+    { wch: 12 }, // 발송지
+    { wch: 16 }, // 상호
+    { wch: 10 }, // 수령인
+    { wch: 30 }, // 주소
+    { wch: 16 }, // 연락처
+    { wch: 12 }, // 택배사
+    { wch: 16 }, // 송장번호
     { wch: 20 }, // 비고
   ];
 

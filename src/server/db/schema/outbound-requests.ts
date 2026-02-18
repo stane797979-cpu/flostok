@@ -44,6 +44,15 @@ export const outboundRequests = pgTable(
     }),
     confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
     notes: text("notes"),
+    // 고객유형 (B2B/B2C)
+    customerType: text("customer_type"),
+    // 배송 정보
+    recipientCompany: text("recipient_company"), // 상호
+    recipientName: text("recipient_name"), // 수령인
+    recipientAddress: text("recipient_address"), // 주소
+    recipientPhone: text("recipient_phone"), // 연락처
+    courierName: text("courier_name"), // 택배사
+    trackingNumber: text("tracking_number"), // 송장번호
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),

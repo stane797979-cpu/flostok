@@ -31,9 +31,16 @@ interface OutboundRequest {
   status: string;
   outboundType: string;
   outboundTypeLabel: string;
+  customerType: string | null;
   requestedByName: string | null;
   sourceWarehouseName: string | null;
   targetWarehouseName: string | null;
+  recipientCompany: string | null;
+  recipientName: string | null;
+  recipientAddress: string | null;
+  recipientPhone: string | null;
+  courierName: string | null;
+  trackingNumber: string | null;
   itemsCount: number;
   totalQuantity: number;
   createdAt: Date;
@@ -44,6 +51,11 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   confirmed: { label: "출고완료", className: "bg-green-600" },
   cancelled: { label: "취소됨", className: "bg-slate-500" },
 };
+
+function formatDate(date: Date): string {
+  const d = new Date(date);
+  return d.toLocaleDateString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit" });
+}
 
 function formatTimeAgo(date: Date): string {
   const now = new Date();
@@ -289,6 +301,11 @@ export function WarehouseOutboundClient() {
                         </div>
                         <div className="flex items-center gap-2">
                           <Badge variant="outline">{req.outboundTypeLabel}</Badge>
+                          {req.customerType && (
+                            <Badge variant="outline" className={req.customerType === "B2B" ? "border-blue-300 text-blue-700" : "border-green-300 text-green-700"}>
+                              {req.customerType}
+                            </Badge>
+                          )}
                           <Badge className={config.className}>{config.label}</Badge>
                         </div>
                       </div>
@@ -300,10 +317,16 @@ export function WarehouseOutboundClient() {
                               {req.targetWarehouseName && ` → ${req.targetWarehouseName}`}
                             </p>
                           )}
+                          {(req.recipientName || req.recipientCompany) && (
+                            <p className="text-slate-600">
+                              {req.recipientCompany && <span className="font-medium">{req.recipientCompany} </span>}
+                              {req.recipientName}
+                            </p>
+                          )}
                           <p className="text-slate-500">{req.itemsCount}품목 · {req.totalQuantity.toLocaleString()}개</p>
                           <div className="flex items-center gap-1 text-slate-400">
                             <Clock className="h-3.5 w-3.5" />
-                            {formatTimeAgo(req.createdAt)}
+                            {formatDate(req.createdAt)}
                           </div>
                         </div>
                       </div>
@@ -327,12 +350,13 @@ export function WarehouseOutboundClient() {
                       </TableHead>
                       <TableHead>요청번호</TableHead>
                       <TableHead>출고유형</TableHead>
+                      <TableHead>B2B/B2C</TableHead>
                       <TableHead>상태</TableHead>
                       <TableHead>출고 창고</TableHead>
-                      <TableHead>요청자</TableHead>
+                      <TableHead>수령인</TableHead>
                       <TableHead className="text-center">품목수</TableHead>
                       <TableHead className="text-center">총수량</TableHead>
-                      <TableHead>요청시간</TableHead>
+                      <TableHead>요청일</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -379,6 +403,15 @@ export function WarehouseOutboundClient() {
                             </Badge>
                           </TableCell>
                           <TableCell>
+                            {req.customerType ? (
+                              <Badge variant="outline" className={req.customerType === "B2B" ? "border-blue-300 text-blue-700" : "border-green-300 text-green-700"}>
+                                {req.customerType}
+                              </Badge>
+                            ) : (
+                              <span className="text-slate-400">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
                             <Badge className={config.className}>
                               {config.label}
                             </Badge>
@@ -390,7 +423,14 @@ export function WarehouseOutboundClient() {
                             )}
                           </TableCell>
                           <TableCell>
-                            {req.requestedByName || "-"}
+                            {req.recipientName || req.recipientCompany ? (
+                              <div className="text-sm">
+                                {req.recipientCompany && <p className="font-medium">{req.recipientCompany}</p>}
+                                {req.recipientName && <p className="text-slate-500">{req.recipientName}</p>}
+                              </div>
+                            ) : (
+                              <span className="text-slate-400">-</span>
+                            )}
                           </TableCell>
                           <TableCell className="text-center">
                             {req.itemsCount}개
@@ -399,10 +439,9 @@ export function WarehouseOutboundClient() {
                             {req.totalQuantity.toLocaleString()}개
                           </TableCell>
                           <TableCell>
-                            <div className="flex items-center gap-1 text-sm text-slate-500">
-                              <Clock className="h-3.5 w-3.5" />
-                              {formatTimeAgo(req.createdAt)}
-                            </div>
+                            <span className="text-sm text-slate-600">
+                              {formatDate(req.createdAt)}
+                            </span>
                           </TableCell>
                         </TableRow>
                       );

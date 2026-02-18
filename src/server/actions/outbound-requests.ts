@@ -138,9 +138,16 @@ export async function getOutboundRequests(options?: {
     status: string;
     outboundType: string;
     outboundTypeLabel: string;
+    customerType: string | null;
     requestedByName: string | null;
     sourceWarehouseName: string | null;
     targetWarehouseName: string | null;
+    recipientCompany: string | null;
+    recipientName: string | null;
+    recipientAddress: string | null;
+    recipientPhone: string | null;
+    courierName: string | null;
+    trackingNumber: string | null;
     itemsCount: number;
     totalQuantity: number;
     createdAt: Date;
@@ -167,9 +174,16 @@ export async function getOutboundRequests(options?: {
       requestNumber: outboundRequests.requestNumber,
       status: outboundRequests.status,
       outboundType: outboundRequests.outboundType,
+      customerType: outboundRequests.customerType,
       requestedByName: users.name,
       sourceWarehouseName: sql<string | null>`sw.name`,
       targetWarehouseName: sql<string | null>`tw.name`,
+      recipientCompany: outboundRequests.recipientCompany,
+      recipientName: outboundRequests.recipientName,
+      recipientAddress: outboundRequests.recipientAddress,
+      recipientPhone: outboundRequests.recipientPhone,
+      courierName: outboundRequests.courierName,
+      trackingNumber: outboundRequests.trackingNumber,
       createdAt: outboundRequests.createdAt,
     })
     .from(outboundRequests)
@@ -220,9 +234,16 @@ export async function getOutboundRequests(options?: {
         status: r.status!,
         outboundType: r.outboundType,
         outboundTypeLabel: OUTBOUND_TYPE_LABELS[r.outboundType] || r.outboundType,
+        customerType: r.customerType,
         requestedByName: r.requestedByName,
         sourceWarehouseName: r.sourceWarehouseName ?? null,
         targetWarehouseName: r.targetWarehouseName ?? null,
+        recipientCompany: r.recipientCompany,
+        recipientName: r.recipientName,
+        recipientAddress: r.recipientAddress,
+        recipientPhone: r.recipientPhone,
+        courierName: r.courierName,
+        trackingNumber: r.trackingNumber,
         itemsCount: stats.itemsCount,
         totalQuantity: stats.totalQuantity,
         createdAt: r.createdAt,
@@ -243,11 +264,18 @@ export async function getOutboundRequestById(requestId: string): Promise<{
     status: string;
     outboundType: string;
     outboundTypeLabel: string;
+    customerType: string | null;
     requestedByName: string | null;
     confirmedByName: string | null;
     confirmedAt: Date | null;
     sourceWarehouseName: string | null;
     targetWarehouseName: string | null;
+    recipientCompany: string | null;
+    recipientName: string | null;
+    recipientAddress: string | null;
+    recipientPhone: string | null;
+    courierName: string | null;
+    trackingNumber: string | null;
     notes: string | null;
     createdAt: Date;
     items: Array<{
@@ -273,6 +301,7 @@ export async function getOutboundRequestById(requestId: string): Promise<{
         requestNumber: outboundRequests.requestNumber,
         status: outboundRequests.status,
         outboundType: outboundRequests.outboundType,
+        customerType: outboundRequests.customerType,
         notes: outboundRequests.notes,
         createdAt: outboundRequests.createdAt,
         confirmedAt: outboundRequests.confirmedAt,
@@ -280,6 +309,12 @@ export async function getOutboundRequestById(requestId: string): Promise<{
         confirmedByName: sql<string>`confirmed_by.name`,
         sourceWarehouseName: sql<string | null>`sw.name`,
         targetWarehouseName: sql<string | null>`tw.name`,
+        recipientCompany: outboundRequests.recipientCompany,
+        recipientName: outboundRequests.recipientName,
+        recipientAddress: outboundRequests.recipientAddress,
+        recipientPhone: outboundRequests.recipientPhone,
+        courierName: outboundRequests.courierName,
+        trackingNumber: outboundRequests.trackingNumber,
       })
       .from(outboundRequests)
       .leftJoin(
@@ -329,11 +364,18 @@ export async function getOutboundRequestById(requestId: string): Promise<{
         status: request.status!,
         outboundType: request.outboundType,
         outboundTypeLabel: OUTBOUND_TYPE_LABELS[request.outboundType] || request.outboundType,
+        customerType: request.customerType,
         requestedByName: request.requestedByName,
         confirmedByName: request.confirmedByName,
         confirmedAt: request.confirmedAt,
         sourceWarehouseName: request.sourceWarehouseName ?? null,
         targetWarehouseName: request.targetWarehouseName ?? null,
+        recipientCompany: request.recipientCompany,
+        recipientName: request.recipientName,
+        recipientAddress: request.recipientAddress,
+        recipientPhone: request.recipientPhone,
+        courierName: request.courierName,
+        trackingNumber: request.trackingNumber,
         notes: request.notes,
         createdAt: request.createdAt,
         items: items.map((item) => ({
