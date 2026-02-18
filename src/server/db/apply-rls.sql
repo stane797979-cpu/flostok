@@ -7,9 +7,10 @@ RETURNS uuid
 LANGUAGE sql
 SECURITY DEFINER
 STABLE
+SET search_path = ''
 AS $func$
   SELECT organization_id
-  FROM users
+  FROM public.users
   WHERE auth_id = auth.uid()::text
   LIMIT 1;
 $func$;

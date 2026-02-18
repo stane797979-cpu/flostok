@@ -37,9 +37,10 @@ RETURNS uuid
 LANGUAGE sql
 SECURITY DEFINER
 STABLE
+SET search_path = ''
 AS $$
   SELECT organization_id
-  FROM users
+  FROM public.users
   WHERE auth_id = auth.uid()
   LIMIT 1;
 $$;
