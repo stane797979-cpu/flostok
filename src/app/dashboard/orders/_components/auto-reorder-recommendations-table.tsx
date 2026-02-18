@@ -112,13 +112,13 @@ export function AutoReorderRecommendationsTable({
     );
   };
 
-  const sortLabel = (columnKey: SortKey) => {
-    if (sortKey !== columnKey) return "";
+  const sortSubLabel = (columnKey: SortKey) => {
+    if (sortKey !== columnKey) return null;
     if (columnKey === "urgency")
-      return sortDir === "asc" ? "(품절→주의)" : "(주의→품절)";
+      return sortDir === "asc" ? "품절→주의" : "주의→품절";
     if (columnKey === "status")
-      return sortDir === "asc" ? "(대기→거부)" : "(거부→대기)";
-    return sortDir === "asc" ? "↑" : "↓";
+      return sortDir === "asc" ? "대기→거부" : "거부→대기";
+    return null;
   };
 
   const sortableHeadClass =
@@ -369,120 +369,86 @@ export function AutoReorderRecommendationsTable({
                 />
               </TableHead>
               <TableHead
-                className={cn("w-[90px] whitespace-nowrap", sortableHeadClass)}
+                className={cn("whitespace-nowrap", sortableHeadClass)}
                 onClick={() => handleSort("status")}
               >
                 <div className="flex items-center">
-                  상태
-                  <SortIcon columnKey="status" />
-                  <span className="ml-1 text-[10px] text-slate-500">
-                    {sortLabel("status")}
-                  </span>
+                  상태 <SortIcon columnKey="status" />
                 </div>
+                {sortSubLabel("status") && (
+                  <div className="text-[10px] font-normal text-slate-400">{sortSubLabel("status")}</div>
+                )}
               </TableHead>
               <TableHead
-                className={cn("w-[90px] whitespace-nowrap", sortableHeadClass)}
+                className={cn("whitespace-nowrap", sortableHeadClass)}
                 onClick={() => handleSort("urgency")}
               >
                 <div className="flex items-center">
-                  긴급도
-                  <SortIcon columnKey="urgency" />
-                  <span className="ml-1 text-[10px] text-slate-500">
-                    {sortLabel("urgency")}
-                  </span>
+                  긴급도 <SortIcon columnKey="urgency" />
                 </div>
+                {sortSubLabel("urgency") && (
+                  <div className="text-[10px] font-normal text-slate-400">{sortSubLabel("urgency")}</div>
+                )}
               </TableHead>
               <TableHead
-                className={cn("w-[110px]", sortableHeadClass)}
+                className={cn("whitespace-nowrap", sortableHeadClass)}
                 onClick={() => handleSort("sku")}
               >
                 <div className="flex items-center">
-                  SKU
-                  <SortIcon columnKey="sku" />
-                  <span className="ml-1 text-[10px] text-slate-500">
-                    {sortLabel("sku")}
-                  </span>
+                  SKU <SortIcon columnKey="sku" />
                 </div>
               </TableHead>
-              <TableHead className={sortableHeadClass} onClick={() => handleSort("name")}>
+              <TableHead className={cn("whitespace-nowrap", sortableHeadClass)} onClick={() => handleSort("name")}>
                 <div className="flex items-center">
-                  제품명
-                  <SortIcon columnKey="name" />
-                  <span className="ml-1 text-[10px] text-slate-500">
-                    {sortLabel("name")}
-                  </span>
+                  제품명 <SortIcon columnKey="name" />
                 </div>
               </TableHead>
               <TableHead
-                className={cn("text-right", sortableHeadClass)}
+                className={cn("whitespace-nowrap text-right", sortableHeadClass)}
                 onClick={() => handleSort("currentStock")}
               >
                 <div className="flex items-center justify-end">
-                  현재고
-                  <SortIcon columnKey="currentStock" />
-                  <span className="ml-1 text-[10px] text-slate-500">
-                    {sortLabel("currentStock")}
-                  </span>
+                  현재고 <SortIcon columnKey="currentStock" />
                 </div>
               </TableHead>
               <TableHead
-                className={cn("text-right", sortableHeadClass)}
+                className={cn("whitespace-nowrap text-right", sortableHeadClass)}
                 onClick={() => handleSort("safetyStock")}
               >
                 <div className="flex items-center justify-end">
-                  안전재고
-                  <SortIcon columnKey="safetyStock" />
-                  <span className="ml-1 text-[10px] text-slate-500">
-                    {sortLabel("safetyStock")}
-                  </span>
+                  안전재고 <SortIcon columnKey="safetyStock" />
                 </div>
               </TableHead>
               <TableHead
-                className={cn("text-right", sortableHeadClass)}
+                className={cn("whitespace-nowrap text-right", sortableHeadClass)}
                 onClick={() => handleSort("reorderPoint")}
               >
                 <div className="flex items-center justify-end">
-                  발주점
-                  <SortIcon columnKey="reorderPoint" />
-                  <span className="ml-1 text-[10px] text-slate-500">
-                    {sortLabel("reorderPoint")}
-                  </span>
+                  발주점 <SortIcon columnKey="reorderPoint" />
                 </div>
               </TableHead>
               <TableHead
-                className={cn("text-right", sortableHeadClass)}
+                className={cn("whitespace-nowrap text-right", sortableHeadClass)}
                 onClick={() => handleSort("recommendedQty")}
               >
                 <div className="flex items-center justify-end">
-                  추천수량
-                  <SortIcon columnKey="recommendedQty" />
-                  <span className="ml-1 text-[10px] text-slate-500">
-                    {sortLabel("recommendedQty")}
-                  </span>
+                  추천수량 <SortIcon columnKey="recommendedQty" />
                 </div>
               </TableHead>
               <TableHead
-                className={cn("text-right", sortableHeadClass)}
+                className={cn("whitespace-nowrap text-right", sortableHeadClass)}
                 onClick={() => handleSort("estimatedCost")}
               >
                 <div className="flex items-center justify-end">
-                  예상비용
-                  <SortIcon columnKey="estimatedCost" />
-                  <span className="ml-1 text-[10px] text-slate-500">
-                    {sortLabel("estimatedCost")}
-                  </span>
+                  예상비용 <SortIcon columnKey="estimatedCost" />
                 </div>
               </TableHead>
-              <TableHead className={sortableHeadClass} onClick={() => handleSort("supplier")}>
+              <TableHead className={cn("whitespace-nowrap", sortableHeadClass)} onClick={() => handleSort("supplier")}>
                 <div className="flex items-center">
-                  공급자
-                  <SortIcon columnKey="supplier" />
-                  <span className="ml-1 text-[10px] text-slate-500">
-                    {sortLabel("supplier")}
-                  </span>
+                  공급자 <SortIcon columnKey="supplier" />
                 </div>
               </TableHead>
-              <TableHead>예상입고일</TableHead>
+              <TableHead className="whitespace-nowrap">예상입고일</TableHead>
               <TableHead className="min-w-[150px]">발주 사유</TableHead>
             </TableRow>
           </TableHeader>
@@ -523,15 +489,15 @@ export function AutoReorderRecommendationsTable({
                   <TableCell className="text-right font-medium">
                     ₩{recommendation.estimatedCost.toLocaleString()}
                   </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2 text-sm text-slate-600">
-                      <TruckIcon className="h-3 w-3" />
+                  <TableCell className="whitespace-nowrap">
+                    <div className="flex items-center gap-1 text-sm text-slate-600">
+                      <TruckIcon className="h-3 w-3 shrink-0" />
                       {recommendation.supplierName || "-"}
                     </div>
                   </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2 text-sm text-slate-600">
-                      <CalendarIcon className="h-3 w-3" />
+                  <TableCell className="whitespace-nowrap">
+                    <div className="flex items-center gap-1 text-sm text-slate-600">
+                      <CalendarIcon className="h-3 w-3 shrink-0" />
                       {recommendation.expectedDate}
                     </div>
                   </TableCell>
