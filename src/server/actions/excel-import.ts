@@ -9,17 +9,20 @@ import {
   importProductData,
   importSupplierData,
   importOutboundData,
+  importTransferData,
   createSalesTemplate,
   createProductTemplate,
   createSupplierTemplate,
   createOutboundTemplate,
+  createTransferTemplate,
 } from "@/server/services/excel";
 import type { ExcelImportResult, SalesRecordExcelRow, ProductExcelRow, SupplierExcelRow } from "@/server/services/excel";
+import type { TransferExcelRow } from "@/server/services/excel/transfer-import";
 import { parseExcelBuffer, sheetToJson } from "@/server/services/excel/parser";
 import { requireAuth } from "./auth-helpers";
 import { logActivity } from "@/server/services/activity-log";
 
-export type ImportType = "sales" | "products" | "suppliers" | "outbound";
+export type ImportType = "sales" | "products" | "suppliers" | "outbound" | "transfer";
 
 export interface ImportExcelInput {
   type: ImportType;
@@ -73,9 +76,17 @@ export async function importExcelFile(input: ImportExcelInput): Promise<ImportEx
       };
     }
 
-    let result: ExcelImportResult<SalesRecordExcelRow | ProductExcelRow | SupplierExcelRow>;
+    let result: ExcelImportResult<SalesRecordExcelRow | ProductExcelRow | SupplierExcelRow | TransferExcelRow>;
 
-    if (input.type === "outbound") {
+    if (input.type === "transfer") {
+      // 재고이동: transferInventory 직접 호출 → 즉시 재고 반영
+      result = await importTransferData({
+        organizationId: user.organizationId,
+        userId: user.id,
+        buffer,
+        sheetName: input.sheetName,
+      });
+    } else if (input.type === "outbound") {
       // 출고: outbound_requests (pending) 생성 — 재고 차감 안 함
       const { getDefaultWarehouse } = await import("./warehouses");
       const defaultWarehouse = await getDefaultWarehouse();
@@ -121,7 +132,7 @@ export async function importExcelFile(input: ImportExcelInput): Promise<ImportEx
       });
     }
 
-    const typeLabels: Record<ImportType, string> = { sales: "판매 데이터", products: "제품 데이터", suppliers: "공급자 데이터", outbound: "출고 데이터" };
+    const typeLabels: Record<ImportType, string> = { sales: "판매 데이터", products: "제품 데이터", suppliers: "공급자 데이터", outbound: "출고 데이터", transfer: "재고이동" };
     const typeLabel = typeLabels[input.type];
 
     // 활동 로그 기록 (성공 건수가 있을 때만)
@@ -139,7 +150,9 @@ export async function importExcelFile(input: ImportExcelInput): Promise<ImportEx
       message: result.success
         ? input.type === "outbound"
           ? `출고 요청 ${result.successCount}건 생성 완료 (창고 확정 대기)`
-          : `${typeLabel} ${result.successCount}건 임포트 완료`
+          : input.type === "transfer"
+            ? `재고이동 ${result.successCount}건 처리 완료`
+            : `${typeLabel} ${result.successCount}건 임포트 완료`
         : `${typeLabel} 임포트 중 ${result.errorCount}건 오류 발생`,
       totalRows: result.totalRows,
       successCount: result.successCount,
@@ -174,7 +187,9 @@ export async function importExcelFile(input: ImportExcelInput): Promise<ImportEx
 export async function getExcelTemplateBase64(type: ImportType): Promise<string> {
   let buffer: ArrayBuffer;
 
-  if (type === "outbound") {
+  if (type === "transfer") {
+    buffer = await createTransferTemplate();
+  } else if (type === "outbound") {
     buffer = await createOutboundTemplate();
   } else if (type === "sales") {
     buffer = await createSalesTemplate();

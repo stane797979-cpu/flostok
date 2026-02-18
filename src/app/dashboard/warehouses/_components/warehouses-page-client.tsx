@@ -29,12 +29,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, MoreHorizontal, Edit, Trash2, ArrowRightLeft } from "lucide-react";
+import { Plus, MoreHorizontal, Edit, Trash2, ArrowRightLeft, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { deleteWarehouse } from "@/server/actions/warehouses";
 import { toast } from "sonner";
 import { WarehouseFormDialog } from "./warehouse-form-dialog";
 import { WarehouseTransferDialog } from "./warehouse-transfer-dialog";
+import { ExcelImportDialog } from "@/components/features/excel/excel-import-dialog";
 
 interface Warehouse {
   id: string;
@@ -65,6 +66,7 @@ export function WarehousesPageClient({ warehouses }: WarehousesPageClientProps) 
   const [editWarehouse, setEditWarehouse] = useState<Warehouse | null>(null);
   const [deleteWarehouseId, setDeleteWarehouseId] = useState<string | null>(null);
   const [transferOpen, setTransferOpen] = useState(false);
+  const [transferImportOpen, setTransferImportOpen] = useState(false);
   const router = useRouter();
 
   const totalCount = warehouses.length;
@@ -134,6 +136,14 @@ export function WarehousesPageClient({ warehouses }: WarehousesPageClientProps) 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-lg font-semibold">창고 목록</h2>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setTransferImportOpen(true)}
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            재고이동 엑셀 업로드
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -284,6 +294,19 @@ export function WarehousesPageClient({ warehouses }: WarehousesPageClientProps) 
         onOpenChange={setTransferOpen}
         warehouses={warehouses.filter((w) => w.isActive)}
         onSuccess={handleRefresh}
+      />
+
+      {/* 재고이동 엑셀 업로드 다이얼로그 */}
+      <ExcelImportDialog
+        open={transferImportOpen}
+        onOpenChange={setTransferImportOpen}
+        importType="transfer"
+        title="재고이동 엑셀 업로드"
+        description="Excel 파일을 업로드하여 창고 간 재고이동을 일괄 처리합니다. 즉시 재고에 반영됩니다."
+        onSuccess={() => {
+          handleRefresh();
+          toast.success("재고이동이 완료되었습니다");
+        }}
       />
     </div>
   );
