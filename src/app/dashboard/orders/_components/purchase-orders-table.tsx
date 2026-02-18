@@ -41,9 +41,8 @@ type SortDirection = "asc" | "desc";
 const STATUS_ORDER = ["draft", "ordered", "pending_receipt", "received", "cancelled"];
 
 export const PurchaseOrdersTable = memo(function PurchaseOrdersTable({ orders, onViewClick, onDownloadClick, selectedIds, onSelectChange, className }: PurchaseOrdersTableProps) {
-  // 체크 가능한 상태: 취소/완료 제외 전부
-  const checkableStatuses: PurchaseOrderListItem["status"][] = ["draft", "ordered", "pending_receipt"];
-  const checkableOrders = orders.filter((o) => checkableStatuses.includes(o.status));
+  // 모든 상태 체크 가능
+  const checkableOrders = orders;
   const allCheckableSelected = checkableOrders.length > 0 && checkableOrders.every((o) => selectedIds?.includes(o.id));
 
   // Shift+클릭 범위 선택을 위한 lastCheckedIndex
@@ -121,7 +120,6 @@ export const PurchaseOrdersTable = memo(function PurchaseOrdersTable({ orders, o
       const end = Math.max(lastCheckedIndexRef.current, index);
       const rangeIds = sorted
         .slice(start, end + 1)
-        .filter((o) => checkableStatuses.includes(o.status))
         .map((o) => o.id);
 
       const newIds = Array.from(new Set([...selectedIds, ...rangeIds]));
@@ -247,24 +245,19 @@ export const PurchaseOrdersTable = memo(function PurchaseOrdersTable({ orders, o
         </TableHeader>
         <TableBody>
           {sorted.map((order, index) => {
-            const isCheckable = checkableStatuses.includes(order.status);
             return (
             <TableRow key={order.id}>
               {onSelectChange && (
                 <TableCell>
-                  {isCheckable ? (
-                    <Checkbox
-                      checked={selectedIds?.includes(order.id) ?? false}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        const isCurrentlyChecked = selectedIds?.includes(order.id) ?? false;
-                        handleSelectOne(order.id, !isCurrentlyChecked, index, e.shiftKey);
-                      }}
-                      aria-label={`${order.orderNumber} 선택`}
-                    />
-                  ) : (
-                    <div className="h-4 w-4" />
-                  )}
+                  <Checkbox
+                    checked={selectedIds?.includes(order.id) ?? false}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      const isCurrentlyChecked = selectedIds?.includes(order.id) ?? false;
+                      handleSelectOne(order.id, !isCurrentlyChecked, index, e.shiftKey);
+                    }}
+                    aria-label={`${order.orderNumber} 선택`}
+                  />
                 </TableCell>
               )}
               <TableCell className="whitespace-nowrap font-mono text-sm">{order.orderNumber}</TableCell>
