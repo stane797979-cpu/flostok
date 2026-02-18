@@ -133,7 +133,6 @@ export const MAIN_SECTIONS: NavSection[] = [
         menuKey: "outbound",
         children: [
           { title: "출고요청", href: "/dashboard/outbound?tab=upload", menuKey: "outbound" },
-          { title: "재고 이동", href: "/dashboard/outbound?tab=transfer", menuKey: "outbound" },
           { title: "출고확정(창고)", href: "/dashboard/warehouse/outbound", menuKey: "warehouse_outbound" },
           { title: "출고현황", href: "/dashboard/outbound?tab=records", menuKey: "outbound" },
         ],

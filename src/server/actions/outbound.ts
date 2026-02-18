@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/server/db";
-import { inventory, inventoryHistory, products, outboundRequests } from "@/server/db/schema";
+import { inventory, inventoryHistory, products } from "@/server/db/schema";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { requireAuth } from "./auth-helpers";
 import { getChangeTypeByKey } from "@/server/services/inventory/types";
@@ -20,7 +20,6 @@ export interface OutboundRecord {
   changeTypeLabel: string;
   stockBefore: number;
   stockAfter: number;
-  referenceNumber: string | null;
   notes: string | null;
   createdAt: Date;
 }
@@ -59,11 +58,9 @@ export async function getOutboundRecords(options?: {
           sku: products.sku,
           name: products.name,
         },
-        requestNumber: outboundRequests.requestNumber,
       })
       .from(inventoryHistory)
       .innerJoin(products, eq(inventoryHistory.productId, products.id))
-      .leftJoin(outboundRequests, eq(inventoryHistory.referenceId, outboundRequests.id))
       .where(and(...conditions))
       .orderBy(desc(inventoryHistory.createdAt))
       .limit(limit)
@@ -88,7 +85,6 @@ export async function getOutboundRecords(options?: {
         changeTypeLabel: typeInfo?.label || row.record.changeType,
         stockBefore: row.record.stockBefore,
         stockAfter: row.record.stockAfter,
-        referenceNumber: row.requestNumber ?? null,
         notes: row.record.notes,
         createdAt: row.record.createdAt,
       };

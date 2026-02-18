@@ -20,14 +20,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ChevronLeft, ChevronRight, Download, Loader2, PackageMinus, Upload } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Loader2, PackageMinus, Upload, ArrowRightLeft } from "lucide-react";
 import { OutboundRecordsTable } from "./outbound-records-table";
 import { OutboundEditDialog } from "./outbound-edit-dialog";
 import { OutboundRequestDialog } from "./outbound-request-dialog";
 import { ExcelImportDialog } from "@/components/features/excel/excel-import-dialog";
+import { WarehouseTransferDialog } from "@/app/dashboard/warehouses/_components/warehouse-transfer-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { getOutboundRecords, deleteOutboundRecord, type OutboundRecord } from "@/server/actions/outbound";
 import { exportInventoryMovementToExcel } from "@/server/actions/excel-export";
+import { getWarehouses } from "@/server/actions/warehouses";
 
 const VALID_PAGE_SIZES = [50, 100, 200];
 const DEFAULT_PAGE_SIZE = 50;
@@ -69,6 +71,10 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
   // 출고 업로드/요청 상태
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
+
+  // 재고 이동 상태
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+  const [warehouseList, setWarehouseList] = useState<Array<{ id: string; code: string; name: string }>>([]);
 
   // 수정/삭제 상태
   const [editRecord, setEditRecord] = useState<OutboundRecord | null>(null);
@@ -234,6 +240,17 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 재고 이동 다이얼로그 열기
+  const handleOpenTransfer = useCallback(async () => {
+    try {
+      const result = await getWarehouses();
+      setWarehouseList(result.warehouses.map((w) => ({ id: w.id, code: w.code, name: w.name })));
+      setTransferDialogOpen(true);
+    } catch {
+      toast({ title: "오류", description: "창고 목록을 불러오지 못했습니다", variant: "destructive" });
+    }
+  }, [toast]);
+
   const pageTitle = initialTab === "upload" ? "출고 업로드" : "출고 현황";
   const pageDescription = initialTab === "upload"
     ? "출고 데이터를 엑셀로 업로드하면 출고 요청이 생성됩니다"
@@ -247,11 +264,12 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
       </div>
 
       {initialTab === "upload" && (
-        <Card>
+        <div className="grid gap-6 md:grid-cols-2">
+          <Card>
             <CardHeader>
               <CardTitle>출고 데이터 업로드</CardTitle>
               <CardDescription>
-                출고 데이터를 엑셀로 업로드하면 출고 요청이 생성됩니다. 창고에서 확정 후 재고가 차감됩니다.
+                엑셀로 출고 요청을 일괄 생성합니다. 창고에서 확정 후 재고가 차감됩니다.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -262,7 +280,7 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
                 <div className="text-center">
                   <p className="font-medium">엑셀 파일로 출고 데이터를 업로드합니다</p>
                   <p className="mt-1 text-sm text-slate-500">
-                    필수 컬럼: SKU, 날짜, 수량 (선택: 출고유형, 채널, 비고)
+                    필수: SKU, 날짜, 수량 / 선택: 출고유형, B2B/B2C, 배송정보
                   </p>
                 </div>
                 <Button onClick={() => setImportDialogOpen(true)}>
@@ -271,7 +289,34 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
                 </Button>
               </div>
             </CardContent>
-        </Card>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>재고 이동</CardTitle>
+              <CardDescription>
+                창고 간 재고를 이동합니다. 출발 창고에서 차감, 도착 창고에서 증가합니다.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col items-center gap-4 py-8">
+                <div className="rounded-full bg-slate-100 p-6 dark:bg-slate-800">
+                  <ArrowRightLeft className="h-10 w-10 text-slate-400" />
+                </div>
+                <div className="text-center">
+                  <p className="font-medium">창고 간 재고 이동</p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    제품을 선택하고 출발/도착 창고와 수량을 지정합니다
+                  </p>
+                </div>
+                <Button onClick={handleOpenTransfer}>
+                  <ArrowRightLeft className="mr-2 h-4 w-4" />
+                  재고 이동
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {initialTab === "records" && (
@@ -389,6 +434,19 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
           toast({
             title: "출고 요청 생성 완료",
             description: "출고 요청이 생성되었습니다. 창고에서 확정해주세요.",
+          });
+        }}
+      />
+
+      {/* 재고 이동 다이얼로그 */}
+      <WarehouseTransferDialog
+        open={transferDialogOpen}
+        onOpenChange={setTransferDialogOpen}
+        warehouses={warehouseList}
+        onSuccess={() => {
+          toast({
+            title: "재고 이동 완료",
+            description: "창고 간 재고 이동이 완료되었습니다.",
           });
         }}
       />
