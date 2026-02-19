@@ -44,7 +44,7 @@ import {
   cancelBulkPurchaseOrders,
   uploadPurchaseOrderExcel,
 } from "@/server/actions/purchase-orders";
-import { exportPurchaseOrderToExcel, exportInboundRecordsToExcel } from "@/server/actions/excel-export";
+import { exportPurchaseOrderToExcel, exportInboundRecordsToExcel, exportPurchaseOrdersListToExcel } from "@/server/actions/excel-export";
 import { getInboundRecords } from "@/server/actions/inbound";
 import type { ReorderItem as ServerReorderItem } from "@/server/services/scm/reorder-recommendation";
 
@@ -277,6 +277,8 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
   // 자동발주 페이지네이션 (클라이언트)
   const [autoReorderPage, setAutoReorderPage] = useState(1);
   const [autoReorderPageSize, setAutoReorderPageSize] = useState(50);
+
+  const [isDownloadingOrders, setIsDownloadingOrders] = useState(false);
 
   // 발주현황 페이지네이션
   const [ordersPage, setOrdersPage] = useState(1);
@@ -710,6 +712,40 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
     }
   };
 
+  // 발주현황 전체 엑셀 다운로드
+  const handleDownloadOrdersList = useCallback(async () => {
+    setIsDownloadingOrders(true);
+    try {
+      const result = await exportPurchaseOrdersListToExcel({ excludeStatus: "cancelled" });
+      if (result.success && result.data) {
+        const binaryString = atob(result.data.buffer);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], {
+          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = result.data.filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        toast({ title: "다운로드 완료", description: `${result.data.filename} 파일이 다운로드되었습니다` });
+      } else {
+        toast({ title: "다운로드 실패", description: result.error || "Excel 다운로드에 실패했습니다", variant: "destructive" });
+      }
+    } catch (error) {
+      console.error("발주현황 Excel 다운로드 오류:", error);
+      toast({ title: "오류", description: "Excel 다운로드 중 오류가 발생했습니다", variant: "destructive" });
+    } finally {
+      setIsDownloadingOrders(false);
+    }
+  }, [toast]);
+
   const handleBulkCancel = async () => {
     if (selectedOrderIds.length === 0) return;
 
@@ -1069,8 +1105,21 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                     </Label>
                   </div>
                 </div>
-                {selectedOrderIds.length > 0 && (
-                  <div className="flex gap-2">
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDownloadOrdersList}
+                    disabled={isDownloadingOrders || purchaseOrders.length === 0}
+                  >
+                    {isDownloadingOrders ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="mr-2 h-4 w-4" />
+                    )}
+                    전체 엑셀 다운로드
+                  </Button>
+                  {selectedOrderIds.length > 0 && (
                     <Button
                       variant="destructive"
                       size="sm"
@@ -1084,8 +1133,8 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                       )}
                       {selectedOrderIds.length}건 일괄 취소
                     </Button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </CardHeader>
             <CardContent>

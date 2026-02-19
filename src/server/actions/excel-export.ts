@@ -10,7 +10,7 @@ import {
   inventoryHistory,
   organizations,
 } from "@/server/db/schema";
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, and, sql, inArray, isNull, ne, desc } from "drizzle-orm";
 import {
   generatePurchaseOrderExcel,
   generateMultiplePurchaseOrdersExcel,
@@ -444,5 +444,97 @@ export async function exportInventoryToExcel(): Promise<{
       success: false,
       error: "재고 현황 Excel 다운로드에 실패했습니다",
     };
+  }
+}
+
+/**
+ * 발주 현황 전체 리스트 Excel 다운로드
+ */
+export async function exportPurchaseOrdersListToExcel(options?: {
+  excludeStatus?: string;
+}): Promise<{
+  success: boolean;
+  data?: { buffer: string; filename: string };
+  error?: string;
+}> {
+  try {
+    const user = await requireAuth();
+
+    const conditions = [
+      eq(purchaseOrders.organizationId, user.organizationId),
+      isNull(purchaseOrders.deletedAt),
+    ];
+
+    if (options?.excludeStatus) {
+      conditions.push(
+        ne(
+          purchaseOrders.status,
+          options.excludeStatus as (typeof purchaseOrders.status.enumValues)[number]
+        )
+      );
+    }
+
+    const ordersData = await db
+      .select({
+        orderNumber: purchaseOrders.orderNumber,
+        supplierName: suppliers.name,
+        status: purchaseOrders.status,
+        totalAmount: purchaseOrders.totalAmount,
+        orderDate: purchaseOrders.orderDate,
+        expectedDate: purchaseOrders.expectedDate,
+        notes: purchaseOrders.notes,
+      })
+      .from(purchaseOrders)
+      .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
+      .where(and(...conditions))
+      .orderBy(desc(purchaseOrders.createdAt));
+
+    if (ordersData.length === 0) {
+      return { success: false, error: "발주 데이터가 없습니다" };
+    }
+
+    const statusLabel: Record<string, string> = {
+      draft: "초안", pending: "대기", approved: "승인",
+      ordered: "발주완료", confirmed: "확정", shipped: "배송중",
+      partially_received: "부분입고", received: "입고완료",
+      completed: "완료", cancelled: "취소",
+    };
+
+    const XLSX = await import("xlsx");
+
+    const rows = ordersData.map((o) => ({
+      발주번호: o.orderNumber,
+      공급자: o.supplierName || "미지정",
+      상태: statusLabel[o.status] || o.status,
+      총금액: o.totalAmount ? Number(o.totalAmount) : 0,
+      발주일: o.orderDate || "",
+      예상입고일: o.expectedDate || "",
+      비고: o.notes || "",
+    }));
+
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    worksheet["!cols"] = [
+      { wch: 18 }, { wch: 16 }, { wch: 10 },
+      { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 24 },
+    ];
+    XLSX.utils.book_append_sheet(workbook, worksheet, "발주현황");
+
+    const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+    const today = new Date().toISOString().split("T")[0];
+    const filename = `발주현황_${today}.xlsx`;
+    const base64Buffer = Buffer.from(buffer).toString("base64");
+
+    await logActivity({
+      user,
+      action: "EXPORT",
+      entityType: "excel_export",
+      description: `발주현황 전체 Excel 다운로드 (${rows.length}건)`,
+    });
+
+    return { success: true, data: { buffer: base64Buffer, filename } };
+  } catch (error) {
+    console.error("발주 현황 Excel 다운로드 오류:", error);
+    return { success: false, error: "발주 현황 Excel 다운로드에 실패했습니다" };
   }
 }
