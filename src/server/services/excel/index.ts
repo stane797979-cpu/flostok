@@ -18,3 +18,4 @@ export * from "./order-export";
 export * from "./data-export";
 export * from "./outbound-import";
 export * from "./transfer-import";
+export * from "./picking-list-export";

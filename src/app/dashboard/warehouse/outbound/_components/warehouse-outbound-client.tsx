@@ -20,8 +20,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { RefreshCw, PackageX, Clock, CheckCircle2, Loader2 } from "lucide-react";
+import { RefreshCw, PackageX, Clock, CheckCircle2, Loader2, FileSpreadsheet } from "lucide-react";
 import { getOutboundRequests, bulkConfirmOutboundRequests } from "@/server/actions/outbound-requests";
+import { exportMultiplePickingListsToExcel } from "@/server/actions/excel-export";
 import { OutboundConfirmDialog } from "./outbound-confirm-dialog";
 import { useToast } from "@/hooks/use-toast";
 
@@ -82,6 +83,7 @@ export function WarehouseOutboundClient() {
   // 체크박스 선택 상태
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkConfirming, setIsBulkConfirming] = useState(false);
+  const [isDownloadingPickingList, setIsDownloadingPickingList] = useState(false);
 
   const { toast } = useToast();
 
@@ -185,6 +187,55 @@ export function WarehouseOutboundClient() {
     }
   };
 
+  // 피킹지 일괄 다운로드
+  const handleBulkPickingListDownload = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+
+    setIsDownloadingPickingList(true);
+    try {
+      const result = await exportMultiplePickingListsToExcel(ids);
+      if (result.success && result.data) {
+        const binaryString = atob(result.data.buffer);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], {
+          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = result.data.filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+
+        toast({
+          title: "피킹지 다운로드 완료",
+          description: `${ids.length}건의 피킹지가 다운로드되었습니다`,
+        });
+      } else {
+        toast({
+          title: "다운로드 실패",
+          description: result.error || "피킹지 다운로드에 실패했습니다",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("피킹지 다운로드 오류:", error);
+      toast({
+        title: "오류",
+        description: "피킹지 다운로드 중 오류가 발생했습니다",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDownloadingPickingList(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -248,18 +299,33 @@ export function WarehouseOutboundClient() {
                   <span className="text-sm font-medium">
                     {selectedIds.size}건 선택됨
                   </span>
-                  <Button
-                    size="sm"
-                    onClick={handleBulkConfirm}
-                    disabled={isBulkConfirming}
-                  >
-                    {isBulkConfirming ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="mr-2 h-4 w-4" />
-                    )}
-                    선택 일괄 확정
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleBulkPickingListDownload}
+                      disabled={isDownloadingPickingList}
+                    >
+                      {isDownloadingPickingList ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <FileSpreadsheet className="mr-2 h-4 w-4" />
+                      )}
+                      피킹지 다운로드
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleBulkConfirm}
+                      disabled={isBulkConfirming}
+                    >
+                      {isBulkConfirming ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="mr-2 h-4 w-4" />
+                      )}
+                      선택 일괄 확정
+                    </Button>
+                  </div>
                 </div>
               )}
 

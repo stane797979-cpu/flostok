@@ -18,6 +18,14 @@ import {
 } from "@/server/services/excel/order-export";
 import { generateInboundExcel, generateInventoryExcel } from "@/server/services/excel/data-export";
 import { generateInventoryMovementExcel } from "@/server/services/excel/inventory-movement-export";
+import {
+  generatePickingListExcel,
+  generateMultiplePickingListsExcel,
+} from "@/server/services/excel/picking-list-export";
+import {
+  getOutboundRequestForPickingList,
+  getOutboundRequestsForPickingList,
+} from "./outbound-requests";
 import { getInboundRecords } from "./inbound";
 import { getInventoryList } from "./inventory";
 import { requireAuth } from "./auth-helpers";
@@ -536,5 +544,77 @@ export async function exportPurchaseOrdersListToExcel(options?: {
   } catch (error) {
     console.error("발주 현황 Excel 다운로드 오류:", error);
     return { success: false, error: "발주 현황 Excel 다운로드에 실패했습니다" };
+  }
+}
+
+/**
+ * 단일 출고 요청 피킹지 Excel 다운로드
+ */
+export async function exportPickingListToExcel(requestId: string): Promise<{
+  success: boolean;
+  data?: { buffer: string; filename: string };
+  error?: string;
+}> {
+  try {
+    const user = await requireAuth();
+
+    const result = await getOutboundRequestForPickingList(requestId);
+    if (!result.success || !result.data) {
+      return { success: false, error: result.error || "피킹지 데이터 조회에 실패했습니다" };
+    }
+
+    const buffer = await generatePickingListExcel(result.data);
+    const today = new Date().toISOString().split("T")[0];
+    const filename = `피킹지_${result.data.requestNumber}_${today}.xlsx`;
+    const base64Buffer = Buffer.from(buffer).toString("base64");
+
+    await logActivity({
+      user,
+      action: "EXPORT",
+      entityType: "excel_export",
+      description: `피킹지 다운로드: ${result.data.requestNumber}`,
+    });
+
+    return { success: true, data: { buffer: base64Buffer, filename } };
+  } catch (error) {
+    console.error("피킹지 Excel 다운로드 오류:", error);
+    return { success: false, error: "피킹지 다운로드에 실패했습니다" };
+  }
+}
+
+/**
+ * 복수 출고 요청 피킹지 Excel 다운로드 (합산 시트 + 개별 시트)
+ */
+export async function exportMultiplePickingListsToExcel(requestIds: string[]): Promise<{
+  success: boolean;
+  data?: { buffer: string; filename: string };
+  error?: string;
+}> {
+  try {
+    const user = await requireAuth();
+
+    const validated = z.array(z.string().uuid()).min(1).max(50).parse(requestIds);
+
+    const result = await getOutboundRequestsForPickingList(validated);
+    if (!result.success || !result.dataList) {
+      return { success: false, error: result.error || "피킹지 데이터 조회에 실패했습니다" };
+    }
+
+    const buffer = await generateMultiplePickingListsExcel(result.dataList);
+    const today = new Date().toISOString().split("T")[0];
+    const filename = `피킹지_일괄_${today}.xlsx`;
+    const base64Buffer = Buffer.from(buffer).toString("base64");
+
+    await logActivity({
+      user,
+      action: "EXPORT",
+      entityType: "excel_export",
+      description: `피킹지 일괄 다운로드: ${result.dataList.length}건`,
+    });
+
+    return { success: true, data: { buffer: base64Buffer, filename } };
+  } catch (error) {
+    console.error("피킹지 일괄 Excel 다운로드 오류:", error);
+    return { success: false, error: "피킹지 일괄 다운로드에 실패했습니다" };
   }
 }

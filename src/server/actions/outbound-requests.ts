@@ -6,10 +6,12 @@ import {
   outboundRequestItems,
   products,
   inventory,
+  inventoryLots,
   users,
   warehouses,
 } from "@/server/db/schema";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
+import type { PickingListData } from "@/server/services/excel/picking-list-export";
 import {
   requireAuth,
   requireManagerOrAbove,
@@ -704,6 +706,194 @@ export async function cancelOutboundRequest(requestId: string): Promise<{
     return {
       success: false,
       error: error instanceof Error ? error.message : "출고 요청 취소에 실패했습니다",
+    };
+  }
+}
+
+/**
+ * 피킹지 생성용 단일 출고 요청 상세 데이터 조회
+ * - inventory.location (적치위치)
+ * - inventory_lots (FIFO 기준 가장 오래된 active lot)
+ */
+export async function getOutboundRequestForPickingList(
+  requestId: string
+): Promise<{ success: boolean; data?: PickingListData; error?: string }> {
+  try {
+    const user = await requireAuth();
+
+    // 1단계: 출고 요청 헤더 조회
+    const [request] = await db
+      .select({
+        id: outboundRequests.id,
+        requestNumber: outboundRequests.requestNumber,
+        status: outboundRequests.status,
+        outboundType: outboundRequests.outboundType,
+        customerType: outboundRequests.customerType,
+        notes: outboundRequests.notes,
+        createdAt: outboundRequests.createdAt,
+        confirmedAt: outboundRequests.confirmedAt,
+        sourceWarehouseId: outboundRequests.sourceWarehouseId,
+        requestedByName: sql<string>`requested_by.name`,
+        sourceWarehouseName: sql<string>`sw.name`,
+        sourceWarehouseCode: sql<string>`sw.code`,
+        sourceWarehouseAddress: sql<string | null>`sw.address`,
+        targetWarehouseName: sql<string | null>`tw.name`,
+        recipientCompany: outboundRequests.recipientCompany,
+        recipientName: outboundRequests.recipientName,
+        recipientAddress: outboundRequests.recipientAddress,
+        recipientPhone: outboundRequests.recipientPhone,
+        courierName: outboundRequests.courierName,
+        trackingNumber: outboundRequests.trackingNumber,
+      })
+      .from(outboundRequests)
+      .leftJoin(sql`users as requested_by`, eq(outboundRequests.requestedById, sql`requested_by.id`))
+      .leftJoin(sql`${warehouses} as sw`, sql`sw.id = ${outboundRequests.sourceWarehouseId}`)
+      .leftJoin(sql`${warehouses} as tw`, sql`tw.id = ${outboundRequests.targetWarehouseId}`)
+      .where(
+        and(
+          eq(outboundRequests.id, requestId),
+          eq(outboundRequests.organizationId, user.organizationId)
+        )
+      )
+      .limit(1);
+
+    if (!request) {
+      return { success: false, error: "출고 요청을 찾을 수 없습니다" };
+    }
+
+    // 2단계: 출고 항목 + 제품 + 재고(위치) 조회
+    const items = await db
+      .select({
+        id: outboundRequestItems.id,
+        productId: outboundRequestItems.productId,
+        productSku: products.sku,
+        productName: products.name,
+        category: products.category,
+        unit: products.unit,
+        requestedQuantity: outboundRequestItems.requestedQuantity,
+        confirmedQuantity: outboundRequestItems.confirmedQuantity,
+        currentStock: inventory.currentStock,
+        location: inventory.location,
+        itemNotes: outboundRequestItems.notes,
+      })
+      .from(outboundRequestItems)
+      .innerJoin(products, eq(outboundRequestItems.productId, products.id))
+      .leftJoin(
+        inventory,
+        and(
+          eq(outboundRequestItems.productId, inventory.productId),
+          eq(inventory.warehouseId, request.sourceWarehouseId)
+        )
+      )
+      .where(eq(outboundRequestItems.outboundRequestId, requestId));
+
+    // 3단계: 각 제품의 FIFO 기준 가장 오래된 active lot 조회
+    const productIds = [...new Set(items.map((i) => i.productId))];
+    const lotsMap = new Map<string, { lotNumber: string; expiryDate: string | null }>();
+
+    if (productIds.length > 0) {
+      const lots = await db
+        .select({
+          productId: inventoryLots.productId,
+          lotNumber: inventoryLots.lotNumber,
+          expiryDate: inventoryLots.expiryDate,
+        })
+        .from(inventoryLots)
+        .where(
+          and(
+            eq(inventoryLots.warehouseId, request.sourceWarehouseId),
+            eq(inventoryLots.status, "active"),
+            sql`${inventoryLots.remainingQuantity} > 0`,
+            inArray(inventoryLots.productId, productIds)
+          )
+        )
+        .orderBy(inventoryLots.receivedDate);
+
+      // 각 제품의 첫 번째(가장 오래된) lot만 저장
+      for (const lot of lots) {
+        if (!lotsMap.has(lot.productId)) {
+          lotsMap.set(lot.productId, {
+            lotNumber: lot.lotNumber,
+            expiryDate: lot.expiryDate,
+          });
+        }
+      }
+    }
+
+    return {
+      success: true,
+      data: {
+        requestNumber: request.requestNumber,
+        outboundTypeLabel: OUTBOUND_TYPE_LABELS[request.outboundType] || request.outboundType,
+        status: request.status!,
+        createdAt: request.createdAt,
+        confirmedAt: request.confirmedAt,
+        sourceWarehouseName: request.sourceWarehouseName || "-",
+        sourceWarehouseCode: request.sourceWarehouseCode || "-",
+        sourceWarehouseAddress: request.sourceWarehouseAddress ?? null,
+        targetWarehouseName: request.targetWarehouseName ?? null,
+        requestedByName: request.requestedByName ?? null,
+        customerType: request.customerType,
+        recipientCompany: request.recipientCompany,
+        recipientName: request.recipientName,
+        recipientAddress: request.recipientAddress,
+        recipientPhone: request.recipientPhone,
+        courierName: request.courierName,
+        trackingNumber: request.trackingNumber,
+        notes: request.notes,
+        items: items.map((item) => {
+          const lot = lotsMap.get(item.productId);
+          return {
+            productSku: item.productSku,
+            productName: item.productName,
+            category: item.category,
+            unit: item.unit || "EA",
+            location: item.location,
+            lotNumber: lot?.lotNumber ?? null,
+            expiryDate: lot?.expiryDate ?? null,
+            requestedQuantity: item.requestedQuantity,
+            confirmedQuantity: item.confirmedQuantity,
+            currentStock: item.currentStock || 0,
+            notes: item.itemNotes,
+          };
+        }),
+      },
+    };
+  } catch (error) {
+    console.error("피킹지 데이터 조회 오류:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "피킹지 데이터 조회에 실패했습니다",
+    };
+  }
+}
+
+/**
+ * 피킹지 생성용 복수 출고 요청 일괄 조회
+ */
+export async function getOutboundRequestsForPickingList(
+  requestIds: string[]
+): Promise<{ success: boolean; dataList?: PickingListData[]; error?: string }> {
+  try {
+    const results: PickingListData[] = [];
+
+    for (const id of requestIds) {
+      const result = await getOutboundRequestForPickingList(id);
+      if (result.success && result.data) {
+        results.push(result.data);
+      }
+    }
+
+    if (results.length === 0) {
+      return { success: false, error: "조회 가능한 출고 요청이 없습니다" };
+    }
+
+    return { success: true, dataList: results };
+  } catch (error) {
+    console.error("피킹지 일괄 데이터 조회 오류:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "피킹지 데이터 조회에 실패했습니다",
     };
   }
 }
