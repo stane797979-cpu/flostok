@@ -20,7 +20,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { RefreshCw, PackageX, Clock, CheckCircle2, Loader2, FileSpreadsheet } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { RefreshCw, PackageX, Clock, CheckCircle2, Loader2, FileSpreadsheet, Info } from "lucide-react";
 import { getOutboundRequests, bulkConfirmOutboundRequests } from "@/server/actions/outbound-requests";
 import { exportMultiplePickingListsToExcel } from "@/server/actions/excel-export";
 import { OutboundConfirmDialog } from "./outbound-confirm-dialog";
@@ -394,8 +400,8 @@ export function WarehouseOutboundClient() {
                           <p className="text-slate-500">
                             {req.itemsCount}품목 · {req.totalQuantity.toLocaleString()}개
                             {" · "}
-                            <span className={req.totalCurrentStock < req.totalQuantity ? "font-medium text-red-600" : "text-green-600"}>
-                              현재고 {req.totalCurrentStock.toLocaleString()}
+                            <span className={(req.totalCurrentStock - req.totalBacklog) < req.totalQuantity ? "font-medium text-red-600" : "text-green-600"}>
+                              가용 {(req.totalCurrentStock - req.totalBacklog).toLocaleString()}
                             </span>
                             {req.totalBacklog > 0 && (
                               <span className="text-orange-600"> · 대기 {req.totalBacklog.toLocaleString()}</span>
@@ -433,8 +439,38 @@ export function WarehouseOutboundClient() {
                       <TableHead>수령인</TableHead>
                       <TableHead className="text-center">품목수</TableHead>
                       <TableHead className="text-center">총수량</TableHead>
-                      <TableHead className="text-center">현재고</TableHead>
-                      <TableHead className="text-center">대기수량</TableHead>
+                      <TableHead className="text-center">
+                        <TooltipProvider delayDuration={200}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex cursor-help items-center gap-1">
+                                가용재고
+                                <Info className="h-3.5 w-3.5 text-slate-400" />
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-[260px] text-xs leading-relaxed">
+                              <p className="font-medium">가용재고 = 현재고 - 대기수량</p>
+                              <p className="mt-1">현재고에서 다른 출고 대기건의 수량을 뺀, 실제 출고 가능한 수량입니다.</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </TableHead>
+                      <TableHead className="text-center">
+                        <TooltipProvider delayDuration={200}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex cursor-help items-center gap-1">
+                                대기수량
+                                <Info className="h-3.5 w-3.5 text-slate-400" />
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-[260px] text-xs leading-relaxed">
+                              <p>이 요청을 제외한, 같은 제품에 대한 다른 출고 대기중인 수량의 합계입니다.</p>
+                              <p className="mt-1 text-slate-300">현재고에서 이미 차감된 값이 아니며, 가용재고 계산에 사용됩니다.</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </TableHead>
                       <TableHead>요청일</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -518,9 +554,14 @@ export function WarehouseOutboundClient() {
                             {req.totalQuantity.toLocaleString()}개
                           </TableCell>
                           <TableCell className="text-center">
-                            <span className={`font-medium ${req.totalCurrentStock < req.totalQuantity ? "text-red-600" : "text-green-600"}`}>
-                              {req.totalCurrentStock.toLocaleString()}
-                            </span>
+                            {(() => {
+                              const available = req.totalCurrentStock - req.totalBacklog;
+                              return (
+                                <span className={`font-medium ${available < req.totalQuantity ? "text-red-600" : "text-green-600"}`}>
+                                  {available.toLocaleString()}
+                                </span>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell className="text-center">
                             {req.totalBacklog > 0 ? (
