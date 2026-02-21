@@ -83,6 +83,60 @@ export async function createOutboundRequest(
       sourceWarehouseId = dw.id;
     }
 
+    // 재고 검증: 요청 수량이 가용재고(현재고 - 타 pending 대기수량)를 초과하는지 확인
+    const productIds = validated.items.map((item) => item.productId);
+    const stockRows = await db
+      .select({
+        productId: inventory.productId,
+        currentStock: inventory.currentStock,
+      })
+      .from(inventory)
+      .where(
+        and(
+          inArray(inventory.productId, productIds),
+          eq(inventory.warehouseId, sourceWarehouseId),
+          eq(inventory.organizationId, user.organizationId)
+        )
+      );
+    const stockMap = new Map(stockRows.map((r) => [r.productId, r.currentStock]));
+
+    // 같은 제품에 대한 다른 pending 출고 요청의 대기수량 조회
+    const backlogRows = await db
+      .select({
+        productId: outboundRequestItems.productId,
+        totalBacklog: sql<number>`coalesce(sum(${outboundRequestItems.requestedQuantity}), 0)`,
+      })
+      .from(outboundRequestItems)
+      .innerJoin(outboundRequests, eq(outboundRequestItems.outboundRequestId, outboundRequests.id))
+      .where(
+        and(
+          inArray(outboundRequestItems.productId, productIds),
+          eq(outboundRequests.status, "pending"),
+          eq(outboundRequests.organizationId, user.organizationId),
+          eq(outboundRequests.sourceWarehouseId, sourceWarehouseId)
+        )
+      )
+      .groupBy(outboundRequestItems.productId);
+    const backlogMap = new Map(backlogRows.map((r) => [r.productId, Number(r.totalBacklog)]));
+
+    const insufficientItems: string[] = [];
+    for (const item of validated.items) {
+      const current = stockMap.get(item.productId) ?? 0;
+      const backlog = backlogMap.get(item.productId) ?? 0;
+      const available = current - backlog;
+      if (item.requestedQuantity > available) {
+        insufficientItems.push(
+          `현재고 ${current}, 대기 ${backlog}, 가용 ${available}, 요청 ${item.requestedQuantity}`
+        );
+      }
+    }
+    if (insufficientItems.length > 0) {
+      return {
+        success: false,
+        error: `재고가 부족한 항목이 있습니다:\n${insufficientItems.join("\n")}`,
+      };
+    }
+
     const requestNumber = generateRequestNumber();
 
     // 출고 요청 생성 (창고 정보 포함)

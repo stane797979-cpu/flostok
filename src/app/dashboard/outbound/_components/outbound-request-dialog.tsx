@@ -28,7 +28,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Loader2, Plus, Trash2, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { createOutboundRequest } from "@/server/actions/outbound-requests";
 import { getInventoryByProductId } from "@/server/actions/inventory";
@@ -146,12 +147,25 @@ export function OutboundRequestDialog({
     );
   };
 
+  // 재고 부족 항목 체크
+  const insufficientItems = items.filter((item) => item.quantity > item.currentStock);
+  const hasStockIssues = insufficientItems.length > 0;
+
   // 제출
   const handleSubmit = async () => {
     if (!outboundType || items.length === 0) {
       toast({
         title: "입력 오류",
         description: "출고 유형과 최소 1개 이상의 항목을 입력하세요",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (hasStockIssues) {
+      toast({
+        title: "재고 부족",
+        description: "재고가 부족한 항목이 있습니다. 수량을 조정하세요.",
         variant: "destructive",
       });
       return;
@@ -286,10 +300,12 @@ export function OutboundRequestDialog({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {items.map((item) => (
-                      <TableRow key={item.id}>
+                    {items.map((item) => {
+                      const isInsufficient = item.quantity > item.currentStock;
+                      return (
+                      <TableRow key={item.id} className={isInsufficient ? "bg-red-50" : ""}>
                         <TableCell className="font-medium">
-                          {item.productId.slice(0, 8)}...
+                          {item.productName || item.productSku || item.productId.slice(0, 8) + "..."}
                         </TableCell>
                         <TableCell className="text-right">
                           <Input
@@ -299,11 +315,11 @@ export function OutboundRequestDialog({
                             onChange={(e) =>
                               handleItemQuantityChange(item.id, e.target.value)
                             }
-                            className="w-20 text-right"
+                            className={`w-20 text-right ${isInsufficient ? "border-red-500" : ""}`}
                             disabled={isSubmitting}
                           />
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className={`text-right ${isInsufficient ? "font-medium text-red-600" : ""}`}>
                           {item.currentStock.toLocaleString()}개
                         </TableCell>
                         <TableCell>
@@ -318,11 +334,23 @@ export function OutboundRequestDialog({
                           </Button>
                         </TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
             </div>
+          )}
+
+          {/* 재고 부족 경고 */}
+          {hasStockIssues && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                재고가 부족한 항목이 {insufficientItems.length}개 있습니다.
+                요청 수량이 현재고를 초과하면 출고 요청을 생성할 수 없습니다.
+              </AlertDescription>
+            </Alert>
           )}
 
           {/* 메모 */}
@@ -345,7 +373,7 @@ export function OutboundRequestDialog({
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={isSubmitting || !outboundType || items.length === 0}
+            disabled={isSubmitting || !outboundType || items.length === 0 || hasStockIssues}
           >
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             출고 요청 생성
