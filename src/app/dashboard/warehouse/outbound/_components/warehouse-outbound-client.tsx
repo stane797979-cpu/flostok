@@ -466,7 +466,7 @@ export function WarehouseOutboundClient() {
                             </TooltipTrigger>
                             <TooltipContent side="top" className="max-w-[260px] text-xs leading-relaxed">
                               <p>이 요청을 제외한, 같은 제품에 대한 다른 출고 대기중인 수량의 합계입니다.</p>
-                              <p className="mt-1 text-slate-300">현재고에서 이미 차감된 값이 아니며, 가용재고 계산에 사용됩니다.</p>
+                              <p className="mt-1 text-white/80">현재고에서 이미 차감된 값이 아니며, 가용재고 계산에 사용됩니다.</p>
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
