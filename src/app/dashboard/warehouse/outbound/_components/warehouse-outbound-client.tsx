@@ -44,6 +44,8 @@ interface OutboundRequest {
   trackingNumber: string | null;
   itemsCount: number;
   totalQuantity: number;
+  totalCurrentStock: number;
+  totalBacklog: number;
   createdAt: Date;
 }
 
@@ -389,7 +391,16 @@ export function WarehouseOutboundClient() {
                               {req.recipientName}
                             </p>
                           )}
-                          <p className="text-slate-500">{req.itemsCount}품목 · {req.totalQuantity.toLocaleString()}개</p>
+                          <p className="text-slate-500">
+                            {req.itemsCount}품목 · {req.totalQuantity.toLocaleString()}개
+                            {" · "}
+                            <span className={req.totalCurrentStock < req.totalQuantity ? "font-medium text-red-600" : "text-green-600"}>
+                              현재고 {req.totalCurrentStock.toLocaleString()}
+                            </span>
+                            {req.totalBacklog > 0 && (
+                              <span className="text-orange-600"> · 대기 {req.totalBacklog.toLocaleString()}</span>
+                            )}
+                          </p>
                           <div className="flex items-center gap-1 text-slate-400">
                             <Clock className="h-3.5 w-3.5" />
                             {formatDate(req.createdAt)}
@@ -422,6 +433,8 @@ export function WarehouseOutboundClient() {
                       <TableHead>수령인</TableHead>
                       <TableHead className="text-center">품목수</TableHead>
                       <TableHead className="text-center">총수량</TableHead>
+                      <TableHead className="text-center">현재고</TableHead>
+                      <TableHead className="text-center">대기수량</TableHead>
                       <TableHead>요청일</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -503,6 +516,20 @@ export function WarehouseOutboundClient() {
                           </TableCell>
                           <TableCell className="text-center">
                             {req.totalQuantity.toLocaleString()}개
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <span className={`font-medium ${req.totalCurrentStock < req.totalQuantity ? "text-red-600" : "text-green-600"}`}>
+                              {req.totalCurrentStock.toLocaleString()}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {req.totalBacklog > 0 ? (
+                              <span className="font-medium text-orange-600">
+                                {req.totalBacklog.toLocaleString()}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">-</span>
+                            )}
                           </TableCell>
                           <TableCell>
                             <span className="text-sm text-slate-600">

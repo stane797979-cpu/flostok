@@ -152,6 +152,8 @@ export async function getOutboundRequests(options?: {
     trackingNumber: string | null;
     itemsCount: number;
     totalQuantity: number;
+    totalCurrentStock: number;
+    totalBacklog: number;
     createdAt: Date;
   }>;
   total: number;
@@ -177,6 +179,7 @@ export async function getOutboundRequests(options?: {
       status: outboundRequests.status,
       outboundType: outboundRequests.outboundType,
       customerType: outboundRequests.customerType,
+      sourceWarehouseId: outboundRequests.sourceWarehouseId,
       requestedByName: users.name,
       sourceWarehouseName: sql<string | null>`sw.name`,
       targetWarehouseName: sql<string | null>`tw.name`,
@@ -221,6 +224,88 @@ export async function getOutboundRequests(options?: {
     ])
   );
 
+  // 현재고 조회: 각 요청의 품목별 현재고 합산
+  // outbound_request_items -> inventory (출발 창고 기준)
+  const stockMap = new Map<string, number>();
+  if (requestIds.length > 0) {
+    const stockRows = await db
+      .select({
+        outboundRequestId: outboundRequestItems.outboundRequestId,
+        totalCurrentStock: sql<number>`COALESCE(SUM(COALESCE(${inventory.currentStock}, 0)), 0)`,
+      })
+      .from(outboundRequestItems)
+      .innerJoin(outboundRequests, eq(outboundRequestItems.outboundRequestId, outboundRequests.id))
+      .leftJoin(
+        inventory,
+        and(
+          eq(inventory.productId, outboundRequestItems.productId),
+          eq(inventory.warehouseId, outboundRequests.sourceWarehouseId)
+        )
+      )
+      .where(inArray(outboundRequestItems.outboundRequestId, requestIds))
+      .groupBy(outboundRequestItems.outboundRequestId);
+
+    for (const row of stockRows) {
+      stockMap.set(row.outboundRequestId, Number(row.totalCurrentStock));
+    }
+  }
+
+  // 백로그 조회: 같은 제품에 대한 다른 pending 출고 요청의 수량 합
+  const backlogMap = new Map<string, number>();
+  if (requestIds.length > 0) {
+    // 1) 현재 페이지 요청들의 모든 품목 productId 수집
+    const requestItems = await db
+      .select({
+        outboundRequestId: outboundRequestItems.outboundRequestId,
+        productId: outboundRequestItems.productId,
+        requestedQuantity: outboundRequestItems.requestedQuantity,
+      })
+      .from(outboundRequestItems)
+      .where(inArray(outboundRequestItems.outboundRequestId, requestIds));
+
+    // 2) 모든 productId에 대해 pending 상태의 전체 출고 대기 수량 조회
+    const allProductIds = [...new Set(requestItems.map((i) => i.productId))];
+    if (allProductIds.length > 0) {
+      const pendingTotals = await db
+        .select({
+          productId: outboundRequestItems.productId,
+          totalPending: sql<number>`SUM(${outboundRequestItems.requestedQuantity})`,
+        })
+        .from(outboundRequestItems)
+        .innerJoin(outboundRequests, eq(outboundRequestItems.outboundRequestId, outboundRequests.id))
+        .where(
+          and(
+            eq(outboundRequests.status, "pending"),
+            eq(outboundRequests.organizationId, user.organizationId),
+            inArray(outboundRequestItems.productId, allProductIds)
+          )
+        )
+        .groupBy(outboundRequestItems.productId);
+
+      const pendingByProduct = new Map(
+        pendingTotals.map((p) => [p.productId, Number(p.totalPending)])
+      );
+
+      // 3) 각 요청별 백로그 = (해당 제품들의 전체 pending 합) - (자기 요청 수량)
+      const requestItemsGrouped = new Map<string, { productId: string; qty: number }[]>();
+      for (const item of requestItems) {
+        const arr = requestItemsGrouped.get(item.outboundRequestId) || [];
+        arr.push({ productId: item.productId, qty: item.requestedQuantity });
+        requestItemsGrouped.set(item.outboundRequestId, arr);
+      }
+
+      for (const [reqId, items] of requestItemsGrouped) {
+        let backlog = 0;
+        for (const item of items) {
+          const totalPending = pendingByProduct.get(item.productId) || 0;
+          // 백로그 = 전체 pending - 자기 수량
+          backlog += Math.max(0, totalPending - item.qty);
+        }
+        backlogMap.set(reqId, backlog);
+      }
+    }
+  }
+
   // 전체 개수
   const [countResult] = await db
     .select({ count: sql<number>`count(*)` })
@@ -248,6 +333,8 @@ export async function getOutboundRequests(options?: {
         trackingNumber: r.trackingNumber,
         itemsCount: stats.itemsCount,
         totalQuantity: stats.totalQuantity,
+        totalCurrentStock: stockMap.get(r.id) || 0,
+        totalBacklog: backlogMap.get(r.id) || 0,
         createdAt: r.createdAt,
       };
     }),
