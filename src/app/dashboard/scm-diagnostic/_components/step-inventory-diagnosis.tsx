@@ -2,11 +2,17 @@
 
 import {
   AlertTriangle,
+  BarChart3,
   Brain,
   Calculator,
   ClipboardCheck,
+  Database,
   HelpCircle,
+  Layers,
+  Monitor,
   Package,
+  RefreshCw,
+  Target,
 } from 'lucide-react';
 import { OptionCard } from '@/app/dashboard/forecast-guide/_components/option-card';
 import type { InventoryAnswers } from '@/server/services/scm/diagnostic-engine';
@@ -25,7 +31,7 @@ export function StepInventoryDiagnosis({ answers, onChange }: StepInventoryDiagn
     <div className="space-y-8">
       <div>
         <h2 className="text-xl font-bold text-slate-900">재고현황 진단</h2>
-        <p className="mt-1 text-sm text-muted-foreground">총 4문항입니다. 해당되는 항목을 선택해 주세요.</p>
+        <p className="mt-1 text-sm text-muted-foreground">총 9문항입니다. 해당되는 항목을 선택해 주세요.</p>
       </div>
 
       {/* Q1 */}
@@ -133,6 +139,168 @@ export function StepInventoryDiagnosis({ answers, onChange }: StepInventoryDiagn
               description={option.description}
               selected={answers.safetyStockMethod === option.value}
               onClick={() => set('safetyStockMethod', option.value)}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Q5 */}
+      <div className="space-y-3">
+        <h3 className="text-base font-semibold text-slate-800">
+          Q5. 재고 관리에 어떤 도구를 사용하나요?
+        </h3>
+        <div className="grid gap-2">
+          {[
+            {
+              value: 'erp_wms' as const,
+              icon: Monitor,
+              title: 'ERP / WMS 시스템',
+              description: '전문 재고 관리 시스템으로 실시간 관리',
+            },
+            {
+              value: 'spreadsheet' as const,
+              icon: BarChart3,
+              title: '엑셀 / 스프레드시트',
+              description: '엑셀이나 구글 시트로 수동 관리',
+            },
+            {
+              value: 'manual' as const,
+              icon: HelpCircle,
+              title: '수기 / 별도 도구 없음',
+              description: '종이 장부나 기억에 의존',
+            },
+          ].map((option) => (
+            <OptionCard
+              key={option.value}
+              icon={option.icon}
+              title={option.title}
+              description={option.description}
+              selected={answers.managementTool === option.value}
+              onClick={() => set('managementTool', option.value)}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Q6 */}
+      <div className="space-y-3">
+        <h3 className="text-base font-semibold text-slate-800">
+          Q6. ABC 분류(제품 중요도별 차등 관리)를 적용하고 있나요?
+        </h3>
+        <div className="grid gap-2">
+          {[
+            {
+              value: 'applied' as const,
+              icon: Layers,
+              title: '체계적으로 적용 중',
+              description: 'A/B/C 등급별로 재고 정책을 차등 적용',
+            },
+            {
+              value: 'partial' as const,
+              icon: Layers,
+              title: '부분적으로 적용',
+              description: '일부 제품만 중요도를 구분하여 관리',
+            },
+            {
+              value: 'none' as const,
+              icon: HelpCircle,
+              title: '적용하지 않아요',
+              description: '모든 제품을 동일한 방식으로 관리',
+            },
+          ].map((option) => (
+            <OptionCard
+              key={option.value}
+              icon={option.icon}
+              title={option.title}
+              description={option.description}
+              selected={answers.abcClassification === option.value}
+              onClick={() => set('abcClassification', option.value)}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Q7 */}
+      <div className="space-y-3">
+        <h3 className="text-base font-semibold text-slate-800">
+          Q7. 재고 데이터를 얼마나 자주 갱신하나요?
+        </h3>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {[
+            { value: 'realtime' as const, title: '실시간', description: '입출고 즉시 시스템에 반영' },
+            { value: 'daily' as const, title: '매일 1회', description: '하루 마감 시 일괄 갱신' },
+            { value: 'weekly' as const, title: '주 1회', description: '주간 단위로 데이터 갱신' },
+            { value: 'irregular' as const, title: '불규칙', description: '필요할 때만 갱신하거나 갱신하지 않음' },
+          ].map((option) => (
+            <OptionCard
+              key={option.value}
+              icon={RefreshCw}
+              title={option.title}
+              description={option.description}
+              selected={answers.dataRefreshFreq === option.value}
+              onClick={() => set('dataRefreshFreq', option.value)}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Q8 */}
+      <div className="space-y-3">
+        <h3 className="text-base font-semibold text-slate-800">
+          Q8. 유통기한/시즌 재고를 별도로 관리하나요?
+        </h3>
+        <div className="grid gap-2">
+          {[
+            {
+              value: 'systematic' as const,
+              icon: Database,
+              title: '체계적으로 관리',
+              description: '유통기한·시즌별 선입선출, 자동 알림 등 운영',
+            },
+            {
+              value: 'partial' as const,
+              icon: Database,
+              title: '부분적으로 관리',
+              description: '일부 품목만 유통기한을 추적',
+            },
+            {
+              value: 'none' as const,
+              icon: HelpCircle,
+              title: '별도 관리 없음',
+              description: '유통기한·시즌 구분 없이 동일 관리',
+            },
+          ].map((option) => (
+            <OptionCard
+              key={option.value}
+              icon={option.icon}
+              title={option.title}
+              description={option.description}
+              selected={answers.seasonalHandling === option.value}
+              onClick={() => set('seasonalHandling', option.value)}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Q9 */}
+      <div className="space-y-3">
+        <h3 className="text-base font-semibold text-slate-800">
+          Q9. 장부(시스템)상 재고와 실제 재고가 얼마나 일치하나요?
+        </h3>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {[
+            { value: 'very_close' as const, title: '거의 일치해요', description: '오차 3% 미만' },
+            { value: 'mostly_close' as const, title: '대부분 비슷해요', description: '오차 3~10% 수준' },
+            { value: 'often_different' as const, title: '자주 달라요', description: '오차 10% 이상 빈발' },
+            { value: 'dont_know' as const, title: '비교해 본 적 없어요', description: '장부와 실제 재고를 대조하지 않음' },
+          ].map((option) => (
+            <OptionCard
+              key={option.value}
+              icon={Target}
+              title={option.title}
+              description={option.description}
+              selected={answers.stockAccuracy === option.value}
+              onClick={() => set('stockAccuracy', option.value)}
             />
           ))}
         </div>

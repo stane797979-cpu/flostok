@@ -25,9 +25,9 @@ const CATEGORY_ORDER: DiagnosticCategory[] = ['inventory', 'logistics', 'order']
 
 /** 각 카테고리의 필수 답변 키 수 */
 const REQUIRED_ANSWER_COUNT: Record<DiagnosticCategory, number> = {
-  inventory: 4,
-  logistics: 5,
-  order: 4,
+  inventory: 9,
+  logistics: 10,
+  order: 9,
 };
 
 export function ScmDiagnosticWizard() {

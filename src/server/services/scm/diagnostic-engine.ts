@@ -24,6 +24,16 @@ export interface InventoryAnswers {
   auditFrequency: "monthly" | "quarterly" | "biannual" | "rarely";
   /** Q4: 안전재고 설정 방법 */
   safetyStockMethod: "data" | "experience" | "none";
+  /** Q5: 재고 관리 도구 */
+  managementTool: "erp_wms" | "spreadsheet" | "manual";
+  /** Q6: ABC 분류 적용 여부 */
+  abcClassification: "applied" | "partial" | "none";
+  /** Q7: 재고 데이터 갱신 빈도 */
+  dataRefreshFreq: "realtime" | "daily" | "weekly" | "irregular";
+  /** Q8: 유통기한/시즌 재고 관리 */
+  seasonalHandling: "systematic" | "partial" | "none";
+  /** Q9: 재고 정확도 체감 */
+  stockAccuracy: "very_close" | "mostly_close" | "often_different" | "dont_know";
 }
 
 export interface LogisticsAnswers {
@@ -37,6 +47,16 @@ export interface LogisticsAnswers {
   orderErrorFreq: "rarely" | "monthly" | "weekly" | "daily";
   /** Q5: 운용 중인 공급업체 수 */
   supplierCount: "one" | "two_three" | "four_five" | "over_six";
+  /** Q6: 물류 운영 방식 */
+  operationMode: "hybrid" | "thirdParty" | "inHouse" | "ad_hoc";
+  /** Q7: 물류비 모니터링 수준 */
+  costMonitoring: "monthly_analysis" | "total_only" | "rarely";
+  /** Q8: 배송 클레임 처리 체계 */
+  claimHandling: "systematic" | "case_by_case" | "reactive" | "ignored";
+  /** Q9: 피킹/패킹 프로세스 표준화 */
+  pickPackProcess: "standardized" | "partial" | "none";
+  /** Q10: 물류 데이터 활용도 */
+  dataUtilization: "active" | "partial" | "none";
 }
 
 export interface OrderAnswers {
@@ -48,6 +68,16 @@ export interface OrderAnswers {
   leadTimeAwareness: "exact" | "approximate" | "unknown";
   /** Q4: 발주 시점 파악 방법 */
   orderTrigger: "system" | "manual" | "reactive";
+  /** Q5: 발주 프로세스 표준화(SOP) */
+  orderSop: "documented" | "informal" | "none";
+  /** Q6: MOQ 대응 방식 */
+  moqHandling: "optimized" | "sometimes_over" | "not_applicable";
+  /** Q7: 공급자 평가/관리 체계 */
+  supplierEvaluation: "formal" | "informal" | "none";
+  /** Q8: 발주 데이터 분석 활용 */
+  orderDataAnalysis: "active" | "partial" | "none";
+  /** Q9: 대체 공급자 확보 */
+  backupSupplier: "prepared" | "some" | "none";
 }
 
 export interface DiagnosticAnswers {
@@ -209,27 +239,52 @@ export function scoreInventoryDiagnosis(
 
   // ── 설문 점수 산출 (40점 만점) ────────────────
 
-  // Q1: 품절 발생 빈도 (10점)
+  // Q1: 품절 발생 빈도 (6점)
   const stockoutFreqScore: Record<InventoryAnswers["stockoutFrequency"], number> =
-    { rarely: 10, monthly: 7, weekly: 3, always: 0 };
+    { rarely: 6, monthly: 4, weekly: 2, always: 0 };
 
-  // Q2: 과잉재고 인식 비율 (10점)
+  // Q2: 과잉재고 인식 비율 (5점)
   const excessRatioScore: Record<InventoryAnswers["excessRatio"], number> =
-    { under10: 10, "10to30": 6, "30to50": 3, over50: 0 };
+    { under10: 5, "10to30": 3, "30to50": 1, over50: 0 };
 
-  // Q3: 실사 주기 (10점)
+  // Q3: 실사 주기 (4점)
   const auditFreqScore: Record<InventoryAnswers["auditFrequency"], number> =
-    { monthly: 10, quarterly: 7, biannual: 4, rarely: 1 };
+    { monthly: 4, quarterly: 3, biannual: 1, rarely: 0 };
 
-  // Q4: 안전재고 산출 방식 (10점)
+  // Q4: 안전재고 산출 방식 (5점)
   const safetyStockScore: Record<InventoryAnswers["safetyStockMethod"], number> =
-    { data: 10, experience: 5, none: 0 };
+    { data: 5, experience: 3, none: 0 };
+
+  // Q5: 재고 관리 도구 (5점)
+  const managementToolScore: Record<InventoryAnswers["managementTool"], number> =
+    { erp_wms: 5, spreadsheet: 3, manual: 0 };
+
+  // Q6: ABC 분류 적용 여부 (4점)
+  const abcClassificationScore: Record<InventoryAnswers["abcClassification"], number> =
+    { applied: 4, partial: 2, none: 0 };
+
+  // Q7: 재고 데이터 갱신 빈도 (4점)
+  const dataRefreshFreqScore: Record<InventoryAnswers["dataRefreshFreq"], number> =
+    { realtime: 4, daily: 3, weekly: 1, irregular: 0 };
+
+  // Q8: 유통기한/시즌 재고 관리 (3점)
+  const seasonalHandlingScore: Record<InventoryAnswers["seasonalHandling"], number> =
+    { systematic: 3, partial: 1, none: 0 };
+
+  // Q9: 재고 정확도 체감 (4점)
+  const stockAccuracyScore: Record<InventoryAnswers["stockAccuracy"], number> =
+    { very_close: 4, mostly_close: 2, often_different: 1, dont_know: 0 };
 
   const surveyTotalScore =
     stockoutFreqScore[answers.stockoutFrequency] +
     excessRatioScore[answers.excessRatio] +
     auditFreqScore[answers.auditFrequency] +
-    safetyStockScore[answers.safetyStockMethod]; // 최대 40점
+    safetyStockScore[answers.safetyStockMethod] +
+    managementToolScore[answers.managementTool] +
+    abcClassificationScore[answers.abcClassification] +
+    dataRefreshFreqScore[answers.dataRefreshFreq] +
+    seasonalHandlingScore[answers.seasonalHandling] +
+    stockAccuracyScore[answers.stockAccuracy]; // 최대 40점
 
   // ── 최종 점수 합산 ────────────────────────────
   let finalScore: number;
@@ -298,20 +353,43 @@ export function scoreInventoryDiagnosis(
   }
 
   // 설문 기반 평가
-  if (auditFreqScore[answers.auditFrequency] >= 7)
+  if (auditFreqScore[answers.auditFrequency] >= 3)
     strengths.push("정기적인 재고 실사로 재고 정확도를 관리하고 있습니다");
   else
     weaknesses.push("실사 주기가 길어 재고 정확도 오차가 누적될 수 있습니다");
 
-  if (safetyStockScore[answers.safetyStockMethod] >= 5)
+  if (safetyStockScore[answers.safetyStockMethod] >= 3)
     strengths.push("데이터 기반 안전재고 설정으로 과학적 재고 관리를 하고 있습니다");
   else
     weaknesses.push("안전재고가 감에 의존하거나 미설정 상태로 리스크에 노출되어 있습니다");
+
+  // 신규 문항 평가
+  if (answers.managementTool === "erp_wms")
+    strengths.push("체계적 재고 관리 시스템으로 데이터 기반 운영이 가능합니다");
+  else if (answers.managementTool === "manual")
+    weaknesses.push("체계적 재고 관리 시스템이 없어 데이터 정확도와 실시간 현황 파악이 어렵습니다");
+
+  if (answers.abcClassification === "applied")
+    strengths.push("제품 중요도별 차등 관리로 재고 효율성을 높이고 있습니다");
+  else if (answers.abcClassification === "none")
+    weaknesses.push("제품 중요도 구분 없이 동일 관리하여 핵심 제품의 재고 관리가 소홀해질 수 있습니다");
+
+  if (answers.dataRefreshFreq === "realtime" || answers.dataRefreshFreq === "daily")
+    strengths.push("재고 데이터가 실시간으로 갱신되어 정확한 의사결정이 가능합니다");
+  else if (answers.dataRefreshFreq === "irregular")
+    weaknesses.push("재고 데이터 갱신이 불규칙하여 실시간 현황 파악이 어렵습니다");
+
+  if (answers.stockAccuracy === "very_close")
+    strengths.push("장부-실제 재고 일치율이 높아 재고 신뢰도가 우수합니다");
+  else if (answers.stockAccuracy === "often_different" || answers.stockAccuracy === "dont_know")
+    weaknesses.push("장부와 실제 재고 차이가 커서 발주·판매 계획의 정확도가 떨어집니다");
 
   // 핵심 액션 결정 (가장 낮은 점수 항목 기준)
   let topAction: string;
   if (weaknesses.length === 0) {
     topAction = "현재 수준을 유지하면서 ABC-XYZ 차등 관리로 효율을 더 높이세요";
+  } else if (answers.managementTool === "manual") {
+    topAction = "엑셀이라도 재고 관리 체계를 구축하고, WMS 도입을 단계적으로 추진하세요";
   } else if (
     hasDbData &&
     excessScore < stockoutScore &&
@@ -345,37 +423,62 @@ export function scoreInventoryDiagnosis(
  * 물류 카테고리 진단 점수를 산출합니다.
  *
  * 순수 설문 100점 구조 (DB 물류비 데이터 없음).
- * Q1(25) + Q2(25) + Q3(20) + Q4(20) + Q5(10)
+ * Q1(15) + Q2(12) + Q3(12) + Q4(10) + Q5(8) + Q6(10) + Q7(8) + Q8(9) + Q9(8) + Q10(8)
  */
 export function scoreLogisticsDiagnosis(
   answers: LogisticsAnswers
 ): CategoryDiagnosticResult {
-  // Q1: 물류비 비율 (25점)
+  // Q1: 물류비 비율 (15점)
   const logisticsRatioScore: Record<LogisticsAnswers["logisticsRatio"], number> =
-    { under5: 25, "5to10": 18, "10to15": 10, over15: 3, unknown: 5 };
+    { under5: 15, "5to10": 11, "10to15": 6, over15: 2, unknown: 3 };
 
-  // Q2: 반품율 (25점)
+  // Q2: 반품율 (12점)
   const returnRateScore: Record<LogisticsAnswers["returnRate"], number> =
-    { under2: 25, "2to5": 17, "5to10": 8, over10: 2 };
+    { under2: 12, "2to5": 8, "5to10": 4, over10: 1 };
 
-  // Q3: 배송 정시율 (20점)
+  // Q3: 배송 정시율 (12점)
   const deliveryOnTimeScore: Record<LogisticsAnswers["deliveryOnTime"], number> =
-    { over95: 20, "80to95": 13, "50to80": 6, under50: 1, unknown: 5 };
+    { over95: 12, "80to95": 8, "50to80": 4, under50: 1, unknown: 3 };
 
-  // Q4: 주문 오류 빈도 (20점)
+  // Q4: 주문 오류 빈도 (10점)
   const orderErrorScore: Record<LogisticsAnswers["orderErrorFreq"], number> =
-    { rarely: 20, monthly: 13, weekly: 5, daily: 0 };
+    { rarely: 10, monthly: 7, weekly: 3, daily: 0 };
 
-  // Q5: 공급자 다변화 (10점) — 집중 리스크 최소화 관점
+  // Q5: 공급자 다변화 (8점) — 집중 리스크 최소화 관점
   const supplierCountScore: Record<LogisticsAnswers["supplierCount"], number> =
-    { one: 2, two_three: 10, four_five: 7, over_six: 5 };
+    { one: 1, two_three: 8, four_five: 6, over_six: 4 };
+
+  // Q6: 물류 운영 방식 (10점)
+  const operationModeScore: Record<LogisticsAnswers["operationMode"], number> =
+    { hybrid: 10, thirdParty: 8, inHouse: 6, ad_hoc: 2 };
+
+  // Q7: 물류비 모니터링 수준 (8점)
+  const costMonitoringScore: Record<LogisticsAnswers["costMonitoring"], number> =
+    { monthly_analysis: 8, total_only: 4, rarely: 1 };
+
+  // Q8: 배송 클레임 처리 체계 (9점)
+  const claimHandlingScore: Record<LogisticsAnswers["claimHandling"], number> =
+    { systematic: 9, case_by_case: 5, reactive: 2, ignored: 0 };
+
+  // Q9: 피킹/패킹 프로세스 표준화 (8점)
+  const pickPackProcessScore: Record<LogisticsAnswers["pickPackProcess"], number> =
+    { standardized: 8, partial: 4, none: 1 };
+
+  // Q10: 물류 데이터 활용도 (8점)
+  const dataUtilizationScore: Record<LogisticsAnswers["dataUtilization"], number> =
+    { active: 8, partial: 4, none: 0 };
 
   const finalScore = Math.round(
     logisticsRatioScore[answers.logisticsRatio] +
       returnRateScore[answers.returnRate] +
       deliveryOnTimeScore[answers.deliveryOnTime] +
       orderErrorScore[answers.orderErrorFreq] +
-      supplierCountScore[answers.supplierCount]
+      supplierCountScore[answers.supplierCount] +
+      operationModeScore[answers.operationMode] +
+      costMonitoringScore[answers.costMonitoring] +
+      claimHandlingScore[answers.claimHandling] +
+      pickPackProcessScore[answers.pickPackProcess] +
+      dataUtilizationScore[answers.dataUtilization]
   );
 
   const { grade, label: gradeLabel } = scoreToGrade(finalScore);
@@ -385,39 +488,69 @@ export function scoreLogisticsDiagnosis(
   const strengths: string[] = [];
   const weaknesses: string[] = [];
 
-  if (logisticsRatioScore[answers.logisticsRatio] >= 18)
+  if (logisticsRatioScore[answers.logisticsRatio] >= 11)
     strengths.push("물류비 비율이 업계 기준(5~8%) 이내로 효율적으로 관리되고 있습니다");
   else if (answers.logisticsRatio !== "unknown")
     weaknesses.push("물류비 비율이 높아 원가 경쟁력을 저하시키고 있습니다");
 
-  if (returnRateScore[answers.returnRate] >= 17)
+  if (returnRateScore[answers.returnRate] >= 8)
     strengths.push("반품율이 낮아 출고 품질이 우수합니다");
   else
     weaknesses.push("반품율이 높아 재작업 비용과 고객 불만이 증가하고 있습니다");
 
-  if (deliveryOnTimeScore[answers.deliveryOnTime] >= 13)
+  if (deliveryOnTimeScore[answers.deliveryOnTime] >= 8)
     strengths.push("배송 정시율이 높아 고객 신뢰도가 확보되어 있습니다");
   else if (answers.deliveryOnTime !== "unknown")
     weaknesses.push("배송 정시율이 낮아 고객 이탈 위험이 있습니다");
 
-  if (orderErrorScore[answers.orderErrorFreq] >= 13)
+  if (orderErrorScore[answers.orderErrorFreq] >= 7)
     strengths.push("주문 처리 오류가 거의 없어 운영 신뢰성이 높습니다");
   else
     weaknesses.push("주문 오류가 잦아 재처리 비용과 고객 불만이 발생하고 있습니다");
 
-  if (supplierCountScore[answers.supplierCount] >= 7)
+  if (supplierCountScore[answers.supplierCount] >= 6)
     strengths.push("공급자가 적절히 다변화되어 공급 리스크가 분산되어 있습니다");
   else if (answers.supplierCount === "one")
     weaknesses.push("공급자가 1개사에 집중되어 공급 중단 리스크가 매우 높습니다");
+
+  // 신규 문항 평가
+  if (answers.operationMode === "hybrid")
+    strengths.push("자체물류와 3PL의 장점을 결합한 효율적 물류 체계를 운영하고 있습니다");
+  else if (answers.operationMode === "ad_hoc")
+    weaknesses.push("일관된 물류 운영 체계가 없어 비용 예측과 서비스 품질 관리가 어렵습니다");
+
+  if (answers.costMonitoring === "monthly_analysis")
+    strengths.push("물류비를 항목별로 정기 분석하여 비용 최적화를 추구하고 있습니다");
+  else if (answers.costMonitoring === "rarely")
+    weaknesses.push("물류비를 분석하지 않아 비용 절감 기회를 놓치고 있습니다");
+
+  if (answers.claimHandling === "systematic")
+    strengths.push("체계적 클레임 대응으로 재발을 방지하고 있습니다");
+  else if (answers.claimHandling === "reactive" || answers.claimHandling === "ignored")
+    weaknesses.push("클레임 대응 체계가 미비하여 반복적 문제 발생과 고객 이탈 리스크가 높습니다");
+
+  if (answers.pickPackProcess === "standardized")
+    strengths.push("표준화된 출고 프로세스로 오배송·누락을 최소화하고 있습니다");
+  else if (answers.pickPackProcess === "none")
+    weaknesses.push("출고 작업 표준화가 미비하여 오배송·누락 리스크가 높습니다");
+
+  if (answers.dataUtilization === "active")
+    strengths.push("물류 데이터를 적극 활용하여 지속적 개선이 이루어지고 있습니다");
+  else if (answers.dataUtilization === "none")
+    weaknesses.push("물류 실적 데이터를 활용하지 않아 개선 기회를 놓치고 있습니다");
 
   // 핵심 액션
   let topAction: string;
   if (weaknesses.length === 0) {
     topAction = "현재 물류 운영 수준을 유지하면서 자동화 도입으로 추가 비용 절감을 추구하세요";
-  } else if (returnRateScore[answers.returnRate] < 8) {
+  } else if (answers.operationMode === "ad_hoc") {
+    topAction = "물류 운영 체계를 정비하고 3PL 도입을 검토하세요";
+  } else if (returnRateScore[answers.returnRate] < 4) {
     topAction = "반품 원인을 유형별로 분류하고, 출고 전 검수 프로세스를 즉시 강화하세요";
-  } else if (orderErrorScore[answers.orderErrorFreq] < 5) {
+  } else if (orderErrorScore[answers.orderErrorFreq] < 3) {
     topAction = "바코드 스캔 또는 피킹 리스트 자동화를 도입하여 주문 오류를 즉시 줄이세요";
+  } else if (answers.costMonitoring === "rarely" && weaknesses.some(w => w.includes("물류비"))) {
+    topAction = "물류비를 항목별로 분해하여 가장 큰 비중부터 집중 절감하세요";
   } else if (answers.logisticsRatio === "over15") {
     topAction = "운송비·보관비·처리비 비중을 분석하여 가장 큰 항목부터 집중 절감하세요";
   } else {
@@ -487,27 +620,52 @@ export function scoreOrderDiagnosis(
 
   // ── 설문 점수 산출 (40점 만점) ────────────────
 
-  // Q1: 납기 준수율 인식 (10점)
+  // Q1: 납기 준수율 인식 (6점)
   const leadTimeComplianceScore: Record<OrderAnswers["leadTimeCompliance"], number> =
-    { over95: 10, "80to95": 7, "50to80": 3, often_late: 0 };
+    { over95: 6, "80to95": 4, "50to80": 2, often_late: 0 };
 
-  // Q2: 긴급 발주 빈도 (10점)
+  // Q2: 긴급 발주 빈도 (5점)
   const urgentOrderScore: Record<OrderAnswers["urgentOrderFreq"], number> =
-    { rarely: 10, monthly: 7, weekly: 3, always: 0 };
+    { rarely: 5, monthly: 3, weekly: 1, always: 0 };
 
-  // Q3: 리드타임 인지도 (10점)
+  // Q3: 리드타임 인지도 (5점)
   const leadTimeAwarenessScore: Record<OrderAnswers["leadTimeAwareness"], number> =
-    { exact: 10, approximate: 5, unknown: 0 };
+    { exact: 5, approximate: 3, unknown: 0 };
 
-  // Q4: 발주 트리거 방식 (10점)
+  // Q4: 발주 트리거 방식 (5점)
   const orderTriggerScore: Record<OrderAnswers["orderTrigger"], number> =
-    { system: 10, manual: 5, reactive: 0 };
+    { system: 5, manual: 3, reactive: 0 };
+
+  // Q5: 발주 프로세스 표준화(SOP) (5점)
+  const orderSopScore: Record<OrderAnswers["orderSop"], number> =
+    { documented: 5, informal: 3, none: 0 };
+
+  // Q6: MOQ 대응 방식 (3점)
+  const moqHandlingScore: Record<OrderAnswers["moqHandling"], number> =
+    { optimized: 3, sometimes_over: 1, not_applicable: 2 };
+
+  // Q7: 공급자 평가/관리 체계 (4점)
+  const supplierEvaluationScore: Record<OrderAnswers["supplierEvaluation"], number> =
+    { formal: 4, informal: 2, none: 0 };
+
+  // Q8: 발주 데이터 분석 활용 (4점)
+  const orderDataAnalysisScore: Record<OrderAnswers["orderDataAnalysis"], number> =
+    { active: 4, partial: 2, none: 0 };
+
+  // Q9: 대체 공급자 확보 (3점)
+  const backupSupplierScore: Record<OrderAnswers["backupSupplier"], number> =
+    { prepared: 3, some: 1, none: 0 };
 
   const surveyTotalScore =
     leadTimeComplianceScore[answers.leadTimeCompliance] +
     urgentOrderScore[answers.urgentOrderFreq] +
     leadTimeAwarenessScore[answers.leadTimeAwareness] +
-    orderTriggerScore[answers.orderTrigger]; // 최대 40점
+    orderTriggerScore[answers.orderTrigger] +
+    orderSopScore[answers.orderSop] +
+    moqHandlingScore[answers.moqHandling] +
+    supplierEvaluationScore[answers.supplierEvaluation] +
+    orderDataAnalysisScore[answers.orderDataAnalysis] +
+    backupSupplierScore[answers.backupSupplier]; // 최대 40점
 
   // ── 최종 점수 합산 ────────────────────────────
   let finalScore: number;
@@ -580,23 +738,51 @@ export function scoreOrderDiagnosis(
       weaknesses.push("리드타임이 길어 선행 발주 의존도가 높고 재고 부담이 큽니다");
   }
 
-  if (urgentOrderScore[answers.urgentOrderFreq] >= 7)
+  if (urgentOrderScore[answers.urgentOrderFreq] >= 3)
     strengths.push("긴급 발주 빈도가 낮아 계획적 발주가 잘 이루어지고 있습니다");
   else
     weaknesses.push("긴급 발주가 잦아 추가 물류비와 공급자 관계 악화를 초래하고 있습니다");
 
-  if (orderTriggerScore[answers.orderTrigger] >= 5)
+  if (orderTriggerScore[answers.orderTrigger] >= 3)
     strengths.push("체계적인 발주 기준이 있어 일관된 발주 관리가 가능합니다");
   else
     weaknesses.push("재고 소진 후 반응형 발주로 운영되어 품절 리스크가 상시 존재합니다");
+
+  // 신규 문항 평가
+  if (answers.orderSop === "documented")
+    strengths.push("발주 프로세스가 표준화되어 일관된 업무 수행이 가능합니다");
+  else if (answers.orderSop === "none")
+    weaknesses.push("발주 프로세스가 표준화되지 않아 담당자 부재 시 업무 공백과 오류 리스크가 있습니다");
+
+  if (answers.supplierEvaluation === "formal")
+    strengths.push("정기적 공급자 평가로 공급 품질을 체계적으로 관리하고 있습니다");
+  else if (answers.supplierEvaluation === "none")
+    weaknesses.push("공급자 평가 체계가 없어 납기·품질 문제를 사전에 방지하기 어렵습니다");
+
+  if (answers.orderDataAnalysis === "active")
+    strengths.push("발주 데이터 분석을 통해 지속적으로 발주 효율을 개선하고 있습니다");
+  else if (answers.orderDataAnalysis === "none")
+    weaknesses.push("발주 이력 데이터를 활용하지 않아 발주 최적화 기회를 놓치고 있습니다");
+
+  if (answers.backupSupplier === "prepared")
+    strengths.push("대체 공급자를 확보하여 공급 리스크를 분산하고 있습니다");
+  else if (answers.backupSupplier === "none")
+    weaknesses.push("대체 공급자가 없어 공급 중단 시 사업 연속성에 심각한 위협이 됩니다");
+
+  if (answers.moqHandling === "sometimes_over")
+    weaknesses.push("MOQ 제약으로 인한 과다 발주가 재고 부담을 가중시키고 있습니다");
 
   // 핵심 액션
   let topAction: string;
   if (weaknesses.length === 0) {
     topAction = "현재 발주 체계를 유지하면서 EOQ 기반 발주량 최적화로 비용을 추가 절감하세요";
+  } else if (answers.orderSop === "none" && answers.orderTrigger === "reactive") {
+    topAction = "발주 표준 절차(SOP)를 수립하고, 발주점 기반 자동 알림을 즉시 도입하세요";
+  } else if (answers.backupSupplier === "none") {
+    topAction = "주요 품목의 대체 공급자를 즉시 확보하여 공급 리스크를 분산하세요";
   } else if (answers.orderTrigger === "reactive") {
     topAction = "발주점(ROP) 기준을 즉시 설정하고, 시스템이 자동으로 발주 시점을 알리도록 구성하세요";
-  } else if (urgentOrderScore[answers.urgentOrderFreq] < 3) {
+  } else if (urgentOrderScore[answers.urgentOrderFreq] < 1) {
     topAction = "긴급 발주 원인을 분석하고 발주 리드타임 여유분을 안전재고에 반영하세요";
   } else if (hasDbData && onTimeScore < 10) {
     topAction = "공급자별 납기준수율을 측정하고, 미달 공급자에 대한 페널티 조항을 계약에 추가하세요";
@@ -659,6 +845,15 @@ const INVENTORY_STRATEGIES: OptimizationStrategy[] = [
     priority: "medium",
     relatedCategories: ["inventory"],
   },
+  {
+    title: "재고 관리 시스템(WMS) 도입",
+    description:
+      "수기/엑셀 관리에서 벗어나 바코드·QR 기반 WMS를 도입하여 재고 정확도와 실시간 가시성을 확보합니다.",
+    expectedEffect: "재고 정확도 95%+ 달성, 실사 시간 70% 절감",
+    timeframe: "3~6개월",
+    priority: "high",
+    relatedCategories: ["inventory"],
+  },
 ];
 
 /** 물류 관련 전략 풀 */
@@ -699,6 +894,15 @@ const LOGISTICS_STRATEGIES: OptimizationStrategy[] = [
     priority: "medium",
     relatedCategories: ["logistics"],
   },
+  {
+    title: "3PL 도입 또는 물류 체계 재정비",
+    description:
+      "전문 물류업체 위탁 또는 자체 물류 프로세스를 체계화하여 비용 효율과 서비스 품질을 동시에 확보합니다.",
+    expectedEffect: "물류비 15~25% 절감, 배송 정시율 향상",
+    timeframe: "2~4개월",
+    priority: "high",
+    relatedCategories: ["logistics"],
+  },
 ];
 
 /** 발주 관련 전략 풀 */
@@ -737,6 +941,15 @@ const ORDER_STRATEGIES: OptimizationStrategy[] = [
     expectedEffect: "재고 유지 비용 15~20% 절감, 발주 횟수 최적화",
     timeframe: "2~4주",
     priority: "medium",
+    relatedCategories: ["order"],
+  },
+  {
+    title: "공급 리스크 분산 체계 구축",
+    description:
+      "주요 품목별 대체 공급자를 확보하고, 공급 중단 시나리오별 대응 매뉴얼을 작성합니다.",
+    expectedEffect: "공급 중단 리스크 80% 감소, 사업 연속성 확보",
+    timeframe: "2~3개월",
+    priority: "high",
     relatedCategories: ["order"],
   },
 ];
