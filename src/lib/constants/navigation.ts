@@ -20,6 +20,7 @@ import {
   PackageX,
   Compass,
   Warehouse,
+  Stethoscope,
   type LucideIcon,
 } from "lucide-react";
 
@@ -204,6 +205,13 @@ export const MAIN_SECTIONS: NavSection[] = [
     title: "도구",
     color: "text-slate-300",
     items: [
+      {
+        title: "SCM 진단키트",
+        href: "/dashboard/scm-diagnostic",
+        icon: Stethoscope,
+        description: "설문으로 SCM 현황 진단 및 전략 추천",
+        menuKey: "scm_diagnostic",
+      },
       {
         title: "AI 채팅",
         href: "/dashboard/chat",
