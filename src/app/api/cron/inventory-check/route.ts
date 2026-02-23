@@ -15,10 +15,10 @@ function getInventoryStatus(
 
   if (currentStock === 0) return { status: 'out_of_stock' }
   if (currentStock < safe * 0.5) return { status: 'critical' }
-  if (currentStock < safe) return { status: 'low' }
+  if (currentStock < safe) return { status: 'shortage' }
   if (currentStock >= safe * 5.0) return { status: 'overstock' }
   if (currentStock >= safe * 3.0) return { status: 'excess' }
-  if ((reorderPoint || 0) > 0 && currentStock < (reorderPoint || 0)) return { status: 'warning' }
+  if ((reorderPoint || 0) > 0 && currentStock < (reorderPoint || 0)) return { status: 'caution' }
   return { status: 'optimal' }
 }
 
@@ -53,7 +53,8 @@ export async function GET(request: NextRequest) {
       breakdown: {
         outOfStock: number
         critical: number
-        low: number
+        shortage: number
+        caution: number
         excess: number
         overstock: number
       }
@@ -77,11 +78,11 @@ export async function GET(request: NextRequest) {
             organizationName: org.name,
             productsChecked: 0,
             alertsCreated: 0,
-            breakdown: { outOfStock: 0, critical: 0, low: 0, excess: 0, overstock: 0 },
+            breakdown: { outOfStock: 0, critical: 0, shortage: 0, caution: 0, excess: 0, overstock: 0 },
           }
         }
 
-        const breakdown = { outOfStock: 0, critical: 0, low: 0, excess: 0, overstock: 0 }
+        const breakdown = { outOfStock: 0, critical: 0, shortage: 0, caution: 0, excess: 0, overstock: 0 }
 
         const alertsToCreate: Array<{
           organizationId: string
@@ -117,8 +118,8 @@ export async function GET(request: NextRequest) {
               title: `위험: ${product.name}`,
               message: `[${product.sku}] ${product.name}의 재고가 위험 수준입니다.`,
             })
-          } else if (status.status === 'low') {
-            breakdown.low++
+          } else if (status.status === 'shortage') {
+            breakdown.shortage++
             alertsToCreate.push({
               organizationId: org.id,
               productId: product.id,
@@ -126,6 +127,16 @@ export async function GET(request: NextRequest) {
               severity: 'warning',
               title: `부족: ${product.name}`,
               message: `[${product.sku}] ${product.name}의 재고가 부족합니다.`,
+            })
+          } else if (status.status === 'caution') {
+            breakdown.caution++
+            alertsToCreate.push({
+              organizationId: org.id,
+              productId: product.id,
+              type: 'stock_shortage',
+              severity: 'info',
+              title: `주의: ${product.name}`,
+              message: `[${product.sku}] ${product.name}의 재고가 발주점 이하입니다.`,
             })
           } else if (status.status === 'excess') {
             breakdown.excess++
@@ -218,7 +229,7 @@ export async function GET(request: NextRequest) {
           organizationName: org.name,
           productsChecked: 0,
           alertsCreated: 0,
-          breakdown: { outOfStock: 0, critical: 0, low: 0, excess: 0, overstock: 0 },
+          breakdown: { outOfStock: 0, critical: 0, shortage: 0, caution: 0, excess: 0, overstock: 0 },
           error: result.reason instanceof Error ? result.reason.message : '알 수 없는 오류',
         })
       }
