@@ -10,7 +10,7 @@
 import { unstable_cache } from 'next/cache'
 import { requireAuth } from './auth-helpers'
 import { db } from '@/server/db'
-import { products, salesRecords, inventory, demandForecasts } from '@/server/db/schema'
+import { products, salesRecords, inventory, inventoryHistory, demandForecasts } from '@/server/db/schema'
 import { eq, and, gte, sql } from 'drizzle-orm'
 import {
   performABCAnalysis,
@@ -36,15 +36,15 @@ async function _getABCXYZAnalysisInternal(orgId: string) {
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
   const startDate = sixMonthsAgo.toISOString().split('T')[0]
 
-  // 병렬 데이터 로드 (3개 직렬→병렬 최적화)
-  const [allProducts, salesByProduct, monthlySales] = await Promise.all([
+  // 병렬 데이터 로드 (salesRecords + inventoryHistory 출고 데이터 병렬 조회)
+  const [allProducts, salesByProduct, monthlySales, historyByProduct, historyMonthlySales] = await Promise.all([
     // 1. 전체 제품 목록 조회 (FMR 등급 포함)
     db
       .select({ id: products.id, sku: products.sku, name: products.name, fmrGrade: products.fmrGrade })
       .from(products)
       .where(eq(products.organizationId, orgId)),
 
-    // 2. 제품별 매출 합계 (ABC용)
+    // 2. 제품별 매출 합계 (ABC용, salesRecords)
     db
       .select({
         productId: salesRecords.productId,
@@ -54,7 +54,7 @@ async function _getABCXYZAnalysisInternal(orgId: string) {
       .where(and(eq(salesRecords.organizationId, orgId), gte(salesRecords.date, startDate)))
       .groupBy(salesRecords.productId),
 
-    // 3. 제품별 월별 판매량 (XYZ용)
+    // 3. 제품별 월별 판매량 (XYZ용, salesRecords)
     db
       .select({
         productId: salesRecords.productId,
@@ -64,6 +64,39 @@ async function _getABCXYZAnalysisInternal(orgId: string) {
       .from(salesRecords)
       .where(and(eq(salesRecords.organizationId, orgId), gte(salesRecords.date, startDate)))
       .groupBy(salesRecords.productId, sql`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`),
+
+    // 4. 제품별 출고수량 합계 (ABC 보충용, inventoryHistory)
+    db
+      .select({
+        productId: inventoryHistory.productId,
+        totalQuantity: sql<number>`COALESCE(SUM(ABS(${inventoryHistory.changeAmount})), 0)`,
+      })
+      .from(inventoryHistory)
+      .where(
+        and(
+          eq(inventoryHistory.organizationId, orgId),
+          gte(inventoryHistory.date, startDate),
+          sql`${inventoryHistory.changeAmount} < 0`,
+        )
+      )
+      .groupBy(inventoryHistory.productId),
+
+    // 5. 제품별 월별 출고수량 (XYZ 보충용, inventoryHistory)
+    db
+      .select({
+        productId: inventoryHistory.productId,
+        month: sql<string>`TO_CHAR(${inventoryHistory.date}::date, 'YYYY-MM')`,
+        totalQuantity: sql<number>`COALESCE(SUM(ABS(${inventoryHistory.changeAmount})), 0)`,
+      })
+      .from(inventoryHistory)
+      .where(
+        and(
+          eq(inventoryHistory.organizationId, orgId),
+          gte(inventoryHistory.date, startDate),
+          sql`${inventoryHistory.changeAmount} < 0`,
+        )
+      )
+      .groupBy(inventoryHistory.productId, sql`TO_CHAR(${inventoryHistory.date}::date, 'YYYY-MM')`),
   ])
 
   if (allProducts.length === 0) {
@@ -99,14 +132,34 @@ async function _getABCXYZAnalysisInternal(orgId: string) {
     }
   }
 
+  // salesRecords 기준 매출 맵 생성
   const revenueMap = new Map(salesByProduct.map((s) => [s.productId, Number(s.totalRevenue)]))
 
-  // 월별 데이터를 제품별로 그룹핑
+  // salesRecords에 없는 제품은 inventoryHistory 출고 수량으로 보충 (ABC용)
+  // inventoryHistory에는 금액 정보가 없으므로 출고 수량을 value로 사용
+  const salesProductIds = new Set(salesByProduct.map((s) => s.productId))
+  for (const row of historyByProduct) {
+    if (!salesProductIds.has(row.productId)) {
+      revenueMap.set(row.productId, Number(row.totalQuantity))
+    }
+  }
+
+  // 월별 데이터를 제품별로 그룹핑 (salesRecords)
   const monthlyMap = new Map<string, number[]>()
   for (const row of monthlySales) {
     const arr = monthlyMap.get(row.productId) || []
     arr.push(Number(row.totalQuantity))
     monthlyMap.set(row.productId, arr)
+  }
+
+  // salesRecords에 없는 제품은 inventoryHistory 월별 출고 수량으로 보충 (XYZ용)
+  const monthlyProductIds = new Set(monthlySales.map((s) => s.productId))
+  for (const row of historyMonthlySales) {
+    if (!monthlyProductIds.has(row.productId)) {
+      const arr = monthlyMap.get(row.productId) || []
+      arr.push(Number(row.totalQuantity))
+      monthlyMap.set(row.productId, arr)
+    }
   }
 
   // 4. ABC 분석 입력 데이터 생성
@@ -289,7 +342,8 @@ export async function getDemandForecast(options?: {
     const startDate = twelveMonthsAgo.toISOString().split('T')[0]
 
     // 1단계: 제품 목록 + 탑 제품(필요시) 병렬 조회
-    const [allProducts, topProduct] = await Promise.all([
+    // topProduct: salesRecords 우선, 없으면 inventoryHistory 출고 기록에서 선택
+    const [allProducts, topSalesProduct, topHistoryProduct] = await Promise.all([
       db
         .select({ id: products.id, sku: products.sku, name: products.name, abcGrade: products.abcGrade, xyzGrade: products.xyzGrade })
         .from(products)
@@ -303,19 +357,37 @@ export async function getDemandForecast(options?: {
             .orderBy(sql`COUNT(*) DESC`)
             .limit(1)
         : Promise.resolve(null),
+      !productId
+        ? db
+            .select({ productId: inventoryHistory.productId, totalQty: sql<number>`SUM(ABS(${inventoryHistory.changeAmount}))` })
+            .from(inventoryHistory)
+            .where(
+              and(
+                eq(inventoryHistory.organizationId, orgId),
+                sql`${inventoryHistory.changeAmount} < 0`,
+              )
+            )
+            .groupBy(inventoryHistory.productId)
+            .orderBy(sql`SUM(ABS(${inventoryHistory.changeAmount})) DESC`)
+            .limit(1)
+        : Promise.resolve(null),
     ])
 
     if (allProducts.length === 0) {
       return { products: [], forecast: null }
     }
 
-    const selectedProductId = productId || topProduct?.[0]?.productId
+    // salesRecords 우선, 없으면 inventoryHistory 출고 기록에서 탑 제품 선택
+    const selectedProductId =
+      productId ||
+      topSalesProduct?.[0]?.productId ||
+      topHistoryProduct?.[0]?.productId
     if (!selectedProductId) {
       return { products: allProducts, forecast: null }
     }
 
-    // 2단계: 제품상세 + 재고 + 월별판매량 병렬 조회
-    const [productDetail, inventoryRow, monthlySales] = await Promise.all([
+    // 2단계: 제품상세 + 재고 + 월별판매량(salesRecords) + 월별출고량(inventoryHistory) 병렬 조회
+    const [productDetail, inventoryRow, monthlySalesRaw, monthlyHistoryRaw] = await Promise.all([
       db
         .select({ id: products.id, name: products.name, abcGrade: products.abcGrade, xyzGrade: products.xyzGrade, safetyStock: products.safetyStock })
         .from(products)
@@ -335,6 +407,23 @@ export async function getDemandForecast(options?: {
         .where(and(eq(salesRecords.organizationId, orgId), eq(salesRecords.productId, selectedProductId), gte(salesRecords.date, startDate)))
         .groupBy(sql`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`)
         .orderBy(sql`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`),
+      // inventoryHistory 출고 보충 쿼리 (salesRecords 없을 때 사용)
+      db
+        .select({
+          month: sql<string>`TO_CHAR(${inventoryHistory.date}::date, 'YYYY-MM')`,
+          totalQuantity: sql<number>`COALESCE(SUM(ABS(${inventoryHistory.changeAmount})), 0)`,
+        })
+        .from(inventoryHistory)
+        .where(
+          and(
+            eq(inventoryHistory.organizationId, orgId),
+            eq(inventoryHistory.productId, selectedProductId),
+            gte(inventoryHistory.date, startDate),
+            sql`${inventoryHistory.changeAmount} < 0`,
+          )
+        )
+        .groupBy(sql`TO_CHAR(${inventoryHistory.date}::date, 'YYYY-MM')`)
+        .orderBy(sql`TO_CHAR(${inventoryHistory.date}::date, 'YYYY-MM')`),
     ])
 
     if (productDetail.length === 0) {
@@ -345,6 +434,9 @@ export async function getDemandForecast(options?: {
     const currentStock = inventoryRow[0]?.currentStock ?? 0
     const safetyStock = product.safetyStock ?? 0
     const isOverstock = safetyStock > 0 && currentStock >= safetyStock * 3
+
+    // salesRecords 우선 사용, 없는 제품은 inventoryHistory 출고 데이터로 보충
+    const monthlySales = monthlySalesRaw.length > 0 ? monthlySalesRaw : monthlyHistoryRaw
 
     if (monthlySales.length < 2) {
       return { products: allProducts, forecast: null }
@@ -527,31 +619,73 @@ export async function getSalesTrend(days: number = 30): Promise<{
     startDate.setDate(startDate.getDate() - days)
     const startDateStr = startDate.toISOString().split('T')[0]
 
-    const dailySales = await db
-      .select({
-        date: salesRecords.date,
-        totalSales: sql<number>`COALESCE(SUM(${salesRecords.totalAmount}), 0)`,
-        totalQuantity: sql<number>`COALESCE(SUM(${salesRecords.quantity}), 0)`,
-      })
-      .from(salesRecords)
-      .where(
-        and(
-          eq(salesRecords.organizationId, orgId),
-          gte(salesRecords.date, startDateStr)
+    const [dailySalesRaw, dailyHistoryRaw] = await Promise.all([
+      db
+        .select({
+          date: salesRecords.date,
+          totalSales: sql<number>`COALESCE(SUM(${salesRecords.totalAmount}), 0)`,
+          totalQuantity: sql<number>`COALESCE(SUM(${salesRecords.quantity}), 0)`,
+        })
+        .from(salesRecords)
+        .where(
+          and(
+            eq(salesRecords.organizationId, orgId),
+            gte(salesRecords.date, startDateStr)
+          )
         )
-      )
-      .groupBy(salesRecords.date)
-      .orderBy(salesRecords.date)
+        .groupBy(salesRecords.date)
+        .orderBy(salesRecords.date),
+      // inventoryHistory 출고 보충 (금액 정보 없으므로 수량만, sales=0으로 처리)
+      db
+        .select({
+          date: inventoryHistory.date,
+          totalQuantity: sql<number>`COALESCE(SUM(ABS(${inventoryHistory.changeAmount})), 0)`,
+        })
+        .from(inventoryHistory)
+        .where(
+          and(
+            eq(inventoryHistory.organizationId, orgId),
+            gte(inventoryHistory.date, startDateStr),
+            sql`${inventoryHistory.changeAmount} < 0`,
+          )
+        )
+        .groupBy(inventoryHistory.date)
+        .orderBy(inventoryHistory.date),
+    ])
 
-    if (dailySales.length === 0) {
+    // salesRecords에 있는 날짜 집합
+    const salesDateSet = new Set(dailySalesRaw.map((r) => String(r.date)))
+
+    // salesRecords 데이터를 기준으로 Map 구성
+    const dateMap = new Map<string, { sales: number; quantity: number }>()
+    for (const row of dailySalesRaw) {
+      dateMap.set(String(row.date), {
+        sales: Number(row.totalSales),
+        quantity: Number(row.totalQuantity),
+      })
+    }
+
+    // salesRecords에 없는 날짜는 inventoryHistory 출고 데이터로 보충
+    for (const row of dailyHistoryRaw) {
+      const dateStr = String(row.date)
+      if (!salesDateSet.has(dateStr)) {
+        const existing = dateMap.get(dateStr)
+        if (existing) {
+          // 같은 날짜에 이미 inventoryHistory 데이터가 합산된 경우 (중복 방지)
+          existing.quantity += Number(row.totalQuantity)
+        } else {
+          dateMap.set(dateStr, { sales: 0, quantity: Number(row.totalQuantity) })
+        }
+      }
+    }
+
+    if (dateMap.size === 0) {
       return { data: [], hasData: false }
     }
 
-    const data = dailySales.map((row) => ({
-      date: String(row.date),
-      sales: Number(row.totalSales),
-      quantity: Number(row.totalQuantity),
-    }))
+    const data = Array.from(dateMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, { sales, quantity }]) => ({ date, sales, quantity }))
 
     return { data, hasData: true }
   } catch (error) {
