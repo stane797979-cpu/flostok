@@ -1,4 +1,5 @@
 import { pgTable, uuid, text, timestamp, pgEnum, boolean, index } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { organizations } from "./organizations";
 
 export const userRoleEnum = pgEnum("user_role", ["admin", "manager", "viewer", "warehouse"]);
@@ -22,6 +23,8 @@ export const users = pgTable("users", {
 }, (table) => [
   index("users_email_idx").on(table.email),
   index("users_org_idx").on(table.organizationId),
+  // 부분 인덱스: soft-delete 쿼리 성능 최적화 (deleted_at IS NULL인 행만 인덱싱)
+  index("users_org_active_idx").on(table.organizationId).where(sql`deleted_at IS NULL`),
 ]);
 
 export type User = typeof users.$inferSelect;

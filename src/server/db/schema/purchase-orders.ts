@@ -10,6 +10,7 @@ import {
   index,
   jsonb,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { organizations } from "./organizations";
 import { suppliers } from "./suppliers";
 import { products } from "./products";
@@ -75,6 +76,8 @@ export const purchaseOrders = pgTable("purchase_orders", {
   index("purchase_orders_org_date_idx").on(table.organizationId, table.orderDate),
   index("purchase_orders_supplier_idx").on(table.supplierId),
   index("purchase_orders_dest_warehouse_idx").on(table.destinationWarehouseId),
+  // 부분 인덱스: soft-delete 쿼리 성능 최적화 (deleted_at IS NULL인 행만 인덱싱)
+  index("purchase_orders_org_active_idx").on(table.organizationId).where(sql`deleted_at IS NULL`),
 ]);
 
 // 발주 항목

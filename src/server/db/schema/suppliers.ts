@@ -1,4 +1,5 @@
 import { pgTable, uuid, text, timestamp, integer, numeric, jsonb, index } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { organizations } from "./organizations";
 
 // 공급자
@@ -36,6 +37,8 @@ export const suppliers = pgTable("suppliers", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   index("suppliers_org_idx").on(table.organizationId),
+  // 부분 인덱스: soft-delete 쿼리 성능 최적화 (deleted_at IS NULL인 행만 인덱싱)
+  index("suppliers_org_active_idx").on(table.organizationId).where(sql`deleted_at IS NULL`),
 ]);
 
 export type Supplier = typeof suppliers.$inferSelect;
