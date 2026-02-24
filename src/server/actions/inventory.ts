@@ -343,6 +343,8 @@ interface InventoryTransactionContext {
   product?: typeof products.$inferSelect;
   skipRevalidate?: boolean;
   skipActivityLog?: boolean;
+  /** Drizzle 트랜잭션 객체 — 외부 트랜잭션과 동일한 커넥션에서 실행하려면 전달 */
+  tx?: Parameters<Parameters<typeof db.transaction>[0]>[0];
 }
 
 export async function processInventoryTransaction(
@@ -358,6 +360,8 @@ export async function processInventoryTransaction(
 }> {
   try {
     const user = context?.user ?? await requireAuth();
+    // 트랜잭션 컨텍스트가 있으면 해당 tx를 사용하고, 없으면 독립 db 커넥션 사용
+    const dbOrTx = context?.tx ?? db;
 
     // 유효성 검사
     const validated = inventoryTransactionSchema.parse(input);
@@ -376,7 +380,7 @@ export async function processInventoryTransaction(
     const changeAmount = validated.quantity * changeTypeInfo.sign;
 
     // 제품 정보 조회 (컨텍스트에 있으면 DB 조회 생략)
-    const product = context?.product ?? (await db
+    const product = context?.product ?? (await dbOrTx
       .select()
       .from(products)
       .where(and(eq(products.id, validated.productId), eq(products.organizationId, user.organizationId)))
@@ -388,7 +392,7 @@ export async function processInventoryTransaction(
     }
 
     // 현재 재고 조회 (창고별)
-    const invResult = await db
+    const invResult = await dbOrTx
       .select()
       .from(inventory)
       .where(
@@ -423,7 +427,7 @@ export async function processInventoryTransaction(
 
     if (currentInventory) {
       // 원자적 재고 업데이트 — race condition 방지
-      const [updated] = await db
+      const [updated] = await dbOrTx
         .update(inventory)
         .set({
           currentStock: sql`${inventory.currentStock} + ${changeAmount}`,
@@ -451,7 +455,7 @@ export async function processInventoryTransaction(
       }
     } else {
       // 재고 생성 (창고 포함)
-      const [newInventory] = await db
+      const [newInventory] = await dbOrTx
         .insert(inventory)
         .values({
           organizationId: user.organizationId,
@@ -483,7 +487,7 @@ export async function processInventoryTransaction(
     }
 
     // 재고 이력 기록 (창고 포함)
-    await db.insert(inventoryHistory).values({
+    await dbOrTx.insert(inventoryHistory).values({
       organizationId: user.organizationId,
       warehouseId: warehouseId,
       productId: validated.productId,
@@ -1258,19 +1262,23 @@ export async function deleteInventoryItems(
       return { success: true, deletedCount: items.length };
     }
 
-    // admin/manager: 각 항목별 삭제 요청 생성
-    let requestedCount = 0;
-    for (const item of items) {
-      const result = await createDeletionRequest(
-        {
-          entityType: "inventory",
-          entityId: item.id,
-          reason: reason || `일괄 재고 삭제 요청 (${items.length}건 중)`,
-        },
-        user
-      );
-      if (result.success) requestedCount++;
-    }
+    // admin/manager: 각 항목별 삭제 요청 병렬 생성
+    const deletionResults = await Promise.all(
+      items.map((item) =>
+        createDeletionRequest(
+          {
+            entityType: "inventory",
+            entityId: item.id,
+            reason: reason || `일괄 재고 삭제 요청 (${items.length}건 중)`,
+          },
+          user
+        ).catch((err: unknown) => ({
+          success: false,
+          error: err instanceof Error ? err.message : "삭제 요청 생성에 실패했습니다",
+        }))
+      )
+    );
+    const requestedCount = deletionResults.filter((r) => r.success).length;
 
     return { success: true, deletedCount: 0, requestedCount, isRequest: true };
   } catch (error) {

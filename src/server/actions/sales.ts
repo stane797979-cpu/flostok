@@ -130,13 +130,16 @@ export async function createSalesRecord(
 
     // 트랜잭션으로 재고 차감 및 판매 기록 생성
     const newRecord = await db.transaction(async (tx) => {
-      // 재고 차감 (판매 출고)
-      const inventoryResult = await processInventoryTransaction({
-        productId: validated.productId,
-        changeType: "OUTBOUND_SALE",
-        quantity: validated.quantity,
-        notes: `판매: ${validated.date}`,
-      });
+      // 재고 차감 (판매 출고) — tx를 전달해 같은 트랜잭션 내에서 실행
+      const inventoryResult = await processInventoryTransaction(
+        {
+          productId: validated.productId,
+          changeType: "OUTBOUND_SALE",
+          quantity: validated.quantity,
+          notes: `판매: ${validated.date}`,
+        },
+        { user, product, tx, skipRevalidate: true, skipActivityLog: true }
+      );
 
       if (!inventoryResult.success) {
         throw new Error(inventoryResult.error || "재고 차감 실패");
@@ -168,8 +171,12 @@ export async function createSalesRecord(
       description: `판매 기록 생성`,
     });
 
+    // 재고 차감(processInventoryTransaction)에서 skipRevalidate: true로 생략했으므로 여기서 통합 처리
     revalidatePath("/analytics");
+    revalidatePath("/dashboard/inventory");
     revalidateTag(`analytics-${user.organizationId}`);
+    revalidateTag(`inventory-${user.organizationId}`);
+    revalidateTag(`kpi-${user.organizationId}`);
     return { success: true, record: newRecord };
   } catch (error) {
     if (error instanceof z.ZodError) {
