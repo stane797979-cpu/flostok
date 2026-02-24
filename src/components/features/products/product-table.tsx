@@ -174,7 +174,7 @@ export function ProductTable({ products = [], onView, onEdit, onDelete, onBulkDe
               <TableHead className="w-[50px]">
                 <Checkbox checked={isAllSelected} onCheckedChange={handleSelectAll} />
               </TableHead>
-              <TableHead className="w-[100px]">
+              <TableHead className="min-w-[220px]">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -256,7 +256,7 @@ export function ProductTable({ products = [], onView, onEdit, onDelete, onBulkDe
                     onCheckedChange={(checked) => handleSelectOne(product.id, checked as boolean)}
                   />
                 </TableCell>
-                <TableCell className="font-mono text-sm">{product.sku}</TableCell>
+                <TableCell className="font-mono text-sm whitespace-nowrap">{product.sku}</TableCell>
                 <TableCell className="font-medium">{product.name}</TableCell>
                 <TableCell className="text-slate-500">{product.category || "-"}</TableCell>
                 <TableCell className="text-right font-mono">
