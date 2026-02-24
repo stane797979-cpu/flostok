@@ -20,12 +20,16 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // PortOne 웹훅 서명 검증
+    // PortOne 웹훅 서명 검증 (외부 PG사 호출이므로 Supabase 인증 대신 서명 검증 사용)
     const signature = request.headers.get("x-portone-signature");
     const isValid = await verifyWebhookSignature(body, signature);
 
     if (!isValid) {
-      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+      console.warn("[Webhook] 서명 검증 실패 — 허가되지 않은 요청입니다");
+      return NextResponse.json(
+        { error: "웹훅 서명이 유효하지 않습니다" },
+        { status: 401 },
+      );
     }
 
     const { type, data } = body;

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/server/db";
-import { subscriptions, organizations, paymentHistory } from "@/server/db/schema";
+import { subscriptions, organizations, paymentHistory, users } from "@/server/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { cancelPayment, savePaymentHistory } from "@/server/services/payment/portone";
+import { createClient } from "@/lib/supabase/server";
 
 const cancelSchema = z.object({
   subscriptionId: z.string().uuid(),
@@ -65,6 +66,32 @@ function calculateRefundAmount(
  */
 export async function POST(request: NextRequest) {
   try {
+    // 인증 확인
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: "인증이 필요합니다" },
+        { status: 401 },
+      );
+    }
+
+    // DB에서 사용자의 organizationId 조회
+    const dbUser = await db.query.users.findFirst({
+      where: eq(users.authId, user.id),
+    });
+
+    if (!dbUser) {
+      return NextResponse.json(
+        { error: "사용자 정보를 찾을 수 없습니다" },
+        { status: 403 },
+      );
+    }
+
     const body = await request.json();
     const validated = cancelSchema.parse(body);
 
@@ -79,6 +106,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "구독을 찾을 수 없습니다" },
         { status: 404 },
+      );
+    }
+
+    // 구독의 organizationId가 인증된 사용자의 조직과 일치하는지 검증
+    if (subscription.organizationId !== dbUser.organizationId) {
+      return NextResponse.json(
+        { error: "해당 구독에 대한 권한이 없습니다" },
+        { status: 403 },
       );
     }
 

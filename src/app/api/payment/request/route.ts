@@ -7,6 +7,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getPlanInfo } from "@/server/services/subscription";
+import { createClient } from "@/lib/supabase/server";
+import { db } from "@/server/db";
+import { users } from "@/server/db/schema";
+import { eq } from "drizzle-orm";
 
 const requestSchema = z.object({
   organizationId: z.string().uuid(),
@@ -21,8 +25,42 @@ const requestSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    // 인증 확인
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: "인증이 필요합니다" },
+        { status: 401 },
+      );
+    }
+
+    // DB에서 사용자의 organizationId 조회
+    const dbUser = await db.query.users.findFirst({
+      where: eq(users.authId, user.id),
+    });
+
+    if (!dbUser) {
+      return NextResponse.json(
+        { error: "사용자 정보를 찾을 수 없습니다" },
+        { status: 403 },
+      );
+    }
+
     const body = await request.json();
     const validated = requestSchema.parse(body);
+
+    // 요청된 organizationId가 인증된 사용자의 조직과 일치하는지 검증
+    if (validated.organizationId !== dbUser.organizationId) {
+      return NextResponse.json(
+        { error: "해당 조직에 대한 권한이 없습니다" },
+        { status: 403 },
+      );
+    }
 
     // 플랜 정보 가져오기
     const planInfo = getPlanInfo(validated.plan);
