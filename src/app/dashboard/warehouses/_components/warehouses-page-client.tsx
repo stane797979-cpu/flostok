@@ -32,7 +32,7 @@ import {
 import { Plus, MoreHorizontal, Edit, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { deleteWarehouse } from "@/server/actions/warehouses";
-import { toast } from "sonner";
+import { useToast } from "@/hooks/use-toast";
 import { WarehouseFormDialog } from "./warehouse-form-dialog";
 
 interface Warehouse {
@@ -64,6 +64,7 @@ export function WarehousesPageClient({ warehouses }: WarehousesPageClientProps) 
   const [editWarehouse, setEditWarehouse] = useState<Warehouse | null>(null);
   const [deleteWarehouseId, setDeleteWarehouseId] = useState<string | null>(null);
   const router = useRouter();
+  const { toast } = useToast();
 
   const totalCount = warehouses.length;
   const activeCount = warehouses.filter((w) => w.isActive).length;
@@ -79,10 +80,10 @@ export function WarehousesPageClient({ warehouses }: WarehousesPageClientProps) 
     const result = await deleteWarehouse(deleteWarehouseId);
 
     if (result.success) {
-      toast.success("창고가 삭제되었습니다");
+      toast({ title: "창고가 삭제되었습니다" });
       router.refresh();
     } else {
-      toast.error(result.error || "창고 삭제에 실패했습니다");
+      toast({ title: result.error || "창고 삭제에 실패했습니다", variant: "destructive" });
     }
 
     setDeleteWarehouseId(null);

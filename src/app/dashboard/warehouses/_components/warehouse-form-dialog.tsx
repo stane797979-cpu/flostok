@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
 import { createWarehouse, updateWarehouse } from "@/server/actions/warehouses";
-import { toast } from "sonner";
+import { useToast } from "@/hooks/use-toast";
 
 interface Warehouse {
   id: string;
@@ -60,6 +60,7 @@ export function WarehouseFormDialog({
   const [address, setAddress] = useState("");
   const [isActive, setIsActive] = useState(true);
   const [isPending, startTransition] = useTransition();
+  const { toast } = useToast();
 
   // 수정 모드일 때 기존 데이터 채우기
   useEffect(() => {
@@ -82,17 +83,17 @@ export function WarehouseFormDialog({
   const handleSubmit = () => {
     // 유효성 검증
     if (!code.trim()) {
-      toast.error("창고 코드를 입력하세요");
+      toast({ title: "창고 코드를 입력하세요", variant: "destructive" });
       return;
     }
 
     if (!/^[A-Z0-9_]+$/.test(code.trim())) {
-      toast.error("창고 코드는 영문 대문자, 숫자, 밑줄(_)만 사용할 수 있습니다");
+      toast({ title: "창고 코드는 영문 대문자, 숫자, 밑줄(_)만 사용할 수 있습니다", variant: "destructive" });
       return;
     }
 
     if (!name.trim()) {
-      toast.error("창고명을 입력하세요");
+      toast({ title: "창고명을 입력하세요", variant: "destructive" });
       return;
     }
 
@@ -107,11 +108,11 @@ export function WarehouseFormDialog({
           });
 
           if (result.success) {
-            toast.success("창고가 생성되었습니다");
+            toast({ title: "창고가 생성되었습니다" });
             onSuccess();
             onOpenChange(false);
           } else {
-            toast.error(result.error || "창고 생성에 실패했습니다");
+            toast({ title: result.error || "창고 생성에 실패했습니다", variant: "destructive" });
           }
         } else if (mode === "edit" && warehouse) {
           const result = await updateWarehouse(warehouse.id, {
@@ -123,16 +124,16 @@ export function WarehouseFormDialog({
           });
 
           if (result.success) {
-            toast.success("창고가 수정되었습니다");
+            toast({ title: "창고가 수정되었습니다" });
             onSuccess();
             onOpenChange(false);
           } else {
-            toast.error(result.error || "창고 수정에 실패했습니다");
+            toast({ title: result.error || "창고 수정에 실패했습니다", variant: "destructive" });
           }
         }
       } catch (error) {
         console.error("창고 저장 오류:", error);
-        toast.error("서버 오류가 발생했습니다");
+        toast({ title: "서버 오류가 발생했습니다", variant: "destructive" });
       }
     });
   };

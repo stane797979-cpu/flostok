@@ -23,7 +23,7 @@ import {
 import { Loader2, ArrowRight } from "lucide-react";
 import { ProductCombobox } from "@/components/features/common/product-combobox";
 import { transferInventory } from "@/server/actions/warehouses";
-import { toast } from "sonner";
+import { useToast } from "@/hooks/use-toast";
 
 interface Warehouse {
   id: string;
@@ -50,32 +50,33 @@ export function WarehouseTransferDialog({
   const [quantity, setQuantity] = useState("");
   const [notes, setNotes] = useState("");
   const [isPending, startTransition] = useTransition();
+  const { toast } = useToast();
 
   const handleSubmit = () => {
     // 유효성 검증
     if (!sourceWarehouseId) {
-      toast.error("출발 창고를 선택하세요");
+      toast({ title: "출발 창고를 선택하세요", variant: "destructive" });
       return;
     }
 
     if (!targetWarehouseId) {
-      toast.error("도착 창고를 선택하세요");
+      toast({ title: "도착 창고를 선택하세요", variant: "destructive" });
       return;
     }
 
     if (sourceWarehouseId === targetWarehouseId) {
-      toast.error("출발 창고와 도착 창고가 같을 수 없습니다");
+      toast({ title: "출발 창고와 도착 창고가 같을 수 없습니다", variant: "destructive" });
       return;
     }
 
     if (!productId) {
-      toast.error("제품을 선택하세요");
+      toast({ title: "제품을 선택하세요", variant: "destructive" });
       return;
     }
 
     const qty = parseInt(quantity);
     if (!qty || qty <= 0) {
-      toast.error("이동 수량은 1 이상이어야 합니다");
+      toast({ title: "이동 수량은 1 이상이어야 합니다", variant: "destructive" });
       return;
     }
 
@@ -90,7 +91,7 @@ export function WarehouseTransferDialog({
         });
 
         if (result.success) {
-          toast.success("재고 이동이 완료되었습니다");
+          toast({ title: "재고 이동이 완료되었습니다" });
 
           // 폼 초기화
           setSourceWarehouseId("");
@@ -102,11 +103,11 @@ export function WarehouseTransferDialog({
           onSuccess();
           onOpenChange(false);
         } else {
-          toast.error(result.error || "재고 이동에 실패했습니다");
+          toast({ title: result.error || "재고 이동에 실패했습니다", variant: "destructive" });
         }
       } catch (error) {
         console.error("재고 이동 오류:", error);
-        toast.error("서버 오류가 발생했습니다");
+        toast({ title: "서버 오류가 발생했습니다", variant: "destructive" });
       }
     });
   };

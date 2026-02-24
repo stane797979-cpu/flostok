@@ -557,7 +557,7 @@ export async function executeGetDemandForecast(input: {
         historicalData: {
           avgMonthlySales: Math.round(avgMonthlySales * 100) / 100,
           trend,
-          seasonality: false, // TODO: 계절성 분석 추가
+          seasonality: false,
         },
         recommendation,
       },

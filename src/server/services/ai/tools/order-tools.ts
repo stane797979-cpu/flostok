@@ -4,7 +4,7 @@
  */
 
 import { db } from "@/server/db";
-import { products, inventory, suppliers, purchaseOrders, salesRecords } from "@/server/db/schema";
+import { products, inventory, suppliers, purchaseOrders, purchaseOrderItems, salesRecords } from "@/server/db/schema";
 import { eq, and, sql, or, desc, gte, inArray } from "drizzle-orm";
 import {
   convertToReorderItem,
@@ -426,6 +426,24 @@ export async function executeGetPurchaseOrderStatus(input: {
       cancelled: "취소됨",
     };
 
+    // 발주 항목 수 집계
+    const orderIds = orders.map((row) => row.order.id);
+    const itemCountMap: Record<string, number> = {};
+    if (orderIds.length > 0) {
+      const itemCounts = await db
+        .select({
+          orderId: purchaseOrderItems.purchaseOrderId,
+          count: sql<number>`count(*)`,
+        })
+        .from(purchaseOrderItems)
+        .where(inArray(purchaseOrderItems.purchaseOrderId, orderIds))
+        .groupBy(purchaseOrderItems.purchaseOrderId);
+
+      itemCounts.forEach((row) => {
+        itemCountMap[row.orderId] = Number(row.count);
+      });
+    }
+
     return {
       success: true,
       data: {
@@ -443,7 +461,7 @@ export async function executeGetPurchaseOrderStatus(input: {
           totalAmount: row.order.totalAmount ?? 0,
           orderDate: row.order.orderDate,
           expectedDate: row.order.expectedDate,
-          itemCount: 0, // TODO: join으로 실제 count 조회
+          itemCount: itemCountMap[row.order.id] ?? 0,
         })),
       },
     };

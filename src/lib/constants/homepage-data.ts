@@ -33,7 +33,7 @@ export const COMPANY = {
   ceoName: "이동욱",
   solutionName: "FloStok",
   email: "logisglobalceo@gmail.com",
-  phone: "02-XXX-XXXX", // TODO: 실제 번호로 교체
+  phone: "", // 공개 전화번호 미설정 (필요 시 실제 번호 입력)
 } as const;
 
 // ─── 네비게이션 ───────────────────────────────────
