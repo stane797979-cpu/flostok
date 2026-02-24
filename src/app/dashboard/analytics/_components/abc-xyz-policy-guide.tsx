@@ -66,7 +66,7 @@ const POLICY_ITEMS: PolicyItem[] = [
     priority: 7,
     strategy: "대량 발주, 낮은 발주빈도",
     icon: "low",
-    color: "text-slate-600 bg-slate-50",
+    color: "text-slate-600 bg-slate-50 dark:bg-slate-800/50",
   },
   {
     grade: "CY",
@@ -74,7 +74,7 @@ const POLICY_ITEMS: PolicyItem[] = [
     priority: 8,
     strategy: "간헐적 검토, 최소 재고 유지",
     icon: "low",
-    color: "text-slate-600 bg-slate-50",
+    color: "text-slate-600 bg-slate-50 dark:bg-slate-800/50",
   },
   {
     grade: "CZ",
@@ -82,7 +82,7 @@ const POLICY_ITEMS: PolicyItem[] = [
     priority: 9,
     strategy: "주문생산 검토, 재고 최소화 또는 폐기",
     icon: "low",
-    color: "text-slate-600 bg-slate-50",
+    color: "text-slate-600 bg-slate-50 dark:bg-slate-800/50",
   },
 ];
 

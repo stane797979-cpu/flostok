@@ -353,7 +353,7 @@ export function WarehouseOutboundClient() {
                     <div
                       key={req.id}
                       className={`rounded-lg border p-4 space-y-3 transition-colors ${
-                        isSelected ? "border-primary bg-primary/5" : "bg-white"
+                        isSelected ? "border-primary bg-primary/5" : "bg-white dark:bg-slate-800"
                       }`}
                     >
                       <div className="flex items-center gap-3">
@@ -485,7 +485,7 @@ export function WarehouseOutboundClient() {
                       return (
                         <TableRow
                           key={req.id}
-                          className={`${isSelected ? "bg-primary/5" : ""} ${req.status === "pending" ? "cursor-pointer hover:bg-slate-50" : ""}`}
+                          className={`${isSelected ? "bg-primary/5" : ""} ${req.status === "pending" ? "cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50" : ""}`}
                         >
                           <TableCell>
                             {req.status === "pending" ? (

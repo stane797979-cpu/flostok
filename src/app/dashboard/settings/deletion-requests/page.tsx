@@ -212,6 +212,7 @@ export default function DeletionRequestsPage() {
                   요청이 없습니다.
                 </div>
               ) : (
+                <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -309,6 +310,7 @@ export default function DeletionRequestsPage() {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               )}
             </CardContent>
           </Card>

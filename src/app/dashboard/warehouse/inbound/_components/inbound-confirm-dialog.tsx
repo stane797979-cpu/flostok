@@ -350,7 +350,7 @@ export function InboundConfirmDialog({
           </div>
 
           {/* 입고 항목 테이블 */}
-          <div className="rounded-md border">
+          <div className="overflow-x-auto rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>

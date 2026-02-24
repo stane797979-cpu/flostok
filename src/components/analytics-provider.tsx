@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { initPostHog, identifyUser, setSuperProperties } from "@/lib/analytics";
 import { initSentry, setUser, clearUser } from "@/lib/sentry";
 import { createClient } from "@/lib/supabase/client";
@@ -12,7 +12,7 @@ import { createClient } from "@/lib/supabase/client";
  */
 export default function AnalyticsProvider() {
   const supabaseRef = useRef(createClient());
-  const [userId, setUserId] = useState<string | null>(null);
+  const userIdRef = useRef<string | null>(null);
 
   // Sentry 및 PostHog 초기화
   useEffect(() => {
@@ -41,7 +41,7 @@ export default function AnalyticsProvider() {
         } = await supabase.auth.getUser();
 
         if (user) {
-          setUserId(user.id);
+          userIdRef.current = user.id;
           identifyUser(user.id, {
             email: user.email,
             name: user.user_metadata?.name || user.email?.split("@")[0],
@@ -51,13 +51,13 @@ export default function AnalyticsProvider() {
           });
           setUser(user.id, user.email || undefined, user.user_metadata?.name || undefined);
         } else {
-          if (userId) {
+          if (userIdRef.current) {
             if (typeof window !== "undefined" && window.posthog) {
               window.posthog.reset();
             }
             clearUser();
           }
-          setUserId(null);
+          userIdRef.current = null;
         }
       } catch (error) {
         console.error("사용자 정보 조회 실패:", error);
@@ -70,11 +70,11 @@ export default function AnalyticsProvider() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
-        setUserId(session.user.id);
+        userIdRef.current = session.user.id;
         identifyUser(session.user.id, { email: session.user.email });
         setUser(session.user.id, session.user.email || undefined);
       } else {
-        setUserId(null);
+        userIdRef.current = null;
         if (typeof window !== "undefined" && window.posthog) {
           window.posthog.reset();
         }
@@ -85,7 +85,6 @@ export default function AnalyticsProvider() {
     return () => {
       subscription?.unsubscribe();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return null;

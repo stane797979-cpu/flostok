@@ -294,7 +294,7 @@ export function StepPreviewImport({
             ) : activePreview ? (
               <>
                 {/* 검증 요약 */}
-                <div className="grid grid-cols-3 gap-4 p-4 bg-slate-50 rounded-lg">
+                <div className="grid grid-cols-3 gap-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
                   <div className="text-center">
                     <div className="text-2xl font-bold text-green-600">
                       {activePreview.successCount}

@@ -328,7 +328,7 @@ export function UserManagement({ organizationId }: UserManagementProps) {
         )}
 
         {/* 사용자 테이블 */}
-        <div className="rounded-lg border">
+        <div className="overflow-x-auto rounded-lg border">
           <Table>
             <TableHeader>
               <TableRow className="bg-slate-50">

@@ -289,7 +289,8 @@ export function InventoryTurnover({ data, className }: InventoryTurnoverProps) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
+          <div className="overflow-x-auto">
+            <Table>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[100px]">
@@ -437,6 +438,7 @@ export function InventoryTurnover({ data, className }: InventoryTurnoverProps) {
               ))}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 

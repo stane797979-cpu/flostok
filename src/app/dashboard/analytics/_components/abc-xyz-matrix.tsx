@@ -130,7 +130,7 @@ export function ABCXYZMatrix({ matrixData, selectedGrade, onSelectGrade }: ABCXY
         </div>
 
         {selectedGrade && (
-          <div className="mt-4 rounded-lg bg-slate-50 p-3">
+          <div className="mt-4 rounded-lg bg-slate-50 dark:bg-slate-800/50 p-3">
             <p className="text-sm font-medium text-slate-900">
               선택된 등급: {GRADE_LABELS[selectedGrade]}
             </p>

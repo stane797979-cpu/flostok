@@ -230,7 +230,7 @@ export function WarehouseInboundClient({ initialOrders, warehouses }: WarehouseI
                     className: "bg-slate-600",
                   };
                   return (
-                    <div key={order.id} className="rounded-lg border bg-white p-4 space-y-3">
+                    <div key={order.id} className="rounded-lg border bg-white dark:bg-slate-800 p-4 space-y-3">
                       <div className="flex items-center gap-3">
                         <Checkbox
                           checked={checkedIds.has(order.id)}

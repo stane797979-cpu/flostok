@@ -264,7 +264,7 @@ export function StepFileUpload({ sessionId, files, onFilesChange }: StepFileUplo
       </div>
 
       {/* 템플릿 다운로드 */}
-      <div className="flex items-center gap-2 mb-6 p-3 bg-slate-50 rounded-lg">
+      <div className="flex items-center gap-2 mb-6 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
         <span className="text-sm text-slate-600 mr-2">템플릿 다운로드:</span>
         <Button
           variant="outline"
@@ -293,11 +293,15 @@ export function StepFileUpload({ sessionId, files, onFilesChange }: StepFileUplo
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleClick(); } }}
+          aria-label="엑셀 파일 업로드 — 클릭하거나 파일을 드래그하세요"
           className={cn(
             'border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors mb-6',
             isDragging
               ? 'border-primary bg-primary/5'
-              : 'border-slate-300 hover:border-primary hover:bg-slate-50',
+              : 'border-slate-300 hover:border-primary hover:bg-slate-50 dark:hover:bg-slate-800/30',
             isUploading && 'opacity-50 pointer-events-none'
           )}
         >
@@ -327,7 +331,7 @@ export function StepFileUpload({ sessionId, files, onFilesChange }: StepFileUplo
           </h3>
 
           {files.map((file) => (
-            <div key={file.id} className="border rounded-lg p-4 bg-slate-50">
+            <div key={file.id} className="border rounded-lg p-4 bg-slate-50 dark:bg-slate-800/50">
               <div className="flex items-start gap-4">
                 <FileSpreadsheet className="h-10 w-10 text-green-600 mt-1 flex-shrink-0" />
 

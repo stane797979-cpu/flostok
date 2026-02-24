@@ -209,7 +209,8 @@ export function FulfillmentRateTable({ data }: FulfillmentRateTableProps) {
           </div>
         </CardHeader>
         <CardContent>
-          <Table>
+          <div className="overflow-x-auto">
+            <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>
@@ -308,6 +309,7 @@ export function FulfillmentRateTable({ data }: FulfillmentRateTableProps) {
               ))}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 

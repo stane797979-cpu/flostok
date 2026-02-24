@@ -48,7 +48,7 @@ export function FileUploadZone({
       return
     }
     onFileSelect(file)
-  }, [onFileSelect])
+  }, [onFileSelect, toast])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -99,7 +99,7 @@ export function FileUploadZone({
             'border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors',
             isDragging
               ? 'border-primary bg-primary/5'
-              : 'border-slate-300 hover:border-primary hover:bg-slate-50'
+              : 'border-slate-300 hover:border-primary hover:bg-slate-50 dark:hover:bg-slate-800/30'
           )}
         >
           <Upload className="mx-auto h-12 w-12 text-slate-400 mb-4" />
@@ -118,7 +118,7 @@ export function FileUploadZone({
           />
         </div>
       ) : (
-        <div className="border rounded-lg p-6 bg-slate-50">
+        <div className="border rounded-lg p-6 bg-slate-50 dark:bg-slate-800/50">
           <div className="flex items-start justify-between">
             <div className="flex items-start gap-4">
               <FileSpreadsheet className="h-10 w-10 text-green-600 mt-1" />

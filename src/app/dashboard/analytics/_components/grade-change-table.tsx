@@ -234,7 +234,8 @@ export function GradeChangeTable({ data }: GradeChangeTableProps) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
+          <div className="overflow-x-auto">
+            <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>
@@ -342,6 +343,7 @@ export function GradeChangeTable({ data }: GradeChangeTableProps) {
               ))}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 
@@ -353,7 +355,8 @@ export function GradeChangeTable({ data }: GradeChangeTableProps) {
             <CardDescription>월별 X(안정)/Y(보통)/Z(불안정) 품목 수 변화</CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
+            <div className="overflow-x-auto">
+              <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>기간</TableHead>
@@ -373,6 +376,7 @@ export function GradeChangeTable({ data }: GradeChangeTableProps) {
                 ))}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       )}

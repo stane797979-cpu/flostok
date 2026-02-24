@@ -4,6 +4,12 @@ import { getInboundRecords } from "@/server/actions/inbound";
 import { getWarehouses } from "@/server/actions/warehouses";
 import { OrdersClient } from "./_components/orders-client";
 
+type ReorderResult = Awaited<ReturnType<typeof getReorderItems>>;
+type DeliveryComplianceResult = Awaited<ReturnType<typeof getDeliveryComplianceData>>;
+type PurchaseOrdersResult = Awaited<ReturnType<typeof getPurchaseOrders>>;
+type InboundRecordsResult = Awaited<ReturnType<typeof getInboundRecords>>;
+type WarehousesResult = Awaited<ReturnType<typeof getWarehouses>>;
+
 const VALID_TABS = ["reorder", "auto-reorder", "orders", "order-history", "inbound", "delivery", "import-shipment"] as const;
 type OrderTab = (typeof VALID_TABS)[number];
 
@@ -60,26 +66,16 @@ export default async function OrdersPage({
   const results = await Promise.all(promises);
   const dataMap = Object.fromEntries(keys.map((k, i) => [k, results[i]]));
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const serverReorderItems = (dataMap.reorder as any)?.items ?? [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const serverReorderTotal = (dataMap.reorder as any)?.total ?? 0;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const deliveryComplianceData = (dataMap.compliance as any) ?? null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const serverPurchaseOrders = (dataMap.orders as any)?.orders ?? undefined;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const serverPurchaseOrdersTotal = (dataMap.orders as any)?.total ?? 0;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const serverInboundRecords = (dataMap.inbound as any)?.records ?? undefined;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const serverInboundTotal = (dataMap.inbound as any)?.total ?? 0;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const serverOrderHistory = (dataMap.orderHistory as any)?.orders ?? undefined;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const serverOrderHistoryTotal = (dataMap.orderHistory as any)?.total ?? 0;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const warehousesList = (dataMap.warehouses as any)?.warehouses ?? [];
+  const serverReorderItems = (dataMap.reorder as ReorderResult | undefined)?.items ?? [];
+  const serverReorderTotal = (dataMap.reorder as ReorderResult | undefined)?.total ?? 0;
+  const deliveryComplianceData = (dataMap.compliance as DeliveryComplianceResult | undefined) ?? null;
+  const serverPurchaseOrders = (dataMap.orders as PurchaseOrdersResult | undefined)?.orders ?? undefined;
+  const serverPurchaseOrdersTotal = (dataMap.orders as PurchaseOrdersResult | undefined)?.total ?? 0;
+  const serverInboundRecords = (dataMap.inbound as InboundRecordsResult | undefined)?.records ?? undefined;
+  const serverInboundTotal = (dataMap.inbound as InboundRecordsResult | undefined)?.total ?? 0;
+  const serverOrderHistory = (dataMap.orderHistory as PurchaseOrdersResult | undefined)?.orders ?? undefined;
+  const serverOrderHistoryTotal = (dataMap.orderHistory as PurchaseOrdersResult | undefined)?.total ?? 0;
+  const warehousesList = (dataMap.warehouses as WarehousesResult | undefined)?.warehouses ?? [];
 
   return (
     <OrdersClient

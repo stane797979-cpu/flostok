@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Card,
@@ -61,6 +61,9 @@ export function MovementClient() {
   const defaultRange = getDefaultRange();
   const [startDate, setStartDate] = useState(defaultRange.startDate);
   const [endDate, setEndDate] = useState(defaultRange.endDate);
+  // 초기값을 ref로 보존 — 마운트 시 1회 실행용
+  const initialStartRef = useRef(defaultRange.startDate);
+  const initialEndRef = useRef(defaultRange.endDate);
   const [products, setProducts] = useState<ProductMovementSummary[]>([]);
   const [period, setPeriod] = useState<PeriodData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -97,10 +100,10 @@ export function MovementClient() {
     []
   );
 
-  // 초기 로드
+  // 초기 로드 — ref에 보존된 초기값으로 마운트 시 1회 실행
   useEffect(() => {
-    loadMovementData(startDate, endDate);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    loadMovementData(initialStartRef.current, initialEndRef.current);
+  }, [loadMovementData]);
 
   // 조회 버튼
   const handleSearch = useCallback(() => {

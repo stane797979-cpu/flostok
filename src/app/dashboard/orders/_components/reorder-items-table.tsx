@@ -237,7 +237,7 @@ export function ReorderItemsTable({
         </div>
       )}
 
-      <div className={cn("rounded-md border", className)}>
+      <div className={cn("overflow-x-auto rounded-md border", className)}>
         <Table>
           <TableHeader>
             <TableRow>

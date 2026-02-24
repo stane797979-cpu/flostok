@@ -1,3 +1,4 @@
+// NOTE: 현재 analytics 탭에 미연결된 상태. Mock 데이터 사용 중.
 "use client";
 
 import { useState } from "react";
@@ -227,7 +228,7 @@ export function ScenarioSimulation() {
           </div>
 
           {/* 현재 제품 정보 */}
-          <div className="grid grid-cols-2 gap-4 rounded-lg border bg-slate-50 p-4 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 rounded-lg border bg-slate-50 dark:bg-slate-800/50 p-4 sm:grid-cols-4">
             <div>
               <p className="text-sm text-slate-500">현재 재고</p>
               <p className="text-lg font-semibold">{selectedProduct.currentStock.toLocaleString()}개</p>
@@ -529,7 +530,7 @@ export function ScenarioSimulation() {
                 </div>
               </div>
 
-              <div className="rounded-lg border bg-slate-50 p-4">
+              <div className="rounded-lg border bg-slate-50 dark:bg-slate-800/50 p-4">
                 <h4 className="mb-2 font-medium">권장사항</h4>
                 <ul className="space-y-2 text-sm text-slate-700">
                   {results[0].stockStatus !== "충분" && (

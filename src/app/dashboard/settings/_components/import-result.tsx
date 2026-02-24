@@ -70,7 +70,7 @@ export function ImportResult({
               'border rounded-lg p-4',
               failed > 0
                 ? 'bg-red-50 border-red-200'
-                : 'bg-slate-50 border-slate-200'
+                : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200'
             )}>
               <p className={cn(
                 'text-sm font-medium mb-1',

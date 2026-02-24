@@ -206,7 +206,7 @@ export function StepFileAnalysis({
                     {activeFile.analyzedHeaders?.map((header) => (
                       <div
                         key={header.name}
-                        className="flex items-center gap-1.5 px-3 py-1.5 border rounded-lg bg-white"
+                        className="flex items-center gap-1.5 px-3 py-1.5 border rounded-lg bg-white dark:bg-slate-800"
                       >
                         <span className="text-sm font-medium">
                           {header.name}
@@ -266,7 +266,7 @@ export function StepFileAnalysis({
                 )}
 
                 {/* 통계 요약 */}
-                <div className="grid grid-cols-3 gap-4 p-4 bg-slate-50 rounded-lg">
+                <div className="grid grid-cols-3 gap-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
                   <div className="text-center">
                     <div className="text-2xl font-bold text-slate-900">
                       {activeFile.rowCount?.toLocaleString() || 0}

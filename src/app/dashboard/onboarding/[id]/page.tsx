@@ -87,7 +87,7 @@ export default async function OnboardingDetailPage({
                   return (
                     <div
                       key={file.id}
-                      className="flex items-center justify-between p-4 bg-slate-50 rounded-lg"
+                      className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg"
                     >
                       <div className="flex items-center gap-3">
                         <FileSpreadsheet className="h-5 w-5 text-slate-500" />
@@ -130,7 +130,7 @@ export default async function OnboardingDetailPage({
               <CardTitle className="text-lg">임포트 요약</CardTitle>
             </CardHeader>
             <CardContent>
-              <pre className="text-sm bg-slate-50 p-4 rounded-lg overflow-auto">
+              <pre className="text-sm bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg overflow-auto">
                 {JSON.stringify(importSummary, null, 2)}
               </pre>
             </CardContent>

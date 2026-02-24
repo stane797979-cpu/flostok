@@ -157,7 +157,7 @@ export function LoadProfileDialog({
                 return (
                   <div
                     key={profile.id}
-                    className="flex items-center justify-between p-3 border rounded-lg hover:bg-slate-50"
+                    className="flex items-center justify-between p-3 border rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/50"
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">

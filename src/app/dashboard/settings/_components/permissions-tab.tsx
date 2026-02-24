@@ -287,18 +287,18 @@ export function PermissionsTab({ organizationId }: PermissionsTabProps) {
 
         {/* 메뉴 접근 권한 매트릭스 */}
         <div>
-          <h3 className="mb-3 text-sm font-semibold text-slate-700">메뉴 접근 권한</h3>
+          <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300">메뉴 접근 권한</h3>
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b bg-slate-50">
-                  <th className="sticky left-0 z-10 bg-slate-50 px-4 py-3 text-left font-semibold text-slate-700">
+                <tr className="border-b bg-slate-50 dark:bg-slate-800">
+                  <th className="sticky left-0 z-10 bg-slate-50 dark:bg-slate-800 px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">
                     메뉴
                   </th>
                   {ROLES.map((role) => (
                     <th
                       key={role.key}
-                      className="px-4 py-3 text-center font-semibold text-slate-700"
+                      className="px-4 py-3 text-center font-semibold text-slate-700 dark:text-slate-300"
                     >
                       <Badge variant={getRoleBadgeVariant(role.key)}>
                         {role.label}
@@ -311,9 +311,9 @@ export function PermissionsTab({ organizationId }: PermissionsTabProps) {
                 {ALL_MENU_KEYS.map((menuKey) => (
                   <tr
                     key={menuKey}
-                    className="border-b last:border-b-0 hover:bg-slate-50"
+                    className="border-b last:border-b-0 hover:bg-slate-50 dark:hover:bg-slate-700/50"
                   >
-                    <td className="sticky left-0 z-10 bg-white px-4 py-2.5 font-medium text-slate-700">
+                    <td className="sticky left-0 z-10 bg-white dark:bg-slate-900 px-4 py-2.5 font-medium text-slate-700 dark:text-slate-300">
                       {MENU_KEY_LABELS[menuKey] || menuKey}
                     </td>
                     {ROLES.map((role) => {
@@ -349,7 +349,7 @@ export function PermissionsTab({ organizationId }: PermissionsTabProps) {
         {/* 데이터 조작 권한 매트릭스 (읽기 전용) */}
         <div>
           <div className="mb-3 flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-slate-700">데이터 조작 권한</h3>
+            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">데이터 조작 권한</h3>
             <Badge variant="outline" className="gap-1 text-[10px]">
               <Lock className="h-3 w-3" />
               시스템 정책
@@ -358,14 +358,14 @@ export function PermissionsTab({ organizationId }: PermissionsTabProps) {
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b bg-slate-50">
-                  <th className="sticky left-0 z-10 bg-slate-50 px-4 py-3 text-left font-semibold text-slate-700">
+                <tr className="border-b bg-slate-50 dark:bg-slate-800">
+                  <th className="sticky left-0 z-10 bg-slate-50 dark:bg-slate-800 px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">
                     작업
                   </th>
                   {ROLES.map((role) => (
                     <th
                       key={role.key}
-                      className="px-4 py-3 text-center font-semibold text-slate-700"
+                      className="px-4 py-3 text-center font-semibold text-slate-700 dark:text-slate-300"
                     >
                       <Badge variant={getRoleBadgeVariant(role.key)}>
                         {role.label}
@@ -378,9 +378,9 @@ export function PermissionsTab({ organizationId }: PermissionsTabProps) {
                 {DATA_PERMISSIONS.map((perm) => (
                   <tr
                     key={perm.label}
-                    className="border-b last:border-b-0 hover:bg-slate-50"
+                    className="border-b last:border-b-0 hover:bg-slate-50 dark:hover:bg-slate-700/50"
                   >
-                    <td className="sticky left-0 z-10 bg-white px-4 py-2.5 font-medium text-slate-700">
+                    <td className="sticky left-0 z-10 bg-white dark:bg-slate-900 px-4 py-2.5 font-medium text-slate-700 dark:text-slate-300">
                       {perm.label}
                     </td>
                     {ROLES.map((role) => (
@@ -397,8 +397,8 @@ export function PermissionsTab({ organizationId }: PermissionsTabProps) {
           </div>
         </div>
 
-        <div className="rounded-lg border bg-slate-50 p-4 text-sm text-slate-600">
-          <p className="font-semibold text-slate-700">참고</p>
+        <div className="rounded-lg border bg-slate-50 dark:bg-slate-800/50 p-4 text-sm text-slate-600 dark:text-slate-400">
+          <p className="font-semibold text-slate-700 dark:text-slate-300">참고</p>
           <ul className="mt-1 list-inside list-disc space-y-1">
             <li>
               <strong>슈퍼관리자</strong>와 <strong>관리자</strong> 역할은 항상 전체 메뉴에

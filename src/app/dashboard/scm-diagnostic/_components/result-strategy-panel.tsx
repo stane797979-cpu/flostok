@@ -63,7 +63,7 @@ export function ResultStrategyPanel({
           {strategies.map((strategy, index) => (
             <div
               key={index}
-              className="rounded-lg border bg-white p-4 space-y-3"
+              className="rounded-lg border bg-white dark:bg-slate-800 p-4 space-y-3"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3">
@@ -71,10 +71,10 @@ export function ResultStrategyPanel({
                     {index + 1}
                   </div>
                   <div>
-                    <h4 className="font-semibold text-slate-900">
+                    <h4 className="font-semibold text-slate-900 dark:text-slate-100">
                       {strategy.title}
                     </h4>
-                    <p className="mt-1 text-sm text-slate-600">
+                    <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
                       {strategy.description}
                     </p>
                   </div>
@@ -89,7 +89,7 @@ export function ResultStrategyPanel({
                 </Badge>
               </div>
 
-              <div className="flex flex-wrap gap-x-4 gap-y-1 border-t pt-2 text-sm text-slate-500">
+              <div className="flex flex-wrap gap-x-4 gap-y-1 border-t pt-2 text-sm text-slate-500 dark:text-slate-400">
                 <span className="flex items-center gap-1">
                   <Zap className="h-3.5 w-3.5 text-amber-500" />
                   {strategy.expectedEffect}
@@ -129,7 +129,7 @@ export function ResultStrategyPanel({
                 <div key={item.step} className="relative flex gap-4 pb-6">
                   {/* 세로 연결선 */}
                   {!isLast && (
-                    <div className="absolute left-[15px] top-8 h-[calc(100%-16px)] w-0.5 bg-slate-200" />
+                    <div className="absolute left-[15px] top-8 h-[calc(100%-16px)] w-0.5 bg-slate-200 dark:bg-slate-700" />
                   )}
 
                   {/* 스텝 번호 */}
@@ -139,10 +139,10 @@ export function ResultStrategyPanel({
 
                   {/* 내용 */}
                   <div className="flex-1 space-y-1 pt-0.5">
-                    <h4 className="font-semibold text-slate-900">
+                    <h4 className="font-semibold text-slate-900 dark:text-slate-100">
                       {item.title}
                     </h4>
-                    <p className="text-sm text-slate-600">{item.description}</p>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">{item.description}</p>
                     <div className="flex flex-wrap gap-3 pt-1 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <User className="h-3 w-3" />

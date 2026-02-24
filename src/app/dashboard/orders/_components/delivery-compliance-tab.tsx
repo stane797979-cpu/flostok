@@ -158,7 +158,8 @@ export function DeliveryComplianceTab({ data }: DeliveryComplianceTabProps) {
             <CardDescription>공급자별 리드타임 비교 및 납기 준수 현황</CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
+            <div className="overflow-x-auto">
+              <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>공급자</TableHead>
@@ -215,6 +216,7 @@ export function DeliveryComplianceTab({ data }: DeliveryComplianceTabProps) {
                 ))}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -247,7 +249,8 @@ export function DeliveryComplianceTab({ data }: DeliveryComplianceTabProps) {
           </div>
         </CardHeader>
         <CardContent>
-          <Table>
+          <div className="overflow-x-auto">
+            <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>발주번호</TableHead>
@@ -293,6 +296,7 @@ export function DeliveryComplianceTab({ data }: DeliveryComplianceTabProps) {
               ))}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
