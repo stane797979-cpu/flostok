@@ -330,13 +330,13 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button variant="outline" size="icon" onClick={handlePrevMonth}>
+                  <Button variant="outline" size="icon" onClick={handlePrevMonth} aria-label="이전 월">
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
                   <span className="min-w-[120px] text-center font-medium">
                     {formatMonth(outboundMonth)}
                   </span>
-                  <Button variant="outline" size="icon" onClick={handleNextMonth}>
+                  <Button variant="outline" size="icon" onClick={handleNextMonth} aria-label="다음 월">
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                   <Button
@@ -400,6 +400,7 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
                           size="sm"
                           disabled={currentPage <= 1}
                           onClick={() => handlePageChange(currentPage - 1)}
+                          aria-label="이전 페이지"
                         >
                           <ChevronLeft className="h-4 w-4" />
                         </Button>
@@ -411,6 +412,7 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
                           size="sm"
                           disabled={currentPage >= totalPages}
                           onClick={() => handlePageChange(currentPage + 1)}
+                          aria-label="다음 페이지"
                         >
                           <ChevronRight className="h-4 w-4" />
                         </Button>

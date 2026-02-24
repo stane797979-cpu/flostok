@@ -378,6 +378,7 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
                             className="h-7 w-7"
                             onClick={handleSaveExpectedDate}
                             disabled={isSavingExpectedDate}
+                            aria-label="날짜 저장"
                           >
                             <Check className="h-3.5 w-3.5 text-green-600" />
                           </Button>
@@ -386,6 +387,7 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
                             size="icon"
                             className="h-7 w-7"
                             onClick={() => setIsEditingExpectedDate(false)}
+                            aria-label="날짜 취소"
                           >
                             <X className="h-3.5 w-3.5 text-slate-400" />
                           </Button>
@@ -410,6 +412,7 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
                               size="icon"
                               className="h-6 w-6"
                               onClick={handleEditExpectedDate}
+                              aria-label="예상입고일 수정"
                             >
                               <Pencil className="h-3 w-3 text-slate-400" />
                             </Button>

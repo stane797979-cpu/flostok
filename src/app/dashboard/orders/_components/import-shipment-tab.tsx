@@ -305,10 +305,10 @@ export function ImportShipmentTab() {
                             className="h-6 w-32 text-xs"
                             disabled={isSavingDate}
                           />
-                          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={handleSaveDate} disabled={isSavingDate}>
+                          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={handleSaveDate} disabled={isSavingDate} aria-label="날짜 저장">
                             <Check className="h-3 w-3 text-green-600" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={handleCancelDate} disabled={isSavingDate}>
+                          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={handleCancelDate} disabled={isSavingDate} aria-label="날짜 취소">
                             <X className="h-3 w-3 text-slate-400" />
                           </Button>
                         </div>
@@ -319,6 +319,7 @@ export function ImportShipmentTab() {
                             <button
                               className="opacity-0 group-hover:opacity-100 transition-opacity"
                               onClick={() => handleEditDate(item.id, "etaDate", item.etaDate)}
+                              aria-label="입항예정일 수정"
                             >
                               <Pencil className="h-3 w-3 text-slate-400" />
                             </button>
@@ -339,10 +340,10 @@ export function ImportShipmentTab() {
                             className="h-6 w-32 text-xs"
                             disabled={isSavingDate}
                           />
-                          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={handleSaveDate} disabled={isSavingDate}>
+                          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={handleSaveDate} disabled={isSavingDate} aria-label="날짜 저장">
                             <Check className="h-3 w-3 text-green-600" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={handleCancelDate} disabled={isSavingDate}>
+                          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={handleCancelDate} disabled={isSavingDate} aria-label="날짜 취소">
                             <X className="h-3 w-3 text-slate-400" />
                           </Button>
                         </div>
@@ -353,6 +354,7 @@ export function ImportShipmentTab() {
                             <button
                               className="opacity-0 group-hover:opacity-100 transition-opacity"
                               onClick={() => handleEditDate(item.id, "warehouseEtaDate", item.warehouseEtaDate)}
+                              aria-label="창고입고예정일 수정"
                             >
                               <Pencil className="h-3 w-3 text-slate-400" />
                             </button>

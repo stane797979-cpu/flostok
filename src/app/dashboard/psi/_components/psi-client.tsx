@@ -438,7 +438,7 @@ export function PSIClient({ data: initialData }: PSIClientProps) {
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon" className="h-7 w-7" onClick={handlePrevPeriod} disabled={isLoadingPSI}>
+              <Button variant="outline" size="icon" className="h-7 w-7" onClick={handlePrevPeriod} disabled={isLoadingPSI} aria-label="이전 기간">
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <div className="flex-1 text-center">
@@ -453,7 +453,7 @@ export function PSIClient({ data: initialData }: PSIClientProps) {
                   </>
                 )}
               </div>
-              <Button variant="outline" size="icon" className="h-7 w-7" onClick={handleNextPeriod} disabled={isLoadingPSI}>
+              <Button variant="outline" size="icon" className="h-7 w-7" onClick={handleNextPeriod} disabled={isLoadingPSI} aria-label="다음 기간">
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>

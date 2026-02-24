@@ -201,6 +201,7 @@ export function ExcelImportDialog({
                     setFile(null);
                     setResult(null);
                   }}
+                  aria-label="파일 삭제"
                 >
                   <X className="h-4 w-4" />
                 </Button>

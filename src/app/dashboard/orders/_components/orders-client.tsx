@@ -1007,11 +1007,11 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" disabled={reorderPage <= 1} onClick={() => setReorderPage(reorderPage - 1)}>
+                    <Button variant="outline" size="sm" disabled={reorderPage <= 1} onClick={() => setReorderPage(reorderPage - 1)} aria-label="이전 페이지">
                       <ChevronLeft className="h-4 w-4" />
                     </Button>
                     <span className="text-sm font-medium">{reorderPage} / {reorderTotalPages}</span>
-                    <Button variant="outline" size="sm" disabled={reorderPage >= reorderTotalPages} onClick={() => setReorderPage(reorderPage + 1)}>
+                    <Button variant="outline" size="sm" disabled={reorderPage >= reorderTotalPages} onClick={() => setReorderPage(reorderPage + 1)} aria-label="다음 페이지">
                       <ChevronRight className="h-4 w-4" />
                     </Button>
                   </div>
@@ -1069,11 +1069,11 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" disabled={autoReorderPage <= 1} onClick={() => setAutoReorderPage(autoReorderPage - 1)}>
+                    <Button variant="outline" size="sm" disabled={autoReorderPage <= 1} onClick={() => setAutoReorderPage(autoReorderPage - 1)} aria-label="이전 페이지">
                       <ChevronLeft className="h-4 w-4" />
                     </Button>
                     <span className="text-sm font-medium">{autoReorderPage} / {autoReorderTotalPages}</span>
-                    <Button variant="outline" size="sm" disabled={autoReorderPage >= autoReorderTotalPages} onClick={() => setAutoReorderPage(autoReorderPage + 1)}>
+                    <Button variant="outline" size="sm" disabled={autoReorderPage >= autoReorderTotalPages} onClick={() => setAutoReorderPage(autoReorderPage + 1)} aria-label="다음 페이지">
                       <ChevronRight className="h-4 w-4" />
                     </Button>
                   </div>
@@ -1177,6 +1177,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                           size="sm"
                           disabled={ordersPage <= 1}
                           onClick={() => handleOrdersPageChange(ordersPage - 1)}
+                          aria-label="이전 월"
                         >
                           <ChevronLeft className="h-4 w-4" />
                         </Button>
@@ -1188,6 +1189,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                           size="sm"
                           disabled={ordersPage >= ordersTotalPages}
                           onClick={() => handleOrdersPageChange(ordersPage + 1)}
+                          aria-label="다음 월"
                         >
                           <ChevronRight className="h-4 w-4" />
                         </Button>
@@ -1252,6 +1254,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                           size="sm"
                           disabled={historyPage <= 1}
                           onClick={() => handleHistoryPageChange(historyPage - 1)}
+                          aria-label="이전 페이지"
                         >
                           <ChevronLeft className="h-4 w-4" />
                         </Button>
@@ -1263,6 +1266,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                           size="sm"
                           disabled={historyPage >= historyTotalPages}
                           onClick={() => handleHistoryPageChange(historyPage + 1)}
+                          aria-label="다음 페이지"
                         >
                           <ChevronRight className="h-4 w-4" />
                         </Button>
@@ -1286,13 +1290,13 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                   <CardDescription>월별 입고 기록을 확인하고 엑셀로 다운로드할 수 있습니다</CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button variant="outline" size="icon" onClick={handlePrevMonth}>
+                  <Button variant="outline" size="icon" onClick={handlePrevMonth} aria-label="이전 월">
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
                   <span className="min-w-[120px] text-center font-medium">
                     {formatMonth(inboundMonth)}
                   </span>
-                  <Button variant="outline" size="icon" onClick={handleNextMonth}>
+                  <Button variant="outline" size="icon" onClick={handleNextMonth} aria-label="다음 월">
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                   <Button
@@ -1352,6 +1356,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                           size="sm"
                           disabled={inboundPage <= 1}
                           onClick={() => handleInboundPageChange(inboundPage - 1)}
+                          aria-label="이전 페이지"
                         >
                           <ChevronLeft className="h-4 w-4" />
                         </Button>
@@ -1363,6 +1368,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                           size="sm"
                           disabled={inboundPage >= inboundTotalPages}
                           onClick={() => handleInboundPageChange(inboundPage + 1)}
+                          aria-label="다음 페이지"
                         >
                           <ChevronRight className="h-4 w-4" />
                         </Button>
