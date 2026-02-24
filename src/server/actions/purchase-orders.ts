@@ -1212,107 +1212,138 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
     const today = new Date();
     const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
 
-    // 3. 공급자별로 발주서 생성 (DB 조회 없이 메모리에서 처리)
-    for (const [supplierId, items] of itemsBySupplier.entries()) {
-      try {
-        const supplier = suppliersMap.get(supplierId);
-        if (!supplier) {
-          items.forEach((item) => {
-            errors.push({ productId: item.productId, error: `공급자를 찾을 수 없습니다 (ID: ${supplierId})` });
-          });
-          continue;
-        }
+    // 3. 공급자별로 발주서 병렬 생성
+    // 발주번호 중복 방지: 오늘 기존 발주 수를 미리 조회한 뒤 각 공급자에 offset 부여
+    const [baseCountRow] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(purchaseOrders)
+      .where(
+        and(
+          eq(purchaseOrders.organizationId, orgId),
+          sql`DATE(${purchaseOrders.createdAt}) = CURRENT_DATE`
+        )
+      );
+    const baseCount = Number(baseCountRow?.count || 0);
 
-        // 제품 유효성 검증 (메모리에서)
-        const validItems = items.filter((item) => {
-          if (!productsMap.has(item.productId)) {
-            errors.push({ productId: item.productId, error: "제품을 찾을 수 없습니다" });
-            return false;
+    const supplierEntries = [...itemsBySupplier.entries()];
+
+    const perSupplierResults = await Promise.all(
+      supplierEntries.map(([supplierId, items], idx) =>
+        (async (): Promise<{
+          orderId?: string;
+          orderNumber?: string;
+          errors: Array<{ productId: string; error: string }>;
+        }> => {
+          const localErrors: Array<{ productId: string; error: string }> = [];
+
+          const supplier = suppliersMap.get(supplierId);
+          if (!supplier) {
+            items.forEach((item) => {
+              localErrors.push({ productId: item.productId, error: `공급자를 찾을 수 없습니다 (ID: ${supplierId})` });
+            });
+            return { errors: localErrors };
           }
-          return true;
-        });
-        if (validItems.length === 0) continue;
 
-        // 발주 항목 계산
-        let totalAmount = 0;
-        const orderItems = validItems.map((item) => {
-          const product = productsMap.get(item.productId)!;
-          const unitPrice = product.costPrice || 0;
-          const totalPrice = unitPrice * item.quantity;
-          totalAmount += totalPrice;
-          return { productId: item.productId, quantity: item.quantity, unitPrice, totalPrice };
-        });
+          // 제품 유효성 검증 (메모리에서)
+          const validItems = items.filter((item) => {
+            if (!productsMap.has(item.productId)) {
+              localErrors.push({ productId: item.productId, error: "제품을 찾을 수 없습니다" });
+              return false;
+            }
+            return true;
+          });
+          if (validItems.length === 0) return { errors: localErrors };
 
-        if (orderItems.length === 0) continue;
+          // 발주 항목 계산
+          let totalAmount = 0;
+          const orderItems = validItems.map((item) => {
+            const product = productsMap.get(item.productId)!;
+            const unitPrice = product.costPrice || 0;
+            const totalPrice = unitPrice * item.quantity;
+            totalAmount += totalPrice;
+            return { productId: item.productId, quantity: item.quantity, unitPrice, totalPrice };
+          });
 
-        // 예상입고일 계산 (리드타임 기반)
-        const expectedDateObj = new Date();
-        expectedDateObj.setDate(expectedDateObj.getDate() + (supplier.avgLeadTime || 7));
-        const expectedDate = expectedDateObj.toISOString().split("T")[0];
+          if (orderItems.length === 0) return { errors: localErrors };
 
-        // 트랜잭션으로 시퀀스 + 발주서 + 발주 항목 원자적 생성
-        const newOrder = await db.transaction(async (tx) => {
-          // 발주번호 시퀀스를 트랜잭션 안에서 생성 (동시 요청 시 중복 방지)
-          const [todayCount] = await tx
-            .select({ count: sql<number>`count(*)` })
-            .from(purchaseOrders)
-            .where(
-              and(
-                eq(purchaseOrders.organizationId, orgId),
-                sql`DATE(${purchaseOrders.createdAt}) = CURRENT_DATE`
-              )
-            );
-          const sequence = (Number(todayCount?.count || 0) + 1).toString().padStart(3, "0");
+          // 예상입고일 계산 (리드타임 기반)
+          const expectedDateObj = new Date();
+          expectedDateObj.setDate(expectedDateObj.getDate() + (supplier.avgLeadTime || 7));
+          const expectedDate = expectedDateObj.toISOString().split("T")[0];
+
+          // 발주번호: 기존 발주 수 + 병렬 인덱스로 중복 없이 부여
+          const sequence = (baseCount + idx + 1).toString().padStart(3, "0");
           const orderNumber = `PO-${dateStr}-${sequence}`;
 
-          // 발주서 생성 (destinationWarehouseId 포함)
-          const [order] = await tx
-            .insert(purchaseOrders)
-            .values({
-              organizationId: orgId,
-              destinationWarehouseId: warehouseId,
-              orderNumber,
-              supplierId,
-              status: "ordered",
-              totalAmount,
-              orderDate: today.toISOString().split("T")[0],
-              expectedDate,
-              notes: validated.notes,
+          // 트랜잭션으로 발주서 + 발주 항목 원자적 생성
+          const newOrder = await db.transaction(async (tx) => {
+            const [order] = await tx
+              .insert(purchaseOrders)
+              .values({
+                organizationId: orgId,
+                destinationWarehouseId: warehouseId,
+                orderNumber,
+                supplierId,
+                status: "ordered",
+                totalAmount,
+                orderDate: today.toISOString().split("T")[0],
+                expectedDate,
+                notes: validated.notes,
+              })
+              .returning();
+
+            await tx.insert(purchaseOrderItems).values(
+              orderItems.map((item) => ({
+                purchaseOrderId: order.id,
+                ...item,
+              }))
+            );
+
+            return order;
+          });
+
+          return { orderId: newOrder.id, orderNumber, errors: localErrors };
+        })().catch((error: unknown): {
+          orderId?: string;
+          orderNumber?: string;
+          errors: Array<{ productId: string; error: string }>;
+        } => {
+          console.error(`공급자 ${supplierId} 발주서 생성 오류:`, error);
+          return {
+            errors: items.map((item) => ({
+              productId: item.productId,
+              error: "발주서 생성에 실패했습니다",
+            })),
+          };
+        })
+      )
+    );
+
+    // 결과 집계
+    for (const result of perSupplierResults) {
+      if (result.orderId) createdOrders.push(result.orderId);
+      errors.push(...result.errors);
+    }
+
+    // 생성된 발주서별 활동 로깅 병렬 처리
+    if (user) {
+      await Promise.all(
+        perSupplierResults
+          .filter((r): r is { orderId: string; orderNumber: string; errors: typeof errors } =>
+            !!r.orderId && !!r.orderNumber
+          )
+          .map((r) =>
+            logActivity({
+              user,
+              action: "CREATE",
+              entityType: "purchase_order",
+              entityId: r.orderId,
+              description: `${r.orderNumber} 발주서 생성`,
+            }).catch((err: unknown) => {
+              console.error("활동 로그 기록 오류:", err);
             })
-            .returning();
-
-          // 발주 항목 생성
-          await tx.insert(purchaseOrderItems).values(
-            orderItems.map((item) => ({
-              purchaseOrderId: order.id,
-              ...item,
-            }))
-          );
-
-          return order;
-        });
-
-        createdOrders.push(newOrder.id);
-
-        // 활동 로깅
-        if (user) {
-          await logActivity({
-            user,
-            action: "CREATE",
-            entityType: "purchase_order",
-            entityId: newOrder.id,
-            description: `${orderNumber} 발주서 생성`,
-          });
-        }
-      } catch (error) {
-        console.error(`공급자 ${supplierId} 발주서 생성 오류:`, error);
-        items.forEach((item) => {
-          errors.push({
-            productId: item.productId,
-            error: "발주서 생성에 실패했습니다",
-          });
-        });
-      }
+          )
+      );
     }
 
     revalidatePath("/dashboard/orders");
@@ -1414,18 +1445,19 @@ export async function uploadPurchaseOrderExcel(
       .where(eq(suppliers.organizationId, orgId));
     const supplierNameMap = new Map(supplierList.map((s) => [s.name, s.id]));
 
-    // 엑셀에 있는 공급자명 중 DB에 없는 것은 자동 생성
+    // 엑셀에 있는 공급자명 중 DB에 없는 것은 자동 생성 (배치 INSERT)
     if (supplierCol) {
       const excelSupplierNames = new Set(
         rows.map((row) => String(row[supplierCol] || "").trim()).filter(Boolean)
       );
-      for (const name of excelSupplierNames) {
-        if (!supplierNameMap.has(name)) {
-          const [created] = await db
-            .insert(suppliers)
-            .values({ organizationId: orgId, name })
-            .returning({ id: suppliers.id });
-          supplierNameMap.set(name, created.id);
+      const newSupplierNames = [...excelSupplierNames].filter((name) => !supplierNameMap.has(name));
+      if (newSupplierNames.length > 0) {
+        const createdSuppliers = await db
+          .insert(suppliers)
+          .values(newSupplierNames.map((name) => ({ organizationId: orgId, name })))
+          .returning({ id: suppliers.id, name: suppliers.name });
+        for (const created of createdSuppliers) {
+          supplierNameMap.set(created.name, created.id);
         }
       }
     }
