@@ -2,7 +2,7 @@
 
 import { unstable_cache } from "next/cache";
 import { db } from "@/server/db";
-import { products, inventory, salesRecords } from "@/server/db/schema";
+import { products, inventory, salesRecords, inventoryHistory } from "@/server/db/schema";
 import { eq, and, sql, isNotNull } from "drizzle-orm";
 import { getCurrentUser } from "./auth-helpers";
 
@@ -79,27 +79,50 @@ export async function getInventoryTurnoverData(): Promise<TurnoverSummary> {
         .groupBy(salesRecords.productId)
         .as('sales_agg');
 
-      // 메인 쿼리에서 LEFT JOIN (기존 상관 서브쿼리 대체)
-      const rows = await db
-        .select({
-          productId: products.id,
-          sku: products.sku,
-          name: products.name,
-          costPrice: products.costPrice,
-          unitPrice: products.unitPrice,
-          currentStock: inventory.currentStock,
-          annualSalesQty: sql<number>`coalesce(${salesAgg.totalQty}, 0)`,
-          annualSalesAmount: sql<number>`coalesce(${salesAgg.totalAmount}, 0)`,
-        })
-        .from(products)
-        .leftJoin(inventory, eq(products.id, inventory.productId))
-        .leftJoin(salesAgg, eq(products.id, salesAgg.productId))
-        .where(
-          and(
-            eq(products.organizationId, orgId),
-            isNotNull(products.isActive)
+      // inventoryHistory 출고 집계 (salesRecords 보충용, changeAmount < 0)
+      const [rows, outboundHistoryRows] = await Promise.all([
+        db
+          .select({
+            productId: products.id,
+            sku: products.sku,
+            name: products.name,
+            costPrice: products.costPrice,
+            unitPrice: products.unitPrice,
+            currentStock: inventory.currentStock,
+            annualSalesQty: sql<number>`coalesce(${salesAgg.totalQty}, 0)`,
+            annualSalesAmount: sql<number>`coalesce(${salesAgg.totalAmount}, 0)`,
+          })
+          .from(products)
+          .leftJoin(inventory, eq(products.id, inventory.productId))
+          .leftJoin(salesAgg, eq(products.id, salesAgg.productId))
+          .where(
+            and(
+              eq(products.organizationId, orgId),
+              isNotNull(products.isActive)
+            )
+          ),
+        db
+          .select({
+            productId: inventoryHistory.productId,
+            totalQty: sql<number>`coalesce(sum(abs(${inventoryHistory.changeAmount})), 0)`.as('total_qty'),
+          })
+          .from(inventoryHistory)
+          .where(
+            and(
+              eq(inventoryHistory.organizationId, orgId),
+              sql`${inventoryHistory.date} >= ${oneYearAgoStr}`,
+              sql`${inventoryHistory.date} <= ${todayStr}`,
+              sql`${inventoryHistory.changeAmount} < 0`
+            )
           )
-        );
+          .groupBy(inventoryHistory.productId),
+      ]);
+
+      // inventoryHistory 출고 집계 맵 (productId → totalQty)
+      const outboundMap = new Map<string, number>();
+      for (const row of outboundHistoryRows) {
+        outboundMap.set(row.productId, Number(row.totalQty));
+      }
 
       const items: TurnoverData[] = [];
 
@@ -107,8 +130,13 @@ export async function getInventoryTurnoverData(): Promise<TurnoverSummary> {
         const costPrice = row.costPrice || 0;
         const unitPrice = row.unitPrice || 0;
         const currentStock = row.currentStock || 0;
-        const annualSalesQty = Number(row.annualSalesQty) || 0;
+        const salesQtyRaw = Number(row.annualSalesQty) || 0;
         const annualSalesAmount = Number(row.annualSalesAmount) || 0;
+
+        // salesRecords에 데이터가 없는 제품은 inventoryHistory 출고 수량으로 보충
+        const annualSalesQty = salesQtyRaw > 0
+          ? salesQtyRaw
+          : (outboundMap.get(row.productId) ?? 0);
 
         // COGS = 판매수량 × 원가 (원가가 없으면 판매액의 70% 추정)
         const cogs = costPrice > 0

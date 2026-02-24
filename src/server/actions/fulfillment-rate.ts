@@ -2,7 +2,7 @@
 
 import { unstable_cache } from "next/cache";
 import { db } from "@/server/db";
-import { demandForecasts, products, salesRecords } from "@/server/db/schema";
+import { demandForecasts, products, salesRecords, inventoryHistory } from "@/server/db/schema";
 import { eq, and, sql, gte, lte, isNotNull, inArray } from "drizzle-orm";
 import { getCurrentUser } from "./auth-helpers";
 
@@ -59,9 +59,9 @@ async function _getFulfillmentRateInternal(orgId: string): Promise<FulfillmentRa
       )
     );
 
-  // 예측 데이터 없으면 판매 기반 — 판매+제품을 병렬 조회
+  // 예측 데이터 없으면 판매 기반 — 판매+출고이력+제품을 병렬 조회
   if (forecasts.length === 0) {
-    const [monthlySales, productList] = await Promise.all([
+    const [monthlySales, monthlyOutbound, productList] = await Promise.all([
       db
         .select({
           productId: salesRecords.productId,
@@ -72,22 +72,46 @@ async function _getFulfillmentRateInternal(orgId: string): Promise<FulfillmentRa
         .where(and(eq(salesRecords.organizationId, orgId), gte(salesRecords.date, startDate.substring(0, 10))))
         .groupBy(salesRecords.productId, sql`to_char(${salesRecords.date}::date, 'YYYY-MM-01')`),
       db
+        .select({
+          productId: inventoryHistory.productId,
+          month: sql<string>`to_char(${inventoryHistory.date}::date, 'YYYY-MM-01')`,
+          totalQty: sql<number>`coalesce(sum(abs(${inventoryHistory.changeAmount})), 0)`,
+        })
+        .from(inventoryHistory)
+        .where(
+          and(
+            eq(inventoryHistory.organizationId, orgId),
+            gte(inventoryHistory.date, startDate.substring(0, 10)),
+            sql`${inventoryHistory.changeAmount} < 0`
+          )
+        )
+        .groupBy(inventoryHistory.productId, sql`to_char(${inventoryHistory.date}::date, 'YYYY-MM-01')`),
+      db
         .select({ id: products.id, sku: products.sku, name: products.name })
         .from(products)
         .where(and(eq(products.organizationId, orgId), isNotNull(products.isActive))),
     ]);
 
-    if (monthlySales.length === 0) {
-      return { items: [], avgFulfillmentRate: 0, overForecastCount: 0, underForecastCount: 0, periods: [] };
-    }
+    // salesRecords에 데이터가 있는 제품 ID 집합
+    const salesProductIds = new Set(monthlySales.map((r) => r.productId));
 
-    const productMap = new Map(productList.map((p) => [p.id, p]));
+    // salesRecords 우선 집계 후, 없는 제품은 inventoryHistory로 보충
     const productMonthly = new Map<string, Map<string, number>>();
     for (const row of monthlySales) {
       if (!productMonthly.has(row.productId)) productMonthly.set(row.productId, new Map());
       productMonthly.get(row.productId)!.set(row.month as string, Number(row.totalQty));
     }
+    for (const row of monthlyOutbound) {
+      if (salesProductIds.has(row.productId)) continue; // salesRecords 우선
+      if (!productMonthly.has(row.productId)) productMonthly.set(row.productId, new Map());
+      productMonthly.get(row.productId)!.set(row.month as string, Number(row.totalQty));
+    }
 
+    if (productMonthly.size === 0) {
+      return { items: [], avgFulfillmentRate: 0, overForecastCount: 0, underForecastCount: 0, periods: [] };
+    }
+
+    const productMap = new Map(productList.map((p) => [p.id, p]));
     const items: FulfillmentRateItem[] = [];
     const periodsSet = new Set<string>();
     for (const [productId, months] of productMonthly) {
@@ -108,9 +132,9 @@ async function _getFulfillmentRateInternal(orgId: string): Promise<FulfillmentRa
     return buildSummary(items, periodsSet);
   }
 
-  // 예측 있는 경우 — 제품+판매량 병렬 조회 (N+1 제거)
+  // 예측 있는 경우 — 제품+판매량+출고이력 병렬 조회 (N+1 제거)
   const productIds = [...new Set(forecasts.map((f) => f.productId))];
-  const [productList, monthlySalesAll] = await Promise.all([
+  const [productList, monthlySalesAll, monthlyOutboundAll] = await Promise.all([
     db
       .select({ id: products.id, sku: products.sku, name: products.name })
       .from(products)
@@ -130,12 +154,36 @@ async function _getFulfillmentRateInternal(orgId: string): Promise<FulfillmentRa
         )
       )
       .groupBy(salesRecords.productId, sql`to_char(${salesRecords.date}::date, 'YYYY-MM-01')`),
+    db
+      .select({
+        productId: inventoryHistory.productId,
+        period: sql<string>`to_char(${inventoryHistory.date}::date, 'YYYY-MM-01')`,
+        total: sql<number>`coalesce(sum(abs(${inventoryHistory.changeAmount})), 0)`,
+      })
+      .from(inventoryHistory)
+      .where(
+        and(
+          eq(inventoryHistory.organizationId, orgId),
+          inArray(inventoryHistory.productId, productIds),
+          gte(inventoryHistory.date, startDate.substring(0, 10)),
+          sql`${inventoryHistory.changeAmount} < 0`
+        )
+      )
+      .groupBy(inventoryHistory.productId, sql`to_char(${inventoryHistory.date}::date, 'YYYY-MM-01')`),
   ]);
 
   const productMap = new Map(productList.map((p) => [p.id, p]));
+
+  // salesRecords 우선 룩업
   const salesLookup = new Map<string, number>();
   for (const row of monthlySalesAll) {
     salesLookup.set(`${row.productId}|${row.period}`, Number(row.total));
+  }
+
+  // inventoryHistory 출고 룩업 (salesRecords 보충용)
+  const outboundLookup = new Map<string, number>();
+  for (const row of monthlyOutboundAll) {
+    outboundLookup.set(`${row.productId}|${row.period}`, Number(row.total));
   }
 
   const items: FulfillmentRateItem[] = [];
@@ -144,7 +192,11 @@ async function _getFulfillmentRateInternal(orgId: string): Promise<FulfillmentRa
     const product = productMap.get(f.productId);
     if (!product || !f.forecastQty) continue;
     periodsSet.add(f.period);
-    const actualQty = f.actualQty || salesLookup.get(`${f.productId}|${f.period}`) || 0;
+    const key = `${f.productId}|${f.period}`;
+    const salesQty = salesLookup.get(key);
+    // salesRecords에 값이 있으면 우선 사용, 없으면 inventoryHistory 출고로 보충
+    const actualQty = f.actualQty
+      ?? (salesQty !== undefined ? salesQty : (outboundLookup.get(key) ?? 0));
     const rate = f.forecastQty > 0 ? (actualQty / f.forecastQty) * 100 : 0;
     items.push({
       productId: f.productId, sku: product.sku, name: product.name, period: f.period,
