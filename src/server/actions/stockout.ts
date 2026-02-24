@@ -3,7 +3,7 @@
 import { db } from "@/server/db";
 import { stockoutRecords, products, inventory } from "@/server/db/schema";
 import { eq, and, desc, sql, isNull } from "drizzle-orm";
-import { getCurrentUser } from "./auth-helpers";
+import { getCurrentUser, requireAuth } from "./auth-helpers";
 import { revalidatePath } from "next/cache";
 
 export interface StockoutRecordItem {
@@ -256,15 +256,22 @@ export async function updateStockoutRecord(
   }
 ): Promise<{ success: boolean; message: string }> {
   try {
+    // 인증 확인
+    let user;
+    try {
+      user = await requireAuth();
+    } catch {
+      return { success: false, message: "인증이 필요합니다" };
+    }
+
+    const orgId = user.organizationId;
+
     // auto-detected 기록은 먼저 DB에 INSERT
     if (recordId.startsWith("auto-")) {
       const productId = recordId.replace("auto-", "");
-      const user = await getCurrentUser();
-      const orgId = user?.organizationId;
-      if (!orgId) return { success: false, message: "조직 정보를 찾을 수 없습니다" };
       const today = new Date().toISOString().split("T")[0];
 
-      const [inserted] = await db
+      await db
         .insert(stockoutRecords)
         .values({
           organizationId: orgId,
@@ -280,6 +287,21 @@ export async function updateStockoutRecord(
 
       revalidatePath("/dashboard/stockout");
       return { success: true, message: "결품 기록이 등록되었습니다" };
+    }
+
+    // 해당 결품 기록이 인증된 사용자의 조직 소속인지 검증
+    const [existing] = await db
+      .select({ organizationId: stockoutRecords.organizationId })
+      .from(stockoutRecords)
+      .where(eq(stockoutRecords.id, recordId))
+      .limit(1);
+
+    if (!existing) {
+      return { success: false, message: "결품 기록을 찾을 수 없습니다" };
+    }
+
+    if (existing.organizationId !== orgId) {
+      return { success: false, message: "권한이 없습니다" };
     }
 
     const updateData: Record<string, unknown> = { updatedAt: new Date() };

@@ -3,6 +3,7 @@
 import { db } from "@/server/db";
 import { organizations } from "@/server/db/schema";
 import { eq } from "drizzle-orm";
+import { requireAuth } from "./auth-helpers";
 
 const VALID_PLANS = ["free", "starter", "pro", "enterprise"];
 
@@ -11,8 +12,21 @@ export async function updateOrganizationPlan(
   plan: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    // 인증 확인
+    let user;
+    try {
+      user = await requireAuth();
+    } catch {
+      return { success: false, error: "인증이 필요합니다" };
+    }
+
     if (!orgId) {
       return { success: false, error: "조직 ID가 없습니다." };
+    }
+
+    // 요청한 조직과 인증된 사용자의 조직이 일치하는지 검증
+    if (user.organizationId !== orgId) {
+      return { success: false, error: "권한이 없습니다" };
     }
 
     if (!VALID_PLANS.includes(plan)) {

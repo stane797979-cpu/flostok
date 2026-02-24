@@ -3,7 +3,7 @@
 import { db } from "@/server/db";
 import { kpiMonthlySnapshots } from "@/server/db/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
-import { getCurrentUser } from "./auth-helpers";
+import { getCurrentUser, requireAuth } from "./auth-helpers";
 import { revalidatePath } from "next/cache";
 import type { KPITrend } from "@/server/services/scm/kpi-measurement";
 
@@ -120,6 +120,29 @@ export async function updateKpiComment(
   comment: string
 ): Promise<{ success: boolean; message: string }> {
   try {
+    // 인증 확인
+    let user;
+    try {
+      user = await requireAuth();
+    } catch {
+      return { success: false, message: "인증이 필요합니다" };
+    }
+
+    // 해당 스냅샷이 인증된 사용자의 조직 소속인지 검증
+    const [snapshot] = await db
+      .select({ organizationId: kpiMonthlySnapshots.organizationId })
+      .from(kpiMonthlySnapshots)
+      .where(eq(kpiMonthlySnapshots.id, snapshotId))
+      .limit(1);
+
+    if (!snapshot) {
+      return { success: false, message: "KPI 스냅샷을 찾을 수 없습니다" };
+    }
+
+    if (snapshot.organizationId !== user.organizationId) {
+      return { success: false, message: "권한이 없습니다" };
+    }
+
     await db
       .update(kpiMonthlySnapshots)
       .set({ comment, updatedAt: new Date() })
