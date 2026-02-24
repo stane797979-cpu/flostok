@@ -20,6 +20,7 @@ import { ExcelImportDialog } from "@/components/features/excel/excel-import-dial
 import { type Product } from "@/server/db/schema";
 import { exportProductsToExcel } from "@/server/actions/data-export";
 import { useRouter } from "next/navigation";
+import { useToast } from "@/hooks/use-toast";
 
 interface ProductsPageClientProps {
   initialProducts: (Product & {
@@ -57,6 +58,7 @@ export function ProductsPageClient({
   const [viewingProduct, setViewingProduct] = useState<ProductWithStatus | null>(null);
   const [deletingProductIds, setDeletingProductIds] = useState<string[]>([]);
   const [deletingProductNames, setDeletingProductNames] = useState<string[]>([]);
+  const { toast } = useToast();
 
   // URL 쿼리 빌더
   const buildUrl = (overrides: { page?: number; size?: number }) => {
@@ -132,10 +134,10 @@ export function ProductsPageClient({
       if (result.success && result.data) {
         downloadBase64(result.data.buffer, result.data.filename);
       } else {
-        alert(result.error || "다운로드에 실패했습니다");
+        toast({ title: "다운로드 실패", description: result.error || "다운로드에 실패했습니다", variant: "destructive" });
       }
     } catch {
-      alert("다운로드 중 오류가 발생했습니다");
+      toast({ title: "오류", description: "다운로드 중 오류가 발생했습니다", variant: "destructive" });
     } finally {
       setDownloading(false);
     }

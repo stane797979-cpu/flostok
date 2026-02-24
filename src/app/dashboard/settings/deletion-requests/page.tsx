@@ -48,6 +48,7 @@ import {
   Info,
 } from "lucide-react";
 import Link from "next/link";
+import { useToast } from "@/hooks/use-toast";
 
 const ENTITY_TYPE_LABELS: Record<string, string> = {
   product: "제품",
@@ -83,6 +84,7 @@ export default function DeletionRequestsPage() {
   const [requests, setRequests] = useState<DeletionRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const { toast } = useToast();
 
   // 상세 보기
   const [detailRequest, setDetailRequest] = useState<DeletionRequest | null>(null);
@@ -116,7 +118,7 @@ export default function DeletionRequestsPage() {
       if (result.success) {
         await fetchRequests();
       } else {
-        alert(result.error || "승인에 실패했습니다");
+        toast({ title: "승인 실패", description: result.error || "승인에 실패했습니다", variant: "destructive" });
       }
     } catch (error) {
       console.error("승인 오류:", error);
@@ -140,7 +142,7 @@ export default function DeletionRequestsPage() {
         setRejectDialogOpen(false);
         await fetchRequests();
       } else {
-        alert(result.error || "거부에 실패했습니다");
+        toast({ title: "거부 실패", description: result.error || "거부에 실패했습니다", variant: "destructive" });
       }
     } catch (error) {
       console.error("거부 오류:", error);

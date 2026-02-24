@@ -4,6 +4,7 @@
  * Excel 데이터 임포트 Server Actions
  */
 
+import { z } from "zod";
 import {
   importSalesData,
   importProductData,
@@ -23,6 +24,15 @@ import { requireAuth } from "./auth-helpers";
 import { logActivity } from "@/server/services/activity-log";
 
 export type ImportType = "sales" | "products" | "suppliers" | "outbound" | "transfer";
+
+/** Zod 런타임 검증 스키마 */
+const importExcelSchema = z.object({
+  type: z.enum(["sales", "products", "suppliers", "outbound", "transfer"]),
+  fileBase64: z.string().min(1, "파일 데이터가 비어있습니다"),
+  fileName: z.string().min(1, "파일명이 필요합니다"),
+  sheetName: z.string().optional(),
+  duplicateHandling: z.enum(["skip", "update", "error"]).optional(),
+});
 
 export interface ImportExcelInput {
   type: ImportType;
@@ -48,8 +58,22 @@ export interface ImportExcelResult {
 /**
  * Excel 파일 임포트
  */
-export async function importExcelFile(input: ImportExcelInput): Promise<ImportExcelResult> {
+export async function importExcelFile(rawInput: ImportExcelInput): Promise<ImportExcelResult> {
   try {
+    // 런타임 입력 검증
+    const parsed = importExcelSchema.safeParse(rawInput);
+    if (!parsed.success) {
+      return {
+        success: false,
+        message: parsed.error.errors[0]?.message || "입력 데이터가 올바르지 않습니다",
+        totalRows: 0,
+        successCount: 0,
+        errorCount: 1,
+        errors: [{ row: 0, message: parsed.error.errors[0]?.message || "유효성 검사 실패" }],
+      };
+    }
+    const input = parsed.data;
+
     const user = await requireAuth();
 
     // Base64 -> ArrayBuffer 변환

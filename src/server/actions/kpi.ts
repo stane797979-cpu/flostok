@@ -8,7 +8,7 @@
 import { unstable_cache } from "next/cache";
 import { requireAuth } from "./auth-helpers";
 import { measureKPIMetrics, getKPITrendData } from "@/server/services/scm/kpi-measurement";
-import type { KPIMetrics } from "@/server/services/scm/kpi-improvement";
+import type { KPIMetrics, KPITarget } from "@/server/services/scm/kpi-improvement";
 import type { KPITrend, KPIFilterOptions } from "@/server/services/scm/kpi-measurement";
 
 export type { KPIFilterOptions };
@@ -17,11 +17,11 @@ export type { KPIFilterOptions };
 export interface KPIDashboardData {
   metrics: KPIMetrics;
   trends: KPITrend[];
-  targets: KPIMetrics;
+  targets: KPITarget;
 }
 
 /** 기본 목표값 (추후 조직별 설정 가능하도록) */
-const DEFAULT_TARGETS: KPIMetrics = {
+const DEFAULT_TARGETS: KPITarget = {
   inventoryTurnoverRate: 10,
   averageInventoryDays: 40,
   inventoryAccuracy: 98,

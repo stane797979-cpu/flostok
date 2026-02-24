@@ -30,11 +30,11 @@ export interface OrderScoringResult {
   breakdown: {
     /** 재고 긴급도 점수 (0-40) */
     inventoryUrgency: number;
-    /** ABC 등급 점수 (0-30) */
+    /** ABC 등급 점수 (0-25) */
     abcScore: number;
     /** 판매 추세 점수 (0-20) */
     salesTrend: number;
-    /** 리드타임 리스크 점수 (0-10) */
+    /** 리드타임 리스크 점수 (0-15) */
     leadTimeRisk: number;
   };
   /** 우선순위 등급 */
@@ -71,18 +71,18 @@ function calculateInventoryUrgencyScore(input: InventoryStatusInput): number {
 }
 
 /**
- * ABC 등급 점수 계산 (0-30점)
+ * ABC 등급 점수 계산 (0-25점)
  *
  * 기준:
- * - A등급: 30점 (핵심 품목, 최우선 관리)
- * - B등급: 20점 (중요 품목)
- * - C등급: 10점 (일반 품목)
+ * - A등급: 25점 (핵심 품목, 최우선 관리)
+ * - B등급: 15점 (중요 품목)
+ * - C등급: 5점 (일반 품목)
  */
 function calculateABCScore(abcGrade: ABCGrade): number {
   const scoreMap: Record<ABCGrade, number> = {
-    A: 30,
-    B: 20,
-    C: 10,
+    A: 25,
+    B: 15,
+    C: 5,
   };
 
   return scoreMap[abcGrade];
@@ -112,17 +112,17 @@ function calculateSalesTrendScore(recentSales: number, previousSales: number): n
 }
 
 /**
- * 리드타임 리스크 점수 계산 (0-10점)
+ * 리드타임 리스크 점수 계산 (0-15점)
  *
  * 기준:
  * - 리드타임이 길수록 발주 지연 시 리스크가 크므로 높은 점수
  * - 최대 30일 기준 정규화
- * - 1일: 0.3점, 7일: 2.3점, 14일: 4.7점, 30일: 10점
+ * - 1일: 0.5점, 7일: 3.5점, 14일: 7.0점, 30일: 15점
  */
 function calculateLeadTimeRiskScore(leadTimeDays: number): number {
   const maxLeadTime = 30; // 최대 리드타임 기준
   const normalizedLeadTime = Math.min(leadTimeDays, maxLeadTime);
-  const score = (normalizedLeadTime / maxLeadTime) * 10;
+  const score = (normalizedLeadTime / maxLeadTime) * 15;
 
   return Math.round(score * 10) / 10; // 소수점 1자리
 }
@@ -132,9 +132,9 @@ function calculateLeadTimeRiskScore(leadTimeDays: number): number {
  *
  * 총점 범위: 0-100점
  * - 재고 긴급도: 40점
- * - ABC 등급: 30점
+ * - ABC 등급: 25점
  * - 판매 추세: 20점
- * - 리드타임 리스크: 10점
+ * - 리드타임 리스크: 15점
  *
  * 우선순위 등급:
  * - urgent (긴급): 80-100점 → 즉시 발주 (금일)

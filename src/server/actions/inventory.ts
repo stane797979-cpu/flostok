@@ -422,18 +422,33 @@ export async function processInventoryTransaction(
     const today = new Date().toISOString().split("T")[0];
 
     if (currentInventory) {
-      // 재고 업데이트
-      await db
+      // 원자적 재고 업데이트 — race condition 방지
+      const [updated] = await db
         .update(inventory)
         .set({
-          currentStock: stockAfter,
-          availableStock: stockAfter, // TODO: 예약재고 반영
+          currentStock: sql`${inventory.currentStock} + ${changeAmount}`,
+          availableStock: sql`${inventory.availableStock} + ${changeAmount}`,
+          inventoryValue: sql`(${inventory.currentStock} + ${changeAmount}) * ${product.costPrice || 0}`,
           status: statusResult.key as (typeof inventory.status.enumValues)[number],
           location: validated.location || currentInventory.location,
           lastUpdatedAt: new Date(),
           updatedAt: new Date(),
         })
-        .where(eq(inventory.id, currentInventory.id));
+        .where(
+          and(
+            eq(inventory.id, currentInventory.id),
+            // DB 레벨에서 음수 재고 방지
+            sql`${inventory.currentStock} + ${changeAmount} >= 0`
+          )
+        )
+        .returning();
+
+      if (!updated) {
+        return {
+          success: false,
+          error: `재고가 부족합니다. 동시 요청으로 인해 처리할 수 없습니다.`,
+        };
+      }
     } else {
       // 재고 생성 (창고 포함)
       const [newInventory] = await db

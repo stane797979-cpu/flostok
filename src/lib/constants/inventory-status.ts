@@ -90,6 +90,13 @@ export function getInventoryStatus(
   if (currentStock === 0) {
     return INVENTORY_STATUS.OUT_OF_STOCK;
   }
+  // 안전재고 미설정 시 — safetyStock=0이면 배수 비교가 무의미
+  if (safetyStock <= 0) {
+    if (reorderPoint > 0 && currentStock < reorderPoint) {
+      return INVENTORY_STATUS.CAUTION;
+    }
+    return INVENTORY_STATUS.OPTIMAL;
+  }
   if (currentStock < safetyStock * 0.5) {
     return INVENTORY_STATUS.CRITICAL;
   }

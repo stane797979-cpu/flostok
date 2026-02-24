@@ -3,6 +3,8 @@
  * 수요 및 리드타임 불확실성을 고려한 버퍼 재고 산정
  */
 
+import { safeSqrt, safeNumber, ensurePositive } from "@/lib/utils/safe-math";
+
 export interface SafetyStockInput {
   /** 일평균 판매량 */
   averageDailyDemand: number;
@@ -91,28 +93,32 @@ export function getZScore(serviceLevel: number): number {
  * - σLT: 리드타임 표준편차 (일)
  */
 export function calculateSafetyStock(input: SafetyStockInput): SafetyStockResult {
-  const {
-    averageDailyDemand,
-    demandStdDev,
-    leadTimeDays,
-    leadTimeStdDev = 0,
-    serviceLevel = 0.95,
-  } = input;
+  // 입력 검증 — NaN/음수 방어
+  const avgDemand = ensurePositive(input.averageDailyDemand, 0);
+  const demandStd = safeNumber(input.demandStdDev, 0);
+  const leadTime = ensurePositive(input.leadTimeDays, 1);
+  const leadTimeStd = safeNumber(input.leadTimeStdDev ?? 0, 0);
+  const serviceLevel = input.serviceLevel ?? 0.95;
+
+  // 데이터 부족 시 안전재고 0 반환 (신규 제품 등)
+  if (avgDemand === 0) {
+    return { safetyStock: 0, serviceLevel, zScore: 0, method: "simplified" };
+  }
 
   const zScore = getZScore(serviceLevel);
 
   let safetyStock: number;
   let method: "simplified" | "full";
 
-  if (leadTimeStdDev > 0) {
-    // 전체 공식: 수요 변동 + 리드타임 변동 모두 고려
-    const demandVariance = leadTimeDays * Math.pow(demandStdDev, 2);
-    const leadTimeVariance = Math.pow(averageDailyDemand, 2) * Math.pow(leadTimeStdDev, 2);
-    safetyStock = zScore * Math.sqrt(demandVariance + leadTimeVariance);
+  if (leadTimeStd > 0) {
+    // 전체 공식 (King's formula): SS = Z × √(LT × σd² + d̄² × σLT²)
+    const demandVariance = leadTime * demandStd * demandStd;
+    const leadTimeVariance = avgDemand * avgDemand * leadTimeStd * leadTimeStd;
+    safetyStock = zScore * safeSqrt(demandVariance + leadTimeVariance);
     method = "full";
   } else {
-    // 단순화 공식: 수요 변동만 고려
-    safetyStock = zScore * demandStdDev * Math.sqrt(leadTimeDays);
+    // 단순화 공식: SS = Z × σd × √LT
+    safetyStock = zScore * demandStd * safeSqrt(leadTime);
     method = "simplified";
   }
 
@@ -133,5 +139,11 @@ export function calculateSimpleSafetyStock(
   leadTimeDays: number,
   safetyFactor: number = 0.5 // 리드타임 수요의 50%
 ): number {
-  return Math.ceil(averageDailyDemand * leadTimeDays * safetyFactor);
+  const demand = ensurePositive(averageDailyDemand, 0);
+  const lt = ensurePositive(leadTimeDays, 0);
+  const factor = safeNumber(safetyFactor, 0.5);
+
+  if (demand === 0 || lt === 0) return 0;
+
+  return Math.ceil(demand * lt * factor);
 }

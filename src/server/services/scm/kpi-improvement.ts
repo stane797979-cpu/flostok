@@ -6,7 +6,7 @@
 export interface KPIMetrics {
   inventoryTurnoverRate: number; // 재고회전율 (회/년)
   averageInventoryDays: number; // 평균 재고일수 (일)
-  inventoryAccuracy: number; // 재고 정확도 (%)
+  inventoryAccuracy: number | null; // 재고 정확도 (%) — 실사 미실시 시 null
   stockoutRate: number; // 품절률 (%)
   onTimeOrderRate: number; // 적시 발주율 (%)
   averageLeadTime: number; // 평균 리드타임 (일)
@@ -204,7 +204,7 @@ export function generateKPIImprovementProposals(
   }
 
   // 재고 정확도 개선 제안
-  if (metrics.inventoryAccuracy < targets.inventoryAccuracy) {
+  if (metrics.inventoryAccuracy !== null && metrics.inventoryAccuracy < targets.inventoryAccuracy) {
     const gap = targets.inventoryAccuracy - metrics.inventoryAccuracy;
 
     if (gap > 2) {
@@ -261,7 +261,7 @@ export function generateKPIImprovementProposals(
   if (
     metrics.inventoryTurnoverRate >= targets.inventoryTurnoverRate &&
     metrics.averageInventoryDays <= targets.averageInventoryDays &&
-    metrics.inventoryAccuracy >= targets.inventoryAccuracy &&
+    (metrics.inventoryAccuracy === null || metrics.inventoryAccuracy >= targets.inventoryAccuracy) &&
     metrics.stockoutRate <= targets.stockoutRate &&
     metrics.onTimeOrderRate >= targets.onTimeOrderRate &&
     metrics.orderFulfillmentRate >= targets.orderFulfillmentRate

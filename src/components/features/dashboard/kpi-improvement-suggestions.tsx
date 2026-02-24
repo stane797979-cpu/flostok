@@ -418,7 +418,7 @@ export function KPIImprovementSuggestions({
               {[
                 { label: '재고회전율', current: metrics.inventoryTurnoverRate, target: targets.inventoryTurnoverRate, unit: '회/년', higher: true },
                 { label: '평균 재고일수', current: metrics.averageInventoryDays, target: targets.averageInventoryDays, unit: '일', higher: false },
-                { label: '재고 정확도', current: metrics.inventoryAccuracy, target: targets.inventoryAccuracy, unit: '%', higher: true },
+                { label: '재고 정확도', current: metrics.inventoryAccuracy ?? 0, target: targets.inventoryAccuracy, unit: '%', higher: true },
                 { label: '품절률', current: metrics.stockoutRate, target: targets.stockoutRate, unit: '%', higher: false },
                 { label: '적시 발주율', current: metrics.onTimeOrderRate, target: targets.onTimeOrderRate, unit: '%', higher: true },
                 { label: '평균 리드타임', current: metrics.averageLeadTime, target: targets.averageLeadTime, unit: '일', higher: false },

@@ -118,10 +118,10 @@ export function DataManagement({ isAdmin }: DataManagementProps) {
       if (result.success && result.data) {
         downloadBase64File(result.data.buffer, result.data.filename);
       } else {
-        alert(result.error || "다운로드에 실패했습니다");
+        toast({ title: "다운로드 실패", description: result.error || "다운로드에 실패했습니다", variant: "destructive" });
       }
     } catch {
-      alert("다운로드 중 오류가 발생했습니다");
+      toast({ title: "오류", description: "다운로드 중 오류가 발생했습니다", variant: "destructive" });
     } finally {
       setExportingProducts(false);
     }
@@ -134,10 +134,10 @@ export function DataManagement({ isAdmin }: DataManagementProps) {
       if (result.success && result.data) {
         downloadBase64File(result.data.buffer, result.data.filename);
       } else {
-        alert(result.error || "다운로드에 실패했습니다");
+        toast({ title: "다운로드 실패", description: result.error || "다운로드에 실패했습니다", variant: "destructive" });
       }
     } catch {
-      alert("다운로드 중 오류가 발생했습니다");
+      toast({ title: "오류", description: "다운로드 중 오류가 발생했습니다", variant: "destructive" });
     } finally {
       setExportingSales(false);
     }

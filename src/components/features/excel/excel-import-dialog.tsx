@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Upload, FileSpreadsheet, AlertCircle, CheckCircle, Download, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 import { importExcelFile, getExcelTemplateBase64, type ImportType, type ImportExcelResult } from "@/server/actions/excel-import";
 
 interface ExcelImportDialogProps {
@@ -38,6 +39,7 @@ export function ExcelImportDialog({
   const [duplicateHandling, setDuplicateHandling] = useState<"skip" | "update" | "error">("skip");
   const [result, setResult] = useState<ImportExcelResult | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const { toast } = useToast();
 
   const typeLabel = importType === "transfer" ? "재고이동" : importType === "outbound" ? "출고 데이터" : importType === "sales" ? "판매 데이터" : importType === "suppliers" ? "공급자 데이터" : "제품 데이터";
   const displayTitle = title || `${typeLabel} 임포트`;
@@ -137,7 +139,7 @@ export function ExcelImportDialog({
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error("Template download error:", error);
-      alert("양식 다운로드에 실패했습니다. 다시 시도해주세요.");
+      toast({ title: "다운로드 실패", description: "양식 다운로드에 실패했습니다. 다시 시도해주세요.", variant: "destructive" });
     } finally {
       setTemplateDownloading(false);
     }

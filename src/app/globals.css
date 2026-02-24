@@ -32,6 +32,60 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 230 80% 56%;
     --radius: 0.5rem;
+
+    /* ===== 전역 가독성 강화 (CSS Custom Properties) ===== */
+    --text-body: #1e293b;        /* slate-800 */
+    --text-muted: #475569;       /* slate-600 */
+    --text-subtle: #64748b;      /* slate-500 */
+    --text-placeholder: #64748b;
+    --th-color: #1e293b;
+    --td-color: #1e293b;
+    --tab-color: #475569;
+    --tab-active-color: #1e293b;
+    --text-xs-size: 0.8125rem;
+    --text-xs-lh: 1.25rem;
+    --text-sm-size: 0.9375rem;
+    --text-sm-lh: 1.375rem;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
+
+    /* 가독성 강화 다크모드 대응 */
+    --text-body: #e2e8f0;
+    --text-muted: #94a3b8;
+    --text-subtle: #94a3b8;
+    --text-placeholder: #64748b;
+    --th-color: #e2e8f0;
+    --td-color: #cbd5e1;
+    --tab-color: #94a3b8;
+    --tab-active-color: #e2e8f0;
   }
 }
 
@@ -47,50 +101,102 @@ body {
 
 /* ===== 전역 가독성 강화 (shadcn/ui 기본값보다 진하게) ===== */
 
-/* 연한 회색 텍스트를 진하게 */
-.text-slate-300 { color: #64748b !important; }
-.text-slate-400 { color: #475569 !important; }
-.text-slate-500 { color: #334155 !important; }
-.text-gray-400 { color: #475569 !important; }
-.text-gray-500 { color: #334155 !important; }
+/* 연한 텍스트를 진하게 (specificity로 해결, !important 제거) */
+body .text-slate-300 { color: var(--text-subtle); }
+body .text-slate-400 { color: var(--text-muted); }
+body .text-slate-500 { color: var(--text-muted); }
+body .text-gray-400 { color: var(--text-muted); }
+body .text-gray-500 { color: var(--text-muted); }
 
 /* 글씨 크기 최소 보장 */
-.text-xs {
-  font-size: 0.8125rem !important;
-  line-height: 1.25rem !important;
+body .text-xs {
+  font-size: var(--text-xs-size);
+  line-height: var(--text-xs-lh);
 }
-.text-sm {
-  font-size: 0.9375rem !important;
-  line-height: 1.375rem !important;
+body .text-sm {
+  font-size: var(--text-sm-size);
+  line-height: var(--text-sm-lh);
 }
 
 /* 테이블 헤더 진하게 */
-th {
-  color: #1e293b !important;
-  font-weight: 600 !important;
+body th {
+  color: var(--th-color);
+  font-weight: 600;
 }
 
 /* 테이블 셀 기본 색상 진하게 */
-td {
-  color: #1e293b !important;
+body td {
+  color: var(--td-color);
 }
 
 /* placeholder 텍스트 */
 ::placeholder {
-  color: #64748b !important;
+  color: var(--text-placeholder);
 }
 
 /* Tabs 트리거 진하게 */
-[role="tab"] {
-  color: #475569 !important;
-  font-weight: 500 !important;
+body [role="tab"] {
+  color: var(--tab-color);
+  font-weight: 500;
 }
-[role="tab"][data-state="active"] {
-  color: #1e293b !important;
-  font-weight: 600 !important;
+body [role="tab"][data-state="active"] {
+  color: var(--tab-active-color);
+  font-weight: 600;
 }
 
 /* 버튼 텍스트 크기 보장 */
 button {
   font-size: inherit;
+}
+
+/* ===== 인쇄 스타일 ===== */
+@media print {
+  /* 레이아웃 요소 숨김 */
+  nav, aside, header, footer,
+  [data-sidebar], [data-header],
+  button, .no-print {
+    display: none !important;
+  }
+
+  /* 메인 콘텐츠 전체 너비 */
+  main, [data-main-content] {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* 배경색 제거 */
+  * {
+    background: white !important;
+    color: black !important;
+    box-shadow: none !important;
+  }
+
+  /* 테이블 페이지 브레이크 */
+  table {
+    page-break-inside: auto;
+  }
+  tr {
+    page-break-inside: avoid;
+  }
+  thead {
+    display: table-header-group;
+  }
+
+  /* 링크 URL 표시 */
+  a[href]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.8em;
+    color: #666;
+  }
+  a[href^="#"]::after,
+  a[href^="javascript"]::after {
+    content: "";
+  }
+
+  /* 카드 보더만 유지 */
+  .border, [class*="border-"] {
+    border-color: #ddd !important;
+  }
 }

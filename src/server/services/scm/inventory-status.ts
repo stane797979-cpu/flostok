@@ -53,6 +53,27 @@ export function classifyInventoryStatus(input: InventoryStatusInput): InventoryS
     };
   }
 
+  // 안전재고 미설정 시 (신규 제품 등) — safetyStock=0이면 배수 비교가 무의미
+  if (safetyStock <= 0) {
+    if (reorderPoint > 0 && currentStock < reorderPoint) {
+      return {
+        status: INVENTORY_STATUS.CAUTION,
+        key: "caution",
+        needsAction: true,
+        urgencyLevel: 1,
+        recommendation: "발주 검토 권장 (안전재고 미설정)",
+      };
+    }
+    return {
+      status: INVENTORY_STATUS.OPTIMAL,
+      key: "optimal",
+      needsAction: false,
+      urgencyLevel: 0,
+      recommendation: "적정 재고 (안전재고 설정을 권장합니다)",
+    };
+  }
+
+  // 이하 7단계 분류 (safetyStock > 0 보장)
   if (currentStock < safetyStock * 0.5) {
     return {
       status: INVENTORY_STATUS.CRITICAL,

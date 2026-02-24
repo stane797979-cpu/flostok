@@ -85,53 +85,76 @@ export async function getAlerts(options?: {
 /**
  * 알림 읽음 처리
  */
-export async function markAlertAsRead(alertId: string): Promise<{ success: boolean }> {
-  const user = await requireAuth();
+export async function markAlertAsRead(alertId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const user = await requireAuth();
 
-  await db
-    .update(alerts)
-    .set({ isRead: true, readAt: new Date() })
-    .where(
-      and(eq(alerts.id, alertId), eq(alerts.organizationId, user.organizationId))
-    );
+    if (!alertId || typeof alertId !== "string") {
+      return { success: false, error: "유효하지 않은 알림 ID입니다" };
+    }
 
-  revalidatePath("/dashboard/alerts");
-  return { success: true };
+    await db
+      .update(alerts)
+      .set({ isRead: true, readAt: new Date() })
+      .where(
+        and(eq(alerts.id, alertId), eq(alerts.organizationId, user.organizationId))
+      );
+
+    revalidatePath("/dashboard/alerts");
+    return { success: true };
+  } catch (error) {
+    console.error("[markAlertAsRead] 오류:", error);
+    return { success: false, error: "알림 읽음 처리에 실패했습니다" };
+  }
 }
 
 /**
  * 전체 알림 읽음 처리
  */
-export async function markAllAlertsAsRead(): Promise<{ success: boolean; count: number }> {
-  const user = await requireAuth();
+export async function markAllAlertsAsRead(): Promise<{ success: boolean; count: number; error?: string }> {
+  try {
+    const user = await requireAuth();
 
-  const result = await db
-    .update(alerts)
-    .set({ isRead: true, readAt: new Date() })
-    .where(
-      and(
-        eq(alerts.organizationId, user.organizationId),
-        eq(alerts.isRead, false)
+    const result = await db
+      .update(alerts)
+      .set({ isRead: true, readAt: new Date() })
+      .where(
+        and(
+          eq(alerts.organizationId, user.organizationId),
+          eq(alerts.isRead, false)
+        )
       )
-    )
-    .returning({ id: alerts.id });
+      .returning({ id: alerts.id });
 
-  revalidatePath("/dashboard/alerts");
-  return { success: true, count: result.length };
+    revalidatePath("/dashboard/alerts");
+    return { success: true, count: result.length };
+  } catch (error) {
+    console.error("[markAllAlertsAsRead] 오류:", error);
+    return { success: false, count: 0, error: "전체 읽음 처리에 실패했습니다" };
+  }
 }
 
 /**
  * 알림 삭제
  */
-export async function deleteAlert(alertId: string): Promise<{ success: boolean }> {
-  const user = await requireAuth();
+export async function deleteAlert(alertId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const user = await requireAuth();
 
-  await db
-    .delete(alerts)
-    .where(
-      and(eq(alerts.id, alertId), eq(alerts.organizationId, user.organizationId))
-    );
+    if (!alertId || typeof alertId !== "string") {
+      return { success: false, error: "유효하지 않은 알림 ID입니다" };
+    }
 
-  revalidatePath("/dashboard/alerts");
-  return { success: true };
+    await db
+      .delete(alerts)
+      .where(
+        and(eq(alerts.id, alertId), eq(alerts.organizationId, user.organizationId))
+      );
+
+    revalidatePath("/dashboard/alerts");
+    return { success: true };
+  } catch (error) {
+    console.error("[deleteAlert] 오류:", error);
+    return { success: false, error: "알림 삭제에 실패했습니다" };
+  }
 }

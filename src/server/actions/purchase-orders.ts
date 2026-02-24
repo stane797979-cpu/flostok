@@ -463,7 +463,7 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
     const today = new Date();
     const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
 
-    const [supplierResult, productsData, todayOrders] = await Promise.all([
+    const [supplierResult, productsData] = await Promise.all([
       db
         .select()
         .from(suppliers)
@@ -473,15 +473,6 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
         .select()
         .from(products)
         .where(and(sql`${products.id} IN ${productIds}`, eq(products.organizationId, orgId))),
-      db
-        .select({ count: sql<number>`count(*)` })
-        .from(purchaseOrders)
-        .where(
-          and(
-            eq(purchaseOrders.organizationId, orgId),
-            sql`DATE(${purchaseOrders.createdAt}) = CURRENT_DATE`
-          )
-        ),
     ]);
 
     const supplier = supplierResult[0];
@@ -512,10 +503,6 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
       };
     });
 
-    // 발주번호 생성 (PO-YYYYMMDD-XXX)
-    const sequence = (Number(todayOrders[0]?.count || 0) + 1).toString().padStart(3, "0");
-    const orderNumber = `PO-${dateStr}-${sequence}`;
-
     // warehouseId 결정: 입력값 또는 기본 창고
     let warehouseId = validated.warehouseId;
     if (!warehouseId) {
@@ -533,8 +520,21 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
       expectedDate = expectedDateObj.toISOString().split("T")[0];
     }
 
-    // 트랜잭션으로 발주서 및 발주 항목 생성
+    // 트랜잭션으로 발주번호 시퀀스 + 발주서 + 발주 항목 원자적 생성
     const newOrder = await db.transaction(async (tx) => {
+      // 발주번호 시퀀스를 트랜잭션 안에서 생성 (동시 요청 시 중복 방지)
+      const [todayCount] = await tx
+        .select({ count: sql<number>`count(*)` })
+        .from(purchaseOrders)
+        .where(
+          and(
+            eq(purchaseOrders.organizationId, orgId),
+            sql`DATE(${purchaseOrders.createdAt}) = CURRENT_DATE`
+          )
+        );
+      const sequence = (Number(todayCount?.count || 0) + 1).toString().padStart(3, "0");
+      const orderNumber = `PO-${dateStr}-${sequence}`;
+
       // 발주서 생성 (destinationWarehouseId 포함)
       const [order] = await tx
         .insert(purchaseOrders)
@@ -1200,7 +1200,7 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
     const allSupplierIds = [...itemsBySupplier.keys()];
     const allProductIds = validated.items.map((i) => i.productId);
 
-    const [allSuppliersData, allProductsData, todayOrderCount] = await Promise.all([
+    const [allSuppliersData, allProductsData] = await Promise.all([
       // 전체 공급자 한번에 조회
       db.select().from(suppliers).where(
         and(eq(suppliers.organizationId, orgId), sql`${suppliers.id} IN ${allSupplierIds}`)
@@ -1209,15 +1209,10 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
       db.select().from(products).where(
         and(eq(products.organizationId, orgId), sql`${products.id} IN ${allProductIds}`)
       ),
-      // 오늘 발주 수 1회만 조회
-      db.select({ count: sql<number>`count(*)` }).from(purchaseOrders).where(
-        and(eq(purchaseOrders.organizationId, orgId), sql`DATE(${purchaseOrders.createdAt}) = CURRENT_DATE`)
-      ),
     ]);
 
     const suppliersMap = new Map(allSuppliersData.map((s) => [s.id, s]));
     const productsMap = new Map(allProductsData.map((p) => [p.id, p]));
-    const baseOrderCount = Number(todayOrderCount[0]?.count || 0);
     const today = new Date();
     const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
 
@@ -1254,17 +1249,26 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
 
         if (orderItems.length === 0) continue;
 
-        // 발주번호 생성 (사전 조회된 카운트 사용)
-        const sequence = (baseOrderCount + createdOrders.length + 1).toString().padStart(3, "0");
-        const orderNumber = `PO-${dateStr}-${sequence}`;
-
         // 예상입고일 계산 (리드타임 기반)
         const expectedDateObj = new Date();
         expectedDateObj.setDate(expectedDateObj.getDate() + (supplier.avgLeadTime || 7));
         const expectedDate = expectedDateObj.toISOString().split("T")[0];
 
-        // 트랜잭션으로 발주서 및 발주 항목 생성
+        // 트랜잭션으로 시퀀스 + 발주서 + 발주 항목 원자적 생성
         const newOrder = await db.transaction(async (tx) => {
+          // 발주번호 시퀀스를 트랜잭션 안에서 생성 (동시 요청 시 중복 방지)
+          const [todayCount] = await tx
+            .select({ count: sql<number>`count(*)` })
+            .from(purchaseOrders)
+            .where(
+              and(
+                eq(purchaseOrders.organizationId, orgId),
+                sql`DATE(${purchaseOrders.createdAt}) = CURRENT_DATE`
+              )
+            );
+          const sequence = (Number(todayCount?.count || 0) + 1).toString().padStart(3, "0");
+          const orderNumber = `PO-${dateStr}-${sequence}`;
+
           // 발주서 생성 (destinationWarehouseId 포함)
           const [order] = await tx
             .insert(purchaseOrders)

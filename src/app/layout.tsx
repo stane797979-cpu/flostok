@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { ThemeProvider } from "next-themes";
 import "./globals.css";
 import AnalyticsProvider from "@/components/analytics-provider";
 
@@ -32,6 +33,7 @@ export const metadata: Metadata = {
     "FloStok",
   ],
   metadataBase: new URL(siteUrl),
+  manifest: "/manifest.json",
   openGraph: {
     type: "website",
     locale: "ko_KR",
@@ -54,10 +56,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko">
+    <html lang="ko" suppressHydrationWarning>
       <body className={`${inter.variable} font-sans antialiased`}>
-        <AnalyticsProvider />
-        {children}
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="light"
+          enableSystem={false}
+          disableTransitionOnChange
+        >
+          <AnalyticsProvider />
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );

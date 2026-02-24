@@ -84,7 +84,7 @@ export async function measureKPIMetrics(
     const filteredIds = await resolveFilteredProductIds(organizationId, filters);
     if (filteredIds !== null && filteredIds.length === 0) {
       return {
-        inventoryTurnoverRate: 0, averageInventoryDays: 999, inventoryAccuracy: 95.0,
+        inventoryTurnoverRate: 0, averageInventoryDays: 999, inventoryAccuracy: null,
         stockoutRate: 0, onTimeOrderRate: 0, averageLeadTime: 0, orderFulfillmentRate: 0,
       };
     }
@@ -201,7 +201,7 @@ export async function measureKPIMetrics(
     return {
       inventoryTurnoverRate,
       averageInventoryDays,
-      inventoryAccuracy: 95.0, // 실사 데이터 없으므로 고정값
+      inventoryAccuracy: null, // 실사 데이터 없으므로 측정 불가
       stockoutRate,
       onTimeOrderRate,
       averageLeadTime,
@@ -212,7 +212,7 @@ export async function measureKPIMetrics(
     return {
       inventoryTurnoverRate: 0,
       averageInventoryDays: 999,
-      inventoryAccuracy: 95.0,
+      inventoryAccuracy: null,
       stockoutRate: 0,
       onTimeOrderRate: 0,
       averageLeadTime: 0,

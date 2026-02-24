@@ -56,6 +56,29 @@ export interface ProductReorderData {
   forecastMethod?: string;
 }
 
+/** 발주 추천 설정 (optional, 미지정 시 기본값 사용) */
+export interface ReorderConfig {
+  /** 1회 발주 비용 (원, 기본값 50000) */
+  orderingCost?: number;
+  /** 연간 재고유지비율 (0-1, 기본값 0.25 = 25%) */
+  holdingRate?: number;
+  /** 목표 재고일수 (기본값: ABC등급별 차등 - A:15, B:30, C:45) */
+  targetDaysOfInventory?: number;
+}
+
+/** ABC 등급별 기본 목표 재고일수 */
+const DEFAULT_TARGET_DAYS_BY_ABC: Record<string, number> = {
+  A: 15, // 고회전: 15일
+  B: 30, // 중회전: 30일
+  C: 45, // 저회전: 45일
+};
+
+/** 기본 발주 비용 (원) */
+const DEFAULT_ORDERING_COST = 50000;
+
+/** 기본 재고유지비율 */
+const DEFAULT_HOLDING_RATE = 0.25;
+
 /**
  * 발주 필요 여부 판단
  */
@@ -146,7 +169,7 @@ export function convertToReorderItem(data: ProductReorderData): ReorderItem | nu
  * 보정계수는 ABC-XYZ 등급 조합에 따라 0.65~1.0 범위
  * (AX=1.0 → 핵심+안정 품목은 그대로, CZ=0.65 → 저가+불안정 품목은 35% 축소)
  */
-export function calculateRecommendedQuantity(data: ProductReorderData): number {
+export function calculateRecommendedQuantity(data: ProductReorderData, config?: ReorderConfig): number {
   const { currentStock, safetyStock, avgDailySales, moq, costPrice } = data;
 
   // 수요예측값이 있으면 우선 사용, 없으면 실적 기반
@@ -166,10 +189,10 @@ export function calculateRecommendedQuantity(data: ProductReorderData): number {
   // EOQ 계산 (연간 수요가 충분한 경우)
   let eoqQty = 0;
   if (annualDemand > 0 && costPrice > 0) {
-    const orderingCost = 50000; // 1회 발주 비용 (기본값 5만원)
+    const orderingCost = config?.orderingCost ?? DEFAULT_ORDERING_COST;
     const holdingCost = calculateHoldingCost({
       unitPrice: costPrice,
-      holdingRate: 0.25, // 25% 유지비율
+      holdingRate: config?.holdingRate ?? DEFAULT_HOLDING_RATE,
     });
 
     const eoqResult = calculateEOQ({
@@ -187,7 +210,10 @@ export function calculateRecommendedQuantity(data: ProductReorderData): number {
     reorderPoint: data.reorderPoint,
     safetyStock,
     averageDailyDemand: adjustedDailySales,
-    targetDaysOfInventory: 30, // 목표 30일 재고
+    targetDaysOfInventory:
+      config?.targetDaysOfInventory ??
+      DEFAULT_TARGET_DAYS_BY_ABC[data.abcGrade ?? "B"] ??
+      30,
     eoq: eoqQty > 0 ? eoqQty : undefined,
     minOrderQuantity: moq,
     orderMultiple: 1,

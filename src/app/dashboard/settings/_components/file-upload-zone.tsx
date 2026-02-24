@@ -4,6 +4,7 @@ import { Upload, FileSpreadsheet, X } from 'lucide-react'
 import { useState, useCallback, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { useToast } from '@/hooks/use-toast'
 
 interface FileUploadZoneProps {
   onFileSelect: (file: File) => void
@@ -20,6 +21,7 @@ export function FileUploadZone({
 }: FileUploadZoneProps) {
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const { toast } = useToast()
 
   const validateFile = (file: File): string | null => {
     // 파일 형식 검증
@@ -42,7 +44,7 @@ export function FileUploadZone({
   const handleFile = useCallback((file: File) => {
     const error = validateFile(file)
     if (error) {
-      alert(error)
+      toast({ title: "파일 오류", description: error, variant: "destructive" })
       return
     }
     onFileSelect(file)

@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { KPICard } from "./kpi-card";
 import { KPISparkline } from "./kpi-sparkline";
-import type { KPIMetrics } from "@/server/services/scm/kpi-improvement";
+import type { KPIMetrics, KPITarget } from "@/server/services/scm/kpi-improvement";
 import type { KPITrend } from "@/server/services/scm/kpi-measurement";
 
 /**
@@ -23,7 +23,7 @@ function getKPIStatus(
 interface KPIGridProps {
   metrics: KPIMetrics;
   trends: KPITrend[];
-  targets: KPIMetrics;
+  targets: KPITarget;
 }
 
 export function KPIGrid({ metrics, trends, targets }: KPIGridProps) {
@@ -59,10 +59,10 @@ export function KPIGrid({ metrics, trends, targets }: KPIGridProps) {
           />
           <KPICard
             name="재고 정확도"
-            value={Number(metrics.inventoryAccuracy.toFixed(1))}
-            unit="%"
-            target={targets.inventoryAccuracy}
-            status={getKPIStatus(metrics.inventoryAccuracy, targets.inventoryAccuracy)}
+            value={metrics.inventoryAccuracy !== null ? Number(metrics.inventoryAccuracy.toFixed(1)) : "-"}
+            unit={metrics.inventoryAccuracy !== null ? "%" : ""}
+            target={targets.inventoryAccuracy ?? undefined}
+            status={metrics.inventoryAccuracy !== null ? getKPIStatus(metrics.inventoryAccuracy, targets.inventoryAccuracy ?? 95) : "warning"}
             iconName="percent"
           />
           <KPICard

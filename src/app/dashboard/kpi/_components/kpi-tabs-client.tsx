@@ -8,13 +8,13 @@ import { KPIImprovementSuggestions } from "@/components/features/dashboard/kpi-i
 import { KpiMonthlyTrendTable } from "./kpi-monthly-trend-table";
 import { KPIFilters } from "./kpi-filters";
 import { getKPIDashboardData } from "@/server/actions/kpi";
-import type { KPIMetrics } from "@/server/services/scm/kpi-improvement";
+import type { KPIMetrics, KPITarget } from "@/server/services/scm/kpi-improvement";
 import type { KPITrend } from "@/server/services/scm/kpi-measurement";
 
 interface KpiTabsClientProps {
   metrics: KPIMetrics;
   trends: KPITrend[];
-  targets: KPIMetrics;
+  targets: KPITarget;
 }
 
 export function KpiTabsClient({
