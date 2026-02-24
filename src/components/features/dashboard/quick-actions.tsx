@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ShoppingCart, Package, Bell, FileText, BarChart3, Settings } from "lucide-react";
+import { ShoppingCart, Package, Bell, Warehouse, BarChart3, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { getAlerts } from "@/server/actions/alerts";
@@ -49,9 +49,9 @@ export function QuickActions() {
       href: "/dashboard/alerts",
     },
     {
-      icon: FileText,
-      label: "보고서",
-      description: "재고 현황",
+      icon: Warehouse,
+      label: "재고 현황",
+      description: "재고 목록 조회",
       variant: "outline" as const,
       href: "/dashboard/inventory",
     },

@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Package, AlertTriangle, TrendingDown, Archive, ShoppingCart } from "lucide-react";
+import { Package, AlertTriangle, TrendingDown, Archive, ShoppingCart, Banknote } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { PeriodBadge } from "@/components/features/dashboard/period-badge";
@@ -100,6 +100,7 @@ async function loadDashboardData() {
         critical: stats.critical,
         needsOrder: stats.outOfStock + stats.critical + stats.shortage,
         excess: stats.excess,
+        totalValue: stats.totalValue,
       },
       needsOrderProducts,
       statusDistribution,
@@ -112,7 +113,7 @@ async function loadDashboardData() {
   } catch (error) {
     console.error("대시보드 데이터 로드 실패:", error);
     return {
-      stats: { totalSku: 0, outOfStock: 0, critical: 0, needsOrder: 0, excess: 0 },
+      stats: { totalSku: 0, outOfStock: 0, critical: 0, needsOrder: 0, excess: 0, totalValue: 0 },
       needsOrderProducts: [],
       statusDistribution: {},
       totalSku: 0,
@@ -150,7 +151,7 @@ export default async function DashboardPage() {
           formula="현재고 vs 안전재고 비교"
         />
       </div>
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-base font-medium text-slate-500">총 SKU</CardTitle>
@@ -194,6 +195,23 @@ export default async function DashboardPage() {
           <CardContent>
             <div className="text-3xl font-bold text-blue-600">{stats.excess}</div>
             <p className="text-sm text-blue-500">재고 최적화 검토</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-green-200 dark:border-green-900">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-base font-medium text-green-600">재고총금액</CardTitle>
+            <Banknote className="h-5 w-5 text-green-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">
+              {new Intl.NumberFormat("ko-KR", {
+                style: "currency",
+                currency: "KRW",
+                maximumFractionDigits: 0,
+              }).format(stats.totalValue || 0)}
+            </div>
+            <p className="text-sm text-green-500">현재 재고 평가액</p>
           </CardContent>
         </Card>
       </div>

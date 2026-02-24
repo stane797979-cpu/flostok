@@ -6,6 +6,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { ChevronDown, ChevronRight, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SubNavItem } from "@/lib/constants/navigation";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 /**
  * child href와 현재 URL 비교
@@ -125,8 +126,8 @@ export function NavItem({
     );
   }
 
-  // --- 일반 항목 또는 collapsed 모드 ---
-  return (
+  // --- 일반 링크 내용 (collapsed/expanded 공통) ---
+  const linkContent = (
     <Link
       href={href}
       onClick={onClick}
@@ -138,7 +139,6 @@ export function NavItem({
           : "text-slate-600 dark:text-slate-400",
         collapsed && "justify-center px-2"
       )}
-      title={collapsed ? title : undefined}
     >
       <Icon className={cn("h-5 w-5 shrink-0", isActive && "text-primary-600")} />
       {!collapsed && (
@@ -165,4 +165,21 @@ export function NavItem({
       )}
     </Link>
   );
+
+  // --- collapsed 모드: Tooltip으로 메뉴명 표시 ---
+  if (collapsed) {
+    return (
+      <Tooltip delayDuration={0}>
+        <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
+        <TooltipContent side="right" className="font-medium">
+          <p className="text-white">{title}</p>
+          {badge !== undefined && badge > 0 && (
+            <p className="text-xs text-white/80">({badge})</p>
+          )}
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return linkContent;
 }

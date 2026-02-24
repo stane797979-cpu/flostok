@@ -14,19 +14,20 @@ interface DashboardShellProps {
     isSuperadmin?: boolean;
     allowedMenus?: string[];
   };
+  sidebarBadges?: Record<string, number>;
 }
 
-export function DashboardShell({ children, userInfo }: DashboardShellProps) {
+export function DashboardShell({ children, userInfo, sidebarBadges }: DashboardShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleNavigation = () => setMobileOpen(false);
 
   return (
     <div className="flex h-screen overflow-hidden">
-      {/* 데스크톱 사이드바 */}
+      {/* 데스크탑 사이드바 */}
       <div className="hidden lg:flex">
         <Suspense>
-          <Sidebar userInfo={userInfo} />
+          <Sidebar userInfo={userInfo} badges={sidebarBadges} />
         </Suspense>
       </div>
 
@@ -37,6 +38,7 @@ export function DashboardShell({ children, userInfo }: DashboardShellProps) {
           <Suspense>
             <Sidebar
               userInfo={userInfo}
+              badges={sidebarBadges}
               onNavigate={handleNavigation}
               className="border-r-0"
             />
