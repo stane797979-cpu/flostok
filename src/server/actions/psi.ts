@@ -9,7 +9,6 @@ import {
   generatePeriods,
   type PSIResult,
 } from "@/server/services/scm/psi-aggregation";
-import { calculateEOQ } from "@/server/services/scm/eoq";
 import { revalidatePath, unstable_cache, revalidateTag } from "next/cache";
 
 /**
@@ -40,7 +39,8 @@ async function _getPSIDataInternal(orgId: string, monthOffset: number = 0): Prom
         orderMethod: products.orderMethod,
       })
       .from(products)
-      .where(eq(products.organizationId, orgId)),
+      .where(eq(products.organizationId, orgId))
+      .catch(() => []),
 
     // 현재 재고
     db
@@ -49,7 +49,8 @@ async function _getPSIDataInternal(orgId: string, monthOffset: number = 0): Prom
         currentStock: inventory.currentStock,
       })
       .from(inventory)
-      .where(eq(inventory.organizationId, orgId)),
+      .where(eq(inventory.organizationId, orgId))
+      .catch(() => []),
 
     // 출고 실적 (월별 집계 — inventory_history에서 changeAmount < 0)
     db
@@ -67,7 +68,8 @@ async function _getPSIDataInternal(orgId: string, monthOffset: number = 0): Prom
           lte(inventoryHistory.date, endDate)
         )
       )
-      .groupBy(inventoryHistory.productId, sql`to_char(${inventoryHistory.date}::date, 'YYYY-MM')`),
+      .groupBy(inventoryHistory.productId, sql`to_char(${inventoryHistory.date}::date, 'YYYY-MM')`)
+      .catch(() => []),
 
     // 입고 실적 (월별 집계)
     db
@@ -84,7 +86,8 @@ async function _getPSIDataInternal(orgId: string, monthOffset: number = 0): Prom
           lte(inboundRecords.date, endDate)
         )
       )
-      .groupBy(inboundRecords.productId, sql`to_char(${inboundRecords.date}::date, 'YYYY-MM')`),
+      .groupBy(inboundRecords.productId, sql`to_char(${inboundRecords.date}::date, 'YYYY-MM')`)
+      .catch(() => []),
 
     // 수요 예측 (참고용)
     db
@@ -101,7 +104,8 @@ async function _getPSIDataInternal(orgId: string, monthOffset: number = 0): Prom
           gte(demandForecasts.period, startDate),
           lte(demandForecasts.period, endDate)
         )
-      ),
+      )
+      .catch(() => []),
 
     // PSI 계획 데이터 (S&OP + 출고계획)
     db
@@ -119,7 +123,8 @@ async function _getPSIDataInternal(orgId: string, monthOffset: number = 0): Prom
           gte(psiPlans.period, startDate),
           lte(psiPlans.period, endDate)
         )
-      ),
+      )
+      .catch(() => []),
 
     // 입고 계획 (발주서 expectedDate 기준 월별 발주수량 합산)
     db
@@ -142,7 +147,8 @@ async function _getPSIDataInternal(orgId: string, monthOffset: number = 0): Prom
           lte(purchaseOrders.expectedDate, endDate)
         )
       )
-      .groupBy(purchaseOrderItems.productId, sql`to_char(${purchaseOrders.expectedDate}::date, 'YYYY-MM')`),
+      .groupBy(purchaseOrderItems.productId, sql`to_char(${purchaseOrders.expectedDate}::date, 'YYYY-MM')`)
+      .catch(() => []),
   ]);
 
   // Map 형태로 변환
@@ -462,13 +468,15 @@ export async function generateSOPQuantities(
           reorderPoint: products.reorderPoint
         })
         .from(products)
-        .where(eq(products.organizationId, orgId)),
+        .where(eq(products.organizationId, orgId))
+        .catch(() => []),
 
       // 현재 재고
       db
         .select({ productId: inventory.productId, currentStock: inventory.currentStock })
         .from(inventory)
-        .where(eq(inventory.organizationId, orgId)),
+        .where(eq(inventory.organizationId, orgId))
+        .catch(() => []),
 
       // 출고계획 (psi_plans)
       db
@@ -486,7 +494,8 @@ export async function generateSOPQuantities(
             gte(psiPlans.period, startDate),
             lte(psiPlans.period, endDate)
           )
-        ),
+        )
+        .catch(() => []),
 
       // 수요예측 (forecast 방식용)
       db
@@ -502,7 +511,8 @@ export async function generateSOPQuantities(
             gte(demandForecasts.period, startDate),
             lte(demandForecasts.period, endDate)
           )
-        ),
+        )
+        .catch(() => []),
     ]);
 
     const inventoryMap = new Map(inventoryRows.map((r) => [r.productId, r.currentStock]));

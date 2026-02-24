@@ -2,8 +2,8 @@
 
 import { z } from 'zod'
 import { db } from '@/server/db'
-import { organizations } from '@/server/db/schema'
-import { eq } from 'drizzle-orm'
+import { organizations, users } from '@/server/db/schema'
+import { eq, and, isNull } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import crypto from 'crypto'
@@ -85,8 +85,9 @@ function maskApiKey(key: string): string {
 
 /**
  * 조직의 현재 사용자 확인
+ * users 테이블에서 authId로 사용자를 조회하여 organizationId가 일치하는지 검증
  */
-async function verifyOrganizationAccess(_organizationId: string): Promise<boolean> {
+async function verifyOrganizationAccess(organizationId: string): Promise<boolean> {
   const supabase = await createClient()
   const {
     data: { user },
@@ -96,9 +97,19 @@ async function verifyOrganizationAccess(_organizationId: string): Promise<boolea
     return false
   }
 
-  // TODO: users 테이블에서 실제 조직 권한 확인
-  // 현재는 간단히 organizationId만 검증
-  return true
+  const [dbUser] = await db
+    .select({ organizationId: users.organizationId })
+    .from(users)
+    .where(
+      and(
+        eq(users.authId, user.id),
+        eq(users.organizationId, organizationId),
+        isNull(users.deletedAt)
+      )
+    )
+    .limit(1)
+
+  return !!dbUser
 }
 
 // ============================================

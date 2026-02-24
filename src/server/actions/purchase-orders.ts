@@ -308,10 +308,6 @@ export async function calculateReorderQuantity(productId: string): Promise<{
       throw new Error("제품을 찾을 수 없습니다");
     }
 
-    if (!productData) {
-      throw new Error("제품을 찾을 수 없습니다");
-    }
-
     // 조직 ID 확인
     const user = await getCurrentUser();
     if (!user?.organizationId) {
