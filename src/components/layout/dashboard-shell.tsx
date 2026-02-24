@@ -49,7 +49,7 @@ export function DashboardShell({ children, userInfo, sidebarBadges }: DashboardS
       {/* 메인 콘텐츠 영역 */}
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header onMenuClick={() => setMobileOpen(true)} />
-        <main className="flex-1 overflow-y-auto bg-slate-50 p-4 md:p-6 lg:p-8">
+        <main className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 p-4 md:p-6 lg:p-8">
           {children}
         </main>
       </div>

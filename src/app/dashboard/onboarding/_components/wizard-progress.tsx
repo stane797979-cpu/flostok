@@ -30,7 +30,7 @@ export function WizardProgress({ currentStep, steps }: WizardProgressProps) {
                     'flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all',
                     isCompleted && 'bg-green-600 border-green-600',
                     isCurrent && 'bg-primary border-primary',
-                    isFuture && 'bg-white border-slate-300'
+                    isFuture && 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600'
                   )}
                 >
                   {isCompleted ? (

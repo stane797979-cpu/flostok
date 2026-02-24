@@ -449,7 +449,7 @@ export function DemandForecastChart() {
                         <Label className="text-xs">예측 방법</Label>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <HelpCircle className="h-3.5 w-3.5 rounded-full bg-slate-200 p-[2px] text-slate-500 cursor-help hover:bg-primary/20 hover:text-primary transition-colors" />
+                            <HelpCircle className="h-3.5 w-3.5 rounded-full bg-slate-200 dark:bg-slate-700 p-[2px] text-slate-500 dark:text-slate-400 cursor-help hover:bg-primary/20 hover:text-primary transition-colors" />
                           </TooltipTrigger>
                           <TooltipContent side="top" className="max-w-xs text-xs leading-relaxed">
                             <p className="font-semibold mb-1">예측 방법 비교</p>
@@ -477,7 +477,7 @@ export function DemandForecastChart() {
                           <Label className="text-xs">이동 윈도우 크기</Label>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <HelpCircle className="h-3.5 w-3.5 rounded-full bg-slate-200 p-[2px] text-slate-500 cursor-help hover:bg-primary/20 hover:text-primary transition-colors" />
+                              <HelpCircle className="h-3.5 w-3.5 rounded-full bg-slate-200 dark:bg-slate-700 p-[2px] text-slate-500 dark:text-slate-400 cursor-help hover:bg-primary/20 hover:text-primary transition-colors" />
                             </TooltipTrigger>
                             <TooltipContent side="top" className="max-w-xs text-xs leading-relaxed">
                               <p className="font-semibold mb-1">최근 몇 개월의 평균을 사용할지 설정</p>
@@ -504,7 +504,7 @@ export function DemandForecastChart() {
                           <Label className="text-xs">평활계수 (α)</Label>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <HelpCircle className="h-3.5 w-3.5 rounded-full bg-slate-200 p-[2px] text-slate-500 cursor-help hover:bg-primary/20 hover:text-primary transition-colors" />
+                              <HelpCircle className="h-3.5 w-3.5 rounded-full bg-slate-200 dark:bg-slate-700 p-[2px] text-slate-500 dark:text-slate-400 cursor-help hover:bg-primary/20 hover:text-primary transition-colors" />
                             </TooltipTrigger>
                             <TooltipContent side="top" className="max-w-xs text-xs leading-relaxed">
                               <p className="font-semibold mb-1">최근 데이터를 얼마나 중시할지 설정</p>
@@ -534,7 +534,7 @@ export function DemandForecastChart() {
                           <Label className="text-xs">추세계수 (β)</Label>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <HelpCircle className="h-3.5 w-3.5 rounded-full bg-slate-200 p-[2px] text-slate-500 cursor-help hover:bg-primary/20 hover:text-primary transition-colors" />
+                              <HelpCircle className="h-3.5 w-3.5 rounded-full bg-slate-200 dark:bg-slate-700 p-[2px] text-slate-500 dark:text-slate-400 cursor-help hover:bg-primary/20 hover:text-primary transition-colors" />
                             </TooltipTrigger>
                             <TooltipContent side="top" className="max-w-xs text-xs leading-relaxed">
                               <p className="font-semibold mb-1">추세 변화를 얼마나 빠르게 반영할지 설정</p>

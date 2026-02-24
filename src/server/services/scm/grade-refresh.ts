@@ -9,7 +9,7 @@
 
 import { db } from "@/server/db";
 import { products, salesRecords, gradeHistory, inventoryHistory } from "@/server/db/schema";
-import { eq, and, sql, min } from "drizzle-orm";
+import { eq, and, sql, min, inArray } from "drizzle-orm";
 import {
   performABCAnalysis,
   performXYZAnalysis,
@@ -261,7 +261,7 @@ export async function refreshGradesForOrganization(
           .where(
             and(
               eq(salesRecords.organizationId, organizationId),
-              sql`${salesRecords.productId} IN ${eligibleProducts}`,
+              inArray(salesRecords.productId, eligibleProducts),
               sql`${salesRecords.date} >= ${startDate}`
             )
           ),
@@ -275,7 +275,7 @@ export async function refreshGradesForOrganization(
           .where(
             and(
               eq(inventoryHistory.organizationId, organizationId),
-              sql`${inventoryHistory.productId} IN ${eligibleProducts}`,
+              inArray(inventoryHistory.productId, eligibleProducts),
               sql`${inventoryHistory.date} >= ${startDate}`,
               sql`${inventoryHistory.changeAmount} < 0`
             )

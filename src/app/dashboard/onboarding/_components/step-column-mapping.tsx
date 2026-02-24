@@ -340,7 +340,7 @@ export function StepColumnMapping({
                               )
                             }
                           >
-                            <SelectTrigger className="bg-white">
+                            <SelectTrigger className="bg-white dark:bg-slate-800">
                               <SelectValue placeholder="매핑 안함" />
                             </SelectTrigger>
                             <SelectContent>
