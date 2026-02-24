@@ -33,7 +33,7 @@ export interface GradeRefreshResult {
 }
 
 /** 신제품 판단 기준: 판매 이력 개월 수 */
-const NEW_PRODUCT_THRESHOLD_MONTHS = 3;
+const NEW_PRODUCT_THRESHOLD_MONTHS = 2;
 
 /**
  * 조직의 전체 제품 등급을 갱신합니다.
@@ -223,6 +223,7 @@ export async function refreshGradesForOrganization(
         });
 
         // 단일 UPDATE ... FROM (VALUES ...) 쿼리로 배치 처리
+        const nowIso = now.toISOString();
         await db.execute(sql`
           UPDATE products
           SET
@@ -230,7 +231,7 @@ export async function refreshGradesForOrganization(
             xyz_grade = NULL,
             fmr_grade = v.fmr_grade::fmr_grade,
             metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('gradeInfo', v.grade_info),
-            updated_at = ${now}
+            updated_at = ${nowIso}
           FROM (VALUES ${sql.join(valueRows, sql`, `)}) AS v(product_id, grade_info, fmr_grade)
           WHERE products.id = v.product_id
         `);
@@ -397,6 +398,7 @@ export async function refreshGradesForOrganization(
           return sql`(${productId}::uuid, ${abcGrade}, ${xyzGrade}, ${fmrGrade}, ${JSON.stringify(gradeInfo)}::jsonb)`;
         });
 
+        const nowIso2 = now.toISOString();
         await db.execute(sql`
           UPDATE products
           SET
@@ -404,7 +406,7 @@ export async function refreshGradesForOrganization(
             xyz_grade = v.xyz_grade,
             fmr_grade = v.fmr_grade::fmr_grade,
             metadata = COALESCE(products.metadata, '{}'::jsonb) || jsonb_build_object('gradeInfo', v.grade_info),
-            updated_at = ${now}
+            updated_at = ${nowIso2}
           FROM (VALUES ${sql.join(updateRows, sql`, `)}) AS v(product_id, abc_grade, xyz_grade, fmr_grade, grade_info)
           WHERE products.id = v.product_id
         `);
