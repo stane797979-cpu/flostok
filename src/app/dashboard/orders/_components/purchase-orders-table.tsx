@@ -181,7 +181,7 @@ export const PurchaseOrdersTable = memo(function PurchaseOrdersTable({ orders, o
       {/* 모바일 카드 뷰 */}
       <div className={cn("space-y-3 md:hidden", className)}>
         {sorted.map((order) => (
-          <div key={order.id} className="rounded-lg border bg-white p-4 space-y-2">
+          <div key={order.id} className="rounded-lg border bg-white dark:bg-slate-800 p-4 space-y-2">
             <div className="flex items-center justify-between">
               <div className="min-w-0 flex-1">
                 <p className="font-mono text-sm font-medium">{order.orderNumber}</p>

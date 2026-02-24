@@ -31,10 +31,10 @@ export function PeriodBadge({ period, description, formula }: PeriodBadgeProps) 
             <Info className="h-3 w-3" />
           </Badge>
         </TooltipTrigger>
-        <TooltipContent side="bottom" className="max-w-sm bg-white text-slate-900 border border-slate-200 shadow-lg">
+        <TooltipContent side="bottom" className="max-w-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 shadow-lg">
           <p className="text-sm leading-snug">{description}</p>
           {formula && (
-            <p className="mt-0.5 text-xs text-slate-500 leading-snug">{formula}</p>
+            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 leading-snug">{formula}</p>
           )}
         </TooltipContent>
       </Tooltip>

@@ -166,7 +166,7 @@ export const InboundRecordsTable = memo(function InboundRecordsTable({ records, 
       {/* 모바일 카드 뷰 */}
       <div className={cn("space-y-3 md:hidden", className)}>
         {sortedRecords.map((record) => (
-          <div key={record.id} className="rounded-lg border bg-white p-4 space-y-2">
+          <div key={record.id} className="rounded-lg border bg-white dark:bg-slate-800 p-4 space-y-2">
             <div className="flex items-center justify-between">
               <div className="min-w-0 flex-1">
                 <p className="font-medium truncate">{record.productName}</p>
