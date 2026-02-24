@@ -130,6 +130,7 @@ export function ForecastGuideWizard({ products }: ForecastGuideWizardProps) {
             products={products}
             selectedProductId={answers.productId}
             onSelectProduct={handleProductSelect}
+            onNext={() => setCurrentStep(1)}
             onSkip={handleSkipProduct}
           />
         );

@@ -11,6 +11,7 @@ interface StepProductSelectProps {
   products: ProductOption[];
   selectedProductId?: string;
   onSelectProduct: (productId: string) => void;
+  onNext: () => void;
   onSkip: () => void;
 }
 
@@ -18,6 +19,7 @@ export function StepProductSelect({
   products,
   selectedProductId,
   onSelectProduct,
+  onNext,
   onSkip,
 }: StepProductSelectProps) {
   const [search, setSearch] = useState('');
@@ -104,7 +106,13 @@ export function StepProductSelect({
         </div>
       )}
 
-      <div className="flex justify-center">
+      <div className="flex items-center justify-center gap-3">
+        {selectedProductId && (
+          <Button onClick={onNext}>
+            다음 단계로
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
+        )}
         <Button variant="ghost" onClick={onSkip}>
           <BarChart3 className="mr-2 h-4 w-4" />
           전체 SKU 데이터 분석
