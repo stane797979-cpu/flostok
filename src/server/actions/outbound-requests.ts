@@ -7,6 +7,7 @@ import {
   products,
   inventory,
   inventoryLots,
+  salesRecords,
   users,
   warehouses,
 } from "@/server/db/schema";
@@ -656,6 +657,26 @@ export async function confirmOutboundRequest(
       }
     }
 
+    // 판매출고(OUTBOUND_SALE)인 경우 salesRecords에 자동 생성 (수요예측·분석 연동)
+    if (request.outboundType === "OUTBOUND_SALE") {
+      const today = new Date().toISOString().split("T")[0];
+      const salesValues = validated.items
+        .filter((i) => i.confirmedQuantity > 0 && requestItemMap.has(i.itemId))
+        .map((i) => {
+          const item = requestItemMap.get(i.itemId)!;
+          return {
+            organizationId: user.organizationId,
+            productId: item.productId,
+            date: today,
+            quantity: i.confirmedQuantity,
+            notes: `출고확정 자동생성 (${request.requestNumber})`,
+          };
+        });
+      if (salesValues.length > 0) {
+        await db.insert(salesRecords).values(salesValues);
+      }
+    }
+
     // 요청 상태 업데이트 (confirmed)
     await db
       .update(outboundRequests)
@@ -769,6 +790,23 @@ export async function bulkConfirmOutboundRequests(
       }
 
       if (!hasError) {
+        // 판매출고(OUTBOUND_SALE)인 경우 salesRecords에 자동 생성
+        if (request.outboundType === "OUTBOUND_SALE") {
+          const today = new Date().toISOString().split("T")[0];
+          const salesValues = items
+            .filter((i) => i.requestedQuantity > 0)
+            .map((i) => ({
+              organizationId: user.organizationId,
+              productId: i.productId,
+              date: today,
+              quantity: i.requestedQuantity,
+              notes: `출고확정 자동생성 (${request.requestNumber})`,
+            }));
+          if (salesValues.length > 0) {
+            await db.insert(salesRecords).values(salesValues);
+          }
+        }
+
         await db
           .update(outboundRequests)
           .set({

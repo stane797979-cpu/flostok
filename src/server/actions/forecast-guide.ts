@@ -8,7 +8,7 @@
  */
 
 import { db } from '@/server/db'
-import { products, salesRecords, inventory, demandForecasts } from '@/server/db/schema'
+import { products, salesRecords, inventory, inventoryHistory, demandForecasts } from '@/server/db/schema'
 import { eq, and, gte, sql } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { requireAuth } from './auth-helpers'
@@ -323,8 +323,8 @@ export async function getBulkForecastGuide(): Promise<BulkForecastResult> {
   twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12)
   const startDate = twelveMonthsAgo.toISOString().split('T')[0]
 
-  // 1. 병렬 DB 쿼리 3개
-  const [allProducts, allSales, allInventory] = await Promise.all([
+  // 1. 병렬 DB 쿼리 4개 (salesRecords + inventoryHistory 출고 데이터 모두 활용)
+  const [allProducts, allSales, allOutbound, allInventory] = await Promise.all([
     db
       .select({
         id: products.id,
@@ -346,6 +346,21 @@ export async function getBulkForecastGuide(): Promise<BulkForecastResult> {
       .where(and(eq(salesRecords.organizationId, orgId), gte(salesRecords.date, startDate)))
       .groupBy(salesRecords.productId, sql`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`)
       .orderBy(salesRecords.productId, sql`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`),
+    // 출고 이력에서도 수요 데이터 추출 (changeAmount < 0 = 출고)
+    db
+      .select({
+        productId: inventoryHistory.productId,
+        month: sql<string>`TO_CHAR(${inventoryHistory.date}::date, 'YYYY-MM')`,
+        totalQuantity: sql<number>`COALESCE(SUM(ABS(${inventoryHistory.changeAmount})), 0)`,
+      })
+      .from(inventoryHistory)
+      .where(and(
+        eq(inventoryHistory.organizationId, orgId),
+        gte(inventoryHistory.date, startDate),
+        sql`${inventoryHistory.changeAmount} < 0`,
+      ))
+      .groupBy(inventoryHistory.productId, sql`TO_CHAR(${inventoryHistory.date}::date, 'YYYY-MM')`)
+      .orderBy(inventoryHistory.productId, sql`TO_CHAR(${inventoryHistory.date}::date, 'YYYY-MM')`),
     db
       .select({ productId: inventory.productId, currentStock: inventory.currentStock })
       .from(inventory)
@@ -360,11 +375,29 @@ export async function getBulkForecastGuide(): Promise<BulkForecastResult> {
     }
   }
 
-  // 2. 판매 데이터 productId별 그룹핑
+  // 2. 판매 데이터 + 출고 이력 병합하여 productId별 그룹핑
+  //    salesRecords에 데이터가 없는 제품은 inventoryHistory 출고 기록을 활용
   const salesByProduct = new Map<string, Array<{ month: string; quantity: number }>>()
+
+  // 2-1. salesRecords 데이터 먼저 적재
+  const productsWithSales = new Set<string>()
   for (const row of allSales) {
     if (!salesByProduct.has(row.productId)) salesByProduct.set(row.productId, [])
     salesByProduct.get(row.productId)!.push({ month: row.month, quantity: Number(row.totalQuantity) })
+    productsWithSales.add(row.productId)
+  }
+
+  // 2-2. salesRecords에 없는 제품은 inventoryHistory 출고 데이터로 보충
+  for (const row of allOutbound) {
+    if (productsWithSales.has(row.productId)) continue // salesRecords 우선
+    if (!salesByProduct.has(row.productId)) salesByProduct.set(row.productId, [])
+    const existing = salesByProduct.get(row.productId)!
+    const existingMonth = existing.find(e => e.month === row.month)
+    if (existingMonth) {
+      existingMonth.quantity += Number(row.totalQuantity)
+    } else {
+      existing.push({ month: row.month, quantity: Number(row.totalQuantity) })
+    }
   }
 
   // 3. 재고 맵
