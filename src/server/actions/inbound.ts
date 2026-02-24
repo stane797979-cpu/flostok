@@ -715,61 +715,89 @@ export async function bulkConfirmInbound(
       itemsByOrderId.set(item.purchaseOrderId, existing);
     }
 
-    for (const order of orders) {
+    // 각 발주서에 대한 입고 처리 작업 목록 생성
+    // 상태가 유효하지 않거나 이미 완료된 항목은 사전 필터링
+    type OrderTask =
+      | { skip: true; orderId: string; orderNumber: string; reason: string }
+      | { skip: false; orderId: string; orderNumber: string; input: ConfirmInboundInput };
+
+    const tasks: OrderTask[] = orders.map((order) => {
       if (!inboundCapableStatuses.includes(order.status)) {
-        errors.push({
+        return {
+          skip: true,
           orderId: order.id,
           orderNumber: order.orderNumber,
-          error: `현재 상태(${order.status})에서는 입고 처리할 수 없습니다`,
-        });
-        continue;
+          reason: `현재 상태(${order.status})에서는 입고 처리할 수 없습니다`,
+        };
       }
 
-      try {
-        const items = itemsByOrderId.get(order.id) || [];
+      const items = itemsByOrderId.get(order.id) || [];
+      const pendingItems = items.filter(
+        (item) => (item.receivedQuantity ?? 0) < item.quantity
+      );
 
-        // 미입고 항목 필터링
-        const pendingItems = items.filter(
-          (item) => (item.receivedQuantity ?? 0) < item.quantity
-        );
+      if (pendingItems.length === 0) {
+        return {
+          skip: true,
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          reason: "이미 전량 입고 완료된 발주서입니다",
+        };
+      }
 
-        if (pendingItems.length === 0) {
-          errors.push({
-            orderId: order.id,
-            orderNumber: order.orderNumber,
-            error: "이미 전량 입고 완료된 발주서입니다",
-          });
-          continue;
-        }
+      const inboundItems = pendingItems.map((item) => ({
+        orderItemId: item.id,
+        productId: item.productId,
+        expectedQuantity: item.quantity - (item.receivedQuantity ?? 0),
+        receivedQuantity: item.quantity - (item.receivedQuantity ?? 0),
+      }));
 
-        // confirmInbound 호출용 데이터 구성
-        const inboundItems = pendingItems.map((item) => ({
-          orderItemId: item.id,
-          productId: item.productId,
-          expectedQuantity: item.quantity - (item.receivedQuantity ?? 0),
-          receivedQuantity: item.quantity - (item.receivedQuantity ?? 0),
-        }));
-
-        const result = await confirmInbound({
+      return {
+        skip: false,
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        input: {
           orderId: order.id,
           items: inboundItems,
           notes: "일괄 입고확인 처리",
-        });
+        },
+      };
+    });
 
-        if (result.success) {
-          processedCount++;
-        } else {
-          errors.push({
-            orderId: order.id,
-            orderNumber: order.orderNumber,
-            error: result.error || "입고 처리 실패",
-          });
-        }
-      } catch {
+    // 건너뛸 항목 에러 목록에 추가
+    for (const task of tasks) {
+      if (task.skip) {
         errors.push({
-          orderId: order.id,
-          orderNumber: order.orderNumber,
-          error: "입고 처리 중 오류 발생",
+          orderId: task.orderId,
+          orderNumber: task.orderNumber,
+          error: task.reason,
+        });
+      }
+    }
+
+    // 처리 대상 작업만 추출하여 병렬 실행
+    const activeTasks = tasks.filter((t): t is Extract<OrderTask, { skip: false }> => !t.skip);
+
+    const results = await Promise.allSettled(
+      activeTasks.map((task) => confirmInbound(task.input))
+    );
+
+    for (let i = 0; i < results.length; i++) {
+      const task = activeTasks[i];
+      const result = results[i];
+
+      if (result.status === "fulfilled" && result.value.success) {
+        processedCount++;
+      } else {
+        const errorMessage =
+          result.status === "rejected"
+            ? "입고 처리 중 오류 발생"
+            : result.value.error || "입고 처리 실패";
+
+        errors.push({
+          orderId: task.orderId,
+          orderNumber: task.orderNumber,
+          error: errorMessage,
         });
       }
     }
