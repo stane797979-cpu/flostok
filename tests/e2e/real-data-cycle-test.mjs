@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
 
-const BASE = process.env.BASE_URL || 'http://localhost:3001'
+const BASE = process.env.BASE_URL || 'http://localhost:3000'
 const EMAIL = 'admin1@stocklogis.com'
 const PASSWORD = 'admin1234'
 
