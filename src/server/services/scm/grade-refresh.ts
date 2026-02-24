@@ -70,19 +70,41 @@ export async function refreshGradesForOrganization(
       return result;
     }
 
-    // 2. 각 제품별 최초 판매일 조회 (단일 쿼리로 처리)
-    const firstSaleDates = await db
-      .select({
-        productId: salesRecords.productId,
-        firstSaleDate: min(salesRecords.date),
-      })
-      .from(salesRecords)
-      .where(eq(salesRecords.organizationId, organizationId))
-      .groupBy(salesRecords.productId);
+    // 2. 각 제품별 최초 판매일 조회 (salesRecords + inventoryHistory 출고 병합)
+    const [salesFirstDates, outboundFirstDates] = await Promise.all([
+      db
+        .select({
+          productId: salesRecords.productId,
+          firstSaleDate: min(salesRecords.date),
+        })
+        .from(salesRecords)
+        .where(eq(salesRecords.organizationId, organizationId))
+        .groupBy(salesRecords.productId),
+      db
+        .select({
+          productId: inventoryHistory.productId,
+          firstSaleDate: min(inventoryHistory.date),
+        })
+        .from(inventoryHistory)
+        .where(
+          and(
+            eq(inventoryHistory.organizationId, organizationId),
+            sql`${inventoryHistory.changeAmount} < 0`
+          )
+        )
+        .groupBy(inventoryHistory.productId),
+    ]);
 
-    const firstSaleMap = new Map(
-      firstSaleDates.map((r) => [r.productId, r.firstSaleDate])
-    );
+    // salesRecords 우선, 없으면 inventoryHistory 출고 데이터로 보충
+    const firstSaleMap = new Map<string, string | null>();
+    for (const r of salesFirstDates) {
+      firstSaleMap.set(r.productId, r.firstSaleDate);
+    }
+    for (const r of outboundFirstDates) {
+      if (!firstSaleMap.has(r.productId)) {
+        firstSaleMap.set(r.productId, r.firstSaleDate);
+      }
+    }
 
     // 3. 제품별 판매 이력 기간 계산 → 신제품/분석 대상 분류
     const now = new Date();
@@ -226,21 +248,42 @@ export async function refreshGradesForOrganization(
       sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
       const startDate = sixMonthsAgo.toISOString().split("T")[0];
 
-      const salesData = await db
-        .select({
-          productId: salesRecords.productId,
-          date: salesRecords.date,
-          quantity: salesRecords.quantity,
-          totalAmount: salesRecords.totalAmount,
-        })
-        .from(salesRecords)
-        .where(
-          and(
-            eq(salesRecords.organizationId, organizationId),
-            sql`${salesRecords.productId} IN ${eligibleProducts}`,
-            sql`${salesRecords.date} >= ${startDate}`
-          )
-        );
+      // salesRecords + inventoryHistory 출고 데이터 병렬 조회
+      const [salesData, outboundSalesData] = await Promise.all([
+        db
+          .select({
+            productId: salesRecords.productId,
+            date: salesRecords.date,
+            quantity: salesRecords.quantity,
+            totalAmount: salesRecords.totalAmount,
+          })
+          .from(salesRecords)
+          .where(
+            and(
+              eq(salesRecords.organizationId, organizationId),
+              sql`${salesRecords.productId} IN ${eligibleProducts}`,
+              sql`${salesRecords.date} >= ${startDate}`
+            )
+          ),
+        db
+          .select({
+            productId: inventoryHistory.productId,
+            date: inventoryHistory.date,
+            quantity: sql<number>`ABS(${inventoryHistory.changeAmount})`,
+          })
+          .from(inventoryHistory)
+          .where(
+            and(
+              eq(inventoryHistory.organizationId, organizationId),
+              sql`${inventoryHistory.productId} IN ${eligibleProducts}`,
+              sql`${inventoryHistory.date} >= ${startDate}`,
+              sql`${inventoryHistory.changeAmount} < 0`
+            )
+          ),
+      ]);
+
+      // salesRecords에 데이터가 있는 제품 ID 집합
+      const productsWithSalesData = new Set(salesData.map((s) => s.productId));
 
       // 5-2. ABC 분석용 데이터 집계 (매출액 기준)
       const salesByProduct = new Map<
@@ -263,6 +306,25 @@ export async function refreshGradesForOrganization(
         entry.monthlyQuantities.set(
           monthKey,
           (entry.monthlyQuantities.get(monthKey) || 0) + sale.quantity
+        );
+      }
+
+      // 5-2b. salesRecords에 없는 제품은 inventoryHistory 출고 데이터로 보충
+      for (const row of outboundSalesData) {
+        if (productsWithSalesData.has(row.productId)) continue;
+        if (!salesByProduct.has(row.productId)) {
+          salesByProduct.set(row.productId, {
+            totalValue: 0,
+            monthlyQuantities: new Map(),
+          });
+        }
+        const entry = salesByProduct.get(row.productId)!;
+        // 출고 이력에는 totalAmount가 없으므로 수량만 집계 (ABC는 수량 기반으로 대체)
+        entry.totalValue += Number(row.quantity);
+        const monthKey = row.date.substring(0, 7);
+        entry.monthlyQuantities.set(
+          monthKey,
+          (entry.monthlyQuantities.get(monthKey) || 0) + Number(row.quantity)
         );
       }
 
