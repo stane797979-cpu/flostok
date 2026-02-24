@@ -95,21 +95,21 @@ const METHOD_LABELS: Record<string, string> = {
 };
 
 const CONFIDENCE_MAP: Record<string, { label: string; color: string }> = {
-  high: { label: "높음", color: "bg-green-100 text-green-700" },
-  medium: { label: "보통", color: "bg-yellow-100 text-yellow-700" },
-  low: { label: "낮음", color: "bg-red-100 text-red-700" },
+  high: { label: "높음", color: "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-300" },
+  medium: { label: "보통", color: "bg-yellow-100 text-yellow-700 dark:bg-yellow-950/50 dark:text-yellow-300" },
+  low: { label: "낮음", color: "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300" },
 };
 
 const ABC_COLORS: Record<string, string> = {
-  A: "bg-red-100 text-red-700 border-red-200",
-  B: "bg-yellow-100 text-yellow-700 border-yellow-200",
-  C: "bg-slate-100 text-slate-600 border-slate-200",
+  A: "bg-red-100 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800",
+  B: "bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-950/50 dark:text-yellow-300 dark:border-yellow-800",
+  C: "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800/50 dark:text-slate-300 dark:border-slate-700",
 };
 
 const XYZ_COLORS: Record<string, string> = {
-  X: "bg-green-100 text-green-700 border-green-200",
-  Y: "bg-orange-100 text-orange-700 border-orange-200",
-  Z: "bg-purple-100 text-purple-700 border-purple-200",
+  X: "bg-green-100 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-300 dark:border-green-800",
+  Y: "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-300 dark:border-orange-800",
+  Z: "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800",
 };
 
 const forecastChartConfig = {
@@ -582,11 +582,11 @@ export function DemandForecastChart() {
       ) : (
         <>
           {/* 선택 기준 카드 */}
-          <Card className="border-blue-100 bg-blue-50/30">
+          <Card className="border-blue-100 bg-blue-50/30 dark:border-blue-800 dark:bg-blue-950/40">
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2">
-                <Info className="h-4 w-4 text-blue-600" />
-                <CardTitle className="text-sm text-blue-900">
+                <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                <CardTitle className="text-sm text-blue-900 dark:text-blue-100">
                   {forecast.isManual ? "수동 선택" : "자동 선택"} 기준
                 </CardTitle>
               </div>
@@ -616,26 +616,26 @@ export function DemandForecastChart() {
                   <Badge variant="outline" className={cn(
                     "text-xs",
                     forecast.meta.yoyGrowthRate >= 0
-                      ? "bg-green-50 text-green-700 border-green-200"
-                      : "bg-red-50 text-red-700 border-red-200"
+                      ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-300 dark:border-green-800"
+                      : "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800"
                   )}>
                     성장률: {forecast.meta.yoyGrowthRate >= 0 ? "+" : ""}{forecast.meta.yoyGrowthRate}%
                   </Badge>
                 )}
                 {forecast.meta.isOverstock && (
-                  <Badge variant="outline" className="text-xs bg-violet-50 text-violet-700 border-violet-200">
+                  <Badge variant="outline" className="text-xs bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/50 dark:text-violet-300 dark:border-violet-800">
                     재고과다
                   </Badge>
                 )}
                 {forecast.seasonallyAdjusted && (
-                  <Badge variant="outline" className="text-xs bg-cyan-50 text-cyan-700 border-cyan-200">
+                  <Badge variant="outline" className="text-xs bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-950/50 dark:text-cyan-300 dark:border-cyan-800">
                     계절조정
                   </Badge>
                 )}
               </div>
 
               {/* 선택 사유 */}
-              <p className="text-xs text-blue-800 leading-relaxed">
+              <p className="text-xs text-blue-800 dark:text-blue-200 leading-relaxed">
                 {forecast.selectionReason}
               </p>
             </CardContent>

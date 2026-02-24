@@ -50,21 +50,21 @@ type SortField = "name" | "abcGrade" | "xyzGrade" | "revenue" | "variationRate";
 type SortDirection = "asc" | "desc" | null;
 
 const ABC_BADGE_COLORS: Record<ABCGrade, string> = {
-  A: "bg-green-100 text-green-800 hover:bg-green-100",
-  B: "bg-blue-100 text-blue-800 hover:bg-blue-100",
-  C: "bg-slate-100 text-slate-800 hover:bg-slate-100",
+  A: "bg-green-100 text-green-800 hover:bg-green-100 dark:bg-green-950/50 dark:text-green-300 dark:hover:bg-green-950/50",
+  B: "bg-blue-100 text-blue-800 hover:bg-blue-100 dark:bg-blue-950/50 dark:text-blue-300 dark:hover:bg-blue-950/50",
+  C: "bg-slate-100 text-slate-800 hover:bg-slate-100 dark:bg-slate-800/50 dark:text-slate-300 dark:hover:bg-slate-800/50",
 };
 
 const XYZ_BADGE_COLORS: Record<XYZGrade, string> = {
-  X: "bg-emerald-100 text-emerald-800 hover:bg-emerald-100",
-  Y: "bg-yellow-100 text-yellow-800 hover:bg-yellow-100",
-  Z: "bg-orange-100 text-orange-800 hover:bg-orange-100",
+  X: "bg-emerald-100 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-300 dark:hover:bg-emerald-950/50",
+  Y: "bg-yellow-100 text-yellow-800 hover:bg-yellow-100 dark:bg-yellow-950/50 dark:text-yellow-300 dark:hover:bg-yellow-950/50",
+  Z: "bg-orange-100 text-orange-800 hover:bg-orange-100 dark:bg-orange-950/50 dark:text-orange-300 dark:hover:bg-orange-950/50",
 };
 
 const FMR_BADGE_COLORS: Record<FMRGrade, string> = {
-  F: "border-red-300 bg-red-50 text-red-700",
-  M: "border-yellow-300 bg-yellow-50 text-yellow-700",
-  R: "border-slate-300 bg-slate-50 text-slate-500",
+  F: "border-red-300 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/50 dark:text-red-300",
+  M: "border-yellow-300 bg-yellow-50 text-yellow-700 dark:border-yellow-800 dark:bg-yellow-950/50 dark:text-yellow-300",
+  R: "border-slate-300 bg-slate-50 text-slate-500 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-400",
 };
 
 export function ABCXYZTable({ products, selectedGrade }: ABCXYZTableProps) {
@@ -222,7 +222,7 @@ export function ABCXYZTable({ products, selectedGrade }: ABCXYZTableProps) {
                   <TooltipProvider delayDuration={200}>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span className="cursor-help rounded bg-orange-100 px-1.5 py-0.5 text-orange-700 font-semibold border border-orange-300">FMR</span>
+                        <span className="cursor-help rounded bg-orange-100 px-1.5 py-0.5 text-orange-700 font-semibold border border-orange-300 dark:bg-orange-950/50 dark:text-orange-300 dark:border-orange-800">FMR</span>
                       </TooltipTrigger>
                       <TooltipContent side="top" className="max-w-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 shadow-lg">
                         <p className="font-semibold">출고 빈도 분석 (Fast-Medium-Rare)</p>

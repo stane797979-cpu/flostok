@@ -183,13 +183,13 @@ export function ScenarioSimulation() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "충분":
-        return "bg-green-50 text-green-700 border-green-200";
+        return "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-300 dark:border-green-800";
       case "발주필요":
-        return "bg-yellow-50 text-yellow-700 border-yellow-200";
+        return "bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-950/50 dark:text-yellow-300 dark:border-yellow-800";
       case "긴급":
-        return "bg-red-50 text-red-700 border-red-200";
+        return "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800";
       default:
-        return "bg-slate-50 text-slate-700 border-slate-200";
+        return "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800/50 dark:text-slate-300 dark:border-slate-700";
     }
   };
 
@@ -326,12 +326,12 @@ export function ScenarioSimulation() {
                       <tr
                         key={index}
                         className={`border-b ${
-                          index === 1 ? "bg-blue-50 font-medium" : "" // 사용자 설정 하이라이트
+                          index === 1 ? "bg-blue-50 font-medium dark:bg-blue-950/30" : "" // 사용자 설정 하이라이트
                         } ${
                           result.scenarioName.includes("최악")
-                            ? "bg-red-50"
+                            ? "bg-red-50 dark:bg-red-950/30"
                             : result.scenarioName.includes("최선")
-                              ? "bg-green-50"
+                              ? "bg-green-50 dark:bg-green-950/30"
                               : ""
                         }`}
                       >
@@ -450,16 +450,16 @@ export function ScenarioSimulation() {
                         <div
                           className={`absolute left-0 top-0 h-full rounded ${
                             result.newReorderPoint > selectedProduct.currentStock
-                              ? "bg-red-200"
-                              : "bg-green-200"
+                              ? "bg-red-200 dark:bg-red-950/60"
+                              : "bg-green-200 dark:bg-green-950/60"
                           }`}
                           style={{ width: `${barWidth}%` }}
                         >
                           <div
                             className={`flex h-full items-center justify-end pr-2 text-xs font-medium ${
                               result.newReorderPoint > selectedProduct.currentStock
-                                ? "text-red-800"
-                                : "text-green-800"
+                                ? "text-red-800 dark:text-red-300"
+                                : "text-green-800 dark:text-green-300"
                             }`}
                           >
                             {result.stockStatus}
@@ -489,7 +489,7 @@ export function ScenarioSimulation() {
                   className={`rounded-lg border p-4 ${getStatusColor(results.find((r) => r.scenarioName.includes("최악"))?.stockStatus || "충분")}`}
                 >
                   <p className="text-sm font-medium">최악의 시나리오</p>
-                  <p className="mt-2 text-xs text-slate-600">
+                  <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">
                     {results.find((r) => r.scenarioName.includes("최악"))?.scenarioName}
                   </p>
                   <p className="mt-1 text-2xl font-bold">
@@ -498,7 +498,7 @@ export function ScenarioSimulation() {
                       ?.newReorderPoint.toLocaleString()}
                     개
                   </p>
-                  <p className="text-xs text-slate-600">발주점</p>
+                  <p className="text-xs text-slate-600 dark:text-slate-400">발주점</p>
                 </div>
 
                 <div
@@ -517,22 +517,22 @@ export function ScenarioSimulation() {
                   <p className="text-xs text-slate-600">발주점</p>
                 </div>
 
-                <div className="rounded-lg border bg-blue-50 p-4">
-                  <p className="text-sm font-medium text-blue-900">평균 발주점</p>
-                  <p className="mt-2 text-xs text-blue-600">전체 시나리오 평균</p>
-                  <p className="mt-1 text-2xl font-bold text-blue-900">
+                <div className="rounded-lg border bg-blue-50 p-4 dark:bg-blue-950/50 dark:border-blue-800">
+                  <p className="text-sm font-medium text-blue-900 dark:text-blue-300">평균 발주점</p>
+                  <p className="mt-2 text-xs text-blue-600 dark:text-blue-400">전체 시나리오 평균</p>
+                  <p className="mt-1 text-2xl font-bold text-blue-900 dark:text-blue-300">
                     {Math.ceil(
                       results.reduce((sum, r) => sum + r.newReorderPoint, 0) / results.length
                     ).toLocaleString()}
                     개
                   </p>
-                  <p className="text-xs text-blue-600">발주점</p>
+                  <p className="text-xs text-blue-600 dark:text-blue-400">발주점</p>
                 </div>
               </div>
 
               <div className="rounded-lg border bg-slate-50 dark:bg-slate-800/50 p-4">
                 <h4 className="mb-2 font-medium">권장사항</h4>
-                <ul className="space-y-2 text-sm text-slate-700">
+                <ul className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
                   {results[0].stockStatus !== "충분" && (
                     <li className="flex items-start gap-2">
                       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-orange-600" />

@@ -40,7 +40,7 @@ function TurnoverStatusBadge({ status }: { status: TurnoverData["status"] }) {
     low: {
       label: "저회전",
       variant: "outline" as const,
-      className: "border-orange-500 text-orange-700",
+      className: "border-orange-500 text-orange-700 dark:border-orange-600 dark:text-orange-400",
     },
     critical: { label: "위험", variant: "destructive" as const, className: "" },
   };

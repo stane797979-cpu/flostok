@@ -41,7 +41,7 @@ function RateBadge({ rate }: { rate: number }) {
   }
   if (rate > 110) {
     return (
-      <Badge variant="outline" className="border-yellow-500 text-yellow-700">
+      <Badge variant="outline" className="border-yellow-500 text-yellow-700 dark:border-yellow-600 dark:text-yellow-400">
         {rate}%
       </Badge>
     );
@@ -329,7 +329,7 @@ export function FulfillmentRateTable({ data }: FulfillmentRateTableProps) {
               <span className="text-sm">양호</span>
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant="outline" className="border-yellow-500 text-yellow-700">
+              <Badge variant="outline" className="border-yellow-500 text-yellow-700 dark:border-yellow-600 dark:text-yellow-400">
                 110%+
               </Badge>
               <span className="text-sm">예측 초과</span>

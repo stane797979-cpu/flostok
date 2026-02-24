@@ -49,43 +49,45 @@
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
+    /* 배경: 깊은 네이비 계열, 카드와 배경 분리로 시각적 계층 */
+    --background: 222 47% 7%;
     --foreground: 210 40% 98%;
 
-    --card: 222.2 84% 4.9%;
+    --card: 222 47% 11%;
     --card-foreground: 210 40% 98%;
 
-    --popover: 222.2 84% 4.9%;
+    --popover: 222 47% 11%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 213 94% 68%;
+    --primary-foreground: 222 47% 11%;
 
-    --secondary: 217.2 32.6% 17.5%;
+    --secondary: 217 33% 17%;
     --secondary-foreground: 210 40% 98%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 213 27% 84%;
 
-    --accent: 217.2 32.6% 17.5%;
+    --accent: 217 33% 20%;
     --accent-foreground: 210 40% 98%;
 
-    --destructive: 0 62.8% 30.6%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    /* 테두리: slate-700 수준으로 확실히 보이게 */
+    --border: 215 25% 27%;
+    --input: 215 25% 27%;
+    --ring: 213 94% 68%;
 
-    /* 가독성 강화 다크모드 대응 */
-    --text-body: #e2e8f0;
-    --text-muted: #94a3b8;
-    --text-subtle: #94a3b8;
-    --text-placeholder: #64748b;
-    --th-color: #e2e8f0;
-    --td-color: #cbd5e1;
-    --tab-color: #94a3b8;
-    --tab-active-color: #e2e8f0;
+    /* 가독성 강화 — 전체적으로 밝게 */
+    --text-body: #f1f5f9;        /* slate-100 */
+    --text-muted: #cbd5e1;       /* slate-300 (기존 #94a3b8 → 대폭 밝게) */
+    --text-subtle: #94a3b8;      /* slate-400 */
+    --text-placeholder: #64748b; /* slate-500 */
+    --th-color: #f1f5f9;         /* slate-100 */
+    --td-color: #e2e8f0;         /* slate-200 */
+    --tab-color: #cbd5e1;        /* slate-300 (기존 #94a3b8 → 밝게) */
+    --tab-active-color: #f1f5f9; /* slate-100 */
   }
 }
 

@@ -97,7 +97,7 @@ function RiskBadge({ level }: { level: string }) {
       );
     case "medium":
       return (
-        <Badge variant="outline" className="border-yellow-500 text-yellow-700 text-xs">
+        <Badge variant="outline" className="border-yellow-500 text-yellow-700 text-xs dark:border-yellow-600 dark:text-yellow-400">
           보통
         </Badge>
       );
@@ -360,9 +360,9 @@ export function GradeChangeTable({ data }: GradeChangeTableProps) {
               <TableHeader>
                 <TableRow>
                   <TableHead>기간</TableHead>
-                  <TableHead className="text-center text-green-700">X (안정)</TableHead>
-                  <TableHead className="text-center text-yellow-700">Y (보통)</TableHead>
-                  <TableHead className="text-center text-red-700">Z (불안정)</TableHead>
+                  <TableHead className="text-center text-green-700 dark:text-green-400">X (안정)</TableHead>
+                  <TableHead className="text-center text-yellow-700 dark:text-yellow-400">Y (보통)</TableHead>
+                  <TableHead className="text-center text-red-700 dark:text-red-400">Z (불안정)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
