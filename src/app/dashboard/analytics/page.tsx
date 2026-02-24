@@ -98,8 +98,8 @@ export default async function AnalyticsPage() {
     matrixData = abcResult.matrixData;
     summary = abcResult.summary;
     insights = abcResult.insights;
-  } catch {
-    // ABC-XYZ 로드 실패 시 빈 데이터로 표시
+  } catch (err) {
+    console.error("[분석] 데이터 로드 실패:", err);
   }
 
   const hasData = products.length > 0;

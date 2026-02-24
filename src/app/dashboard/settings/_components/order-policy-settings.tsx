@@ -6,6 +6,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Loader2, RotateCcw, Save, Info } from "lucide-react";
 import {
   getOrderPolicySettings,
@@ -25,6 +35,7 @@ export function OrderPolicySettingsComponent({ organizationId }: OrderPolicySett
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [settings, setSettings] = useState<OrderPolicySettings>(DEFAULT_ORDER_POLICY);
   const [errors, setErrors] = useState<Partial<Record<keyof OrderPolicySettings, string>>>({});
 
@@ -132,12 +143,8 @@ export function OrderPolicySettingsComponent({ organizationId }: OrderPolicySett
     }
   };
 
-  // 초기화
-  const handleReset = async () => {
-    if (!confirm("발주 정책을 기본값으로 초기화하시겠습니까?")) {
-      return;
-    }
-
+  // 초기화 (AlertDialog 확인 후 실행)
+  const handleResetConfirmed = async () => {
     setIsResetting(true);
     try {
       const result = await resetOrderPolicySettings(organizationId);
@@ -426,7 +433,7 @@ export function OrderPolicySettingsComponent({ organizationId }: OrderPolicySett
       <div className="flex justify-end gap-3">
         <Button
           variant="outline"
-          onClick={handleReset}
+          onClick={() => setResetConfirmOpen(true)}
           disabled={isResetting || isSaving}
         >
           {isResetting ? (
@@ -455,6 +462,24 @@ export function OrderPolicySettingsComponent({ organizationId }: OrderPolicySett
           )}
         </Button>
       </div>
+
+      <AlertDialog open={resetConfirmOpen} onOpenChange={setResetConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>발주 정책 초기화</AlertDialogTitle>
+            <AlertDialogDescription>
+              발주 정책을 기본값으로 초기화하시겠습니까?
+              현재 설정된 값이 모두 기본값으로 변경됩니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction onClick={handleResetConfirmed}>
+              초기화
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

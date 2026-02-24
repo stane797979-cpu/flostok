@@ -5,8 +5,8 @@ export default async function ForecastGuidePage() {
   let products: ProductOption[] = [];
   try {
     products = await getProductListForGuide();
-  } catch {
-    // 빌드 시 또는 인증 실패 시 빈 배열로 폴백
+  } catch (err) {
+    console.error("[수요예측 가이드] 제품 목록 로드 실패:", err);
   }
 
   return (

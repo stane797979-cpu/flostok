@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -54,6 +55,7 @@ export function BillingClient({ currentPlan, orgId }: BillingClientProps) {
   const [selectedPlan, setSelectedPlan] = useState(currentPlan);
   const [isUpdating, setIsUpdating] = useState(false);
   const { toast } = useToast();
+  const router = useRouter();
 
   const handlePlanChange = async (planId: string) => {
     if (planId === currentPlan) return;
@@ -66,8 +68,8 @@ export function BillingClient({ currentPlan, orgId }: BillingClientProps) {
           title: "플랜 변경 완료",
           description: `${PLANS.find((p) => p.id === planId)?.name} 플랜으로 변경되었습니다.`,
         });
-        // 페이지 새로고침으로 서버 컴포넌트 업데이트
-        window.location.reload();
+        // 서버 컴포넌트 데이터 재검증
+        router.refresh();
       } else {
         toast({
           title: "플랜 변경 실패",

@@ -359,8 +359,8 @@ export function DataManagement({ isAdmin }: DataManagementProps) {
         open={importDialogOpen}
         onOpenChange={setImportDialogOpen}
         importType={selectedImportType}
-        onSuccess={(result) => {
-          console.log("Import success:", result);
+        onSuccess={() => {
+          // 임포트 완료 후 추가 처리 필요 시 여기서 수행
         }}
       />
     </div>

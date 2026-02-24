@@ -91,12 +91,17 @@ export default function AlertsPage() {
       setAlertItems(result.alerts);
       setUnreadCount(result.unreadCount);
       setTotal(result.total);
-    } catch {
-      console.error("알림 조회 실패");
+    } catch (err) {
+      console.error("알림 조회 실패:", err);
+      toast({
+        title: "알림 조회 실패",
+        description: "알림 목록을 불러오는 데 실패했습니다. 잠시 후 다시 시도해 주세요.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     loadAlerts(activeTab === "unread");

@@ -4,6 +4,16 @@ import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -27,6 +37,10 @@ export default function SuppliersPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; supplier: Supplier | null }>({
+    open: false,
+    supplier: null,
+  });
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -82,8 +96,13 @@ export default function SuppliersPage() {
     setIsDialogOpen(true);
   };
 
-  const handleDelete = async (supplier: Supplier) => {
-    if (!confirm(`"${supplier.name}" 공급자를 삭제하시겠습니까?`)) return;
+  const handleDelete = (supplier: Supplier) => {
+    setDeleteConfirm({ open: true, supplier });
+  };
+
+  const handleDeleteConfirmed = async () => {
+    const supplier = deleteConfirm.supplier;
+    if (!supplier) return;
 
     const result = await deleteSupplier(supplier.id);
     if (result.success) {
@@ -96,6 +115,7 @@ export default function SuppliersPage() {
     } else {
       toast({ title: "삭제 실패", description: result.error, variant: "destructive" });
     }
+    setDeleteConfirm({ open: false, supplier: null });
   };
 
   return (
@@ -220,6 +240,31 @@ export default function SuppliersPage() {
         importType="suppliers"
         onSuccess={() => fetchSuppliers()}
       />
+
+      {/* 공급자 삭제 확인 다이얼로그 */}
+      <AlertDialog
+        open={deleteConfirm.open}
+        onOpenChange={(open) => setDeleteConfirm((prev) => ({ ...prev, open }))}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>공급자 삭제</AlertDialogTitle>
+            <AlertDialogDescription>
+              &ldquo;{deleteConfirm.supplier?.name}&rdquo; 공급자를 삭제하시겠습니까?
+              이 작업은 되돌릴 수 없습니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirmed}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              삭제
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

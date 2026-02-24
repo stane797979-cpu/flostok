@@ -16,6 +16,12 @@ import { getInventoryStatus } from "@/lib/constants/inventory-status";
 import { getKPISummary } from "@/server/actions/kpi";
 import { getInventoryTurnoverData } from "@/server/actions/turnover";
 import { getABCXYZAnalysis } from "@/server/actions/analytics";
+
+const KPI_TARGETS = {
+  inventoryTurnoverRate: 10,   // 재고회전율 목표: 10회/년
+  averageInventoryDays: 40,    // 평균 재고일수 목표: 40일
+  onTimeOrderRate: 90,         // 적시 발주율 목표: 90%
+} as const;
 /** 안전하게 대시보드 데이터를 로드 (인증 실패 시 빈 데이터) */
 async function loadDashboardData() {
   const errors: string[] = [];
@@ -108,7 +114,6 @@ async function loadDashboardData() {
       kpi: kpiSummary,
       turnoverTop5,
       matrixData: abcResult.matrixData,
-      _debugErrors: errors.length > 0 ? errors : null,
     };
   } catch (error) {
     console.error("대시보드 데이터 로드 실패:", error);
@@ -120,28 +125,16 @@ async function loadDashboardData() {
       kpi: { inventoryTurnoverRate: 0, averageInventoryDays: 0, onTimeOrderRate: 0, stockoutRate: 0 },
       turnoverTop5: { fastest: [], slowest: [] },
       matrixData: [],
-      _debugErrors: [`전체 실패: ${error instanceof Error ? error.message : String(error)}`],
     };
   }
 }
 
 export default async function DashboardPage() {
   const dashData = await loadDashboardData();
-  const { stats, needsOrderProducts, statusDistribution, totalSku, kpi, turnoverTop5, matrixData, _debugErrors } = dashData;
+  const { stats, needsOrderProducts, statusDistribution, totalSku, kpi, turnoverTop5, matrixData } = dashData;
 
   return (
     <div className="space-y-6">
-      {/* 디버그: 데이터 로드 에러 표시 */}
-      {_debugErrors && (
-        <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
-          <p className="font-semibold">데이터 로드 오류 ({_debugErrors.length}건)</p>
-          <ul className="mt-1 list-inside list-disc">
-            {_debugErrors.map((err, i) => (
-              <li key={i}>{err}</li>
-            ))}
-          </ul>
-        </div>
-      )}
       {/* 재고 현황 요약 */}
       <div className="flex items-center gap-2">
         <h2 className="text-lg font-semibold text-slate-700">재고 현황 요약</h2>
@@ -239,24 +232,24 @@ export default async function DashboardPage() {
             name="재고회전율"
             value={kpi.inventoryTurnoverRate}
             unit="회/년"
-            target={10}
-            status={kpi.inventoryTurnoverRate >= 10 ? "success" : kpi.inventoryTurnoverRate >= 8 ? "warning" : "danger"}
+            target={KPI_TARGETS.inventoryTurnoverRate}
+            status={kpi.inventoryTurnoverRate >= KPI_TARGETS.inventoryTurnoverRate ? "success" : kpi.inventoryTurnoverRate >= 8 ? "warning" : "danger"}
             iconName="bar-chart"
           />
           <KPICard
             name="평균 재고일수"
             value={kpi.averageInventoryDays}
             unit="일"
-            target={40}
-            status={kpi.averageInventoryDays <= 40 ? "success" : kpi.averageInventoryDays <= 50 ? "warning" : "danger"}
+            target={KPI_TARGETS.averageInventoryDays}
+            status={kpi.averageInventoryDays <= KPI_TARGETS.averageInventoryDays ? "success" : kpi.averageInventoryDays <= 50 ? "warning" : "danger"}
             iconName="calendar"
           />
           <KPICard
             name="적시 발주율"
             value={kpi.onTimeOrderRate}
             unit="%"
-            target={90}
-            status={kpi.onTimeOrderRate >= 90 ? "success" : kpi.onTimeOrderRate >= 72 ? "warning" : "danger"}
+            target={KPI_TARGETS.onTimeOrderRate}
+            status={kpi.onTimeOrderRate >= KPI_TARGETS.onTimeOrderRate ? "success" : kpi.onTimeOrderRate >= 72 ? "warning" : "danger"}
             iconName="check-circle"
           />
         </div>

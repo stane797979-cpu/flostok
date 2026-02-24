@@ -33,6 +33,16 @@ import { AlertCircle, CheckCircle2, Package, Warehouse } from "lucide-react";
 import { confirmInbound, closeOrderWithPartialInbound, type ConfirmInboundInput } from "@/server/actions/inbound";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export interface InboundDialogItem {
   orderItemId: string;
@@ -78,6 +88,7 @@ export function InboundDialog({
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
   const { toast } = useToast();
 
   // 발주서 창고 또는 기본 창고 pre-select
@@ -213,10 +224,8 @@ export function InboundDialog({
     }
   };
 
-  // 잔여 포기 및 완료 처리
-  const handleCloseOrder = async () => {
-    if (!confirm("잔여수량을 포기하고 발주를 완료 처리하시겠습니까?")) return;
-
+  // 잔여 포기 및 완료 처리 (AlertDialog 확인 후 실행)
+  const handleCloseOrderConfirmed = async () => {
     setIsClosing(true);
     try {
       const result = await closeOrderWithPartialInbound(orderId, notes || "잔여수량 포기 처리");
@@ -284,6 +293,7 @@ export function InboundDialog({
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -336,7 +346,7 @@ export function InboundDialog({
           </div>
 
           {/* 입고 항목 테이블 */}
-          <div className="rounded-md border">
+          <div className="overflow-x-auto rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -492,7 +502,7 @@ export function InboundDialog({
           {hasAnyReceived && (
             <Button
               variant="destructive"
-              onClick={handleCloseOrder}
+              onClick={() => setCloseConfirmOpen(true)}
               disabled={isSubmitting || isClosing}
             >
               {isClosing ? "처리중..." : "잔여 포기 및 완료"}
@@ -504,5 +514,27 @@ export function InboundDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <AlertDialog open={closeConfirmOpen} onOpenChange={setCloseConfirmOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>잔여 수량 포기 및 완료 처리</AlertDialogTitle>
+          <AlertDialogDescription>
+            잔여수량을 포기하고 발주를 완료 처리하시겠습니까?
+            이 작업은 되돌릴 수 없습니다.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>취소</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleCloseOrderConfirmed}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            완료 처리
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }

@@ -1,5 +1,7 @@
 import dynamic from "next/dynamic";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertTriangle } from "lucide-react";
 import { MyAccount } from "./_components/my-account";
 import { getCurrentUser } from "@/server/actions/auth-helpers";
 
@@ -29,9 +31,6 @@ const PermissionsTab = dynamic(
   () => import("./_components/permissions-tab").then((m) => ({ default: m.PermissionsTab }))
 );
 
-// 개발용 폴백 조직 ID
-const FALLBACK_ORG_ID = "00000000-0000-0000-0000-000000000001";
-
 export default async function SettingsPage({
   searchParams,
 }: {
@@ -43,7 +42,7 @@ export default async function SettingsPage({
 
   // 실제 로그인 사용자의 조직 ID 사용
   const user = await getCurrentUser();
-  const organizationId = user?.organizationId || FALLBACK_ORG_ID;
+  const organizationId = user?.organizationId ?? null;
 
   return (
     <div className="space-y-6">
@@ -51,6 +50,15 @@ export default async function SettingsPage({
         <h1 className="text-3xl font-bold">설정</h1>
         <p className="mt-2 text-slate-500">조직 설정 및 시스템 관리</p>
       </div>
+
+      {organizationId === null && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            조직 정보를 불러올 수 없습니다. 관리자에게 문의하거나 다시 로그인해 주세요.
+          </AlertDescription>
+        </Alert>
+      )}
 
       <Tabs defaultValue={defaultTab} className="space-y-4">
         <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
@@ -76,23 +84,23 @@ export default async function SettingsPage({
         </TabsContent>
 
         <TabsContent value="organization" className="space-y-4">
-          <OrganizationTab organizationId={organizationId} />
+          <OrganizationTab organizationId={organizationId ?? ""} />
         </TabsContent>
 
         <TabsContent value="users" className="space-y-4">
-          <UserManagement organizationId={organizationId} />
+          <UserManagement organizationId={organizationId ?? ""} />
         </TabsContent>
 
         <TabsContent value="permissions" className="space-y-4">
-          <PermissionsTab organizationId={organizationId} />
+          <PermissionsTab organizationId={organizationId ?? ""} />
         </TabsContent>
 
         <TabsContent value="policy" className="space-y-4">
-          <OrderPolicySettingsComponent organizationId={organizationId} />
+          <OrderPolicySettingsComponent organizationId={organizationId ?? ""} />
         </TabsContent>
 
         <TabsContent value="api" className="space-y-4">
-          <APIKeySettings organizationId={organizationId} />
+          <APIKeySettings organizationId={organizationId ?? ""} />
         </TabsContent>
 
         <TabsContent value="notifications" className="space-y-4">
