@@ -27,7 +27,9 @@ import { SupplierTable } from "@/components/features/suppliers/supplier-table";
 import { SupplierCardView } from "@/components/features/suppliers/supplier-card-view";
 import { SupplierFormDialog } from "@/components/features/suppliers/supplier-form-dialog";
 import { getSuppliers, deleteSupplier } from "@/server/actions/suppliers";
+import { getSupplierScorecards } from "@/server/actions/supplier-scorecard";
 import { type Supplier } from "@/server/db/schema";
+import { type SupplierScorecard } from "@/server/services/scm/supplier-scorecard";
 import { useToast } from "@/hooks/use-toast";
 
 const DEFAULT_PAGE_SIZE = 50;
@@ -42,6 +44,7 @@ export default function SuppliersPage() {
     supplier: null,
   });
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [scorecards, setScorecards] = useState<SupplierScorecard[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
 
@@ -55,9 +58,16 @@ export default function SuppliersPage() {
     try {
       setIsLoading(true);
       const offset = (page - 1) * size;
-      const result = await getSuppliers({ search: search || undefined, limit: size, offset });
+
+      // 공급자 목록과 스코어카드를 병렬로 조회
+      const [result, scorecardsData] = await Promise.all([
+        getSuppliers({ search: search || undefined, limit: size, offset }),
+        getSupplierScorecards().catch(() => [] as SupplierScorecard[]),
+      ]);
+
       setSuppliers(result.suppliers);
       setTotalItems(result.total);
+      setScorecards(scorecardsData);
     } catch {
       toast({ title: "오류", description: "공급자 목록을 불러오는데 실패했습니다.", variant: "destructive" });
     } finally {
@@ -166,6 +176,7 @@ export default function SuppliersPage() {
             <TabsContent value="table">
               <SupplierTable
                 suppliers={suppliers}
+                scorecards={scorecards}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
               />
@@ -174,6 +185,7 @@ export default function SuppliersPage() {
             <TabsContent value="card">
               <SupplierCardView
                 suppliers={suppliers}
+                scorecards={scorecards}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
               />
