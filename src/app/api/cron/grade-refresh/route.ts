@@ -56,6 +56,7 @@ export async function GET(request: NextRequest) {
       organizationName: string;
       totalProducts: number;
       updatedCount: number;
+      unchangedCount: number;
       newProductCount: number;
       error?: string;
     }> = [];
@@ -70,7 +71,7 @@ export async function GET(request: NextRequest) {
         const refreshResult = await refreshGradesForOrganization(org.id);
 
         console.log(
-          `[Grade-Refresh Cron] 조직 ${org.name}: 전체 ${refreshResult.totalProducts}개, 갱신 ${refreshResult.updatedCount}개, 신제품 ${refreshResult.newProductCount}개`
+          `[Grade-Refresh Cron] 조직 ${org.name}: 전체 ${refreshResult.totalProducts}개, 갱신 ${refreshResult.updatedCount}개, 미변경 ${refreshResult.unchangedCount}개, 신제품 ${refreshResult.newProductCount}개`
         );
 
         if (refreshResult.errors.length > 0) {
@@ -85,6 +86,7 @@ export async function GET(request: NextRequest) {
           organizationName: org.name,
           totalProducts: refreshResult.totalProducts,
           updatedCount: refreshResult.updatedCount,
+          unchangedCount: refreshResult.unchangedCount,
           newProductCount: refreshResult.newProductCount,
           error:
             refreshResult.errors.length > 0
@@ -108,6 +110,7 @@ export async function GET(request: NextRequest) {
           organizationName: org.name,
           totalProducts: 0,
           updatedCount: 0,
+          unchangedCount: 0,
           newProductCount: 0,
           error: result.reason instanceof Error ? result.reason.message : "알 수 없는 오류",
         });

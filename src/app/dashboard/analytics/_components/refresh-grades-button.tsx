@@ -19,7 +19,7 @@ export function RefreshGradesButton() {
       if (result.success) {
         toast({
           title: "등급 갱신 완료",
-          description: `전체 ${result.totalProducts}개 제품 중 ${result.updatedCount}개 갱신, 신제품 ${result.newProductCount}개`,
+          description: `전체 ${result.totalProducts}개 제품 중 ${result.updatedCount}개 갱신, 미변경 ${result.unchangedCount ?? 0}개, 신제품 ${result.newProductCount}개`,
         });
         router.refresh();
       } else {

@@ -1,14 +1,15 @@
 "use server";
 
 import { db } from "@/server/db";
-import { products, type Product } from "@/server/db/schema";
+import { products, inventory, type Product } from "@/server/db/schema";
 import { eq, and, desc, asc, sql, isNull } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 import { requireAuth, requireManagerOrAbove } from "./auth-helpers";
 import { logActivity } from "@/server/services/activity-log";
 import { checkProductDependencies } from "@/server/services/deletion/dependency-checker";
 import { createDeletionRequest, immediateDeleteEntity } from "@/server/services/deletion/deletion-workflow";
+import { classifyInventoryStatus } from "@/server/services/scm/inventory-status";
 
 /**
  * 제품 입력 스키마
@@ -258,6 +259,49 @@ export async function updateProduct(
         })
         .where(and(eq(products.id, id), eq(products.organizationId, user.organizationId)))
         .returning();
+
+      // 안전재고 또는 발주점 변경 시 → 해당 제품의 재고상태 일괄 재분류
+      const safetyStockChanged =
+        input.safetyStock !== undefined && input.safetyStock !== existing.safetyStock;
+      const reorderPointChanged =
+        input.reorderPoint !== undefined && input.reorderPoint !== existing.reorderPoint;
+
+      if (safetyStockChanged || reorderPointChanged) {
+        try {
+          const inventoryRecords = await db
+            .select({ id: inventory.id, currentStock: inventory.currentStock })
+            .from(inventory)
+            .where(
+              and(
+                eq(inventory.productId, id),
+                eq(inventory.organizationId, user.organizationId)
+              )
+            );
+
+          for (const inv of inventoryRecords) {
+            const statusResult = classifyInventoryStatus({
+              currentStock: inv.currentStock,
+              safetyStock: updated.safetyStock || 0,
+              reorderPoint: updated.reorderPoint || 0,
+            });
+
+            await db
+              .update(inventory)
+              .set({
+                status: statusResult.status,
+                lastUpdatedAt: new Date(),
+                updatedAt: new Date(),
+              })
+              .where(eq(inventory.id, inv.id));
+          }
+
+          // 재고 캐시 무효화
+          revalidateTag(`inventory-${user.organizationId}`);
+        } catch (error) {
+          console.error("재고상태 재분류 오류:", error);
+          // 제품 수정 자체는 성공했으므로 에러를 삼키되 로그 남김
+        }
+      }
 
       revalidatePath("/products");
       revalidatePath(`/products/${id}`);

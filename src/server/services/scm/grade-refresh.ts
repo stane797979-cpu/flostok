@@ -1,8 +1,8 @@
 /**
  * ABC-XYZ-FMR 등급 갱신 서비스
  *
- * - 판매 이력 3개월 미만: 신제품(NEW) 태그, ABC-XYZ 등급 미부여
- * - 판매 이력 3개월 이상: ABC-XYZ 분석 수행, 등급 자동 부여
+ * - 판매 이력 2개월 미만: 신제품(NEW) 태그, ABC-XYZ 등급 미부여
+ * - 판매 이력 2개월 이상: ABC-XYZ 분석 수행, 등급 자동 부여
  * - FMR: 출고 이력(inventory_history) 기반, 신제품 여부 무관하게 전 제품 산출
  * - products.metadata.gradeInfo에 메타데이터 저장 (스키마 변경 없음)
  */
@@ -28,6 +28,7 @@ export interface GradeInfo {
 export interface GradeRefreshResult {
   totalProducts: number;
   updatedCount: number;
+  unchangedCount: number;
   newProductCount: number;
   errors: string[];
 }
@@ -44,17 +45,21 @@ export async function refreshGradesForOrganization(
   const result: GradeRefreshResult = {
     totalProducts: 0,
     updatedCount: 0,
+    unchangedCount: 0,
     newProductCount: 0,
     errors: [],
   };
 
   try {
-    // 1. 조직의 활성 제품 목록 조회
+    // 1. 조직의 활성 제품 목록 조회 (기존 등급 포함 — 변경 비교용)
     const productList = await db
       .select({
         id: products.id,
         name: products.name,
         metadata: products.metadata,
+        abcGrade: products.abcGrade,
+        xyzGrade: products.xyzGrade,
+        fmrGrade: products.fmrGrade,
       })
       .from(products)
       .where(
@@ -368,87 +373,115 @@ export async function refreshGradesForOrganization(
 
       const xyzResults = performXYZAnalysis(xyzItems);
 
-      // 5-5. 결과를 DB에 반영
+      // 5-5. 결과를 DB에 반영 (변경된 제품만 + 트랜잭션)
       const abcMap = new Map(abcResults.map((r) => [r.id, r.grade]));
       const xyzMap = new Map(xyzResults.map((r) => [r.id, r]));
 
-      // 5-5a. products 배치 UPDATE (UPDATE ... FROM VALUES) — ABC-XYZ-FMR 모두 반영
-      try {
-        const updateRows = eligibleProducts.map((productId) => {
-          const abcGrade = abcMap.get(productId) || null;
-          const xyzResult = xyzMap.get(productId);
-          const xyzGrade = xyzResult?.grade || null;
-          const fmrGrade = fmrMap.get(productId) || null;
+      // 기존 등급을 빠르게 조회하기 위한 맵
+      const existingGradeMap = new Map(
+        productList.map((p) => [p.id, { abc: p.abcGrade, xyz: p.xyzGrade, fmr: p.fmrGrade }])
+      );
 
-          const firstSaleDate = firstSaleMap.get(productId);
-          let salesMonths = 0;
-          if (firstSaleDate) {
-            const firstDate = new Date(firstSaleDate);
-            salesMonths =
-              (now.getFullYear() - firstDate.getFullYear()) * 12 +
-              (now.getMonth() - firstDate.getMonth());
-          }
+      // 5-5a. 등급 변경 여부 비교 → 변경된 제품만 필터링
+      const changedProducts: string[] = [];
+      const unchangedProducts: string[] = [];
 
-          const gradeInfo: GradeInfo = {
-            isNewProduct: false,
-            salesMonths,
-            lastGradeRefresh: now.toISOString(),
-          };
+      for (const productId of eligibleProducts) {
+        const newAbc = abcMap.get(productId) || null;
+        const newXyz = xyzMap.get(productId)?.grade || null;
+        const newFmr = fmrMap.get(productId) || null;
+        const existing = existingGradeMap.get(productId);
 
-          return sql`(${productId}::uuid, ${abcGrade}, ${xyzGrade}, ${fmrGrade}, ${JSON.stringify(gradeInfo)}::jsonb)`;
-        });
-
-        const nowIso2 = now.toISOString();
-        await db.execute(sql`
-          UPDATE products
-          SET
-            abc_grade = v.abc_grade,
-            xyz_grade = v.xyz_grade,
-            fmr_grade = v.fmr_grade::fmr_grade,
-            metadata = COALESCE(products.metadata, '{}'::jsonb) || jsonb_build_object('gradeInfo', v.grade_info),
-            updated_at = ${nowIso2}
-          FROM (VALUES ${sql.join(updateRows, sql`, `)}) AS v(product_id, abc_grade, xyz_grade, fmr_grade, grade_info)
-          WHERE products.id = v.product_id
-        `);
-
-        result.updatedCount = eligibleProducts.length;
-      } catch (error) {
-        result.errors.push(
-          `제품 등급 배치 업데이트 실패: ${error instanceof Error ? error.message : "알 수 없는 오류"}`
-        );
+        if (
+          existing &&
+          existing.abc === newAbc &&
+          existing.xyz === newXyz &&
+          existing.fmr === newFmr
+        ) {
+          unchangedProducts.push(productId);
+        } else {
+          changedProducts.push(productId);
+        }
       }
 
-      // 5-5b. grade_history 배치 INSERT
-      try {
-        const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+      result.unchangedCount = unchangedProducts.length;
 
-        const historyRows = eligibleProducts.map((productId) => {
-          const abcGrade = abcMap.get(productId) || null;
-          const xyzResult = xyzMap.get(productId);
-          const xyzGrade = xyzResult?.grade || null;
-          const combinedGrade = abcGrade && xyzGrade ? `${abcGrade}${xyzGrade}` : null;
-          const salesValue = salesByProduct.get(productId)?.totalValue || 0;
-          const cv = xyzResult?.coefficientOfVariation ?? null;
+      // 5-5b. 변경된 제품만 products UPDATE + grade_history INSERT (트랜잭션)
+      if (changedProducts.length > 0) {
+        try {
+          await db.transaction(async (tx) => {
+            // products 배치 UPDATE
+            const updateRows = changedProducts.map((productId) => {
+              const abcGrade = abcMap.get(productId) || null;
+              const xyzResult = xyzMap.get(productId);
+              const xyzGrade = xyzResult?.grade || null;
+              const fmrGrade = fmrMap.get(productId) || null;
 
-          return {
-            organizationId,
-            productId,
-            period,
-            abcGrade,
-            xyzGrade,
-            combinedGrade,
-            salesValue: salesValue.toString(),
-            coefficientOfVariation: cv !== null ? cv.toFixed(2) : null,
-          };
-        });
+              const firstSaleDate = firstSaleMap.get(productId);
+              let salesMonths = 0;
+              if (firstSaleDate) {
+                const firstDate = new Date(firstSaleDate);
+                salesMonths =
+                  (now.getFullYear() - firstDate.getFullYear()) * 12 +
+                  (now.getMonth() - firstDate.getMonth());
+              }
 
-        if (historyRows.length > 0) {
-          await db.insert(gradeHistory).values(historyRows);
+              const gradeInfo: GradeInfo = {
+                isNewProduct: false,
+                salesMonths,
+                lastGradeRefresh: now.toISOString(),
+              };
+
+              return sql`(${productId}::uuid, ${abcGrade}, ${xyzGrade}, ${fmrGrade}, ${JSON.stringify(gradeInfo)}::jsonb)`;
+            });
+
+            const nowIso2 = now.toISOString();
+            await tx.execute(sql`
+              UPDATE products
+              SET
+                abc_grade = v.abc_grade,
+                xyz_grade = v.xyz_grade,
+                fmr_grade = v.fmr_grade::fmr_grade,
+                metadata = COALESCE(products.metadata, '{}'::jsonb) || jsonb_build_object('gradeInfo', v.grade_info),
+                updated_at = ${nowIso2}
+              FROM (VALUES ${sql.join(updateRows, sql`, `)}) AS v(product_id, abc_grade, xyz_grade, fmr_grade, grade_info)
+              WHERE products.id = v.product_id
+            `);
+
+            // grade_history 배치 INSERT (변경된 제품만)
+            const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+
+            const historyRows = changedProducts.map((productId) => {
+              const abcGrade = abcMap.get(productId) || null;
+              const xyzResult = xyzMap.get(productId);
+              const xyzGrade = xyzResult?.grade || null;
+              const combinedGrade = abcGrade && xyzGrade ? `${abcGrade}${xyzGrade}` : null;
+              const salesValue = salesByProduct.get(productId)?.totalValue || 0;
+              const cv = xyzResult?.coefficientOfVariation ?? null;
+
+              return {
+                organizationId,
+                productId,
+                period,
+                abcGrade,
+                xyzGrade,
+                combinedGrade,
+                salesValue: salesValue.toString(),
+                coefficientOfVariation: cv !== null ? cv.toFixed(2) : null,
+              };
+            });
+
+            if (historyRows.length > 0) {
+              await tx.insert(gradeHistory).values(historyRows);
+            }
+          });
+
+          result.updatedCount = changedProducts.length;
+        } catch (error) {
+          result.errors.push(
+            `제품 등급 배치 업데이트/이력 저장 실패: ${error instanceof Error ? error.message : "알 수 없는 오류"}`
+          );
         }
-      } catch (error) {
-        result.errors.push(
-          `등급 이력 배치 저장 실패: ${error instanceof Error ? error.message : "알 수 없는 오류"}`
-        );
       }
     }
 

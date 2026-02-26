@@ -713,6 +713,7 @@ export async function refreshGrades() {
       success: true,
       totalProducts: result.totalProducts,
       updatedCount: result.updatedCount,
+      unchangedCount: result.unchangedCount,
       newProductCount: result.newProductCount,
       errors: result.errors,
     }
