@@ -3,10 +3,13 @@
 import { useState, useTransition, useCallback } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Settings } from "lucide-react";
 import { KPIGrid } from "@/components/features/dashboard/kpi-grid";
 import { KPIImprovementSuggestions } from "@/components/features/dashboard/kpi-improvement-suggestions";
 import { KpiMonthlyTrendTable } from "./kpi-monthly-trend-table";
 import { KPIFilters } from "./kpi-filters";
+import { KpiTargetDialog } from "./kpi-target-dialog";
 import { getKPIDashboardData } from "@/server/actions/kpi";
 import type { KPIMetrics, KPITarget } from "@/server/services/scm/kpi-improvement";
 import type { KPITrend } from "@/server/services/scm/kpi-measurement";
@@ -20,15 +23,17 @@ interface KpiTabsClientProps {
 export function KpiTabsClient({
   metrics: initialMetrics,
   trends: initialTrends,
-  targets,
+  targets: initialTargets,
 }: KpiTabsClientProps) {
   const [abcFilter, setAbcFilter] = useState("all");
   const [xyzFilter, setXyzFilter] = useState("all");
 
   const [metrics, setMetrics] = useState(initialMetrics);
   const [trends, setTrends] = useState(initialTrends);
+  const [targets, setTargets] = useState<KPITarget>(initialTargets);
 
   const [isPending, startTransition] = useTransition();
+  const [targetDialogOpen, setTargetDialogOpen] = useState(false);
 
   const isFiltered = abcFilter !== "all" || xyzFilter !== "all";
 
@@ -59,48 +64,73 @@ export function KpiTabsClient({
     handleFilterChange(abcFilter, v);
   };
 
+  const handleTargetSaved = (newTargets: KPITarget) => {
+    setTargets(newTargets);
+  };
+
   return (
-    <Tabs defaultValue="status" className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <TabsList>
-          <TabsTrigger value="status">현황</TabsTrigger>
-          <TabsTrigger value="monthly-trend">월별 추이</TabsTrigger>
-          <TabsTrigger value="improvement">개선 제안</TabsTrigger>
-        </TabsList>
+    <>
+      <Tabs defaultValue="status" className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <TabsList>
+            <TabsTrigger value="status">현황</TabsTrigger>
+            <TabsTrigger value="monthly-trend">월별 추이</TabsTrigger>
+            <TabsTrigger value="improvement">개선 제안</TabsTrigger>
+          </TabsList>
 
-        <div className="flex items-center gap-3">
-          <KPIFilters
-            abcFilter={abcFilter}
-            onAbcFilterChange={handleAbcChange}
-            xyzFilter={xyzFilter}
-            onXyzFilterChange={handleXyzChange}
-            isLoading={isPending}
-          />
-          {isFiltered && (
-            <Badge variant="secondary" className="text-xs">
-              {abcFilter !== "all" ? `${abcFilter}등급` : ""}
-              {abcFilter !== "all" && xyzFilter !== "all" ? " + " : ""}
-              {xyzFilter !== "all" ? `${xyzFilter}등급` : ""}
-            </Badge>
-          )}
+          <div className="flex items-center gap-3">
+            <KPIFilters
+              abcFilter={abcFilter}
+              onAbcFilterChange={handleAbcChange}
+              xyzFilter={xyzFilter}
+              onXyzFilterChange={handleXyzChange}
+              isLoading={isPending}
+            />
+            {isFiltered && (
+              <Badge variant="secondary" className="text-xs">
+                {abcFilter !== "all" ? `${abcFilter}등급` : ""}
+                {abcFilter !== "all" && xyzFilter !== "all" ? " + " : ""}
+                {xyzFilter !== "all" ? `${xyzFilter}등급` : ""}
+              </Badge>
+            )}
+
+            {/* 목표 설정 버튼 */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setTargetDialogOpen(true)}
+              className="flex items-center gap-1.5"
+            >
+              <Settings className="h-3.5 w-3.5" />
+              목표 설정
+            </Button>
+          </div>
         </div>
-      </div>
 
-      <TabsContent value="status">
-        <div className={isPending ? "opacity-50 pointer-events-none transition-opacity" : ""}>
-          <KPIGrid metrics={metrics} trends={trends} targets={targets} />
-        </div>
-      </TabsContent>
+        <TabsContent value="status">
+          <div className={isPending ? "pointer-events-none opacity-50 transition-opacity" : ""}>
+            <KPIGrid metrics={metrics} trends={trends} targets={targets} />
+          </div>
+        </TabsContent>
 
-      <TabsContent value="monthly-trend">
-        <KpiMonthlyTrendTable trends={initialTrends} />
-      </TabsContent>
+        <TabsContent value="monthly-trend">
+          <KpiMonthlyTrendTable trends={initialTrends} />
+        </TabsContent>
 
-      <TabsContent value="improvement">
-        <div className={isPending ? "opacity-50 pointer-events-none transition-opacity" : ""}>
-          <KPIImprovementSuggestions metrics={metrics} targets={targets} />
-        </div>
-      </TabsContent>
-    </Tabs>
+        <TabsContent value="improvement">
+          <div className={isPending ? "pointer-events-none opacity-50 transition-opacity" : ""}>
+            <KPIImprovementSuggestions metrics={metrics} targets={targets} />
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* 목표 설정 Dialog */}
+      <KpiTargetDialog
+        open={targetDialogOpen}
+        onOpenChange={setTargetDialogOpen}
+        currentTargets={targets}
+        onSaved={handleTargetSaved}
+      />
+    </>
   );
 }
