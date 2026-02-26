@@ -3,7 +3,7 @@
 import { z } from 'zod'
 import { db } from '@/server/db'
 import { organizations, users } from '@/server/db/schema'
-import { eq, and, isNull } from 'drizzle-orm'
+import { eq, and, isNull, sql } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import crypto from 'crypto'
@@ -337,6 +337,9 @@ export async function deleteApiKey(input: z.infer<typeof deleteApiKeySchema>) {
 
 /**
  * API 키 검증 (API Routes에서 사용)
+ *
+ * N+1 방지: PostgreSQL의 jsonb_array_elements를 사용하여
+ * 전체 조직 스캔 없이 단일 쿼리로 keyHash 매핑 조직을 찾습니다.
  */
 export async function verifyApiKey(apiKey: string): Promise<{
   valid: boolean
@@ -351,31 +354,43 @@ export async function verifyApiKey(apiKey: string): Promise<{
 
     const keyHash = hashApiKey(apiKey)
 
-    // 모든 조직의 설정에서 해당 키 찾기
-    const orgs = await db.select().from(organizations)
+    // JSONB 배열 내 keyHash를 단일 쿼리로 검색
+    // jsonb_array_elements로 apiKeys 배열을 펼친 뒤, keyHash와 status를 필터링
+    const rows = await db.execute(sql`
+      SELECT
+        o.id AS organization_id,
+        elem->>'id' AS key_id
+      FROM organizations o,
+           jsonb_array_elements(
+             CASE
+               WHEN o.settings IS NOT NULL
+                AND o.settings->'apiKeys' IS NOT NULL
+               THEN o.settings->'apiKeys'
+               ELSE '[]'::jsonb
+             END
+           ) AS elem
+      WHERE elem->>'keyHash' = ${keyHash}
+        AND elem->>'status' = 'active'
+      LIMIT 1
+    `)
 
-    for (const org of orgs) {
-      const settings = (org.settings as OrganizationSettings) || {}
-      const apiKeys = settings.apiKeys || []
+    const row = rows.rows[0] as { organization_id: string; key_id: string } | undefined
 
-      const matchedKey = apiKeys.find((key) => key.keyHash === keyHash && key.status === 'active')
-
-      if (matchedKey) {
-        // 마지막 사용 시간 업데이트 (비동기, 결과 대기 안함)
-        updateLastUsed({
-          organizationId: org.id,
-          keyId: matchedKey.id,
-        }).catch(console.error)
-
-        return {
-          valid: true,
-          organizationId: org.id,
-          keyId: matchedKey.id,
-        }
-      }
+    if (!row) {
+      return { valid: false }
     }
 
-    return { valid: false }
+    // 마지막 사용 시간 업데이트 (비동기, 결과 대기 안함)
+    updateLastUsed({
+      organizationId: row.organization_id,
+      keyId: row.key_id,
+    }).catch(console.error)
+
+    return {
+      valid: true,
+      organizationId: row.organization_id,
+      keyId: row.key_id,
+    }
   } catch (error) {
     console.error('API 키 검증 실패:', error)
     return { valid: false }

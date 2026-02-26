@@ -199,30 +199,19 @@ export async function getOrganizationDetail(organizationId: string): Promise<Act
       return { success: false, error: '조직을 찾을 수 없습니다' }
     }
 
-    const orgUsers = await db
-      .select({ id: users.id, email: users.email, name: users.name, role: users.role, createdAt: users.createdAt })
-      .from(users)
-      .where(eq(users.organizationId, organizationId))
-      .orderBy(desc(users.createdAt))
-
-    const [sub] = await db
-      .select()
-      .from(subscriptions)
-      .where(eq(subscriptions.organizationId, organizationId))
-      .orderBy(desc(subscriptions.createdAt))
-      .limit(1)
-
-    const [uc] = await db.select({ value: count() }).from(users).where(eq(users.organizationId, organizationId))
-    const [pc] = await db.select({ value: count() }).from(products).where(eq(products.organizationId, organizationId))
-    const [oc] = await db.select({ value: count() }).from(purchaseOrders).where(eq(purchaseOrders.organizationId, organizationId))
-    const [ic] = await db.select({ value: count() }).from(inventory).where(eq(inventory.organizationId, organizationId))
-
-    const payments = await db
-      .select({ id: paymentHistory.id, amount: paymentHistory.amount, status: paymentHistory.status, method: paymentHistory.method, createdAt: paymentHistory.createdAt })
-      .from(paymentHistory)
-      .where(eq(paymentHistory.organizationId, organizationId))
-      .orderBy(desc(paymentHistory.createdAt))
-      .limit(10)
+    // 6개 독립 쿼리를 Promise.all로 병렬 실행 (순차 8쿼리 → 병렬 6쿼리)
+    const [orgUsers, [sub], [uc], [pc], [oc], [ic], payments] = await Promise.all([
+      db.select({ id: users.id, email: users.email, name: users.name, role: users.role, createdAt: users.createdAt })
+        .from(users).where(eq(users.organizationId, organizationId)).orderBy(desc(users.createdAt)),
+      db.select().from(subscriptions).where(eq(subscriptions.organizationId, organizationId))
+        .orderBy(desc(subscriptions.createdAt)).limit(1),
+      db.select({ value: count() }).from(users).where(eq(users.organizationId, organizationId)),
+      db.select({ value: count() }).from(products).where(eq(products.organizationId, organizationId)),
+      db.select({ value: count() }).from(purchaseOrders).where(eq(purchaseOrders.organizationId, organizationId)),
+      db.select({ value: count() }).from(inventory).where(eq(inventory.organizationId, organizationId)),
+      db.select({ id: paymentHistory.id, amount: paymentHistory.amount, status: paymentHistory.status, method: paymentHistory.method, createdAt: paymentHistory.createdAt })
+        .from(paymentHistory).where(eq(paymentHistory.organizationId, organizationId)).orderBy(desc(paymentHistory.createdAt)).limit(10),
+    ])
 
     return {
       success: true,

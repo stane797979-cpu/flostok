@@ -4,7 +4,7 @@
 
 import { db } from "@/server/db";
 import { products, inventory, warehouses } from "@/server/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { parseExcelBuffer, sheetToJson, parseNumber } from "./parser";
 import type { ExcelImportResult, ExcelImportError, ProductExcelRow } from "./types";
 
@@ -196,7 +196,9 @@ export async function importProductData(
       existingInventory.map((inv) => [inv.productId, { id: inv.id, reservedStock: inv.reservedStock ?? 0 }])
     );
 
-    // 재고 업데이트/생성 배치 수집용
+    // 배치 수집용
+    const productUpdates: Array<{ id: string; name: string; category: string | null; unit: string; unitPrice: number; costPrice: number; safetyStock: number; leadTime: number; moq: number }> = [];
+    const newProductInserts: Array<{ sku: string; name: string; category: string | null; unit: string; unitPrice: number; costPrice: number; safetyStock: number; leadTime: number; moq: number; currentStock?: number }> = [];
     const inventoryUpdates: Array<{ invId: string; currentStock: number; reservedStock: number }> = [];
     const inventoryInserts: Array<{ productId: string; currentStock: number }> = [];
 
@@ -227,21 +229,18 @@ export async function importProductData(
           continue;
         }
 
-        // update: 기존 제품 업데이트
-        await db
-          .update(products)
-          .set({
-            name: data.name,
-            category: data.category,
-            unit: data.unit ?? "EA",
-            unitPrice: data.unitPrice ?? 0,
-            costPrice: data.costPrice ?? 0,
-            safetyStock: data.safetyStock ?? 0,
-            leadTime: data.leadTime ?? 7,
-            moq: data.moq ?? 1,
-            updatedAt: new Date(),
-          })
-          .where(eq(products.id, existingId));
+        // update: 배치 수집 (루프 종료 후 일괄 UPDATE)
+        productUpdates.push({
+          id: existingId,
+          name: data.name,
+          category: data.category,
+          unit: data.unit ?? "EA",
+          unitPrice: data.unitPrice ?? 0,
+          costPrice: data.costPrice ?? 0,
+          safetyStock: data.safetyStock ?? 0,
+          leadTime: data.leadTime ?? 7,
+          moq: data.moq ?? 1,
+        });
 
         // 재고수량이 있으면 배치 수집
         if (data.currentStock !== undefined) {
@@ -262,9 +261,8 @@ export async function importProductData(
         continue;
       }
 
-      // 새 제품 삽입
-      const [newProduct] = await db.insert(products).values({
-        organizationId,
+      // 새 제품: 배치 수집 (루프 종료 후 일괄 INSERT)
+      newProductInserts.push({
         sku: data.sku,
         name: data.name,
         category: data.category,
@@ -274,14 +272,59 @@ export async function importProductData(
         safetyStock: data.safetyStock ?? 0,
         leadTime: data.leadTime ?? 7,
         moq: data.moq ?? 1,
-      }).returning({ id: products.id });
-
-      // 재고수량이 있으면 배치 수집
-      if (newProduct && data.currentStock !== undefined) {
-        inventoryInserts.push({ productId: newProduct.id, currentStock: data.currentStock });
-      }
+        currentStock: data.currentStock,
+      });
 
       successData.push(data);
+    }
+
+    // 재고 배치 INSERT (신규) — warehouseId 필수
+    // 기존 제품 배치 UPDATE (N개 → 1개 쿼리)
+    if (productUpdates.length > 0) {
+      await db.execute(sql`
+        UPDATE products SET
+          name = v.name,
+          category = v.category,
+          unit = v.unit,
+          unit_price = v.unit_price::numeric,
+          cost_price = v.cost_price::numeric,
+          safety_stock = v.safety_stock::int,
+          lead_time = v.lead_time::int,
+          moq = v.moq::int,
+          updated_at = NOW()
+        FROM (VALUES ${sql.join(
+          productUpdates.map(u => sql`(${u.id}::uuid, ${u.name}, ${u.category}, ${u.unit}, ${u.unitPrice}::numeric, ${u.costPrice}::numeric, ${u.safetyStock}::int, ${u.leadTime}::int, ${u.moq}::int)`),
+          sql`, `
+        )}) AS v(id, name, category, unit, unit_price, cost_price, safety_stock, lead_time, moq)
+        WHERE products.id = v.id
+      `);
+    }
+
+    // 신규 제품 배치 INSERT + RETURNING (N개 → 1개 쿼리)
+    if (newProductInserts.length > 0) {
+      const insertedProducts = await db.insert(products).values(
+        newProductInserts.map(p => ({
+          organizationId,
+          sku: p.sku,
+          name: p.name,
+          category: p.category,
+          unit: p.unit,
+          unitPrice: p.unitPrice,
+          costPrice: p.costPrice,
+          safetyStock: p.safetyStock,
+          leadTime: p.leadTime,
+          moq: p.moq,
+        }))
+      ).returning({ id: products.id, sku: products.sku });
+
+      // 신규 제품의 재고 기록도 배치 수집
+      const insertedMap = new Map(insertedProducts.map(p => [p.sku, p.id]));
+      for (const p of newProductInserts) {
+        const productId = insertedMap.get(p.sku);
+        if (productId && p.currentStock !== undefined) {
+          inventoryInserts.push({ productId, currentStock: p.currentStock });
+        }
+      }
     }
 
     // 재고 배치 INSERT (신규) — warehouseId 필수
@@ -299,18 +342,19 @@ export async function importProductData(
       );
     }
 
-    // 재고 배치 UPDATE (기존) — Promise.all 병렬화
-    // availableStock = currentStock - reservedStock (예약재고를 차감하여 실제 가용재고 반영)
+    // 재고 배치 UPDATE (기존) — 단일 쿼리 (N개 → 1개)
     if (inventoryUpdates.length > 0) {
-      await Promise.all(
-        inventoryUpdates.map((item) =>
-          db.update(inventory).set({
-            currentStock: item.currentStock,
-            availableStock: Math.max(0, item.currentStock - item.reservedStock),
-            updatedAt: new Date(),
-          }).where(eq(inventory.id, item.invId))
-        )
-      );
+      await db.execute(sql`
+        UPDATE inventory SET
+          current_stock = v.current_stock::numeric,
+          available_stock = v.available_stock::numeric,
+          updated_at = NOW()
+        FROM (VALUES ${sql.join(
+          inventoryUpdates.map(item => sql`(${item.invId}::uuid, ${item.currentStock}::numeric, ${Math.max(0, item.currentStock - item.reservedStock)}::numeric)`),
+          sql`, `
+        )}) AS v(id, current_stock, available_stock)
+        WHERE inventory.id = v.id
+      `);
     }
 
     return {

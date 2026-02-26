@@ -3,10 +3,9 @@
  */
 
 import { db } from "@/server/db";
-import { products, inboundRecords } from "@/server/db/schema";
-import { eq, and, isNull, desc } from "drizzle-orm";
+import { products, inboundRecords, inventoryLots, inventory, inventoryHistory } from "@/server/db/schema";
+import { eq, and, isNull, desc, sql } from "drizzle-orm";
 import { parseExcelBuffer, sheetToJson, parseNumber, parseExcelDate, formatDateToString } from "./parser";
-import { createOtherInbound } from "@/server/actions/inbound";
 
 /**
  * XLSX 라이브러리 lazy 로딩
@@ -97,69 +96,169 @@ export async function importOtherInboundData(params: {
     .where(eq(products.organizationId, organizationId));
   const skuToProduct = new Map(allProducts.map((p) => [p.sku, p]));
 
+  // 기본 창고 조회 (1번만)
+  const { getDefaultWarehouse } = await import("@/server/actions/warehouses");
+  const warehouse = await getDefaultWarehouse();
+  if (!warehouse) {
+    return {
+      success: false,
+      message: "기본 창고를 찾을 수 없습니다",
+      totalRows: rows.length,
+      successCount: 0,
+      errorCount: 1,
+      errors: [{ row: 0, message: "기본 창고를 찾을 수 없습니다" }],
+    };
+  }
+
+  const today = new Date().toISOString().split("T")[0];
+
+  // 1단계: 행별 검증 + 배치 데이터 수집
+  const validItems: Array<{
+    productId: string;
+    inboundType: string;
+    quantity: number;
+    location?: string;
+    lotNumber: string;
+    expiryDate?: string;
+    notes?: string;
+  }> = [];
+
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const rowNum = i + 2; // 헤더=1행, 데이터=2행부터
+    const rowNum = i + 2;
 
     try {
-      // SKU 추출
       const sku = String(getColumnValue(row, "sku") || "").trim();
-      if (!sku) {
-        errors.push({ row: rowNum, message: "SKU가 비어있습니다" });
-        continue;
-      }
+      if (!sku) { errors.push({ row: rowNum, message: "SKU가 비어있습니다" }); continue; }
 
-      // 제품 찾기 (미리 로드된 Map에서)
       const product = skuToProduct.get(sku);
+      if (!product) { errors.push({ row: rowNum, message: `SKU '${sku}' 제품을 찾을 수 없습니다` }); continue; }
 
-      if (!product) {
-        errors.push({ row: rowNum, message: `SKU '${sku}' 제품을 찾을 수 없습니다` });
-        continue;
-      }
-
-      // 입고 유형
       const rawType = String(getColumnValue(row, "inboundType") || "").trim();
       const inboundType = INBOUND_TYPE_MAP[rawType];
-      if (!inboundType) {
-        errors.push({ row: rowNum, message: `입고유형 '${rawType}'이(가) 올바르지 않습니다 (반품/조정/이동)` });
-        continue;
-      }
+      if (!inboundType) { errors.push({ row: rowNum, message: `입고유형 '${rawType}'이(가) 올바르지 않습니다 (반품/조정/이동)` }); continue; }
 
-      // 수량
       const quantity = parseNumber(getColumnValue(row, "quantity"));
-      if (!quantity || quantity <= 0) {
-        errors.push({ row: rowNum, message: "수량이 올바르지 않습니다" });
-        continue;
-      }
+      if (!quantity || quantity <= 0) { errors.push({ row: rowNum, message: "수량이 올바르지 않습니다" }); continue; }
 
-      // 선택 필드
       const location = String(getColumnValue(row, "location") || "").trim() || undefined;
-      const lotNumber = String(getColumnValue(row, "lotNumber") || "").trim() || undefined;
+      const lotNumberRaw = String(getColumnValue(row, "lotNumber") || "").trim();
+      const lotNumber = lotNumberRaw || `AUTO-${today.replace(/-/g, "")}-${Date.now().toString(36)}-${i}`;
       const notes = String(getColumnValue(row, "notes") || "").trim() || undefined;
 
-      // 유통기한: Excel 시리얼 숫자 및 비표준 형식을 올바르게 파싱
       const expiryDateRawValue = getColumnValue(row, "expiryDate");
       const expiryDateParsed = await parseExcelDate(expiryDateRawValue);
       const expiryDate = expiryDateParsed ? formatDateToString(expiryDateParsed) : undefined;
 
-      // 입고 처리
-      const result = await createOtherInbound({
-        productId: product.id,
-        inboundType: inboundType as "INBOUND_RETURN" | "INBOUND_ADJUSTMENT" | "INBOUND_TRANSFER",
-        quantity,
-        location,
-        lotNumber,
-        expiryDate,
-        notes,
-      });
-
-      if (result.success) {
-        successCount++;
-      } else {
-        errors.push({ row: rowNum, message: result.error || "입고 처리 실패" });
-      }
+      validItems.push({ productId: product.id, inboundType, quantity, location, lotNumber, expiryDate, notes });
     } catch (err) {
       errors.push({ row: rowNum, message: err instanceof Error ? err.message : "알 수 없는 오류" });
+    }
+  }
+
+  // 2단계: 배치 INSERT (입고기록 + LOT + 재고)
+  if (validItems.length > 0) {
+    try {
+      // 입고기록 배치 INSERT
+      await db.insert(inboundRecords).values(
+        validItems.map(item => ({
+          organizationId,
+          warehouseId: warehouse.id,
+          purchaseOrderId: null,
+          productId: item.productId,
+          date: today,
+          expectedQuantity: item.quantity,
+          receivedQuantity: item.quantity,
+          acceptedQuantity: item.quantity,
+          rejectedQuantity: 0,
+          qualityResult: "pass" as const,
+          location: item.location,
+          lotNumber: item.lotNumber,
+          expiryDate: item.expiryDate,
+          notes: item.notes,
+        }))
+      );
+
+      // LOT 배치 INSERT
+      await db.insert(inventoryLots).values(
+        validItems.map(item => ({
+          organizationId,
+          warehouseId: warehouse.id,
+          productId: item.productId,
+          lotNumber: item.lotNumber,
+          expiryDate: item.expiryDate,
+          initialQuantity: item.quantity,
+          remainingQuantity: item.quantity,
+          receivedDate: today,
+          status: "active" as const,
+        }))
+      );
+
+      // 재고 증감: 제품별로 합산 후 배치 UPSERT
+      const stockByProduct = new Map<string, number>();
+      for (const item of validItems) {
+        stockByProduct.set(item.productId, (stockByProduct.get(item.productId) || 0) + item.quantity);
+      }
+
+      // 기존 재고 조회
+      const productIds = [...stockByProduct.keys()];
+      const existingInventory = await db
+        .select({ id: inventory.id, productId: inventory.productId, currentStock: inventory.currentStock })
+        .from(inventory)
+        .where(and(eq(inventory.organizationId, organizationId), eq(inventory.warehouseId, warehouse.id)))
+        ;
+      const invMap = new Map(existingInventory.map(inv => [inv.productId, inv]));
+
+      // 기존 재고 배치 UPDATE
+      const invUpdates = [...stockByProduct.entries()]
+        .filter(([pid]) => invMap.has(pid))
+        .map(([pid, qty]) => ({ id: invMap.get(pid)!.id, newStock: invMap.get(pid)!.currentStock + qty }));
+
+      if (invUpdates.length > 0) {
+        await db.execute(sql`
+          UPDATE inventory SET
+            current_stock = v.new_stock::numeric,
+            available_stock = GREATEST(0, v.new_stock::numeric - inventory.reserved_stock),
+            updated_at = NOW()
+          FROM (VALUES ${sql.join(
+            invUpdates.map(u => sql`(${u.id}::uuid, ${u.newStock}::numeric)`),
+            sql`, `
+          )}) AS v(id, new_stock)
+          WHERE inventory.id = v.id
+        `);
+      }
+
+      // 신규 재고 배치 INSERT
+      const newInvProducts = [...stockByProduct.entries()].filter(([pid]) => !invMap.has(pid));
+      if (newInvProducts.length > 0) {
+        await db.insert(inventory).values(
+          newInvProducts.map(([productId, qty]) => ({
+            organizationId,
+            warehouseId: warehouse.id,
+            productId,
+            currentStock: qty,
+            availableStock: qty,
+            reservedStock: 0,
+            incomingStock: 0,
+          }))
+        );
+      }
+
+      // 재고 변동 이력 배치 INSERT
+      await db.insert(inventoryHistory).values(
+        validItems.map(item => ({
+          organizationId,
+          productId: item.productId,
+          warehouseId: warehouse.id,
+          changeType: item.inboundType,
+          changeAmount: item.quantity,
+          notes: item.notes || "엑셀 일괄 기타입고",
+        }))
+      );
+
+      successCount = validItems.length;
+    } catch (err) {
+      errors.push({ row: 0, message: `배치 처리 실패: ${err instanceof Error ? err.message : "알 수 없는 오류"}` });
     }
   }
 

@@ -4,7 +4,7 @@
 
 import { db } from "@/server/db";
 import { products, salesRecords } from "@/server/db/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 import {
   parseExcelBuffer,
   sheetToJson,
@@ -259,8 +259,9 @@ export async function importSalesData(
       }
     }
 
-    // 5. 분류 처리 (신규 INSERT 배치, UPDATE 개별, 재고차감 순차)
+    // 5. 분류 처리 (신규 INSERT 배치, UPDATE 배치, 재고차감 순차)
     const newInsertValues: Array<typeof salesRecords.$inferInsert> = [];
+    const salesUpdateBatch: Array<{ id: string; quantity: number; unitPrice: number; totalAmount: number; channel: string | null; notes: string | null }> = [];
     const inventoryOps: Array<{ productId: string; data: SalesRecordExcelRow }> = [];
 
     for (const { index: i, data, productId } of parsedRows) {
@@ -283,18 +284,16 @@ export async function importSalesData(
           continue;
         }
 
-        // update: 기존 데이터 업데이트
+        // update: 배치 수집 (루프 종료 후 일괄 UPDATE)
         const unitPrice = Math.round(data.unitPrice ?? product.unitPrice ?? 0);
-        await db
-          .update(salesRecords)
-          .set({
-            quantity: Math.round(data.quantity),
-            unitPrice,
-            totalAmount: Math.round(data.quantity * unitPrice),
-            channel: data.channel,
-            notes: data.notes,
-          })
-          .where(eq(salesRecords.id, existingId));
+        salesUpdateBatch.push({
+          id: existingId,
+          quantity: Math.round(data.quantity),
+          unitPrice,
+          totalAmount: Math.round(data.quantity * unitPrice),
+          channel: data.channel || null,
+          notes: data.notes || null,
+        });
 
         if (deductInventory) {
           inventoryOps.push({ productId, data });
@@ -324,7 +323,29 @@ export async function importSalesData(
       successData.push(data);
     }
 
-    // 6. 배치 INSERT (신규 판매 기록) — 100건씩 분할하여 PG 파라미터 한도 방지
+    // 6-1. 중복 판매기록 배치 UPDATE (N개 → 1개 쿼리)
+    if (salesUpdateBatch.length > 0) {
+      const BATCH_SIZE_UPDATE = 100;
+      for (let i = 0; i < salesUpdateBatch.length; i += BATCH_SIZE_UPDATE) {
+        const batch = salesUpdateBatch.slice(i, i + BATCH_SIZE_UPDATE);
+        await db.execute(sql`
+          UPDATE sales_records SET
+            quantity = v.quantity::int,
+            unit_price = v.unit_price::numeric,
+            total_amount = v.total_amount::numeric,
+            channel = v.channel,
+            notes = v.notes,
+            updated_at = NOW()
+          FROM (VALUES ${sql.join(
+            batch.map(u => sql`(${u.id}::uuid, ${u.quantity}::int, ${u.unitPrice}::numeric, ${u.totalAmount}::numeric, ${u.channel}, ${u.notes})`),
+            sql`, `
+          )}) AS v(id, quantity, unit_price, total_amount, channel, notes)
+          WHERE sales_records.id = v.id
+        `);
+      }
+    }
+
+    // 6-2. 배치 INSERT (신규 판매 기록) — 100건씩 분할하여 PG 파라미터 한도 방지
     const BATCH_SIZE = 100;
     for (let i = 0; i < newInsertValues.length; i += BATCH_SIZE) {
       const batch = newInsertValues.slice(i, i + BATCH_SIZE);

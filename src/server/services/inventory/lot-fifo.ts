@@ -77,7 +77,7 @@ export async function deductByFIFO(
   // 차감 계산 (메모리)
   let remaining = quantity;
   const deductions: FIFODeduction[] = [];
-  const updateOps: Promise<unknown>[] = [];
+  const lotUpdates: Array<{ id: string; newRemaining: number; newStatus: string }> = [];
 
   for (const lot of activeLots) {
     if (remaining <= 0) break;
@@ -86,16 +86,7 @@ export async function deductByFIFO(
     const newRemaining = lot.remainingQuantity - deductQty;
     const newStatus = newRemaining === 0 ? "depleted" : "active";
 
-    updateOps.push(
-      db
-        .update(inventoryLots)
-        .set({
-          remainingQuantity: newRemaining,
-          status: newStatus as "active" | "depleted" | "expired",
-          updatedAt: new Date(),
-        })
-        .where(eq(inventoryLots.id, lot.id))
-    );
+    lotUpdates.push({ id: lot.id, newRemaining, newStatus });
 
     deductions.push({
       lotId: lot.id,
@@ -107,9 +98,19 @@ export async function deductByFIFO(
     remaining -= deductQty;
   }
 
-  // 병렬 UPDATE (N개 로트를 동시에 업데이트)
-  if (updateOps.length > 0) {
-    await Promise.all(updateOps);
+  // 단일 쿼리 배치 UPDATE (N개 → 1개 쿼리)
+  if (lotUpdates.length > 0) {
+    await db.execute(sql`
+      UPDATE inventory_lots SET
+        remaining_quantity = v.new_remaining::int,
+        status = v.new_status,
+        updated_at = NOW()
+      FROM (VALUES ${sql.join(
+        lotUpdates.map(u => sql`(${u.id}::uuid, ${u.newRemaining}::int, ${u.newStatus})`),
+        sql`, `
+      )}) AS v(id, new_remaining, new_status)
+      WHERE inventory_lots.id = v.id
+    `);
   }
 
   return { success: true, deductions };

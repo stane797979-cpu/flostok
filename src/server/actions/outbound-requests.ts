@@ -18,7 +18,7 @@ import {
   requireManagerOrAbove,
   requireWarehouseOrAbove,
 } from "./auth-helpers";
-import { processInventoryTransaction } from "./inventory";
+import { processInventoryTransaction, processBatchInventoryTransactions, type BatchInventoryItem } from "./inventory";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -611,51 +611,64 @@ export async function confirmOutboundRequest(
           .where(sql`${outboundRequestItems.id} IN ${updateItems.map((i) => i.itemId)}`);
       }
 
-      // 재고 차감 순차 실행 (데이터 무결성, tx 전달로 원자성 보장)
-      for (const item of validated.items) {
-        const requestItem = requestItemMap.get(item.itemId);
-        if (!requestItem) continue;
-        if (item.confirmedQuantity === 0) continue;
+      // 재고 차감 배치 처리 (processBatchInventoryTransactions로 쿼리 수 최소화)
+      // 출고는 FIFO 필요로 배치 함수 내부에서 개별 처리되지만, 제품·재고 조회는 배치로 수행됨
+      const activeItems = validated.items.filter(
+        (i) => i.confirmedQuantity > 0 && requestItemMap.has(i.itemId)
+      );
 
-        // 출발 창고에서 출고
-        const outboundResult = await processInventoryTransaction(
-          {
+      if (activeItems.length > 0) {
+        // 출발 창고 출고 배치
+        const outboundBatchItems: BatchInventoryItem[] = activeItems.map((i) => {
+          const requestItem = requestItemMap.get(i.itemId)!;
+          return {
             productId: requestItem.productId,
-            changeType: request.outboundType as
-              | "OUTBOUND_SALE"
-              | "OUTBOUND_DISPOSAL"
-              | "OUTBOUND_TRANSFER"
-              | "OUTBOUND_SAMPLE"
-              | "OUTBOUND_LOSS"
-              | "OUTBOUND_RETURN",
-            quantity: item.confirmedQuantity,
+            changeType: request.outboundType as BatchInventoryItem["changeType"],
+            quantity: i.confirmedQuantity,
             referenceId: validated.requestId,
             notes: validated.notes,
-            warehouseId: request.sourceWarehouseId,
-          },
-          { user, tx, skipRevalidate: true, skipActivityLog: true }
-        );
+            warehouseId: request.sourceWarehouseId ?? undefined,
+          };
+        });
+
+        const outboundResult = await processBatchInventoryTransactions(outboundBatchItems, {
+          user,
+          tx,
+          warehouseId: request.sourceWarehouseId ?? undefined,
+          skipRevalidate: true,
+          skipActivityLog: true,
+        });
 
         if (!outboundResult.success) {
-          throw new Error(`출고 실패: ${outboundResult.error}`);
+          const failed = outboundResult.results.filter((r) => !r.success);
+          throw new Error(`출고 실패: ${failed.map((r) => r.error).join(", ")}`);
         }
 
-        // 이동 출고(OUTBOUND_TRANSFER)이면 도착 창고로 입고
+        // 이동 출고(OUTBOUND_TRANSFER)이면 도착 창고로 배치 입고
         if (request.outboundType === "OUTBOUND_TRANSFER" && request.targetWarehouseId) {
-          const inboundResult = await processInventoryTransaction(
-            {
+          const inboundBatchItems: BatchInventoryItem[] = activeItems.map((i) => {
+            const requestItem = requestItemMap.get(i.itemId)!;
+            return {
               productId: requestItem.productId,
-              changeType: "INBOUND_TRANSFER",
-              quantity: item.confirmedQuantity,
+              changeType: "INBOUND_TRANSFER" as const,
+              quantity: i.confirmedQuantity,
               referenceId: validated.requestId,
               notes: validated.notes,
-              warehouseId: request.targetWarehouseId,
-            },
-            { user, tx, skipRevalidate: true, skipActivityLog: true }
-          );
+              warehouseId: request.targetWarehouseId!,
+            };
+          });
+
+          const inboundResult = await processBatchInventoryTransactions(inboundBatchItems, {
+            user,
+            tx,
+            warehouseId: request.targetWarehouseId,
+            skipRevalidate: true,
+            skipActivityLog: true,
+          });
 
           if (!inboundResult.success) {
-            throw new Error(`입고 실패: ${inboundResult.error}`);
+            const failed = inboundResult.results.filter((r) => !r.success);
+            throw new Error(`입고 실패: ${failed.map((r) => r.error).join(", ")}`);
           }
         }
       }
