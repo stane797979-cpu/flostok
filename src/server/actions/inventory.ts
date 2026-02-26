@@ -577,12 +577,16 @@ export async function processBatchInventoryTransactions(
     warehouseId?: string;
     skipRevalidate?: boolean;
     skipActivityLog?: boolean;
+    /** Drizzle 트랜잭션 객체 — 외부 트랜잭션과 동일한 커넥션에서 실행하려면 전달 */
+    tx?: Parameters<Parameters<typeof db.transaction>[0]>[0];
   }
 ): Promise<{ success: boolean; results: Array<{ productId: string; success: boolean; stockAfter?: number; error?: string }> }> {
   if (items.length === 0) return { success: true, results: [] };
 
   try {
     const user = context?.user ?? await requireAuth();
+    // 트랜잭션 컨텍스트가 있으면 해당 tx를 사용하고, 없으면 독립 db 커넥션 사용
+    const dbOrTx = context?.tx ?? db;
 
     // warehouseId 결정 (공통 또는 아이템별)
     let defaultWarehouseId = context?.warehouseId;
@@ -599,7 +603,7 @@ export async function processBatchInventoryTransactions(
     // 2. 배치 제품 조회 (context에 없는 경우만)
     let productsMap = context?.productsMap ?? new Map<string, typeof products.$inferSelect>();
     if (!context?.productsMap && uniqueProductIds.length > 0) {
-      const rows = await db
+      const rows = await dbOrTx
         .select()
         .from(products)
         .where(and(inArray(products.id, uniqueProductIds), eq(products.organizationId, user.organizationId)));
@@ -608,7 +612,7 @@ export async function processBatchInventoryTransactions(
 
     // 3. 배치 현재 재고 조회
     const existingInventory = uniqueProductIds.length > 0
-      ? await db
+      ? await dbOrTx
           .select()
           .from(inventory)
           .where(
@@ -673,12 +677,13 @@ export async function processBatchInventoryTransactions(
 
       if (hasOutbound) {
         // FIFO 필요: 기존 단건 처리로 폴백 (하지만 product 캐싱 활용)
+        // tx가 있으면 전달하여 외부 트랜잭션과 동일한 커넥션에서 실행
         fifoNeededProducts.push(productId);
         for (const item of data.items) {
           const wId = item.warehouseId || defaultWarehouseId;
           const result = await processInventoryTransaction(
             { ...item, warehouseId: wId },
-            { user, product, skipRevalidate: true, skipActivityLog: true }
+            { user, product, tx: context?.tx, skipRevalidate: true, skipActivityLog: true }
           );
           results.push({ productId, success: result.success, stockAfter: result.stockAfter, error: result.error });
         }
@@ -731,7 +736,7 @@ export async function processBatchInventoryTransactions(
       results.push({ productId, success: true, stockAfter });
     }
 
-    // 6. 배치 UPDATE/INSERT 실행
+    // 6. 배치 UPDATE/INSERT 실행 (dbOrTx 사용으로 외부 트랜잭션 참여)
     if (batchUpdates.length > 0) {
       const updateOps: Promise<unknown>[] = [];
       const insertValues: Array<typeof inventory.$inferInsert> = [];
@@ -739,7 +744,7 @@ export async function processBatchInventoryTransactions(
       for (const upd of batchUpdates) {
         if (upd.invId) {
           updateOps.push(
-            db.update(inventory).set({
+            dbOrTx.update(inventory).set({
               currentStock: upd.stockAfter,
               availableStock: upd.stockAfter,
               status: upd.newStatus as (typeof inventory.status.enumValues)[number],
@@ -762,13 +767,13 @@ export async function processBatchInventoryTransactions(
       // 병렬 UPDATE + 배치 INSERT
       await Promise.all([
         ...updateOps,
-        ...(insertValues.length > 0 ? [db.insert(inventory).values(insertValues)] : []),
+        ...(insertValues.length > 0 ? [dbOrTx.insert(inventory).values(insertValues)] : []),
       ]);
     }
 
     // 7. 배치 이력 INSERT
     if (historyInserts.length > 0) {
-      await db.insert(inventoryHistory).values(historyInserts);
+      await dbOrTx.insert(inventoryHistory).values(historyInserts);
     }
 
     // 8. 알림 트리거 (fire-and-forget)

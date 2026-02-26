@@ -342,15 +342,18 @@ export async function confirmShipmentInbound(data: {
         status: "active",
       });
 
-      // 4. 재고 증가 처리
-      const inventoryResult = await processInventoryTransaction({
-        productId: shipment.productId,
-        changeType: "INBOUND_PURCHASE",
-        quantity: data.receivedQuantity,
-        referenceId: shipment.purchaseOrderId || shipment.id,
-        notes: `입항스케줄 입고 (B/L: ${shipment.blNumber || "-"})`,
-        location: data.location,
-      });
+      // 4. 재고 증가 처리 (tx 전달로 같은 트랜잭션 내 실행 보장)
+      const inventoryResult = await processInventoryTransaction(
+        {
+          productId: shipment.productId,
+          changeType: "INBOUND_PURCHASE",
+          quantity: data.receivedQuantity,
+          referenceId: shipment.purchaseOrderId || shipment.id,
+          notes: `입항스케줄 입고 (B/L: ${shipment.blNumber || "-"})`,
+          location: data.location,
+        },
+        { user, tx, skipRevalidate: true, skipActivityLog: true }
+      );
 
       if (!inventoryResult.success) {
         throw new Error(`재고 증가 처리 실패: ${inventoryResult.error}`);

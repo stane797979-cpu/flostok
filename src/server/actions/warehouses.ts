@@ -385,8 +385,8 @@ export async function transferInventory(
       };
     }
 
-    // 트랜잭션으로 출고 + 입고 처리
-    await db.transaction(async (_tx) => {
+    // 트랜잭션으로 출고 + 입고 처리 (같은 tx 전달로 원자성 보장)
+    await db.transaction(async (tx) => {
       // 동적 import로 circular dependency 방지
       const { processInventoryTransaction } = await import("./inventory");
 
@@ -400,6 +400,7 @@ export async function transferInventory(
         },
         {
           user,
+          tx,
           skipRevalidate: true,
           skipActivityLog: true,
         }
@@ -419,6 +420,7 @@ export async function transferInventory(
         },
         {
           user,
+          tx,
           skipRevalidate: true,
           skipActivityLog: true,
         }

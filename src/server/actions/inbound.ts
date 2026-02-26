@@ -244,26 +244,28 @@ export async function confirmInbound(input: ConfirmInboundInput): Promise<{
         })
         .where(eq(purchaseOrders.id, validated.orderId));
 
+      // 5. 재고 증가 배치 처리 — 트랜잭션 내부로 이동하여 원자성 보장
+      // (입고=양수이므로 FIFO 불필요, 배치 최적화 적용)
+      const batchResult = await processBatchInventoryTransactions(
+        validItems.map(item => ({
+          productId: item.productId,
+          changeType: "INBOUND_PURCHASE" as const,
+          quantity: item.receivedQuantity,
+          referenceId: validated.orderId,
+          notes: `발주서 ${purchaseOrder.orderNumber} 입고`,
+          warehouseId: destinationWarehouseId,
+        })),
+        { user, productsMap, warehouseId: destinationWarehouseId, tx, skipRevalidate: true, skipActivityLog: true }
+      );
+
+      if (!batchResult.success) {
+        const failedItems = batchResult.results.filter(r => !r.success);
+        console.error("입고 재고 처리 일부 실패:", failedItems);
+        throw new Error(`재고 증가 처리 실패: ${failedItems.map(f => f.error).join(", ")}`);
+      }
+
       return recordIds;
     });
-
-    // 5. 재고 증가 배치 처리 (트랜잭션 외부, 입고=양수이므로 FIFO 불필요)
-    const batchResult = await processBatchInventoryTransactions(
-      validItems.map(item => ({
-        productId: item.productId,
-        changeType: "INBOUND_PURCHASE" as const,
-        quantity: item.receivedQuantity,
-        referenceId: validated.orderId,
-        notes: `발주서 ${purchaseOrder.orderNumber} 입고`,
-        warehouseId: destinationWarehouseId,
-      })),
-      { user, productsMap, warehouseId: destinationWarehouseId, skipRevalidate: true, skipActivityLog: true }
-    );
-
-    if (!batchResult.success) {
-      const failedItems = batchResult.results.filter(r => !r.success);
-      console.error("입고 재고 처리 일부 실패:", failedItems);
-    }
 
     await logActivity({
       user,

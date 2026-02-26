@@ -598,95 +598,99 @@ export async function confirmOutboundRequest(
       .where(sql`${outboundRequestItems.id} IN ${itemIds}`);
     const requestItemMap = new Map(requestItemRows.map((r) => [r.id, r]));
 
-    // confirmedQuantity 배치 업데이트
-    const updateItems = validated.items.filter((i) => i.confirmedQuantity > 0 && requestItemMap.has(i.itemId));
-    if (updateItems.length > 0) {
-      const qtyCase = updateItems.map((i) => sql`WHEN ${i.itemId} THEN ${i.confirmedQuantity}`);
-      await db
-        .update(outboundRequestItems)
-        .set({ confirmedQuantity: sql`CASE id ${sql.join(qtyCase, sql` `)} END` })
-        .where(sql`${outboundRequestItems.id} IN ${updateItems.map((i) => i.itemId)}`);
-    }
-
-    // 재고 차감은 순차 실행 (데이터 무결성)
-    for (const item of validated.items) {
-      const requestItem = requestItemMap.get(item.itemId);
-      if (!requestItem) continue;
-      if (item.confirmedQuantity === 0) continue;
-
-      // 출발 창고에서 출고
-      const outboundResult = await processInventoryTransaction({
-        productId: requestItem.productId,
-        changeType: request.outboundType as
-          | "OUTBOUND_SALE"
-          | "OUTBOUND_DISPOSAL"
-          | "OUTBOUND_TRANSFER"
-          | "OUTBOUND_SAMPLE"
-          | "OUTBOUND_LOSS"
-          | "OUTBOUND_RETURN",
-        quantity: item.confirmedQuantity,
-        referenceId: validated.requestId,
-        notes: validated.notes,
-        warehouseId: request.sourceWarehouseId,
-      });
-
-      if (!outboundResult.success) {
-        return {
-          success: false,
-          error: `출고 실패: ${outboundResult.error}`,
-        };
+    // 트랜잭션으로 확정 처리 전체를 원자적으로 실행
+    // (재고 차감 + 상태 업데이트 + 판매 기록 생성이 한 번에 커밋/롤백되어야 함)
+    await db.transaction(async (tx) => {
+      // confirmedQuantity 배치 업데이트
+      const updateItems = validated.items.filter((i) => i.confirmedQuantity > 0 && requestItemMap.has(i.itemId));
+      if (updateItems.length > 0) {
+        const qtyCase = updateItems.map((i) => sql`WHEN ${i.itemId} THEN ${i.confirmedQuantity}`);
+        await tx
+          .update(outboundRequestItems)
+          .set({ confirmedQuantity: sql`CASE id ${sql.join(qtyCase, sql` `)} END` })
+          .where(sql`${outboundRequestItems.id} IN ${updateItems.map((i) => i.itemId)}`);
       }
 
-      // 이동 출고(OUTBOUND_TRANSFER)이면 도착 창고로 입고
-      if (request.outboundType === "OUTBOUND_TRANSFER" && request.targetWarehouseId) {
-        const inboundResult = await processInventoryTransaction({
-          productId: requestItem.productId,
-          changeType: "INBOUND_TRANSFER",
-          quantity: item.confirmedQuantity,
-          referenceId: validated.requestId,
-          notes: validated.notes,
-          warehouseId: request.targetWarehouseId,
-        });
+      // 재고 차감 순차 실행 (데이터 무결성, tx 전달로 원자성 보장)
+      for (const item of validated.items) {
+        const requestItem = requestItemMap.get(item.itemId);
+        if (!requestItem) continue;
+        if (item.confirmedQuantity === 0) continue;
 
-        if (!inboundResult.success) {
-          return {
-            success: false,
-            error: `입고 실패: ${inboundResult.error}`,
-          };
+        // 출발 창고에서 출고
+        const outboundResult = await processInventoryTransaction(
+          {
+            productId: requestItem.productId,
+            changeType: request.outboundType as
+              | "OUTBOUND_SALE"
+              | "OUTBOUND_DISPOSAL"
+              | "OUTBOUND_TRANSFER"
+              | "OUTBOUND_SAMPLE"
+              | "OUTBOUND_LOSS"
+              | "OUTBOUND_RETURN",
+            quantity: item.confirmedQuantity,
+            referenceId: validated.requestId,
+            notes: validated.notes,
+            warehouseId: request.sourceWarehouseId,
+          },
+          { user, tx, skipRevalidate: true, skipActivityLog: true }
+        );
+
+        if (!outboundResult.success) {
+          throw new Error(`출고 실패: ${outboundResult.error}`);
+        }
+
+        // 이동 출고(OUTBOUND_TRANSFER)이면 도착 창고로 입고
+        if (request.outboundType === "OUTBOUND_TRANSFER" && request.targetWarehouseId) {
+          const inboundResult = await processInventoryTransaction(
+            {
+              productId: requestItem.productId,
+              changeType: "INBOUND_TRANSFER",
+              quantity: item.confirmedQuantity,
+              referenceId: validated.requestId,
+              notes: validated.notes,
+              warehouseId: request.targetWarehouseId,
+            },
+            { user, tx, skipRevalidate: true, skipActivityLog: true }
+          );
+
+          if (!inboundResult.success) {
+            throw new Error(`입고 실패: ${inboundResult.error}`);
+          }
         }
       }
-    }
 
-    // 판매출고(OUTBOUND_SALE)인 경우 salesRecords에 자동 생성 (수요예측·분석 연동)
-    if (request.outboundType === "OUTBOUND_SALE") {
-      const today = new Date().toISOString().split("T")[0];
-      const salesValues = validated.items
-        .filter((i) => i.confirmedQuantity > 0 && requestItemMap.has(i.itemId))
-        .map((i) => {
-          const item = requestItemMap.get(i.itemId)!;
-          return {
-            organizationId: user.organizationId,
-            productId: item.productId,
-            date: today,
-            quantity: i.confirmedQuantity,
-            notes: `출고확정 자동생성 (${request.requestNumber})`,
-          };
-        });
-      if (salesValues.length > 0) {
-        await db.insert(salesRecords).values(salesValues);
+      // 판매출고(OUTBOUND_SALE)인 경우 salesRecords에 자동 생성 (수요예측·분석 연동)
+      if (request.outboundType === "OUTBOUND_SALE") {
+        const today = new Date().toISOString().split("T")[0];
+        const salesValues = validated.items
+          .filter((i) => i.confirmedQuantity > 0 && requestItemMap.has(i.itemId))
+          .map((i) => {
+            const item = requestItemMap.get(i.itemId)!;
+            return {
+              organizationId: user.organizationId,
+              productId: item.productId,
+              date: today,
+              quantity: i.confirmedQuantity,
+              notes: `출고확정 자동생성 (${request.requestNumber})`,
+            };
+          });
+        if (salesValues.length > 0) {
+          await tx.insert(salesRecords).values(salesValues);
+        }
       }
-    }
 
-    // 요청 상태 업데이트 (confirmed)
-    await db
-      .update(outboundRequests)
-      .set({
-        status: "confirmed",
-        confirmedById: user.id,
-        confirmedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(outboundRequests.id, validated.requestId));
+      // 요청 상태 업데이트 (confirmed)
+      await tx
+        .update(outboundRequests)
+        .set({
+          status: "confirmed",
+          confirmedById: user.id,
+          confirmedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(outboundRequests.id, validated.requestId));
+    });
 
     revalidatePath("/dashboard/outbound");
     revalidatePath("/dashboard/warehouse/outbound");
