@@ -45,18 +45,6 @@ export interface WarehouseComparisonSummary {
   periodLabel: string;
 }
 
-// ─── 창고 유형 한국어 변환 ──────────────────────────────────────────────────────
-
-function getWarehouseTypeLabel(type: string): string {
-  switch (type) {
-    case "MAIN":       return "본사";
-    case "REGIONAL":   return "지역";
-    case "VIRTUAL":    return "가상";
-    case "THIRD_PARTY": return "3PL";
-    default:           return type;
-  }
-}
-
 // ─── 메인 함수 ─────────────────────────────────────────────────────────────────
 
 /**

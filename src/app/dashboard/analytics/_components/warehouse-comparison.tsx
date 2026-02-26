@@ -26,7 +26,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Building2, PackageX, TrendingUp, TrendingDown, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { WarehouseComparisonSummary, WarehouseMetrics } from "@/server/actions/warehouse-analytics";
+import type { WarehouseComparisonSummary } from "@/server/actions/warehouse-analytics";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 
 // ─── 유틸 ────────────────────────────────────────────────────────────────────
