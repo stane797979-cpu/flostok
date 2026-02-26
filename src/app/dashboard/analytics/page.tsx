@@ -198,6 +198,12 @@ export default async function AnalyticsPage() {
             <AnalyticsScenario />
           </Suspense>
         </TabsContent>
+
+        <TabsContent value="warehouse">
+          <Suspense fallback={<TabLoadingSkeleton />}>
+            <AnalyticsWarehouse />
+          </Suspense>
+        </TabsContent>
       </Tabs>
     </div>
   );
