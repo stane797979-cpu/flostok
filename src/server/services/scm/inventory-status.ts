@@ -3,7 +3,10 @@
  * DB enum과 동기화된 7단계 재고상태 분류
  */
 
-import { INVENTORY_STATUS, type InventoryStatus } from "@/lib/constants/inventory-status";
+import {
+  type InventoryStatus,
+  _resolveInventoryStatus,
+} from "@/lib/constants/inventory-status";
 
 export type InventoryStatusKey =
   | "out_of_stock"
@@ -28,8 +31,53 @@ export interface InventoryStatusResult {
   recommendation: string;
 }
 
+/** key별 메타데이터 (needsAction, urgencyLevel, recommendation) */
+const STATUS_META: Record<
+  InventoryStatusKey,
+  { needsAction: boolean; urgencyLevel: number; recommendation: string }
+> = {
+  out_of_stock: {
+    needsAction: true,
+    urgencyLevel: 3,
+    recommendation: "즉시 긴급 발주 필요",
+  },
+  critical: {
+    needsAction: true,
+    urgencyLevel: 3,
+    recommendation: "긴급 발주 권장, 리드타임 단축 협의 필요",
+  },
+  shortage: {
+    needsAction: true,
+    urgencyLevel: 2,
+    recommendation: "발주 진행 필요",
+  },
+  caution: {
+    needsAction: true,
+    urgencyLevel: 1,
+    recommendation: "발주 검토 권장",
+  },
+  optimal: {
+    needsAction: false,
+    urgencyLevel: 0,
+    recommendation: "적정 재고 유지 중",
+  },
+  excess: {
+    needsAction: true,
+    urgencyLevel: 1,
+    recommendation: "재고 소진 방안 검토 (프로모션, 타 사업장 이동)",
+  },
+  overstock: {
+    needsAction: true,
+    urgencyLevel: 2,
+    recommendation: "재고 처분 계획 수립 필요 (할인, 반품, 폐기 검토)",
+  },
+};
+
 /**
  * 재고상태 분류 및 권장 조치 반환
+ *
+ * 내부적으로 `lib/constants/inventory-status`의 `_resolveInventoryStatus()`를 호출하여
+ * `getInventoryStatus()`와 분류 로직을 공유합니다.
  *
  * 조건:
  * - 품절: 현재고 = 0
@@ -43,93 +91,25 @@ export interface InventoryStatusResult {
 export function classifyInventoryStatus(input: InventoryStatusInput): InventoryStatusResult {
   const { currentStock, safetyStock, reorderPoint } = input;
 
-  if (currentStock === 0) {
-    return {
-      status: INVENTORY_STATUS.OUT_OF_STOCK,
-      key: "out_of_stock",
-      needsAction: true,
-      urgencyLevel: 3,
-      recommendation: "즉시 긴급 발주 필요",
-    };
-  }
+  // 공통 분류 로직 호출 (getInventoryStatus와 동일한 경로)
+  const status = _resolveInventoryStatus(currentStock, safetyStock, reorderPoint);
+  const key = status.key as InventoryStatusKey;
 
-  // 안전재고 미설정 시 (신규 제품 등) — safetyStock=0이면 배수 비교가 무의미
-  if (safetyStock <= 0) {
-    if (reorderPoint > 0 && currentStock < reorderPoint) {
-      return {
-        status: INVENTORY_STATUS.CAUTION,
-        key: "caution",
-        needsAction: true,
-        urgencyLevel: 1,
-        recommendation: "발주 검토 권장 (안전재고 미설정)",
-      };
-    }
-    return {
-      status: INVENTORY_STATUS.OPTIMAL,
-      key: "optimal",
-      needsAction: false,
-      urgencyLevel: 0,
-      recommendation: "적정 재고 (안전재고 설정을 권장합니다)",
-    };
-  }
-
-  // 이하 7단계 분류 (safetyStock > 0 보장)
-  if (currentStock < safetyStock * 0.5) {
-    return {
-      status: INVENTORY_STATUS.CRITICAL,
-      key: "critical",
-      needsAction: true,
-      urgencyLevel: 3,
-      recommendation: "긴급 발주 권장, 리드타임 단축 협의 필요",
-    };
-  }
-
-  if (currentStock < safetyStock) {
-    return {
-      status: INVENTORY_STATUS.SHORTAGE,
-      key: "shortage",
-      needsAction: true,
-      urgencyLevel: 2,
-      recommendation: "발주 진행 필요",
-    };
-  }
-
-  if (currentStock < reorderPoint) {
-    return {
-      status: INVENTORY_STATUS.CAUTION,
-      key: "caution",
-      needsAction: true,
-      urgencyLevel: 1,
-      recommendation: "발주 검토 권장",
-    };
-  }
-
-  if (currentStock < safetyStock * 3.0) {
-    return {
-      status: INVENTORY_STATUS.OPTIMAL,
-      key: "optimal",
-      needsAction: false,
-      urgencyLevel: 0,
-      recommendation: "적정 재고 유지 중",
-    };
-  }
-
-  if (currentStock < safetyStock * 5.0) {
-    return {
-      status: INVENTORY_STATUS.EXCESS,
-      key: "excess",
-      needsAction: true,
-      urgencyLevel: 1,
-      recommendation: "재고 소진 방안 검토 (프로모션, 타 사업장 이동)",
-    };
-  }
+  // 안전재고 미설정 시 권장 문구를 보정
+  const meta = STATUS_META[key];
+  const recommendation =
+    safetyStock <= 0 && key === "caution"
+      ? "발주 검토 권장 (안전재고 미설정)"
+      : safetyStock <= 0 && key === "optimal"
+        ? "적정 재고 (안전재고 설정을 권장합니다)"
+        : meta.recommendation;
 
   return {
-    status: INVENTORY_STATUS.OVERSTOCK,
-    key: "overstock",
-    needsAction: true,
-    urgencyLevel: 2,
-    recommendation: "재고 처분 계획 수립 필요 (할인, 반품, 폐기 검토)",
+    status,
+    key,
+    needsAction: meta.needsAction,
+    urgencyLevel: meta.urgencyLevel,
+    recommendation,
   };
 }
 

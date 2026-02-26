@@ -8,6 +8,8 @@ import { getABCXYZAnalysis } from "@/server/actions/analytics";
 import { AnalyticsGradeChange } from "./_components/analytics-grade-change";
 import { AnalyticsFulfillment } from "./_components/analytics-fulfillment";
 import { AnalyticsTurnover } from "./_components/analytics-turnover";
+import { AnalyticsAging } from "./_components/analytics-aging";
+import { AnalyticsScenario } from "./_components/analytics-scenario";
 import { RefreshGradesButton } from "./_components/refresh-grades-button";
 import type { ProductAnalysis } from "./_components/abc-xyz-table";
 
@@ -124,6 +126,8 @@ export default async function AnalyticsPage() {
           <TabsTrigger value="demand-forecast">수요예측</TabsTrigger>
           <TabsTrigger value="turnover">재고회전율</TabsTrigger>
           <TabsTrigger value="sales-trend">판매 추이</TabsTrigger>
+          <TabsTrigger value="aging">재고 에이징</TabsTrigger>
+          <TabsTrigger value="scenario">시나리오</TabsTrigger>
         </TabsList>
 
         <TabsContent value="abc-xyz" className="space-y-6">
@@ -171,6 +175,18 @@ export default async function AnalyticsPage() {
 
         <TabsContent value="sales-trend">
           <SalesTrendChart />
+        </TabsContent>
+
+        <TabsContent value="aging">
+          <Suspense fallback={<TabLoadingSkeleton />}>
+            <AnalyticsAging />
+          </Suspense>
+        </TabsContent>
+
+        <TabsContent value="scenario">
+          <Suspense fallback={<TabLoadingSkeleton />}>
+            <AnalyticsScenario />
+          </Suspense>
         </TabsContent>
       </Tabs>
     </div>

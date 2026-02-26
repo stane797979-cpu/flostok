@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
+import { cn, formatNumber } from "@/lib/utils";
 import { type Product } from "@/server/db/schema";
 import { getInventoryList } from "@/server/actions/inventory";
 import { Package, BarChart3, Truck, Info } from "lucide-react";
@@ -83,7 +83,7 @@ export function ProductDetailDialog({ open, onOpenChange, product }: ProductDeta
 
   const formatCurrency = (value: number | null | undefined) => {
     if (value == null) return "-";
-    return value.toLocaleString("ko-KR") + "원";
+    return formatNumber(value) + "원";
   };
 
   return (

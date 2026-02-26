@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Eye, Download, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-import { cn } from "@/lib/utils";
+import { cn, formatKRW } from "@/lib/utils";
 
 export interface PurchaseOrderListItem {
   id: string;
@@ -159,13 +159,6 @@ export const PurchaseOrdersTable = memo(function PurchaseOrdersTable({ orders, o
     });
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("ko-KR", {
-      style: "currency",
-      currency: "KRW",
-    }).format(amount);
-  };
-
   if (orders.length === 0) {
     return (
       <div className="flex h-96 items-center justify-center text-slate-400">
@@ -193,7 +186,7 @@ export const PurchaseOrdersTable = memo(function PurchaseOrdersTable({ orders, o
             </div>
             <div className="flex items-center justify-between text-sm">
               <div className="space-y-0.5">
-                <p className="font-semibold">{formatCurrency(order.totalAmount)}</p>
+                <p className="font-semibold">{formatKRW(order.totalAmount)}</p>
                 <p className="text-slate-500">{formatDate(order.orderDate)} · {order.itemsCount}품목</p>
               </div>
               <Button size="sm" variant="outline" onClick={() => onViewClick(order.id)}>
@@ -264,7 +257,7 @@ export const PurchaseOrdersTable = memo(function PurchaseOrdersTable({ orders, o
               <TableCell className="font-medium">{order.supplierName}</TableCell>
               <TableCell className="whitespace-nowrap text-right">{order.itemsCount}개</TableCell>
               <TableCell className="whitespace-nowrap text-right font-semibold">
-                {formatCurrency(order.totalAmount)}
+                {formatKRW(order.totalAmount)}
               </TableCell>
               <TableCell className="whitespace-nowrap">{getStatusBadge(order.status)}</TableCell>
               <TableCell className="whitespace-nowrap text-sm text-slate-600">

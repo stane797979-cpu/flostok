@@ -80,9 +80,10 @@ export type InventoryStatusKey = keyof typeof INVENTORY_STATUS;
 export type InventoryStatus = (typeof INVENTORY_STATUS)[InventoryStatusKey];
 
 /**
- * 재고 수량과 안전재고, 발주점을 기반으로 재고상태를 계산
+ * 재고 수량·안전재고·발주점 기반 재고상태 분류 핵심 로직
+ * (getInventoryStatus와 classifyInventoryStatus 양쪽에서 공유)
  */
-export function getInventoryStatus(
+function _resolveStatus(
   currentStock: number,
   safetyStock: number,
   reorderPoint: number
@@ -114,3 +115,25 @@ export function getInventoryStatus(
   }
   return INVENTORY_STATUS.OVERSTOCK;
 }
+
+/**
+ * 재고 수량과 안전재고, 발주점을 기반으로 재고상태를 계산
+ *
+ * 내부적으로 `_resolveStatus()`를 호출하여 로직을 단일화합니다.
+ * 전체 메타데이터(needsAction, urgencyLevel 등)가 필요한 경우
+ * `services/scm/inventory-status`의 `classifyInventoryStatus()` 사용을 권장합니다.
+ */
+export function getInventoryStatus(
+  currentStock: number,
+  safetyStock: number,
+  reorderPoint: number
+): InventoryStatus {
+  return _resolveStatus(currentStock, safetyStock, reorderPoint);
+}
+
+/**
+ * @internal
+ * services/scm/inventory-status의 classifyInventoryStatus()에서 사용하기 위해
+ * 분류 핵심 로직을 노출합니다. 외부에서는 직접 사용하지 마세요.
+ */
+export { _resolveStatus as _resolveInventoryStatus };

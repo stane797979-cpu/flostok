@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { Button } from "@/components/ui/button";
 import { TrendingUp, TrendingDown, AlertCircle, Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatCompactKRW } from "@/lib/utils";
 import { getSalesTrend } from "@/server/actions/analytics";
 
 // 판매 추이 데이터 타입 정의
@@ -36,16 +36,6 @@ function formatDate(dateStr: string, period: Period): string {
   return `${month}/${day}`;
 }
 
-// 금액 포맷 함수
-function formatCurrency(value: number): string {
-  if (value >= 100000000) {
-    return `${(value / 100000000).toFixed(1)}억`;
-  }
-  if (value >= 10000) {
-    return `${(value / 10000).toFixed(0)}만`;
-  }
-  return value.toLocaleString("ko-KR");
-}
 
 export function SalesTrendChart({ className }: { className?: string }) {
   const [period, setPeriod] = useState<Period>("30");
@@ -150,7 +140,7 @@ export function SalesTrendChart({ className }: { className?: string }) {
               <TrendingUp className="text-muted-foreground h-4 w-4" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(statistics.totalSales)}원</div>
+              <div className="text-2xl font-bold">{formatCompactKRW(statistics.totalSales)}원</div>
               <p className="text-muted-foreground mt-1 text-xs">최근 {period}일</p>
             </CardContent>
           </Card>
@@ -162,7 +152,7 @@ export function SalesTrendChart({ className }: { className?: string }) {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {formatCurrency(statistics.avgDailySales)}원
+                {formatCompactKRW(statistics.avgDailySales)}원
               </div>
               <p className="text-muted-foreground mt-1 text-xs">
                 총 판매 수량: {statistics.totalQuantity.toLocaleString("ko-KR")}개
@@ -260,7 +250,7 @@ export function SalesTrendChart({ className }: { className?: string }) {
                 interval={tickInterval}
               />
               <YAxis
-                tickFormatter={formatCurrency}
+                tickFormatter={formatCompactKRW}
                 fontSize={11}
                 tickLine={false}
                 axisLine={false}

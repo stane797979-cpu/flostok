@@ -3,6 +3,7 @@
  */
 
 import { type PurchaseOrder, type PurchaseOrderItem } from "@/server/db/schema";
+import { formatKRW } from "@/lib/utils";
 
 /**
  * XLSX 라이브러리 lazy 로딩
@@ -249,10 +250,6 @@ function getStatusText(
 
 /**
  * 금액 포맷팅
+ * @deprecated 직접 사용 대신 `@/lib/utils`의 `formatKRW()` 사용
  */
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("ko-KR", {
-    style: "currency",
-    currency: "KRW",
-  }).format(amount);
-}
+const formatCurrency = formatKRW;

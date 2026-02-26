@@ -6,6 +6,7 @@
 import { classifyInventoryStatus } from "./inventory-status";
 import { calculateEOQ, calculateHoldingCost } from "./eoq";
 import { calculateOrderQuantity } from "./reorder-point";
+import { calculateOrderScore } from "./order-scoring";
 import type { SupplyAdjustmentCoefficients } from "@/types/organization-settings";
 import { getSupplyCoefficient } from "@/types/organization-settings";
 
@@ -225,43 +226,26 @@ export function calculateRecommendedQuantity(data: ProductReorderData, config?: 
 /**
  * 발주 필요 품목 우선순위 스코어링
  *
- * 스코어링 기준:
- * 1. 재고상태 (50점): 품절(50) > 위험(40) > 부족(30) > 주의(20)
- * 2. ABC등급 (30점): A(30) > B(20) > C(10)
- * 3. 재고일수 (20점): 음수/0일(20) > 1-3일(15) > 4-7일(10) > 7일+(5)
+ * @deprecated 직접 호출 대신 `order-scoring.ts`의 `calculateOrderScore()`를 사용하세요.
+ * 이 함수는 하위 호환성 유지를 위해 내부적으로 `calculateOrderScore()`를 래핑합니다.
+ *
+ * calculateOrderScore() 배점 기준:
+ * - 재고 긴급도: 40점
+ * - ABC 등급: 25점
+ * - 판매 추세: 20점 (데이터 미제공 시 기본값 0 적용)
+ * - 리드타임 리스크: 15점 (supplier.leadTime 사용, 없으면 7일 가정)
  */
 export function calculateReorderPriority(item: ReorderItem, abcGrade?: "A" | "B" | "C"): number {
-  let score = 0;
+  const result = calculateOrderScore({
+    currentStock: item.currentStock,
+    safetyStock: item.safetyStock,
+    reorderPoint: item.reorderPoint,
+    abcGrade: abcGrade ?? "B", // 등급 미지정 시 중간값(B) 사용
+    leadTimeDays: item.supplier?.leadTime ?? 7, // 공급자 리드타임 사용, 없으면 7일
+    // recentSales, previousSales: 데이터 미보유 → calculateOrderScore 기본값(0) 적용
+  });
 
-  // 1. 재고상태 스코어 (50점)
-  const statusScores = {
-    out_of_stock: 50,
-    critical: 40,
-    shortage: 30,
-    caution: 20,
-  };
-  score += statusScores[item.status];
-
-  // 2. ABC등급 스코어 (30점)
-  if (abcGrade) {
-    const abcScores = { A: 30, B: 20, C: 10 };
-    score += abcScores[abcGrade];
-  } else {
-    score += 15; // 등급 미지정 시 중간값
-  }
-
-  // 3. 재고일수 스코어 (20점)
-  if (item.daysOfStock === null || item.daysOfStock <= 0) {
-    score += 20; // 재고일수 계산 불가 또는 0일
-  } else if (item.daysOfStock <= 3) {
-    score += 15; // 1-3일
-  } else if (item.daysOfStock <= 7) {
-    score += 10; // 4-7일
-  } else {
-    score += 5; // 7일 이상
-  }
-
-  return score;
+  return result.totalScore;
 }
 
 /**

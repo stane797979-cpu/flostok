@@ -15,16 +15,7 @@ import {
   getOrganizationsMonitoring,
   type OrgMonitoringData,
 } from "@/server/actions/admin";
-
-function formatCurrency(value: number): string {
-  if (value >= 100_000_000) {
-    return `${(value / 100_000_000).toFixed(1)}억`;
-  }
-  if (value >= 10_000) {
-    return `${Math.round(value / 10_000).toLocaleString("ko-KR")}만`;
-  }
-  return value.toLocaleString("ko-KR");
-}
+import { formatCompactKRW } from "@/lib/utils";
 
 function InventoryStatusBar({ data }: { data: OrgMonitoringData }) {
   const total =
@@ -126,14 +117,14 @@ function OrgCard({ org }: { org: OrgMonitoringData }) {
           <div className="rounded-lg bg-slate-50 p-2.5">
             <p className="text-[10px] text-slate-400">재고가치</p>
             <p className="text-sm font-bold text-slate-900">
-              {formatCurrency(org.totalInventoryValue)}
+              {formatCompactKRW(org.totalInventoryValue)}
               <span className="text-[10px] font-normal text-slate-400">원</span>
             </p>
           </div>
           <div className="rounded-lg bg-slate-50 p-2.5">
             <p className="text-[10px] text-slate-400">월 매출 (30일)</p>
             <p className="text-sm font-bold text-slate-900">
-              {formatCurrency(org.monthlySalesAmount)}
+              {formatCompactKRW(org.monthlySalesAmount)}
               <span className="text-[10px] font-normal text-slate-400">원</span>
             </p>
           </div>
@@ -238,7 +229,7 @@ export default async function MonitoringPage() {
             <div>
               <p className="text-sm text-slate-500">총 재고가치</p>
               <p className="text-2xl font-bold">
-                {formatCurrency(totalInventoryValue)}
+                {formatCompactKRW(totalInventoryValue)}
                 <span className="text-sm font-normal text-slate-400">원</span>
               </p>
             </div>
@@ -252,7 +243,7 @@ export default async function MonitoringPage() {
             <div>
               <p className="text-sm text-slate-500">월 매출 합계</p>
               <p className="text-2xl font-bold">
-                {formatCurrency(totalMonthlySales)}
+                {formatCompactKRW(totalMonthlySales)}
                 <span className="text-sm font-normal text-slate-400">원</span>
               </p>
             </div>

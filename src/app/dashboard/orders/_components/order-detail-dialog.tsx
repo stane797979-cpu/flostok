@@ -28,6 +28,7 @@ import { getInboundRecords } from "@/server/actions/inbound";
 import { getEntityActivityLogs } from "@/server/actions/activity-logs";
 import type { ActivityLog } from "@/server/actions/activity-logs";
 import { useToast } from "@/hooks/use-toast";
+import { formatKRW } from "@/lib/utils";
 import { exportPurchaseOrderToExcel } from "@/server/actions/excel-export";
 
 // 상태별 다음 단계 정의 (발주확정 / 취소 / 완료만 — 입고는 입고관리에서 처리)
@@ -299,13 +300,6 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
     });
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("ko-KR", {
-      style: "currency",
-      currency: "KRW",
-    }).format(amount);
-  };
-
   // 발주 진행 중 여부 (입항스케줄, 예상입고일 편집 등에 사용)
   const isInProgress =
     orderData &&
@@ -322,20 +316,20 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
 
           {isLoading ? (
             <div className="flex h-96 items-center justify-center">
-              <div className="text-slate-500">로딩 중...</div>
+              <div className="text-slate-500 dark:text-slate-400">로딩 중...</div>
             </div>
           ) : !orderData ? (
             <div className="flex h-96 items-center justify-center">
-              <div className="text-slate-500">발주서를 찾을 수 없습니다</div>
+              <div className="text-slate-500 dark:text-slate-400">발주서를 찾을 수 없습니다</div>
             </div>
           ) : (
             <div className="space-y-6">
               {/* 발주서 헤더 */}
-              <div className="rounded-lg border bg-slate-50 p-6">
+              <div className="rounded-lg border bg-slate-50 dark:bg-slate-800 p-6">
                 <div className="mb-4 flex items-start justify-between">
                   <div>
                     <h3 className="text-2xl font-bold">{orderData.orderNumber}</h3>
-                    <p className="mt-1 text-sm text-slate-600">
+                    <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
                       {orderData.orderDate && formatDate(orderData.orderDate)}
                     </p>
                   </div>
@@ -346,14 +340,14 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="flex items-start gap-3">
-                    <Building2 className="mt-1 h-5 w-5 text-slate-400" />
+                    <Building2 className="mt-1 h-5 w-5 text-slate-400 dark:text-slate-500" />
                     <div>
-                      <p className="text-sm font-medium text-slate-500">공급자</p>
+                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">공급자</p>
                       <p className="mt-1 font-semibold">
                         {orderData.supplier?.name || "미지정"}
                       </p>
                       {orderData.supplier?.contactPhone && (
-                        <p className="mt-1 text-sm text-slate-600">
+                        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
                           {orderData.supplier.contactPhone}
                         </p>
                       )}
@@ -361,9 +355,9 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
                   </div>
 
                   <div className="flex items-start gap-3">
-                    <Calendar className="mt-1 h-5 w-5 text-slate-400" />
+                    <Calendar className="mt-1 h-5 w-5 text-slate-400 dark:text-slate-500" />
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-slate-500">예상입고일</p>
+                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">예상입고일</p>
                       {isEditingExpectedDate ? (
                         <div className="mt-1 flex items-center gap-1.5">
                           <Input
@@ -389,7 +383,7 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
                             onClick={() => setIsEditingExpectedDate(false)}
                             aria-label="날짜 취소"
                           >
-                            <X className="h-3.5 w-3.5 text-slate-400" />
+                            <X className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
                           </Button>
                         </div>
                       ) : (
@@ -414,7 +408,7 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
                               onClick={handleEditExpectedDate}
                               aria-label="예상입고일 수정"
                             >
-                              <Pencil className="h-3 w-3 text-slate-400" />
+                              <Pencil className="h-3 w-3 text-slate-400 dark:text-slate-500" />
                             </Button>
                           )}
                         </div>
@@ -432,10 +426,10 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
                   <>
                     <Separator className="my-4" />
                     <div className="flex items-start gap-3">
-                      <FileText className="mt-1 h-5 w-5 text-slate-400" />
+                      <FileText className="mt-1 h-5 w-5 text-slate-400 dark:text-slate-500" />
                       <div>
-                        <p className="text-sm font-medium text-slate-500">메모</p>
-                        <p className="mt-1 text-sm text-slate-700">{orderData.notes}</p>
+                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">메모</p>
+                        <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">{orderData.notes}</p>
                       </div>
                     </div>
                   </>
@@ -470,7 +464,7 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
                               {item.product.sku}
                             </TableCell>
                             <TableCell className="font-medium">{item.product.name}</TableCell>
-                            <TableCell className="text-center text-sm text-slate-600">
+                            <TableCell className="text-center text-sm text-slate-600 dark:text-slate-400">
                               {item.product.unit || "-"}
                             </TableCell>
                             <TableCell className="text-right">{item.quantity}</TableCell>
@@ -481,17 +475,17 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
                                     ? "text-green-600 font-semibold"
                                     : isPartiallyReceived
                                       ? "text-yellow-600 font-semibold"
-                                      : "text-slate-600"
+                                      : "text-slate-600 dark:text-slate-400"
                                 }
                               >
                                 {receivedQty}
                               </span>
                             </TableCell>
                             <TableCell className="text-right">
-                              {formatCurrency(item.unitPrice)}
+                              {formatKRW(item.unitPrice)}
                             </TableCell>
                             <TableCell className="text-right font-semibold">
-                              {formatCurrency(item.totalPrice)}
+                              {formatKRW(item.totalPrice)}
                             </TableCell>
                           </TableRow>
                         );
@@ -502,15 +496,15 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
 
                 {/* 합계 */}
                 <div className="mt-4 flex justify-end">
-                  <div className="w-64 rounded-lg border bg-slate-50 p-4">
+                  <div className="w-64 rounded-lg border bg-slate-50 dark:bg-slate-800 p-4">
                     <div className="flex justify-between text-sm">
-                      <span className="text-slate-600">품목 수</span>
+                      <span className="text-slate-600 dark:text-slate-400">품목 수</span>
                       <span className="font-medium">{orderData.items.length}개</span>
                     </div>
                     <Separator className="my-2" />
                     <div className="flex justify-between text-lg font-bold">
                       <span>총 금액</span>
-                      <span>{formatCurrency(orderData.totalAmount || 0)}</span>
+                      <span>{formatKRW(orderData.totalAmount || 0)}</span>
                     </div>
                   </div>
                 </div>
@@ -534,7 +528,7 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
                     </Button>
                   </div>
                   {showShipmentForm && (
-                    <div className="rounded-lg border p-4 space-y-3 bg-slate-50/50">
+                    <div className="rounded-lg border p-4 space-y-3 bg-slate-50/50 dark:bg-slate-800/50">
                       <div className="grid gap-3 sm:grid-cols-3">
                         <div>
                           <Label className="text-xs">B/L 번호</Label>
@@ -689,10 +683,10 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
                     <div className="divide-y">
                       {activityLogsList.map((log) => (
                         <div key={log.id} className="flex items-start gap-3 px-4 py-2.5">
-                          <Clock className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-slate-400" />
+                          <Clock className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-slate-400 dark:text-slate-500" />
                           <div className="min-w-0 flex-1">
-                            <p className="text-sm text-slate-700">{log.description}</p>
-                            <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-400">
+                            <p className="text-sm text-slate-700 dark:text-slate-300">{log.description}</p>
+                            <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
                               <span>{log.userName || "시스템"}</span>
                               <span>·</span>
                               <span>
