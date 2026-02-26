@@ -10,6 +10,8 @@ import { AnalyticsFulfillment } from "./_components/analytics-fulfillment";
 import { AnalyticsTurnover } from "./_components/analytics-turnover";
 import { AnalyticsAging } from "./_components/analytics-aging";
 import { AnalyticsScenario } from "./_components/analytics-scenario";
+import { AnalyticsLotExpiry } from "./_components/analytics-lot-expiry";
+import { AnalyticsWarehouse } from "./_components/analytics-warehouse";
 import { RefreshGradesButton } from "./_components/refresh-grades-button";
 import type { ProductAnalysis } from "./_components/abc-xyz-table";
 
@@ -127,7 +129,9 @@ export default async function AnalyticsPage() {
           <TabsTrigger value="turnover">재고회전율</TabsTrigger>
           <TabsTrigger value="sales-trend">판매 추이</TabsTrigger>
           <TabsTrigger value="aging">재고 에이징</TabsTrigger>
+          <TabsTrigger value="lot-expiry">유통기한</TabsTrigger>
           <TabsTrigger value="scenario">시나리오</TabsTrigger>
+          <TabsTrigger value="warehouse">창고별 비교</TabsTrigger>
         </TabsList>
 
         <TabsContent value="abc-xyz" className="space-y-6">
@@ -180,6 +184,12 @@ export default async function AnalyticsPage() {
         <TabsContent value="aging">
           <Suspense fallback={<TabLoadingSkeleton />}>
             <AnalyticsAging />
+          </Suspense>
+        </TabsContent>
+
+        <TabsContent value="lot-expiry">
+          <Suspense fallback={<TabLoadingSkeleton />}>
+            <AnalyticsLotExpiry />
           </Suspense>
         </TabsContent>
 
