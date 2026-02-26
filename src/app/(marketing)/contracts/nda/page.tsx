@@ -55,7 +55,7 @@ export default function NDAPage() {
             </h3>
             <div className="mt-4 space-y-4">
               <p className="leading-7 text-gray-700">
-                <strong>1. 기밀정보의 범위:</strong> 본 계약에서 "기밀정보"란 서면, 구두, 전자적 형태 또는 기타 모든 형태로 상대방이 제공하는 다음 각 호의 정보를 의미한다.
+                <strong>1. 기밀정보의 범위:</strong> 본 계약에서 &quot;기밀정보&quot;란 서면, 구두, 전자적 형태 또는 기타 모든 형태로 상대방이 제공하는 다음 각 호의 정보를 의미한다.
               </p>
               <ul className="ml-6 space-y-2 text-gray-700">
                 <li className="leading-7">
@@ -77,7 +77,7 @@ export default function NDAPage() {
                   • 시스템 접근 권한, 계정 정보, 보안 정책
                 </li>
                 <li className="leading-7">
-                  • 기타 상대방이 서면으로 "기밀" 또는 "Confidential" 표시를 한 정보
+                  • 기타 상대방이 서면으로 &quot;기밀&quot; 또는 &quot;Confidential&quot; 표시를 한 정보
                 </li>
               </ul>
               <p className="leading-7 text-gray-700">

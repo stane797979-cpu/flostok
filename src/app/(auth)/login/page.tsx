@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Mail, Lock, Package } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { translateAuthError } from '@/lib/utils';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -44,8 +45,8 @@ export default function LoginPage() {
       return;
     }
 
-    if (password.length < 6) {
-      setError('비밀번호는 최소 6자 이상이어야 합니다.');
+    if (password.length < 8) {
+      setError('비밀번호는 최소 8자 이상이어야 합니다.');
       return;
     }
 
@@ -60,11 +61,7 @@ export default function LoginPage() {
       });
 
       if (authError) {
-        if (authError.message === 'Invalid login credentials') {
-          setError('이메일 또는 비밀번호가 올바르지 않습니다.');
-        } else {
-          setError(authError.message);
-        }
+        setError(translateAuthError(authError.message));
         return;
       }
 

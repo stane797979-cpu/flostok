@@ -126,7 +126,7 @@ export function APIKeySettings({ organizationId }: APIKeySettingsProps): React.R
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-slate-400 dark:text-slate-500" />
       </div>
     )
   }
@@ -173,7 +173,7 @@ export function APIKeySettings({ organizationId }: APIKeySettingsProps): React.R
                   <AlertDescription>
                     <strong>중요:</strong> 생성된 API 키는 아래에 한 번만 표시됩니다. 안전한 곳에 복사해서
                     보관하세요.
-                    <code className="mt-2 block rounded bg-slate-100 p-2 font-mono text-sm">{newlyCreatedKey}</code>
+                    <code className="mt-2 block rounded bg-slate-100 dark:bg-slate-800 p-2 font-mono text-sm dark:text-slate-300">{newlyCreatedKey}</code>
                   </AlertDescription>
                 </Alert>
               )}
@@ -210,22 +210,22 @@ export function APIKeySettings({ organizationId }: APIKeySettingsProps): React.R
           </CardHeader>
           <CardContent>
             {apiKeys.length === 0 ? (
-              <div className="flex h-32 items-center justify-center rounded-lg border-2 border-dashed border-slate-200">
-                <p className="text-center text-slate-500">생성된 API 키가 없습니다</p>
+              <div className="flex h-32 items-center justify-center rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-700">
+                <p className="text-center text-slate-500 dark:text-slate-400">생성된 API 키가 없습니다</p>
               </div>
             ) : (
               <div className="space-y-3">
                 {apiKeys.map((apiKey) => (
-                  <div key={apiKey.id} className="flex items-center justify-between rounded-lg border border-slate-200 p-4">
+                  <div key={apiKey.id} className="flex items-center justify-between rounded-lg border border-slate-200 dark:border-slate-700 p-4">
                     {/* 좌측: 키 정보 */}
                     <div className="flex-1 space-y-2">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-slate-900">{apiKey.name}</span>
-                        <span className="text-xs text-slate-500">생성일: {apiKey.createdAt}</span>
+                        <span className="font-medium text-slate-900 dark:text-slate-100">{apiKey.name}</span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400">생성일: {apiKey.createdAt}</span>
                       </div>
 
                       <div className="flex items-center gap-2">
-                        <code className="flex-1 rounded bg-slate-100 px-3 py-2 font-mono text-sm text-slate-700">
+                        <code className="flex-1 rounded bg-slate-100 dark:bg-slate-800 px-3 py-2 font-mono text-sm text-slate-700 dark:text-slate-300">
                           {apiKey.maskedKey}
                         </code>
 
@@ -250,7 +250,7 @@ export function APIKeySettings({ organizationId }: APIKeySettingsProps): React.R
                       </div>
 
                       {apiKey.lastUsedAt && (
-                        <p className="text-xs text-slate-500">마지막 사용: {apiKey.lastUsedAt}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">마지막 사용: {apiKey.lastUsedAt}</p>
                       )}
                     </div>
 
@@ -291,17 +291,17 @@ export function APIKeySettings({ organizationId }: APIKeySettingsProps): React.R
           <CardContent>
             <div className="space-y-3">
               {apiKeys.map((apiKey) => (
-                <div key={apiKey.id} className="rounded-lg border border-slate-200 p-4">
+                <div key={apiKey.id} className="rounded-lg border border-slate-200 dark:border-slate-700 p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="font-medium text-slate-900">{apiKey.name}</p>
-                      <p className="text-sm text-slate-500">{apiKey.maskedKey}</p>
+                      <p className="font-medium text-slate-900 dark:text-slate-100">{apiKey.name}</p>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">{apiKey.maskedKey}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-medium text-slate-900">
+                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
                         {apiKey.lastUsedAt ? `마지막 사용: ${apiKey.lastUsedAt}` : '아직 사용되지 않음'}
                       </p>
-                      <p className="text-xs text-slate-500">생성일: {apiKey.createdAt}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">생성일: {apiKey.createdAt}</p>
                     </div>
                   </div>
                 </div>

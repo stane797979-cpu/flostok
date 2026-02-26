@@ -224,7 +224,7 @@ export function UserManagement({ organizationId }: UserManagementProps) {
           <CardDescription>조직 내 사용자와 권한을 관리합니다</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex h-48 items-center justify-center text-slate-400">
+          <div className="flex h-48 items-center justify-center text-slate-400 dark:text-slate-500">
             {error}
           </div>
         </CardContent>
@@ -331,7 +331,7 @@ export function UserManagement({ organizationId }: UserManagementProps) {
         <div className="overflow-x-auto rounded-lg border">
           <Table>
             <TableHeader>
-              <TableRow className="bg-slate-50">
+              <TableRow className="bg-slate-50 dark:bg-slate-800">
                 <TableHead className="min-w-[200px]">이름</TableHead>
                 <TableHead className="min-w-[240px]">이메일</TableHead>
                 <TableHead className="min-w-[120px]">권한</TableHead>
@@ -343,13 +343,13 @@ export function UserManagement({ organizationId }: UserManagementProps) {
             <TableBody>
               {users.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-32 text-center text-slate-500">
+                  <TableCell colSpan={6} className="h-32 text-center text-slate-500 dark:text-slate-400">
                     사용자가 없습니다
                   </TableCell>
                 </TableRow>
               ) : (
                 users.map((user) => (
-                  <TableRow key={user.id} className="hover:bg-slate-50">
+                  <TableRow key={user.id} className="hover:bg-slate-50 dark:hover:bg-slate-800">
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-3">
                         {user.avatarUrl ? (
@@ -361,7 +361,7 @@ export function UserManagement({ organizationId }: UserManagementProps) {
                             className="h-8 w-8 rounded-full"
                           />
                         ) : (
-                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-600">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 dark:bg-slate-700 text-xs font-semibold text-slate-600 dark:text-slate-300">
                             {(user.name || user.email)[0].toUpperCase()}
                           </div>
                         )}
@@ -373,7 +373,7 @@ export function UserManagement({ organizationId }: UserManagementProps) {
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm text-slate-600">{user.email}</TableCell>
+                    <TableCell className="text-sm text-slate-600 dark:text-slate-400">{user.email}</TableCell>
                     <TableCell>
                       <Select
                         value={user.role}
@@ -415,7 +415,7 @@ export function UserManagement({ organizationId }: UserManagementProps) {
                         </Tooltip>
                       </TooltipProvider>
                     </TableCell>
-                    <TableCell className="text-sm text-slate-600">
+                    <TableCell className="text-sm text-slate-600 dark:text-slate-400">
                       {new Date(user.createdAt).toLocaleDateString('ko-KR', {
                         year: 'numeric',
                         month: '2-digit',
@@ -462,9 +462,9 @@ export function UserManagement({ organizationId }: UserManagementProps) {
         </div>
 
         {/* 권한 설명 */}
-        <div className="rounded-lg border bg-slate-50 p-4">
-          <h4 className="mb-2 text-sm font-semibold text-slate-900">권한 설명</h4>
-          <div className="space-y-1.5 text-sm text-slate-600">
+        <div className="rounded-lg border bg-slate-50 dark:bg-slate-800 p-4">
+          <h4 className="mb-2 text-sm font-semibold text-slate-900 dark:text-slate-100">권한 설명</h4>
+          <div className="space-y-1.5 text-sm text-slate-600 dark:text-slate-400">
             <div className="flex items-start gap-2">
               <Badge className="mt-0.5 shrink-0 bg-amber-500 hover:bg-amber-600">
                 <ShieldCheck className="mr-1 h-3 w-3" />

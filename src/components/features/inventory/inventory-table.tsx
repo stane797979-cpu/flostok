@@ -242,7 +242,7 @@ export const InventoryTable = memo(function InventoryTable({ items, onAdjust, on
               <div className="flex items-center gap-4 text-sm">
                 <div>
                   <span className="text-slate-500">현재고</span>
-                  <span className="ml-1 font-mono font-medium">{item.currentStock.toLocaleString()}</span>
+                  <span className="ml-1 font-mono font-medium">{item.currentStock.toLocaleString("ko-KR")}</span>
                 </div>
                 {inventoryDays !== null && (
                   <div>
@@ -369,13 +369,13 @@ export const InventoryTable = memo(function InventoryTable({ items, onAdjust, on
                     )}
                   </TableCell>
                   <TableCell className="text-right font-mono">
-                    {item.currentStock.toLocaleString()}
+                    {item.currentStock.toLocaleString("ko-KR")}
                   </TableCell>
                   <TableCell className="text-right font-mono text-slate-500">
-                    {safetyStock.toLocaleString()}
+                    {safetyStock.toLocaleString("ko-KR")}
                   </TableCell>
                   <TableCell className="text-right font-mono text-slate-500">
-                    {reorderPoint.toLocaleString()}
+                    {reorderPoint.toLocaleString("ko-KR")}
                   </TableCell>
                   <TableCell className="text-right font-mono">
                     {inventoryDays !== null ? (

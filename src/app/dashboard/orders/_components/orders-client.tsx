@@ -909,13 +909,13 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">{currentPage.title}</h1>
-        <p className="mt-2 text-slate-500">{currentPage.description}</p>
+        <p className="mt-2 text-slate-500 dark:text-slate-400">{currentPage.description}</p>
       </div>
 
       {initialTab === "reorder" && (
         <div className="space-y-4">
           {/* 자동발주와의 차이점 안내 */}
-          <Alert className="border-emerald-200 bg-emerald-50">
+          <Alert className="border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950">
             <ClipboardEdit className="h-4 w-4 text-emerald-600" />
             <AlertTitle className="text-emerald-800">수동 발주란?</AlertTitle>
             <AlertDescription className="text-emerald-700">
@@ -989,8 +989,8 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
               />
               {reorderTotalItems > 0 && (
                 <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-center gap-2 text-sm text-slate-500">
-                    <span>전체 {reorderTotalItems.toLocaleString()}건</span>
+                  <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                    <span>전체 {reorderTotalItems.toLocaleString("ko-KR")}건</span>
                     <span>·</span>
                     <div className="flex items-center gap-1">
                       <span>표시</span>
@@ -1025,7 +1025,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
       {initialTab === "auto-reorder" && (
         <div className="space-y-4">
           {/* 수동발주와의 차이점 안내 */}
-          <Alert className="border-blue-200 bg-blue-50">
+          <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
             <Zap className="h-4 w-4 text-blue-600" />
             <AlertTitle className="text-blue-800">자동발주 추천이란?</AlertTitle>
             <AlertDescription className="text-blue-700">
@@ -1051,8 +1051,8 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
               />
               {autoReorderTotalItems > 0 && (
                 <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-center gap-2 text-sm text-slate-500">
-                    <span>전체 {autoReorderTotalItems.toLocaleString()}건</span>
+                  <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                    <span>전체 {autoReorderTotalItems.toLocaleString("ko-KR")}건</span>
                     <span>·</span>
                     <div className="flex items-center gap-1">
                       <span>표시</span>
@@ -1100,7 +1100,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                       checked={hideReceived}
                       onCheckedChange={(checked) => setHideReceived(!!checked)}
                     />
-                    <Label htmlFor="hide-received" className="text-xs text-slate-500 cursor-pointer">
+                    <Label htmlFor="hide-received" className="text-xs text-slate-500 dark:text-slate-400 cursor-pointer">
                       입고완료 숨기기
                     </Label>
                   </div>
@@ -1139,7 +1139,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
             </CardHeader>
             <CardContent>
               {isLoadingOrders ? (
-                <div className="flex h-48 items-center justify-center text-slate-400">
+                <div className="flex h-48 items-center justify-center text-slate-400 dark:text-slate-500">
                   발주 목록을 불러오는 중...
                 </div>
               ) : (
@@ -1153,8 +1153,8 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                   />
                   {ordersTotalItems > 0 && (
                     <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex items-center gap-2 text-sm text-slate-500">
-                        <span>전체 {ordersTotalItems.toLocaleString()}건</span>
+                      <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                        <span>전체 {ordersTotalItems.toLocaleString("ko-KR")}건</span>
                         <span>·</span>
                         <div className="flex items-center gap-1">
                           <span>표시</span>
@@ -1218,7 +1218,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                   발주 이력을 불러오는 중...
                 </div>
               ) : orderHistory.length === 0 ? (
-                <div className="flex h-48 items-center justify-center text-slate-400">
+                <div className="flex h-48 items-center justify-center text-slate-400 dark:text-slate-500">
                   취소된 발주서가 없습니다
                 </div>
               ) : (
@@ -1230,8 +1230,8 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                   />
                   {historyTotalItems > 0 && (
                     <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex items-center gap-2 text-sm text-slate-500">
-                        <span>전체 {historyTotalItems.toLocaleString()}건</span>
+                      <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                        <span>전체 {historyTotalItems.toLocaleString("ko-KR")}건</span>
                         <span>·</span>
                         <div className="flex items-center gap-1">
                           <span>표시</span>
@@ -1325,7 +1325,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
             </CardHeader>
             <CardContent>
               {isLoadingInbound ? (
-                <div className="flex h-48 items-center justify-center text-slate-400">
+                <div className="flex h-48 items-center justify-center text-slate-400 dark:text-slate-500">
                   입고 기록을 불러오는 중...
                 </div>
               ) : (
@@ -1333,8 +1333,8 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                   <InboundRecordsTable records={inboundRecords} />
                   {inboundTotalItems > 0 && (
                     <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex items-center gap-2 text-sm text-slate-500">
-                        <span>전체 {inboundTotalItems.toLocaleString()}건</span>
+                      <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                        <span>전체 {inboundTotalItems.toLocaleString("ko-KR")}건</span>
                         <span>·</span>
                         <div className="flex items-center gap-1">
                           <span>표시</span>

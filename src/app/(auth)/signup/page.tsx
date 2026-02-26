@@ -19,6 +19,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, Mail, Lock, User, Building2, Package } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { createUserWithOrganization } from '@/server/actions/users';
+import { translateAuthError } from '@/lib/utils';
 
 export default function SignupPage() {
   const router = useRouter();
@@ -99,11 +100,7 @@ export default function SignupPage() {
       });
 
       if (authError) {
-        if (authError.message === 'User already registered') {
-          setError('이미 가입된 이메일입니다.');
-        } else {
-          setError(authError.message);
-        }
+        setError(translateAuthError(authError.message));
         return;
       }
 
