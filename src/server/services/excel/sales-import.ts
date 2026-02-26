@@ -346,7 +346,13 @@ export async function importSalesData(
         const { processBatchInventoryTransactions } = await import("@/server/actions/inventory");
         await processBatchInventoryTransactions(batchItems, { skipRevalidate: true, skipActivityLog: true });
       } catch (error) {
-        console.warn("재고 차감 배치 처리 실패:", error instanceof Error ? error.message : error);
+        // 재고 차감 실패는 판매 기록 저장 자체는 성공이므로 오류로 중단하지 않고 경고로 사용자에게 안내
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.warn("재고 차감 배치 처리 실패:", errorMessage);
+        allErrors.push({
+          row: 0,
+          message: `재고 차감 처리 중 일부 오류 발생: ${errorMessage}`,
+        });
       }
     }
 

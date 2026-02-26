@@ -190,7 +190,7 @@ export async function createSalesRecord(
 /**
  * 판매 기록 삭제 (재고 복구 없음 - 조정으로 처리)
  */
-export async function deleteSalesRecord(id: string): Promise<{ success: boolean; error?: string }> {
+export async function deleteSalesRecord(id: string): Promise<{ success: boolean; message?: string; error?: string }> {
   try {
     const user = await requireAuth();
 
@@ -216,7 +216,11 @@ export async function deleteSalesRecord(id: string): Promise<{ success: boolean;
 
     revalidatePath("/analytics");
     revalidateTag(`analytics-${user.organizationId}`);
-    return { success: true };
+    return {
+      success: true,
+      message:
+        "판매 기록이 삭제되었습니다. 재고는 자동 원복되지 않으므로 재고 조정을 통해 수동으로 처리해주세요.",
+    };
   } catch (error) {
     console.error("판매 기록 삭제 오류:", error);
     return { success: false, error: "판매 기록 삭제에 실패했습니다" };

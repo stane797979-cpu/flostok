@@ -187,15 +187,17 @@ export async function importProductData(
 
     const skuToId = new Map(existingProducts.map((p) => [p.sku, p.id]));
 
-    // 기존 재고 배치 조회 (N+1 제거)
+    // 기존 재고 배치 조회 (N+1 제거) — reservedStock 포함하여 availableStock 계산에 활용
     const existingInventory = await db
-      .select({ id: inventory.id, productId: inventory.productId })
+      .select({ id: inventory.id, productId: inventory.productId, reservedStock: inventory.reservedStock })
       .from(inventory)
       .where(eq(inventory.organizationId, organizationId));
-    const inventoryByProductId = new Map(existingInventory.map((inv) => [inv.productId, inv.id]));
+    const inventoryByProductId = new Map(
+      existingInventory.map((inv) => [inv.productId, { id: inv.id, reservedStock: inv.reservedStock ?? 0 }])
+    );
 
     // 재고 업데이트/생성 배치 수집용
-    const inventoryUpdates: Array<{ invId: string; currentStock: number }> = [];
+    const inventoryUpdates: Array<{ invId: string; currentStock: number; reservedStock: number }> = [];
     const inventoryInserts: Array<{ productId: string; currentStock: number }> = [];
 
     for (let i = 0; i < rows.length; i++) {
@@ -243,9 +245,14 @@ export async function importProductData(
 
         // 재고수량이 있으면 배치 수집
         if (data.currentStock !== undefined) {
-          const invId = inventoryByProductId.get(existingId);
-          if (invId) {
-            inventoryUpdates.push({ invId, currentStock: data.currentStock });
+          const invEntry = inventoryByProductId.get(existingId);
+          if (invEntry) {
+            // availableStock = currentStock - reservedStock (예약재고 유지)
+            inventoryUpdates.push({
+              invId: invEntry.id,
+              currentStock: data.currentStock,
+              reservedStock: invEntry.reservedStock,
+            });
           } else {
             inventoryInserts.push({ productId: existingId, currentStock: data.currentStock });
           }
@@ -293,12 +300,13 @@ export async function importProductData(
     }
 
     // 재고 배치 UPDATE (기존) — Promise.all 병렬화
+    // availableStock = currentStock - reservedStock (예약재고를 차감하여 실제 가용재고 반영)
     if (inventoryUpdates.length > 0) {
       await Promise.all(
         inventoryUpdates.map((item) =>
           db.update(inventory).set({
             currentStock: item.currentStock,
-            availableStock: item.currentStock,
+            availableStock: Math.max(0, item.currentStock - item.reservedStock),
             updatedAt: new Date(),
           }).where(eq(inventory.id, item.invId))
         )

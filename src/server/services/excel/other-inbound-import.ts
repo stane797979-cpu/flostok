@@ -5,7 +5,7 @@
 import { db } from "@/server/db";
 import { products, inboundRecords } from "@/server/db/schema";
 import { eq, and, isNull, desc } from "drizzle-orm";
-import { parseExcelBuffer, sheetToJson, parseNumber } from "./parser";
+import { parseExcelBuffer, sheetToJson, parseNumber, parseExcelDate, formatDateToString } from "./parser";
 import { createOtherInbound } from "@/server/actions/inbound";
 
 /**
@@ -135,8 +135,12 @@ export async function importOtherInboundData(params: {
       // 선택 필드
       const location = String(getColumnValue(row, "location") || "").trim() || undefined;
       const lotNumber = String(getColumnValue(row, "lotNumber") || "").trim() || undefined;
-      const expiryDateRaw = String(getColumnValue(row, "expiryDate") || "").trim() || undefined;
       const notes = String(getColumnValue(row, "notes") || "").trim() || undefined;
+
+      // 유통기한: Excel 시리얼 숫자 및 비표준 형식을 올바르게 파싱
+      const expiryDateRawValue = getColumnValue(row, "expiryDate");
+      const expiryDateParsed = await parseExcelDate(expiryDateRawValue);
+      const expiryDate = expiryDateParsed ? formatDateToString(expiryDateParsed) : undefined;
 
       // 입고 처리
       const result = await createOtherInbound({
@@ -145,7 +149,7 @@ export async function importOtherInboundData(params: {
         quantity,
         location,
         lotNumber,
-        expiryDate: expiryDateRaw,
+        expiryDate,
         notes,
       });
 
