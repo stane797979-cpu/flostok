@@ -36,16 +36,35 @@ export async function GET(request: Request) {
             if (tempUser) {
               await db.update(users).set({ authId: user.id, updatedAt: new Date() }).where(eq(users.id, tempUser.id))
             } else {
-              // 완전 새 사용자: 기본 조직에 추가
-              const defaultOrg = await db.query.organizations.findFirst()
-              if (defaultOrg) {
+              // 완전 새 사용자: 전용 조직을 신규 생성하여 admin으로 등록
+              // 멀티테넌시 보안: 기존 조직에 임의 편입 금지
+              const userName = user.user_metadata?.name || user.email?.split('@')[0] || '사용자'
+              const orgName = `${userName}님의 조직`
+
+              // slug 중복 방지: 타임스탬프 suffix 추가
+              const baseSlug = (user.email?.split('@')[0] || 'org')
+                .toLowerCase()
+                .replace(/[^a-z0-9]/g, '-')
+                .slice(0, 40)
+              const slug = `${baseSlug}-${Date.now()}`
+
+              const [newOrg] = await db.insert(organizations).values({
+                name: orgName,
+                slug,
+                plan: 'free',
+              }).returning()
+
+              if (newOrg) {
                 await db.insert(users).values({
                   authId: user.id,
-                  organizationId: defaultOrg.id,
+                  organizationId: newOrg.id,
                   email: user.email || '',
-                  name: user.user_metadata?.name || user.email?.split('@')[0] || '사용자',
+                  name: userName,
                   role: 'admin',
                 })
+
+                // 온보딩 페이지로 리다이렉트 (조직 정보 설정 유도)
+                return NextResponse.redirect(new URL('/dashboard/onboarding', requestUrl.origin))
               }
             }
           }

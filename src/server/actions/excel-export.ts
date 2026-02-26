@@ -138,10 +138,10 @@ const exportMultipleOrdersSchema = z.object({
 
 /**
  * 복수 발주서 Excel 다운로드
+ * organizationId는 클라이언트 입력을 받지 않고 인증된 사용자의 조직 ID만 사용
  */
 export async function exportPurchaseOrdersToExcel(
-  orderIds: string[],
-  organizationId: string
+  orderIds: string[]
 ): Promise<{
   success: boolean;
   data?: {
@@ -166,7 +166,7 @@ export async function exportPurchaseOrdersToExcel(
       })
       .from(purchaseOrders)
       .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
-      .where(and(sql`${purchaseOrders.id} IN ${orderIds}`, eq(purchaseOrders.organizationId, organizationId)));
+      .where(and(inArray(purchaseOrders.id, orderIds), eq(purchaseOrders.organizationId, user.organizationId)));
 
     if (ordersData.length === 0) {
       return { success: false, error: "발주서를 찾을 수 없습니다" };

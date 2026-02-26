@@ -9,10 +9,16 @@ import {
   generateFallbackResponse,
   getErrorFallback,
 } from "@/lib/ai/fallback/rule-based";
+import { createClient } from "@/lib/supabase/server";
+import { withRateLimit } from "@/lib/redis-middleware";
 
 /**
  * AI 채팅 API Route
  * Anthropic Claude API + Tool Calling + Rule-based Fallback
+ *
+ * 보안:
+ * - 인증된 사용자만 접근 가능
+ * - 시간당 50회 Rate Limiting 적용
  */
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
@@ -57,6 +63,27 @@ Always be helpful, accurate, and proactive in providing SCM insights.`;
 
 export async function POST(req: NextRequest) {
   try {
+    // ── 1. 인증 체크 ──────────────────────────────────────────────────────────
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: "인증이 필요합니다" },
+        { status: 401 }
+      );
+    }
+
+    // ── 2. Rate Limiting (시간당 50회) ────────────────────────────────────────
+    const rateLimitResponse = await withRateLimit(req, {
+      maxRequests: 50,
+      windowSeconds: 3600,
+    });
+    if (rateLimitResponse) {
+      return rateLimitResponse;
+    }
+
+    // ── 3. 요청 파싱 ──────────────────────────────────────────────────────────
     const { messages } = await req.json();
 
     if (!messages || !Array.isArray(messages)) {

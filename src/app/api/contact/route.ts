@@ -3,13 +3,14 @@
  * POST /api/contact
  *
  * 인증 불필요 — 마케팅 페이지에서 누구나 문의 가능
- * Rate limiting은 추후 Upstash Redis로 추가 예정
+ * IP 기반 Rate Limiting: 시간당 10회
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { sendEmail } from "@/lib/email";
 import { COMPANY } from "@/lib/constants/homepage-data";
+import { withRateLimit } from "@/lib/redis-middleware";
 
 // ============================================
 // 입력 유효성 검증
@@ -147,6 +148,15 @@ function escapeHtml(str: string): string {
 
 export async function POST(request: NextRequest) {
   try {
+    // IP 기반 Rate Limiting: 시간당 10회 (스팸 및 남용 방지)
+    const rateLimitResponse = await withRateLimit(request, {
+      maxRequests: 10,
+      windowSeconds: 3600,
+    });
+    if (rateLimitResponse) {
+      return rateLimitResponse;
+    }
+
     const body = await request.json();
     const data = contactSchema.parse(body);
 
