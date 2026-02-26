@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Upload, Download, Calculator, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { Upload, Download, Calculator, ChevronLeft, ChevronRight, Loader2, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { PSIFilters } from "./psi-filters";
 import { PSITable } from "./psi-table";
 import { uploadPSIPlanExcel, generateSOPQuantities, getPSIData, type SOPMethod } from "@/server/actions/psi";
@@ -136,6 +136,30 @@ export function PSIClient({ data: initialData }: PSIClientProps) {
   const belowSafetyCount = data.products.filter(
     (p) => p.currentStock > 0 && p.currentStock < p.safetyStock
   ).length;
+
+  // 부족 개월 수 계산: 미래 계획 기말재고 < 안전재고인 (제품, 월) 조합 수
+  const now = new Date();
+  const currentPeriodStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+  const shortageMonthCount = useMemo(() => {
+    let count = 0;
+    for (const product of data.products) {
+      for (const month of product.months) {
+        // 미래 기간만 계산
+        if (month.period <= currentPeriodStr) continue;
+        if (month.plannedEndingStock < product.safetyStock) {
+          count++;
+        }
+      }
+    }
+    return count;
+  }, [data.products, currentPeriodStr]);
+
+  // 미래 기간 총 (제품 × 미래월) 조합 수
+  const totalFutureMonthCount = useMemo(() => {
+    const futureMonths = data.periods.filter((p) => p > currentPeriodStr).length;
+    return data.products.length * futureMonths;
+  }, [data.products, data.periods, currentPeriodStr]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -388,6 +412,34 @@ export function PSIClient({ data: initialData }: PSIClientProps) {
           </Button>
         </div>
       </div>
+
+      {/* 재고 부족 경고 배너 */}
+      {shortageMonthCount > 0 ? (
+        <div className="flex items-start gap-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-4 py-3">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+          <div>
+            <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+              향후 {data.periods.filter((p) => p > currentPeriodStr).length}개월 중{" "}
+              <span className="text-red-600 dark:text-red-400">{shortageMonthCount}건</span> 재고 부족 예상
+            </p>
+            <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">
+              계획 기말재고가 안전재고 미달인 (제품 × 월) 조합입니다. PSI 테이블에서 붉은색 셀을 확인하세요.
+            </p>
+          </div>
+        </div>
+      ) : totalFutureMonthCount > 0 ? (
+        <div className="flex items-start gap-3 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3">
+          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+          <div>
+            <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
+              향후 {data.periods.filter((p) => p > currentPeriodStr).length}개월 재고 충분
+            </p>
+            <p className="mt-0.5 text-xs text-emerald-700 dark:text-emerald-400">
+              전체 제품의 계획 기말재고가 안전재고 이상으로 유지됩니다.
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       {/* 범례 */}
       <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">

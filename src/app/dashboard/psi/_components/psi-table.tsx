@@ -69,7 +69,55 @@ function StockCell({ value, safetyStock, italic }: { value: number; safetyStock:
   );
 }
 
-/** 월별 8개 서브컬럼 정의 */
+/**
+ * 계획 기말재고 셀 — 안전재고 대비 경고 색상 적용
+ * italic=true인 경우(미래 계획)만 경고 스타일 적용
+ */
+function PlannedEndingStockCell({ value, safetyStock, italic }: { value: number; safetyStock: number; italic?: boolean }) {
+  // 과거 실적 셀은 일반 StockCell과 동일하게 처리
+  if (!italic) {
+    if (value === 0) return <span className="text-slate-300 text-[11px]">-</span>;
+    return (
+      <span className={cn(
+        "tabular-nums text-[11px] font-medium",
+        value === 0 ? "text-red-600 font-bold" : value < safetyStock ? "text-orange-600" : "text-slate-900 dark:text-slate-100"
+      )}>
+        {value.toLocaleString()}
+      </span>
+    );
+  }
+
+  // 미래 계획 셀: 재고 부족 경고 스타일
+  if (value === 0) {
+    return (
+      <span className="flex flex-col items-center gap-0.5">
+        <span className="tabular-nums text-[11px] font-bold italic text-red-600 dark:text-red-400">
+          {value.toLocaleString()}
+        </span>
+        <span className="text-[8px] font-semibold bg-red-600 dark:bg-red-500 text-white rounded px-0.5 leading-tight">
+          품절
+        </span>
+      </span>
+    );
+  }
+  if (value < safetyStock) {
+    return (
+      <span className={cn(
+        "tabular-nums text-[11px] font-medium italic",
+        "text-red-600 dark:text-red-400"
+      )}>
+        {value.toLocaleString()}
+      </span>
+    );
+  }
+  return (
+    <span className="tabular-nums text-[11px] font-medium italic text-slate-900 dark:text-slate-100">
+      {value.toLocaleString()}
+    </span>
+  );
+}
+
+/** 월별 9개 서브컬럼 정의 (부족분 추가) */
 const SUB_COLUMNS = [
   { key: "forecast", label: "수요예측(F/C)", shortLabel: "F/C" },
   { key: "sop", label: "SCM 가이드", shortLabel: "SCM" },
@@ -79,6 +127,7 @@ const SUB_COLUMNS = [
   { key: "outboundActual", label: "출고(실적)", shortLabel: "출고A" },
   { key: "endingPlan", label: "기말(예상)", shortLabel: "기말P" },
   { key: "endingActual", label: "기말(실적)", shortLabel: "기말A" },
+  { key: "shortage", label: "부족분", shortLabel: "부족분" },
 ] as const;
 
 const ABC_XYZ_ORDER: Record<string, number> = {
@@ -205,7 +254,7 @@ export function PSITable({ products, periods }: PSITableProps) {
                   "text-center border-r py-1",
                   period === currentPeriod && "bg-blue-50 dark:bg-blue-950"
                 )}
-                colSpan={8}
+                colSpan={9}
               >
                 <span className="font-bold text-xs">{formatPeriodLabel(period)}</span>
               </TableHead>
@@ -224,6 +273,8 @@ export function PSITable({ products, periods }: PSITableProps) {
                       idx === SUB_COLUMNS.length - 1 && "border-r",
                       // 계획컬럼 배경
                       (col.key === "forecast" || col.key === "sop" || col.key === "inboundPlan" || col.key === "outboundPlan" || col.key === "endingPlan") && "bg-purple-50/50 dark:bg-purple-950/30",
+                      // 부족분 컬럼 강조
+                      col.key === "shortage" && "bg-red-50/60 dark:bg-red-950/20 text-red-600 dark:text-red-400 font-medium",
                     )}
                   >
                     {col.shortLabel}
@@ -274,8 +325,22 @@ export function PSITable({ products, periods }: PSITableProps) {
               </TableCell>
               {product.months.map((month) => {
                 const isCurrent = month.period === currentPeriod;
+                const isFuture = month.period > currentPeriod;
                 const bg = isCurrent ? "bg-blue-50/50 dark:bg-blue-950/50" : "";
                 const planBg = "bg-purple-50/30 dark:bg-purple-950/20";
+
+                // 부족분: 미래 계획 기말재고 기준, 과거/현재는 실적 기준
+                const endingForShortage = isFuture ? month.plannedEndingStock : month.endingStock;
+                const shortage = Math.max(0, product.safetyStock - endingForShortage);
+
+                // 기말P 셀 배경 (미래 계획 기간만)
+                const endingPlanBg = isFuture
+                  ? month.plannedEndingStock <= 0
+                    ? "bg-red-100 dark:bg-red-900/40"
+                    : month.plannedEndingStock < product.safetyStock
+                      ? "bg-red-50 dark:bg-red-950/30"
+                      : ""
+                  : "";
 
                 return (
                   <Fragment key={month.period}>
@@ -320,13 +385,23 @@ export function PSITable({ products, periods }: PSITableProps) {
                     <TableCell className={cn("text-center p-0.5", bg)}>
                       <NumCell value={month.outbound} color="text-orange-600" />
                     </TableCell>
-                    {/* 기말(예상) */}
-                    <TableCell className={cn("text-center p-0.5", bg, planBg)}>
-                      <StockCell value={month.plannedEndingStock} safetyStock={product.safetyStock} italic />
+                    {/* 기말(예상) — 안전재고 미달 시 배경 강조 */}
+                    <TableCell className={cn("text-center p-0.5", bg, planBg, endingPlanBg)}>
+                      <PlannedEndingStockCell value={month.plannedEndingStock} safetyStock={product.safetyStock} italic={isFuture} />
                     </TableCell>
                     {/* 기말(실적) */}
-                    <TableCell className={cn("text-center p-0.5 border-r", bg)}>
+                    <TableCell className={cn("text-center p-0.5", bg)}>
                       <StockCell value={month.endingStock} safetyStock={product.safetyStock} />
+                    </TableCell>
+                    {/* 부족분 */}
+                    <TableCell className={cn("text-center p-0.5 border-r", bg, "bg-red-50/40 dark:bg-red-950/10")}>
+                      {shortage > 0 ? (
+                        <span className="tabular-nums text-[11px] font-semibold text-red-600 dark:text-red-400">
+                          {shortage.toLocaleString()}
+                        </span>
+                      ) : (
+                        <span className="text-slate-300 text-[11px]">-</span>
+                      )}
                     </TableCell>
                   </Fragment>
                 );
@@ -340,6 +415,6 @@ export function PSITable({ products, periods }: PSITableProps) {
 }
 
 // React Fragment for grouping without extra DOM
-function Fragment({ children, ...props }: { children: React.ReactNode; [key: string]: unknown }) {
+function Fragment({ children, ..._ }: { children: React.ReactNode; [key: string]: unknown }) {
   return <>{children}</>;
 }
