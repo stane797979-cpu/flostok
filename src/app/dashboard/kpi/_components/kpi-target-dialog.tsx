@@ -12,7 +12,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { saveKPITargets, DEFAULT_TARGETS } from "@/server/actions/kpi";
+import { saveKPITargets } from "@/server/actions/kpi";
+import { DEFAULT_KPI_TARGETS } from "@/server/services/scm/kpi-improvement";
 import type { KPITarget } from "@/server/services/scm/kpi-improvement";
 import { Loader2 } from "lucide-react";
 
@@ -126,7 +127,7 @@ export function KpiTargetDialog({
   };
 
   const handleReset = () => {
-    setValues(DEFAULT_TARGETS);
+    setValues(DEFAULT_KPI_TARGETS);
   };
 
   const handleSave = () => {

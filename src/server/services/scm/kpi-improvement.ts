@@ -23,6 +23,16 @@ export interface KPITarget {
   orderFulfillmentRate: number;
 }
 
+export const DEFAULT_KPI_TARGETS: KPITarget = {
+  inventoryTurnoverRate: 10,
+  averageInventoryDays: 40,
+  inventoryAccuracy: 98,
+  stockoutRate: 2,
+  onTimeOrderRate: 90,
+  averageLeadTime: 5,
+  orderFulfillmentRate: 95,
+};
+
 export interface ImprovementProposal {
   id: string;
   title: string;

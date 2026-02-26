@@ -27,10 +27,19 @@ import { Badge } from "@/components/ui/badge";
 import { Building2, PackageX, TrendingUp, TrendingDown, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { WarehouseComparisonSummary, WarehouseMetrics } from "@/server/actions/warehouse-analytics";
-import { getWarehouseTypeLabel } from "@/server/actions/warehouse-analytics";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 
 // ─── 유틸 ────────────────────────────────────────────────────────────────────
+
+function getWarehouseTypeLabel(type: string): string {
+  switch (type) {
+    case "MAIN":       return "본사";
+    case "REGIONAL":   return "지역";
+    case "VIRTUAL":    return "가상";
+    case "THIRD_PARTY": return "3PL";
+    default:           return type;
+  }
+}
 
 function formatCurrency(value: number): string {
   if (value >= 100_000_000) return `${(value / 100_000_000).toFixed(1)}억원`;

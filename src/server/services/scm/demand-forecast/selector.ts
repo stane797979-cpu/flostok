@@ -16,6 +16,7 @@ import { ForecastInput, ForecastResult, ForecastMetadata, ForecastMethod } from 
 import { smaMethod } from "./methods/simple-moving-average";
 import { sesMethod, sesMethodWithGrade, simpleExponentialSmoothing, getDefaultAlpha } from "./methods/exponential-smoothing";
 import { holtsMethod_auto, detectTrend } from "./methods/holts-method";
+import { crostonMethod } from "./methods/croston";
 import { calculateMAPE } from "./accuracy/metrics";
 import { detectSeasonality, isSignificantSeasonality, applySeasonalAdjustment } from "./methods/seasonal-adjustment";
 
@@ -38,6 +39,10 @@ function extractMetadata(input: ForecastInput): ForecastMetadata {
     }
   }
 
+  // 0값 비율 계산 (간헐적 수요 판단용)
+  const zeroCount = values.filter((v) => v === 0).length;
+  const zeroProportion = dataMonths > 0 ? zeroCount / dataMonths : 0;
+
   return {
     dataMonths,
     xyzGrade: input.xyzGrade,
@@ -48,6 +53,7 @@ function extractMetadata(input: ForecastInput): ForecastMetadata {
     isOverstock: input.isOverstock,
     hasSeasonality,
     seasonalIndices,
+    zeroProportion,
   };
 }
 
@@ -98,7 +104,16 @@ function getAvailableMethods(metadata: ForecastMetadata): ForecastMethod[] {
     }
   }
 
-  // ABC C등급: 복잡한 방법 제거 (SMA 선호)
+  // Croston: 4개월 이상 && (0값 비율 > 30% OR Z등급)
+  const isIntermittent =
+    metadata.zeroProportion !== undefined && metadata.zeroProportion > 0.3;
+  const isZGrade = metadata.xyzGrade === "Z";
+
+  if (metadata.dataMonths >= crostonMethod.minDataPoints && (isIntermittent || isZGrade)) {
+    methods.push(crostonMethod);
+  }
+
+  // ABC C등급: 복잡한 방법 제거 (SMA 선호, 단 Croston은 유지)
   if (metadata.abcGrade === "C" && methods.length > 1) {
     const filtered = methods.filter((m) => m.name !== "Holts");
     if (filtered.length > 0) return filtered;
@@ -178,10 +193,15 @@ function buildSelectionReason(
 
   if (metadata.isOverstock) factors.push("재고과다(보수적 조정)");
 
+  if (metadata.zeroProportion !== undefined && metadata.zeroProportion > 0.3) {
+    factors.push(`0값 비율 ${(metadata.zeroProportion * 100).toFixed(0)}%`);
+  }
+
   const methodDesc: Record<string, string> = {
     SMA: "단순이동평균(SMA)",
     SES: `지수평활법(SES, α=${params.alpha?.toFixed(2) ?? "auto"})`,
     Holts: `이중지수평활(Holt's, α=${params.alpha?.toFixed(2) ?? "auto"}, β=${params.beta?.toFixed(2) ?? "auto"})`,
+    Croston: `크로스턴법(Croston, α=${params.alpha?.toFixed(2) ?? "0.15"}) — 간헐적 수요 전용`,
   };
 
   return `${factors.join(" · ")} → ${methodDesc[methodName] || methodName}`;
@@ -220,10 +240,25 @@ export function selectBestMethod(input: ForecastInput): ForecastResult {
   const validationResults = crossValidateMethods(values, availableMethods);
   validationResults.sort((a, b) => a.mape - b.mape);
 
-  // Z등급: 단순 방법 선호
+  // Z등급: 간헐적 수요가 높으면 Croston 우선, 아니면 단순 방법 선호
   if (metadata.xyzGrade === "Z") {
+    // Croston이 후보에 있고, 0값 비율이 높은 경우 Croston 우선 선택
+    const crostonCandidate = validationResults.find((r) => r.method.name === "Croston");
+    if (
+      crostonCandidate &&
+      metadata.zeroProportion !== undefined &&
+      metadata.zeroProportion > 0.3 &&
+      crostonCandidate.mape < validationResults[0].mape * 1.3
+    ) {
+      const result = crostonCandidate.method.forecast(values, input.periods);
+      result.mape = crostonCandidate.mape;
+      result.confidence = crostonCandidate.mape < 30 ? "medium" : "low";
+      result.selectionReason = buildSelectionReason(metadata, result.method, result.parameters);
+      return postProcess(result, metadata, input);
+    }
+
     const simpleMethod = validationResults.find(
-      (r) => r.method.name === "SMA" || r.method.name === "SES"
+      (r) => r.method.name === "SMA" || r.method.name === "SES" || r.method.name === "Croston"
     );
     if (simpleMethod && simpleMethod.mape < validationResults[0].mape * 1.2) {
       const result = simpleMethod.method.forecast(values, input.periods);
@@ -296,11 +331,17 @@ function postProcess(
  * 규칙 기반 방법 선택 (교차 검증 없이)
  */
 export function selectMethodByRules(metadata: ForecastMetadata): ForecastMethod {
-  const { dataMonths, xyzGrade, abcGrade, hasTrend, yoyGrowthRate } = metadata;
+  const { dataMonths, xyzGrade, abcGrade, hasTrend, yoyGrowthRate, zeroProportion } = metadata;
 
   if (dataMonths < 3) return smaMethod;
 
-  // C+Z: 항상 SMA
+  // 간헐적 수요 감지: Z등급 + 0값 비율 > 30% + 4개월 이상 → Croston 우선
+  const isIntermittent = zeroProportion !== undefined && zeroProportion > 0.3;
+  if (xyzGrade === "Z" && isIntermittent && dataMonths >= crostonMethod.minDataPoints) {
+    return crostonMethod;
+  }
+
+  // C+Z: Croston 조건 불충족 시 SMA
   if (abcGrade === "C" && xyzGrade === "Z") return smaMethod;
 
   if (dataMonths < 6) {
@@ -317,7 +358,7 @@ export function selectMethodByRules(metadata: ForecastMetadata): ForecastMethod 
 
   if (xyzGrade === "X") return sesMethodWithGrade("X");
   if (xyzGrade === "Y") return hasTrend ? holtsMethod_auto : sesMethod;
-  if (xyzGrade === "Z") return smaMethod;
+  if (xyzGrade === "Z") return isIntermittent ? crostonMethod : smaMethod;
 
   return sesMethod;
 }

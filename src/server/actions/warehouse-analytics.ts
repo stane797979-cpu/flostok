@@ -47,7 +47,7 @@ export interface WarehouseComparisonSummary {
 
 // ─── 창고 유형 한국어 변환 ──────────────────────────────────────────────────────
 
-export function getWarehouseTypeLabel(type: string): string {
+function getWarehouseTypeLabel(type: string): string {
   switch (type) {
     case "MAIN":       return "본사";
     case "REGIONAL":   return "지역";

@@ -67,12 +67,14 @@ const METHOD_BUSINESS_NAMES: Record<ForecastMethodType, string> = {
   SMA: '과거 평균 기반 예측',
   SES: '최근 변화 반영 예측',
   Holts: '성장/감소 추세 반영 예측',
+  Croston: '간헐적 수요 전문 예측',
 }
 
 const METHOD_DESCRIPTIONS: Record<ForecastMethodType, string> = {
   SMA: '최근 몇 개월의 판매량을 단순 평균하여 다음 달을 예측합니다. 직관적이고 안정적인 방법으로, 판매가 일정한 제품에 가장 적합합니다.',
   SES: '모든 과거 데이터를 활용하되, 최근 판매 변화에 더 높은 비중을 둡니다. 변동이 있지만 큰 추세는 없는 제품에 적합합니다.',
   Holts: '판매량의 수준과 증감 추세를 동시에 추적합니다. 꾸준히 성장하거나 감소하는 제품의 미래를 더 정확하게 예측합니다.',
+  Croston: '판매가 간헐적으로 발생하는 제품(부품, 틈새 제품 등)에 특화된 방법입니다. 수요 크기와 발생 간격을 분리하여 예측하므로, 0값이 많은 데이터에서 다른 방법보다 정확합니다.',
 }
 
 const SUPPLY_STRATEGIES: Record<string, SupplyStrategy> = {
@@ -124,6 +126,9 @@ function mapAnswersToMetadata(answers: GuideAnswers): ForecastMetadata {
     unknown: { hasTrend: false },
   }
 
+  // 불규칙 수요 패턴 → 간헐적 수요로 가정 (0값 비율 추정)
+  const zeroProportion = answers.salesPattern === 'irregular' ? 0.4 : 0;
+
   return {
     dataMonths: MONTHS_MAP[answers.dataPeriod],
     xyzGrade: XYZ_MAP[answers.salesPattern],
@@ -131,6 +136,7 @@ function mapAnswersToMetadata(answers: GuideAnswers): ForecastMetadata {
     hasTrend: trendMap[answers.trend].hasTrend,
     yoyGrowthRate: trendMap[answers.trend].yoyGrowthRate,
     isOverstock: answers.inventoryStatus === 'excess',
+    zeroProportion,
   }
 }
 
@@ -222,6 +228,10 @@ function buildWarnings(metadata: ForecastMetadata, answers: GuideAnswers): strin
 
   if (metadata.dataMonths >= 3 && metadata.dataMonths < 6 && metadata.abcGrade === 'A') {
     warnings.push('핵심 제품의 데이터가 6개월 미만입니다. 더 정교한 예측을 위해 데이터가 쌓이면 재분석을 권장합니다.')
+  }
+
+  if (metadata.xyzGrade === 'Z' && metadata.zeroProportion !== undefined && metadata.zeroProportion > 0.3) {
+    warnings.push('간헐적 수요 패턴이 감지되었습니다. 안전재고를 높게 설정하고 긴급발주 체계를 마련하세요.')
   }
 
   return warnings
@@ -543,6 +553,7 @@ export async function saveBulkForecastsToDB(
       SMA: 'sma_3',
       SES: 'ses',
       Holts: 'holt',
+      Croston: 'ses', // Croston은 DB enum에 없으므로 SES로 매핑 (SES 기반 방법)
     }
 
     // 전체 기간 목록 추출

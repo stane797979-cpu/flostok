@@ -10,6 +10,7 @@ import { unstable_cache } from "next/cache";
 import { requireAuth } from "./auth-helpers";
 import { measureKPIMetrics, getKPITrendData } from "@/server/services/scm/kpi-measurement";
 import type { KPIMetrics, KPITarget } from "@/server/services/scm/kpi-improvement";
+import { DEFAULT_KPI_TARGETS } from "@/server/services/scm/kpi-improvement";
 import type { KPITrend, KPIFilterOptions } from "@/server/services/scm/kpi-measurement";
 import { db } from "@/server/db";
 import {
@@ -31,16 +32,7 @@ export interface KPIDashboardData {
   targets: KPITarget;
 }
 
-/** 기본 목표값 (추후 조직별 설정 가능하도록) */
-export const DEFAULT_TARGETS: KPITarget = {
-  inventoryTurnoverRate: 10,
-  averageInventoryDays: 40,
-  inventoryAccuracy: 98,
-  stockoutRate: 2,
-  onTimeOrderRate: 90,
-  averageLeadTime: 5,
-  orderFulfillmentRate: 95,
-};
+const DEFAULT_TARGETS = DEFAULT_KPI_TARGETS;
 
 /**
  * 조직별 KPI 목표값 조회 (organizations.settings.kpiTargets 저장)
