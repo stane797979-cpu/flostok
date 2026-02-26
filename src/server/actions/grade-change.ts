@@ -34,6 +34,7 @@ export interface GradeChangeResult {
   trend: GradeTrendMonth[];
   totalProducts: number;
   changedCount: number;
+  periodLabel: string;
 }
 
 // 등급 순서 (높은 등급 = 높은 숫자)
@@ -194,6 +195,14 @@ async function _getGradeChangeInternal(orgId: string): Promise<GradeChangeResult
 
   const trend = Array.from(trendMap.values()).slice(-6);
 
+  // 비교 기간 라벨 생성
+  const periods = Array.from(new Set(history.map((h) => h.period).filter(Boolean))).sort();
+  const periodLabel = periods.length >= 2
+    ? `${periods[periods.length - 2]} vs ${periods[periods.length - 1]}`
+    : periods.length === 1
+      ? `${periods[0]} (이전 기간 없음)`
+      : "등급 이력 없음";
+
   return {
     changes: changes.sort((a, b) => {
       // high risk 먼저, downgrade 먼저
@@ -203,6 +212,7 @@ async function _getGradeChangeInternal(orgId: string): Promise<GradeChangeResult
     trend,
     totalProducts: productList.length,
     changedCount: changes.filter((c) => c.changeType !== "lateral" && c.changeType !== "new").length,
+    periodLabel,
   };
 }
 

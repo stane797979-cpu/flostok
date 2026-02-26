@@ -254,7 +254,7 @@ async function _getABCXYZAnalysisInternal(orgId: string) {
       yPercentage: total > 0 ? (yCount / total) * 100 : 0,
       zCount,
       zPercentage: total > 0 ? (zCount / total) * 100 : 0,
-      period: '최근 6개월',
+      period: `${startDate} ~ ${new Date().toISOString().split('T')[0]} (최근 6개월)`,
     },
     insights: {
       totalRevenue,

@@ -25,6 +25,7 @@ export interface TurnoverSummary {
   lowTurnoverCount: number;
   top5Fastest: TurnoverData[];
   top5Slowest: TurnoverData[];
+  periodLabel: string;
 }
 
 function classifyTurnoverStatus(rate: number): TurnoverData["status"] {
@@ -197,6 +198,7 @@ export async function getInventoryTurnoverData(): Promise<TurnoverSummary> {
         lowTurnoverCount,
         top5Fastest,
         top5Slowest,
+        periodLabel: `${oneYearAgoStr} ~ ${todayStr} (최근 1년)`,
       };
     },
     [`turnover-data-${orgId}`],

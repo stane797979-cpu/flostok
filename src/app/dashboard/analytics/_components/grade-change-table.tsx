@@ -193,6 +193,13 @@ export function GradeChangeTable({ data }: GradeChangeTableProps) {
 
   return (
     <div className="space-y-6">
+      {/* 기준 기간 */}
+      <div className="flex items-center gap-2">
+        <Badge variant="outline" className="text-xs px-2.5 py-1">
+          기준: {data.periodLabel}
+        </Badge>
+      </div>
+
       {/* 요약 카드 */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card>

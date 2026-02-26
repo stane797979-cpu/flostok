@@ -307,6 +307,13 @@ export function DemandForecastChart() {
 
   return (
     <div className="space-y-4">
+      {/* 기준 기간 */}
+      <div className="flex items-center gap-2">
+        <Badge variant="outline" className="text-xs px-2.5 py-1">
+          기준: 최근 12개월 판매 데이터 기반 예측
+        </Badge>
+      </div>
+
       {/* 제품 선택 + 방법 선택 */}
       <Card>
         <CardHeader className="pb-3">

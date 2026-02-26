@@ -22,17 +22,22 @@ export interface FulfillmentRateSummary {
   overForecastCount: number;
   underForecastCount: number;
   periods: string[];
+  periodLabel: string;
 }
 
-function buildSummary(items: FulfillmentRateItem[], periodsSet: Set<string>): FulfillmentRateSummary {
+function buildSummary(items: FulfillmentRateItem[], periodsSet: Set<string>, periodLabel?: string): FulfillmentRateSummary {
   const rates = items.filter((i) => i.forecastQty > 0).map((i) => i.fulfillmentRate);
   const avgRate = rates.length > 0 ? rates.reduce((s, r) => s + r, 0) / rates.length : 0;
+  const sortedPeriods = Array.from(periodsSet).sort();
   return {
     items,
     avgFulfillmentRate: Math.round(avgRate * 10) / 10,
     overForecastCount: items.filter((i) => i.fulfillmentRate > 110).length,
     underForecastCount: items.filter((i) => i.fulfillmentRate < 90).length,
-    periods: Array.from(periodsSet).sort(),
+    periods: sortedPeriods,
+    periodLabel: periodLabel || (sortedPeriods.length > 0
+      ? `${sortedPeriods[0]} ~ ${sortedPeriods[sortedPeriods.length - 1]} (최근 6개월)`
+      : "데이터 없음"),
   };
 }
 
@@ -108,7 +113,7 @@ async function _getFulfillmentRateInternal(orgId: string): Promise<FulfillmentRa
     }
 
     if (productMonthly.size === 0) {
-      return { items: [], avgFulfillmentRate: 0, overForecastCount: 0, underForecastCount: 0, periods: [] };
+      return { items: [], avgFulfillmentRate: 0, overForecastCount: 0, underForecastCount: 0, periods: [], periodLabel: "데이터 없음" };
     }
 
     const productMap = new Map(productList.map((p) => [p.id, p]));
@@ -214,7 +219,7 @@ export async function getFulfillmentRateData(): Promise<FulfillmentRateSummary> 
   const user = await getCurrentUser();
   const orgId = user?.organizationId;
   if (!orgId) {
-    return { items: [], avgFulfillmentRate: 0, overForecastCount: 0, underForecastCount: 0, periods: [] };
+    return { items: [], avgFulfillmentRate: 0, overForecastCount: 0, underForecastCount: 0, periods: [], periodLabel: "데이터 없음" };
   }
 
   return unstable_cache(
