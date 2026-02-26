@@ -30,6 +30,9 @@ const ActivityLogTab = dynamic(
 const PermissionsTab = dynamic(
   () => import("./_components/permissions-tab").then((m) => ({ default: m.PermissionsTab }))
 );
+const AlertSettingsTab = dynamic(
+  () => import("./_components/alert-settings-tab").then((m) => ({ default: m.AlertSettingsTab }))
+);
 
 export default async function SettingsPage({
   searchParams,
@@ -37,7 +40,7 @@ export default async function SettingsPage({
   searchParams: Promise<{ tab?: string }>;
 }) {
   const { tab } = await searchParams;
-  const validTabs = ["account", "data", "organization", "users", "permissions", "policy", "api", "notifications", "activity"];
+  const validTabs = ["account", "data", "organization", "users", "permissions", "policy", "api", "notifications", "alert-settings", "activity"];
   const defaultTab = tab && validTabs.includes(tab) ? tab : "account";
 
   // 실제 로그인 사용자의 조직 ID 사용
@@ -62,7 +65,7 @@ export default async function SettingsPage({
 
       <Tabs defaultValue={defaultTab} className="space-y-4">
         <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
-          <TabsList className="inline-flex w-auto min-w-full md:grid md:w-full md:grid-cols-9">
+          <TabsList className="inline-flex w-auto min-w-full md:grid md:w-full md:grid-cols-10">
             <TabsTrigger value="account" className="whitespace-nowrap">내 계정</TabsTrigger>
             <TabsTrigger value="data" className="whitespace-nowrap">데이터 관리</TabsTrigger>
             <TabsTrigger value="organization" className="whitespace-nowrap">조직 설정</TabsTrigger>
@@ -71,6 +74,7 @@ export default async function SettingsPage({
             <TabsTrigger value="policy" className="whitespace-nowrap">발주 정책</TabsTrigger>
             <TabsTrigger value="api" className="whitespace-nowrap">API 키</TabsTrigger>
             <TabsTrigger value="notifications" className="whitespace-nowrap">알림 테스트</TabsTrigger>
+            <TabsTrigger value="alert-settings" className="whitespace-nowrap">알림 설정</TabsTrigger>
             <TabsTrigger value="activity" className="whitespace-nowrap">활동 로그</TabsTrigger>
           </TabsList>
         </div>
@@ -105,6 +109,10 @@ export default async function SettingsPage({
 
         <TabsContent value="notifications" className="space-y-4">
           <NotificationTest />
+        </TabsContent>
+
+        <TabsContent value="alert-settings" className="space-y-4">
+          <AlertSettingsTab />
         </TabsContent>
 
         <TabsContent value="activity" className="space-y-4">
