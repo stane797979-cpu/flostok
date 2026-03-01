@@ -65,8 +65,16 @@ export async function GET(request: NextRequest) {
       allOrganizations.map(async (org) => {
         const inventoryItems = await db
           .select({
-            inventory,
-            product: products,
+            inventory: {
+              currentStock: inventory.currentStock,
+            },
+            product: {
+              id: products.id,
+              name: products.name,
+              sku: products.sku,
+              safetyStock: products.safetyStock,
+              reorderPoint: products.reorderPoint,
+            },
           })
           .from(inventory)
           .innerJoin(products, eq(products.id, inventory.productId))

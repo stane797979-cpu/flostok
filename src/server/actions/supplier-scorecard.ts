@@ -49,46 +49,72 @@ export async function getSupplierScorecards(): Promise<
       return [];
     }
 
-    // 2. 공급자별 납기 준수율 집계
+    // 2. 공급자별 납기 준수율 집계 + 불량률 집계를 동시에 실행
     //    완료/입고된 발주 중 정시 입고 비율 계산
     //    정시 기준: actualDate <= expectedDate + 1일 (1일 이내 지연 허용)
-    const deliveryRows = await db
-      .select({
-        supplierId: purchaseOrders.supplierId,
-        totalCompleted: sql<number>`count(*)`,
-        onTimeCount: sql<number>`
-          count(*) filter (
-            where ${purchaseOrders.actualDate} is not null
-            and ${purchaseOrders.expectedDate} is not null
-            and ${purchaseOrders.actualDate}::date <= ${purchaseOrders.expectedDate}::date + interval '1 day'
+    const [deliveryRows, defectRows] = await Promise.all([
+      db
+        .select({
+          supplierId: purchaseOrders.supplierId,
+          totalCompleted: sql<number>`count(*)`,
+          onTimeCount: sql<number>`
+            count(*) filter (
+              where ${purchaseOrders.actualDate} is not null
+              and ${purchaseOrders.expectedDate} is not null
+              and ${purchaseOrders.actualDate}::date <= ${purchaseOrders.expectedDate}::date + interval '1 day'
+            )
+          `,
+          actualLeadTimeSum: sql<number>`
+            sum(
+              case
+                when ${purchaseOrders.actualDate} is not null and ${purchaseOrders.orderDate} is not null
+                then (${purchaseOrders.actualDate}::date - ${purchaseOrders.orderDate}::date)
+                else null
+              end
+            )
+          `,
+          actualLeadTimeCount: sql<number>`
+            count(*) filter (
+              where ${purchaseOrders.actualDate} is not null and ${purchaseOrders.orderDate} is not null
+            )
+          `,
+        })
+        .from(purchaseOrders)
+        .where(
+          and(
+            eq(purchaseOrders.organizationId, orgId),
+            isNull(purchaseOrders.deletedAt),
+            isNotNull(purchaseOrders.supplierId),
+            isNotNull(purchaseOrders.actualDate),
+            sql`${purchaseOrders.status} in ('received', 'completed')`
           )
-        `,
-        actualLeadTimeSum: sql<number>`
-          sum(
-            case
-              when ${purchaseOrders.actualDate} is not null and ${purchaseOrders.orderDate} is not null
-              then (${purchaseOrders.actualDate}::date - ${purchaseOrders.orderDate}::date)
-              else null
-            end
-          )
-        `,
-        actualLeadTimeCount: sql<number>`
-          count(*) filter (
-            where ${purchaseOrders.actualDate} is not null and ${purchaseOrders.orderDate} is not null
-          )
-        `,
-      })
-      .from(purchaseOrders)
-      .where(
-        and(
-          eq(purchaseOrders.organizationId, orgId),
-          isNull(purchaseOrders.deletedAt),
-          isNotNull(purchaseOrders.supplierId),
-          isNotNull(purchaseOrders.actualDate),
-          sql`${purchaseOrders.status} in ('received', 'completed')`
         )
-      )
-      .groupBy(purchaseOrders.supplierId);
+        .groupBy(purchaseOrders.supplierId),
+
+      // 3. 공급자별 불량률 집계
+      //    inbound_records: rejectedQuantity / receivedQuantity
+      db
+        .select({
+          supplierId: purchaseOrders.supplierId,
+          totalReceived: sql<number>`sum(${inboundRecords.receivedQuantity})`,
+          totalRejected: sql<number>`sum(${inboundRecords.rejectedQuantity})`,
+        })
+        .from(inboundRecords)
+        .innerJoin(
+          purchaseOrders,
+          and(
+            eq(inboundRecords.purchaseOrderId, purchaseOrders.id),
+            isNotNull(purchaseOrders.supplierId)
+          )
+        )
+        .where(
+          and(
+            eq(inboundRecords.organizationId, orgId),
+            isNotNull(purchaseOrders.supplierId)
+          )
+        )
+        .groupBy(purchaseOrders.supplierId),
+    ]);
 
     // 공급자 ID → 납기 데이터 맵
     const deliveryMap = new Map<
@@ -107,30 +133,6 @@ export async function getSupplierScorecards(): Promise<
         avgActualLeadTime: ltCount > 0 ? ltSum / ltCount : 0,
       });
     }
-
-    // 3. 공급자별 불량률 집계
-    //    inbound_records: rejectedQuantity / receivedQuantity
-    const defectRows = await db
-      .select({
-        supplierId: purchaseOrders.supplierId,
-        totalReceived: sql<number>`sum(${inboundRecords.receivedQuantity})`,
-        totalRejected: sql<number>`sum(${inboundRecords.rejectedQuantity})`,
-      })
-      .from(inboundRecords)
-      .innerJoin(
-        purchaseOrders,
-        and(
-          eq(inboundRecords.purchaseOrderId, purchaseOrders.id),
-          isNotNull(purchaseOrders.supplierId)
-        )
-      )
-      .where(
-        and(
-          eq(inboundRecords.organizationId, orgId),
-          isNotNull(purchaseOrders.supplierId)
-        )
-      )
-      .groupBy(purchaseOrders.supplierId);
 
     // 공급자 ID → 불량률 맵
     const defectMap = new Map<string, number>();

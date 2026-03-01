@@ -8,7 +8,7 @@ import {
   type Inventory,
   type InventoryHistory,
 } from "@/server/db/schema";
-import { eq, and, desc, sql, gte, inArray } from "drizzle-orm";
+import { eq, and, desc, sql, gte, lte, inArray } from "drizzle-orm";
 import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 import { z } from "zod";
 import { classifyInventoryStatus } from "@/server/services/scm/inventory-status";
@@ -222,6 +222,30 @@ export async function getInventoryAsOfDate(asOfDate: string, options?: {
     ? sql`AND ih.warehouse_id = ${warehouseId}`
     : sql``;
 
+  // 전체 건수 및 totalStock은 CTE를 재사용하는 별도 집계 쿼리로 조회
+  const countData = await db.execute(sql`
+    WITH latest_history AS (
+      SELECT DISTINCT ON (ih.product_id)
+        ih.product_id,
+        ih.stock_after
+      FROM inventory_history ih
+      WHERE ih.organization_id = ${orgId}
+        AND ih.date <= ${asOfDate}
+        ${warehouseCondition}
+      ORDER BY ih.product_id, ih.date DESC, ih.created_at DESC
+    )
+    SELECT
+      count(*) as total,
+      coalesce(sum(lh.stock_after), 0) as total_stock
+    FROM latest_history lh
+    INNER JOIN products p ON p.id = lh.product_id
+  `);
+
+  const countRow = (countData as Array<{ total: string; total_stock: string }>)[0];
+  const total = Number(countRow?.total ?? 0);
+  const totalStock = Number(countRow?.total_stock ?? 0);
+
+  // DB 레벨에서 LIMIT/OFFSET 페이지네이션 적용
   const historicalData = await db.execute(sql`
     WITH latest_history AS (
       SELECT DISTINCT ON (ih.product_id)
@@ -249,9 +273,10 @@ export async function getInventoryAsOfDate(asOfDate: string, options?: {
     FROM latest_history lh
     INNER JOIN products p ON p.id = lh.product_id
     ORDER BY p.sku ASC
+    LIMIT ${lim} OFFSET ${off}
   `);
 
-  const allRows = historicalData as Array<{
+  const paginatedRows = historicalData as Array<{
     product_id: string;
     warehouse_id: string;
     current_stock: number;
@@ -263,10 +288,6 @@ export async function getInventoryAsOfDate(asOfDate: string, options?: {
     abc_grade: string | null;
     xyz_grade: string | null;
   }>;
-
-  const total = allRows.length;
-  const paginatedRows = allRows.slice(off, off + lim);
-  const totalStock = allRows.reduce((sum, r) => sum + Number(r.current_stock), 0);
 
   const items: InventoryListItem[] = paginatedRows.map((row) => ({
     id: `hist-${row.product_id}`,
@@ -879,12 +900,21 @@ export async function getInventoryHistory(options?: {
   offset?: number;
 }): Promise<{ records: InventoryHistory[]; total: number }> {
   const user = await requireAuth();
-  const { productId, limit = 50, offset = 0 } = options || {};
+  const { productId, startDate, endDate, changeTypes, limit = 50, offset = 0 } = options || {};
 
   const conditions = [eq(inventoryHistory.organizationId, user.organizationId)];
 
   if (productId) {
     conditions.push(eq(inventoryHistory.productId, productId));
+  }
+  if (startDate) {
+    conditions.push(gte(inventoryHistory.date, startDate));
+  }
+  if (endDate) {
+    conditions.push(lte(inventoryHistory.date, endDate));
+  }
+  if (changeTypes && changeTypes.length > 0) {
+    conditions.push(inArray(inventoryHistory.changeType, changeTypes));
   }
 
   const [records, countResult] = await Promise.all([

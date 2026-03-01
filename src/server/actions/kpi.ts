@@ -69,31 +69,17 @@ export async function saveKPITargets(targets: Partial<KPITarget>): Promise<{ suc
   try {
     const user = await requireAuth();
 
-    // 현재 settings 조회
-    const result = await db
-      .select({ settings: organizations.settings })
-      .from(organizations)
-      .where(eq(organizations.id, user.organizationId))
-      .limit(1);
-
-    const currentSettings = (result[0]?.settings as Record<string, unknown>) ?? {};
-
-    // kpiTargets 병합 저장
-    const newSettings = {
-      ...currentSettings,
-      kpiTargets: {
-        ...(currentSettings.kpiTargets as Record<string, unknown> ?? {}),
-        ...targets,
-      },
-    };
-
-    await db
-      .update(organizations)
-      .set({
-        settings: newSettings,
-        updatedAt: new Date(),
-      })
-      .where(eq(organizations.id, user.organizationId));
+    // 단일 UPDATE: JSONB || 연산자로 kpiTargets만 병합 (SELECT 불필요)
+    await db.execute(sql`
+      UPDATE ${organizations}
+      SET
+        settings = coalesce(settings, '{}'::jsonb) || jsonb_build_object(
+          'kpiTargets',
+          coalesce(settings->'kpiTargets', '{}'::jsonb) || ${JSON.stringify(targets)}::jsonb
+        ),
+        updated_at = now()
+      WHERE id = ${user.organizationId}
+    `);
 
     // KPI 캐시 무효화
     revalidateTag(`kpi-${user.organizationId}`);

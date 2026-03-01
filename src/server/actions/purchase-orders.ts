@@ -73,59 +73,82 @@ export async function getReorderItems(options?: {
     const orgSettings = orgData?.settings as OrganizationSettings | null;
     const supplyCoefficients = orgSettings?.orderPolicy?.supplyCoefficients;
 
-    // 발주 필요 제품 조회 (현재고 <= 발주점, 활성 PO가 없는 제품만, 최대 500건)
+    // 발주 필요 제품 조회 (전 창고 합산 현재고 <= 발주점, 활성 PO 없는 제품만)
+    // NOTE: inventory 테이블은 (org, warehouse, product) 조합이므로 다중 창고 시 합산 필요
     const MAX_CANDIDATES = 500;
-    const reorderCandidates = await db
-      .select({
-        product: {
-          id: products.id,
-          sku: products.sku,
-          name: products.name,
-          safetyStock: products.safetyStock,
-          reorderPoint: products.reorderPoint,
-          moq: products.moq,
-          leadTime: products.leadTime,
-          unitPrice: products.unitPrice,
-          costPrice: products.costPrice,
-          abcGrade: products.abcGrade,
-          xyzGrade: products.xyzGrade,
-          primarySupplierId: products.primarySupplierId,
-        },
-        inventory: {
-          currentStock: inventory.currentStock,
-        },
-        supplier: {
-          id: suppliers.id,
-          name: suppliers.name,
-          avgLeadTime: suppliers.avgLeadTime,
-        },
-      })
-      .from(products)
-      .leftJoin(inventory, eq(products.id, inventory.productId))
-      .leftJoin(suppliers, eq(products.primarySupplierId, suppliers.id))
-      .where(
-        and(
-          eq(products.organizationId, orgId),
-          // 현재고 <= 발주점
-          or(
-            sql`${inventory.currentStock} IS NULL`,
-            sql`${inventory.currentStock} <= ${products.reorderPoint}`
-          ),
-          // 이미 활성 발주(진행 중)가 있는 제품은 제외 → 중복 발주 방지
-          sql`NOT EXISTS (
-            SELECT 1 FROM purchase_order_items poi
-            JOIN purchase_orders po ON po.id = poi.purchase_order_id
-            WHERE poi.product_id = ${products.id}
-              AND po.organization_id = ${orgId}
-              AND po.status NOT IN ('cancelled', 'received', 'completed')
-              AND po.deleted_at IS NULL
-          )`
+    const reorderCandidates = await db.execute<{
+      product_id: string;
+      product_sku: string;
+      product_name: string;
+      safety_stock: number;
+      reorder_point: number;
+      moq: number;
+      lead_time: number;
+      unit_price: number;
+      cost_price: number;
+      abc_grade: string | null;
+      xyz_grade: string | null;
+      primary_supplier_id: string | null;
+      total_stock: number;
+      supplier_id: string | null;
+      supplier_name: string | null;
+      supplier_avg_lead_time: number | null;
+    }>(sql`
+      SELECT
+        p.id AS product_id,
+        p.sku AS product_sku,
+        p.name AS product_name,
+        COALESCE(p.safety_stock, 0) AS safety_stock,
+        COALESCE(p.reorder_point, 0) AS reorder_point,
+        COALESCE(p.moq, 1) AS moq,
+        COALESCE(p.lead_time, 7) AS lead_time,
+        COALESCE(p.unit_price, 0) AS unit_price,
+        COALESCE(p.cost_price, 0) AS cost_price,
+        p.abc_grade,
+        p.xyz_grade,
+        p.primary_supplier_id,
+        COALESCE(inv_agg.total_stock, 0) AS total_stock,
+        s.id AS supplier_id,
+        s.name AS supplier_name,
+        s.avg_lead_time AS supplier_avg_lead_time
+      FROM products p
+      LEFT JOIN (
+        SELECT product_id, SUM(current_stock) AS total_stock
+        FROM inventory
+        WHERE organization_id = ${orgId}
+        GROUP BY product_id
+      ) inv_agg ON inv_agg.product_id = p.id
+      LEFT JOIN suppliers s ON s.id = p.primary_supplier_id
+      WHERE p.organization_id = ${orgId}
+        AND COALESCE(inv_agg.total_stock, 0) <= COALESCE(p.reorder_point, 0)
+        AND NOT EXISTS (
+          SELECT 1 FROM purchase_order_items poi
+          JOIN purchase_orders po ON po.id = poi.purchase_order_id
+          WHERE poi.product_id = p.id
+            AND po.organization_id = ${orgId}
+            AND po.status NOT IN ('cancelled', 'received', 'completed')
+            AND po.deleted_at IS NULL
         )
-      )
-      .limit(MAX_CANDIDATES);
+      ORDER BY
+        CASE WHEN COALESCE(inv_agg.total_stock, 0) = 0 THEN 0
+             WHEN COALESCE(inv_agg.total_stock, 0) < COALESCE(p.safety_stock, 0) * 0.5 THEN 1
+             ELSE 2
+        END ASC,
+        COALESCE(inv_agg.total_stock, 0) ASC
+      LIMIT ${MAX_CANDIDATES}
+    `);
+
+    // raw SQL 결과 → 배열
+    const candidateRows = (reorderCandidates as unknown as { rows: Array<{
+      product_id: string; product_sku: string; product_name: string;
+      safety_stock: number; reorder_point: number; moq: number; lead_time: number;
+      unit_price: number; cost_price: number; abc_grade: string | null; xyz_grade: string | null;
+      primary_supplier_id: string | null; total_stock: number;
+      supplier_id: string | null; supplier_name: string | null; supplier_avg_lead_time: number | null;
+    }> }).rows ?? [];
 
     // 일평균 판매량을 단일 그룹 쿼리로 일괄 조회 (N+1 쿼리 제거)
-    const productIds = reorderCandidates.map((r) => r.product.id);
+    const productIds = candidateRows.map((r) => r.product_id);
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split("T")[0];
@@ -201,27 +224,27 @@ export async function getReorderItems(options?: {
     }
 
     // 발주 아이템 변환 (DB 호출 없이 메모리에서 처리)
-    const allReorderItems = reorderCandidates
+    const allReorderItems = candidateRows
       .map((row) => {
-        const avgDailySales = avgSalesMap.get(row.product.id) || 0;
-        const forecast = forecastMap.get(row.product.id);
+        const avgDailySales = avgSalesMap.get(row.product_id) || 0;
+        const forecast = forecastMap.get(row.product_id);
 
         const data: ProductReorderData = {
-          productId: row.product.id,
-          sku: row.product.sku,
-          productName: row.product.name,
-          currentStock: row.inventory?.currentStock || 0,
-          safetyStock: row.product.safetyStock || 0,
-          reorderPoint: row.product.reorderPoint || 0,
+          productId: row.product_id,
+          sku: row.product_sku,
+          productName: row.product_name,
+          currentStock: Number(row.total_stock) || 0,
+          safetyStock: Number(row.safety_stock) || 0,
+          reorderPoint: Number(row.reorder_point) || 0,
           avgDailySales,
-          abcGrade: row.product.abcGrade || undefined,
-          xyzGrade: row.product.xyzGrade || undefined,
-          moq: row.product.moq || 1,
-          leadTime: row.supplier?.avgLeadTime || row.product.leadTime || 7,
-          unitPrice: row.product.unitPrice || 0,
-          costPrice: row.product.costPrice || 0,
-          supplierId: row.supplier?.id,
-          supplierName: row.supplier?.name,
+          abcGrade: (row.abc_grade as "A" | "B" | "C") || undefined,
+          xyzGrade: (row.xyz_grade as "X" | "Y" | "Z") || undefined,
+          moq: Number(row.moq) || 1,
+          leadTime: Number(row.supplier_avg_lead_time) || Number(row.lead_time) || 7,
+          unitPrice: Number(row.unit_price) || 0,
+          costPrice: Number(row.cost_price) || 0,
+          supplierId: row.supplier_id ?? undefined,
+          supplierName: row.supplier_name ?? undefined,
           supplyCoefficients,
           // 수요예측 기반 일평균 (있으면 우선 사용)
           forecastDailySales: forecast?.dailySales,
@@ -234,9 +257,9 @@ export async function getReorderItems(options?: {
 
     // ABC 등급 매핑
     const abcGradesMap = new Map<string, "A" | "B" | "C">();
-    reorderCandidates.forEach((row) => {
-      if (row.product.abcGrade) {
-        abcGradesMap.set(row.product.id, row.product.abcGrade);
+    candidateRows.forEach((row) => {
+      if (row.abc_grade) {
+        abcGradesMap.set(row.product_id, row.abc_grade as "A" | "B" | "C");
       }
     });
 
@@ -291,52 +314,53 @@ export async function calculateReorderQuantity(productId: string): Promise<{
     // 유효성 검사
     calculateReorderQtySchema.parse({ productId });
 
-    // 제품 정보 조회
-    const [productData] = await db
-      .select({
-        product: products,
-        inventory: inventory,
-        supplier: suppliers,
-      })
-      .from(products)
-      .leftJoin(inventory, eq(products.id, inventory.productId))
-      .leftJoin(suppliers, eq(products.primarySupplierId, suppliers.id))
-      .where(eq(products.id, productId))
-      .limit(1);
-
-    if (!productData) {
-      throw new Error("제품을 찾을 수 없습니다");
-    }
-
-    // 조직 ID 확인
+    // 인증 먼저 (orgId 필요)
     const user = await getCurrentUser();
     if (!user?.organizationId) {
       throw new Error("인증된 사용자를 찾을 수 없습니다");
     }
     const orgId = user.organizationId;
 
-    // 일평균 판매량 조회 (최근 30일)
+    // 제품 + 판매량 + 조직설정 3개 병렬 조회
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const salesResult = await db
-      .select({ total: sql<number>`coalesce(sum(${salesRecords.quantity}), 0)` })
-      .from(salesRecords)
-      .where(
-        and(
-          eq(salesRecords.organizationId, orgId),
-          eq(salesRecords.productId, productId),
-          gte(salesRecords.date, thirtyDaysAgo.toISOString().split("T")[0])
-        )
-      );
-    const avgDailySales = Math.round((Number(salesResult[0]?.total || 0) / 30) * 100) / 100;
 
-    // 조직 설정에서 보정계수 로드
-    const [singleOrgData] = await db
-      .select({ settings: organizations.settings })
-      .from(organizations)
-      .where(eq(organizations.id, orgId))
-      .limit(1);
-    const singleOrgSettings = singleOrgData?.settings as OrganizationSettings | null;
+    const [productDataArr, salesResult, singleOrgDataArr] = await Promise.all([
+      db
+        .select({
+          product: products,
+          inventory: inventory,
+          supplier: suppliers,
+        })
+        .from(products)
+        .leftJoin(inventory, eq(products.id, inventory.productId))
+        .leftJoin(suppliers, eq(products.primarySupplierId, suppliers.id))
+        .where(eq(products.id, productId))
+        .limit(1),
+      db
+        .select({ total: sql<number>`coalesce(sum(${salesRecords.quantity}), 0)` })
+        .from(salesRecords)
+        .where(
+          and(
+            eq(salesRecords.organizationId, orgId),
+            eq(salesRecords.productId, productId),
+            gte(salesRecords.date, thirtyDaysAgo.toISOString().split("T")[0])
+          )
+        ),
+      db
+        .select({ settings: organizations.settings })
+        .from(organizations)
+        .where(eq(organizations.id, orgId))
+        .limit(1),
+    ]);
+
+    const productData = productDataArr[0];
+    if (!productData) {
+      throw new Error("제품을 찾을 수 없습니다");
+    }
+
+    const avgDailySales = Math.round((Number(salesResult[0]?.total || 0) / 30) * 100) / 100;
+    const singleOrgSettings = singleOrgDataArr[0]?.settings as OrganizationSettings | null;
 
     // 추천 수량 계산
     const data: ProductReorderData = {

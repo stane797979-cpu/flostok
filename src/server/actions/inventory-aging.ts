@@ -3,7 +3,7 @@
 import { unstable_cache } from "next/cache";
 import { db } from "@/server/db";
 import { products, inventory, inventoryHistory } from "@/server/db/schema";
-import { eq, and, sql, isNotNull, isNull, gt } from "drizzle-orm";
+import { eq, and, sql, isNotNull, isNull, gt, gte } from "drizzle-orm";
 import { getCurrentUser } from "./auth-helpers";
 
 export interface AgingProduct {
@@ -86,6 +86,11 @@ async function _getInventoryAgingInternal(orgId: string): Promise<AgingSummary> 
   }
 
   // 2. 각 제품의 마지막 출고일 조회 (change_amount < 0)
+  //    불필요한 풀스캔 방지: 최근 2년 데이터만 조회
+  const twoYearsAgo = new Date();
+  twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+  const twoYearsAgoStr = twoYearsAgo.toISOString().split("T")[0];
+
   const lastOutboundRows = await db
     .select({
       productId: inventoryHistory.productId,
@@ -95,7 +100,8 @@ async function _getInventoryAgingInternal(orgId: string): Promise<AgingSummary> 
     .where(
       and(
         eq(inventoryHistory.organizationId, orgId),
-        sql`${inventoryHistory.changeAmount} < 0`
+        sql`${inventoryHistory.changeAmount} < 0`,
+        gte(inventoryHistory.date, twoYearsAgoStr)
       )
     )
     .groupBy(inventoryHistory.productId);
