@@ -73,6 +73,7 @@ type InventoryListItem = {
 
 export async function getInventoryList(options?: {
   productId?: string;
+  productIds?: string[];
   status?: string;
   warehouseId?: string;
   limit?: number;
@@ -83,8 +84,8 @@ export async function getInventoryList(options?: {
 }> {
   const user = await requireAuth();
   const orgId = user.organizationId;
-  const { productId, status, warehouseId, limit: lim = 50, offset: off = 0 } = options || {};
-  const filterKey = JSON.stringify({ productId, status, warehouseId, lim, off });
+  const { productId, productIds, status, warehouseId, limit: lim = 50, offset: off = 0 } = options || {};
+  const filterKey = JSON.stringify({ productId, productIds, status, warehouseId, lim, off });
 
   return unstable_cache(
     async () => {
@@ -92,6 +93,9 @@ export async function getInventoryList(options?: {
 
       if (productId) {
         conditions.push(eq(inventory.productId, productId));
+      }
+      if (productIds && productIds.length > 0) {
+        conditions.push(inArray(inventory.productId, productIds));
       }
       if (status) {
         conditions.push(eq(inventory.status, status as (typeof inventory.status.enumValues)[number]));

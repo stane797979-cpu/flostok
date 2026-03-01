@@ -7,7 +7,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CreditCard, Construction } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/server/actions/auth-helpers";
 import { db } from "@/server/db";
 import { organizations } from "@/server/db/schema";
 import { eq } from "drizzle-orm";
@@ -21,31 +21,22 @@ const PLAN_INFO: Record<string, { label: string; description: string; color: str
 };
 
 export default async function BillingPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // 기존 3단계 순차 호출(supabase.auth → users → organizations) → 2단계로 단축
+  const user = await getCurrentUser();
 
   let currentPlan = "free";
   let orgId = "";
 
-  if (user) {
-    // 사용자의 조직 정보 조회
-    const { data: profile } = await supabase
-      .from("users")
-      .select("organization_id, role")
-      .eq("auth_id", user.id)
-      .single();
+  if (user?.organizationId) {
+    orgId = user.organizationId;
+    const [org] = await db
+      .select({ plan: organizations.plan })
+      .from(organizations)
+      .where(eq(organizations.id, user.organizationId))
+      .limit(1);
 
-    if (profile?.organization_id) {
-      orgId = profile.organization_id;
-      const [org] = await db
-        .select({ plan: organizations.plan })
-        .from(organizations)
-        .where(eq(organizations.id, profile.organization_id))
-        .limit(1);
-
-      if (org) {
-        currentPlan = org.plan;
-      }
+    if (org) {
+      currentPlan = org.plan;
     }
   }
 

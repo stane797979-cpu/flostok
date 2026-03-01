@@ -17,13 +17,19 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
     const currentPage = Math.max(1, parseInt(params.page || "1", 10) || 1);
     const offset = (currentPage - 1) * pageSize;
 
-    const [productsResult, categoriesResult, inventoryResult] = await Promise.all([
+    // 1단계: 제품 목록 + 카테고리 병렬 조회
+    const [productsResult, categoriesResult] = await Promise.all([
       getProducts({ limit: pageSize, offset }),
       getCategories(),
-      getInventoryList({ limit: 1000 }),
     ]);
 
     const totalPages = Math.max(1, Math.ceil(productsResult.total / pageSize));
+
+    // 2단계: 현재 페이지 제품 ID들로만 재고 조회 (1000건 하드코딩 제거)
+    const productIds = productsResult.products.map((p) => p.id);
+    const inventoryResult = productIds.length > 0
+      ? await getInventoryList({ productIds })
+      : { items: [] };
 
     // 재고 데이터를 productId 기준으로 맵핑
     const inventoryMap = new Map(
