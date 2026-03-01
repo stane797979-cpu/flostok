@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   BarChart,
   Bar,
@@ -24,10 +24,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Building2, PackageX, TrendingUp, TrendingDown, DollarSign } from "lucide-react";
+import { Building2, PackageX, TrendingUp, TrendingDown, DollarSign, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { WarehouseComparisonSummary } from "@/server/actions/warehouse-analytics";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
+
+// ─── 정렬 ────────────────────────────────────────────────────────────────────
+
+type WhSortKey = "warehouseName" | "warehouseType" | "totalSKUs" | "totalStock" | "totalValue" | "outOfStockCount" | "criticalCount" | "optimalCount" | "excessCount" | "healthScore";
+type SortDir = "asc" | "desc";
 
 // ─── 유틸 ────────────────────────────────────────────────────────────────────
 
@@ -118,6 +123,51 @@ interface WarehouseComparisonProps {
 // ─── 컴포넌트 ─────────────────────────────────────────────────────────────────
 
 export function WarehouseComparison({ data, className }: WarehouseComparisonProps) {
+  const [whSortKey, setWhSortKey] = useState<WhSortKey | null>(null);
+  const [whSortDir, setWhSortDir] = useState<SortDir>("asc");
+
+  const handleWhSort = useCallback((key: WhSortKey) => {
+    setWhSortKey((prev) => {
+      if (prev === key) {
+        setWhSortDir((d) => (d === "asc" ? "desc" : "asc"));
+        return key;
+      }
+      setWhSortDir("asc");
+      return key;
+    });
+  }, []);
+
+  const WhSortIcon = ({ column }: { column: WhSortKey }) => {
+    if (whSortKey !== column) return <ArrowUpDown className="ml-1 inline h-3 w-3 text-muted-foreground/50" />;
+    return whSortDir === "asc"
+      ? <ArrowUp className="ml-1 inline h-3 w-3" />
+      : <ArrowDown className="ml-1 inline h-3 w-3" />;
+  };
+
+  const sortedWarehouses = useMemo(() => {
+    if (!data) return [];
+    const items = [...data.warehouses];
+    if (whSortKey) {
+      items.sort((a, b) => {
+        let cmp = 0;
+        switch (whSortKey) {
+          case "warehouseName": cmp = a.warehouseName.localeCompare(b.warehouseName); break;
+          case "warehouseType": cmp = a.warehouseType.localeCompare(b.warehouseType); break;
+          case "totalSKUs": cmp = a.totalSKUs - b.totalSKUs; break;
+          case "totalStock": cmp = a.totalStock - b.totalStock; break;
+          case "totalValue": cmp = a.totalValue - b.totalValue; break;
+          case "outOfStockCount": cmp = a.outOfStockCount - b.outOfStockCount; break;
+          case "criticalCount": cmp = a.criticalCount - b.criticalCount; break;
+          case "optimalCount": cmp = a.optimalCount - b.optimalCount; break;
+          case "excessCount": cmp = (a.excessCount + a.overstockCount) - (b.excessCount + b.overstockCount); break;
+          case "healthScore": cmp = a.healthScore - b.healthScore; break;
+        }
+        return whSortDir === "asc" ? cmp : -cmp;
+      });
+    }
+    return items;
+  }, [data, whSortKey, whSortDir]);
+
   // 스택드 바 차트 데이터 변환
   const chartData = useMemo(() => {
     if (!data) return [];
@@ -226,20 +276,20 @@ export function WarehouseComparison({ data, className }: WarehouseComparisonProp
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="min-w-[130px]">창고명</TableHead>
-                    <TableHead className="min-w-[60px]">유형</TableHead>
-                    <TableHead className="text-right min-w-[70px]">SKU수</TableHead>
-                    <TableHead className="text-right min-w-[80px]">총수량</TableHead>
-                    <TableHead className="text-right min-w-[110px]">재고금액</TableHead>
-                    <TableHead className="text-right min-w-[60px]">품절</TableHead>
-                    <TableHead className="text-right min-w-[60px]">위험</TableHead>
-                    <TableHead className="text-right min-w-[60px]">적정</TableHead>
-                    <TableHead className="text-right min-w-[60px]">과다</TableHead>
-                    <TableHead className="min-w-[160px]">건전성 점수</TableHead>
+                    <TableHead className="min-w-[130px] cursor-pointer select-none hover:text-foreground" onClick={() => handleWhSort("warehouseName")}>창고명<WhSortIcon column="warehouseName" /></TableHead>
+                    <TableHead className="min-w-[60px] cursor-pointer select-none hover:text-foreground" onClick={() => handleWhSort("warehouseType")}>유형<WhSortIcon column="warehouseType" /></TableHead>
+                    <TableHead className="text-right min-w-[70px] cursor-pointer select-none hover:text-foreground" onClick={() => handleWhSort("totalSKUs")}>SKU수<WhSortIcon column="totalSKUs" /></TableHead>
+                    <TableHead className="text-right min-w-[80px] cursor-pointer select-none hover:text-foreground" onClick={() => handleWhSort("totalStock")}>총수량<WhSortIcon column="totalStock" /></TableHead>
+                    <TableHead className="text-right min-w-[110px] cursor-pointer select-none hover:text-foreground" onClick={() => handleWhSort("totalValue")}>재고금액<WhSortIcon column="totalValue" /></TableHead>
+                    <TableHead className="text-right min-w-[60px] cursor-pointer select-none hover:text-foreground" onClick={() => handleWhSort("outOfStockCount")}>품절<WhSortIcon column="outOfStockCount" /></TableHead>
+                    <TableHead className="text-right min-w-[60px] cursor-pointer select-none hover:text-foreground" onClick={() => handleWhSort("criticalCount")}>위험<WhSortIcon column="criticalCount" /></TableHead>
+                    <TableHead className="text-right min-w-[60px] cursor-pointer select-none hover:text-foreground" onClick={() => handleWhSort("optimalCount")}>적정<WhSortIcon column="optimalCount" /></TableHead>
+                    <TableHead className="text-right min-w-[60px] cursor-pointer select-none hover:text-foreground" onClick={() => handleWhSort("excessCount")}>과다<WhSortIcon column="excessCount" /></TableHead>
+                    <TableHead className="min-w-[160px] cursor-pointer select-none hover:text-foreground" onClick={() => handleWhSort("healthScore")}>건전성 점수<WhSortIcon column="healthScore" /></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.warehouses.map((w) => (
+                  {sortedWarehouses.map((w) => (
                     <TableRow key={w.warehouseId}>
                       <TableCell>
                         <div className="font-medium">{w.warehouseName}</div>

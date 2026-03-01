@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   Card,
   CardContent,
@@ -18,9 +18,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { TrendingUp, TrendingDown, AlertTriangle, CheckCircle, PackageX } from "lucide-react";
+import { TrendingUp, TrendingDown, AlertTriangle, CheckCircle, PackageX, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import type { ScenarioSimulationData } from "@/server/actions/scenario-simulation";
 import type { SimulationResult, ScenarioResult } from "@/server/services/scm/scenario-simulation";
+
+// ─── 정렬 ────────────────────────────────────────────────────────────────────
+
+type ScenarioSortKey = "scenarioName" | "demandChangePercent" | "adjustedLeadTime" | "newSafetyStock" | "newReorderPoint" | "stockStatus" | "requiredOrderQuantity";
+type SortDir = "asc" | "desc";
 
 interface ScenarioSimulationProps {
   data: ScenarioSimulationData | null;
@@ -35,6 +40,44 @@ export function ScenarioSimulation({ data }: ScenarioSimulationProps) {
   const [demandChange, setDemandChange] = useState<number>(0);
   const [leadTimeChange, setLeadTimeChange] = useState<number>(0);
   const [results, setResults] = useState<ScenarioResult[]>([]);
+  const [scenarioSortKey, setScenarioSortKey] = useState<ScenarioSortKey | null>(null);
+  const [scenarioSortDir, setScenarioSortDir] = useState<SortDir>("asc");
+
+  const handleScenarioSort = useCallback((key: ScenarioSortKey) => {
+    setScenarioSortKey((prev) => {
+      if (prev === key) {
+        setScenarioSortDir((d) => (d === "asc" ? "desc" : "asc"));
+        return key;
+      }
+      setScenarioSortDir("asc");
+      return key;
+    });
+  }, []);
+
+  const ScenarioSortIcon = ({ column }: { column: ScenarioSortKey }) => {
+    if (scenarioSortKey !== column) return <ArrowUpDown className="ml-1 inline h-3 w-3 text-muted-foreground/50" />;
+    return scenarioSortDir === "asc"
+      ? <ArrowUp className="ml-1 inline h-3 w-3" />
+      : <ArrowDown className="ml-1 inline h-3 w-3" />;
+  };
+
+  const sortedResults = useMemo(() => {
+    if (!scenarioSortKey) return results;
+    const statusOrder: Record<string, number> = { "긴급": 0, "발주필요": 1, "충분": 2 };
+    return [...results].sort((a, b) => {
+      let cmp = 0;
+      switch (scenarioSortKey) {
+        case "scenarioName": cmp = a.scenarioName.localeCompare(b.scenarioName); break;
+        case "demandChangePercent": cmp = a.demandChangePercent - b.demandChangePercent; break;
+        case "adjustedLeadTime": cmp = a.adjustedLeadTime - b.adjustedLeadTime; break;
+        case "newSafetyStock": cmp = a.newSafetyStock - b.newSafetyStock; break;
+        case "newReorderPoint": cmp = a.newReorderPoint - b.newReorderPoint; break;
+        case "stockStatus": cmp = (statusOrder[a.stockStatus] ?? 3) - (statusOrder[b.stockStatus] ?? 3); break;
+        case "requiredOrderQuantity": cmp = a.requiredOrderQuantity - b.requiredOrderQuantity; break;
+      }
+      return scenarioSortDir === "asc" ? cmp : -cmp;
+    });
+  }, [results, scenarioSortKey, scenarioSortDir]);
 
   // 데이터 없음 처리
   if (!data || simulations.length === 0) {
@@ -294,35 +337,35 @@ export function ScenarioSimulation({ data }: ScenarioSimulationProps) {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b dark:border-slate-700">
-                      <th className="pb-3 text-left font-medium dark:text-slate-200">
-                        시나리오
+                      <th className="pb-3 text-left font-medium dark:text-slate-200 cursor-pointer select-none hover:text-foreground" onClick={() => handleScenarioSort("scenarioName")}>
+                        시나리오<ScenarioSortIcon column="scenarioName" />
                       </th>
-                      <th className="pb-3 text-right font-medium dark:text-slate-200">
-                        수요 변동
+                      <th className="pb-3 text-right font-medium dark:text-slate-200 cursor-pointer select-none hover:text-foreground" onClick={() => handleScenarioSort("demandChangePercent")}>
+                        수요 변동<ScenarioSortIcon column="demandChangePercent" />
                       </th>
-                      <th className="pb-3 text-right font-medium dark:text-slate-200">
-                        리드타임
+                      <th className="pb-3 text-right font-medium dark:text-slate-200 cursor-pointer select-none hover:text-foreground" onClick={() => handleScenarioSort("adjustedLeadTime")}>
+                        리드타임<ScenarioSortIcon column="adjustedLeadTime" />
                       </th>
-                      <th className="pb-3 text-right font-medium dark:text-slate-200">
-                        안전재고
+                      <th className="pb-3 text-right font-medium dark:text-slate-200 cursor-pointer select-none hover:text-foreground" onClick={() => handleScenarioSort("newSafetyStock")}>
+                        안전재고<ScenarioSortIcon column="newSafetyStock" />
                       </th>
-                      <th className="pb-3 text-right font-medium dark:text-slate-200">
-                        발주점
+                      <th className="pb-3 text-right font-medium dark:text-slate-200 cursor-pointer select-none hover:text-foreground" onClick={() => handleScenarioSort("newReorderPoint")}>
+                        발주점<ScenarioSortIcon column="newReorderPoint" />
                       </th>
-                      <th className="pb-3 text-right font-medium dark:text-slate-200">
-                        재고 상태
+                      <th className="pb-3 text-right font-medium dark:text-slate-200 cursor-pointer select-none hover:text-foreground" onClick={() => handleScenarioSort("stockStatus")}>
+                        재고 상태<ScenarioSortIcon column="stockStatus" />
                       </th>
-                      <th className="pb-3 text-right font-medium dark:text-slate-200">
-                        발주 필요량
+                      <th className="pb-3 text-right font-medium dark:text-slate-200 cursor-pointer select-none hover:text-foreground" onClick={() => handleScenarioSort("requiredOrderQuantity")}>
+                        발주 필요량<ScenarioSortIcon column="requiredOrderQuantity" />
                       </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {results.map((result, index) => (
+                    {sortedResults.map((result, index) => (
                       <tr
                         key={index}
                         className={`border-b dark:border-slate-700 ${
-                          index === 1
+                          result.scenarioName === "사용자 설정"
                             ? "bg-blue-50 font-medium dark:bg-blue-950/30"
                             : ""
                         } ${
@@ -368,7 +411,7 @@ export function ScenarioSimulation({ data }: ScenarioSimulationProps) {
                         </td>
                         <td className="py-3 text-right dark:text-slate-300">
                           {result.newSafetyStock.toLocaleString()}개
-                          {index > 0 && (
+                          {result.scenarioName !== "기준" && results[0] && (
                             <span className="ml-1 text-xs text-slate-500 dark:text-slate-400">
                               (
                               {result.newSafetyStock >
@@ -386,7 +429,7 @@ export function ScenarioSimulation({ data }: ScenarioSimulationProps) {
                         </td>
                         <td className="py-3 text-right dark:text-slate-300">
                           {result.newReorderPoint.toLocaleString()}개
-                          {index > 0 && (
+                          {result.scenarioName !== "기준" && results[0] && (
                             <span className="ml-1 text-xs text-slate-500 dark:text-slate-400">
                               (
                               {result.newReorderPoint >

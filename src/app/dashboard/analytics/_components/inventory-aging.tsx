@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, XAxis, YAxis } from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
@@ -13,9 +13,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, BarChart2, Calendar, Package, PackageX } from "lucide-react";
+import { AlertTriangle, BarChart2, Calendar, Package, PackageX, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AgingSummary, AgingProduct } from "@/server/actions/inventory-aging";
+
+// ─── 정렬 ────────────────────────────────────────────────────────────────────
+
+type SortKey = "sku" | "name" | "currentStock" | "inventoryValue" | "lastOutboundDate" | "daysSinceLastOutbound";
+type SortDir = "asc" | "desc";
 
 // ─── 유틸 ────────────────────────────────────────────────────────────────────
 
@@ -88,6 +93,26 @@ interface InventoryAgingProps {
 
 export function InventoryAging({ data, className }: InventoryAgingProps) {
   const [selectedCohort, setSelectedCohort] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  const handleSort = useCallback((key: SortKey) => {
+    setSortKey((prev) => {
+      if (prev === key) {
+        setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+        return key;
+      }
+      setSortDir("asc");
+      return key;
+    });
+  }, []);
+
+  const SortIcon = ({ column }: { column: SortKey }) => {
+    if (sortKey !== column) return <ArrowUpDown className="ml-1 inline h-3 w-3 text-muted-foreground/50" />;
+    return sortDir === "asc"
+      ? <ArrowUp className="ml-1 inline h-3 w-3" />
+      : <ArrowDown className="ml-1 inline h-3 w-3" />;
+  };
 
   // 차트 데이터
   const chartData = useMemo(() => {
@@ -103,15 +128,33 @@ export function InventoryAging({ data, className }: InventoryAgingProps) {
   // 테이블에 표시할 제품 목록
   const tableProducts = useMemo<AgingProduct[]>(() => {
     if (!data) return [];
+    let items: AgingProduct[];
     if (selectedCohort) {
-      return data.cohorts.find((c) => c.label === selectedCohort)?.products ?? [];
+      items = [...(data.cohorts.find((c) => c.label === selectedCohort)?.products ?? [])];
+    } else {
+      // 전체: 사장재고(180일+) 먼저 → 나머지 경과일 내림차순
+      items = data.cohorts.flatMap((c) => c.products).sort((a, b) => {
+        if (a.isDeadStock !== b.isDeadStock) return a.isDeadStock ? -1 : 1;
+        return b.daysSinceLastOutbound - a.daysSinceLastOutbound;
+      });
     }
-    // 전체: 사장재고(180일+) 먼저 → 나머지 경과일 내림차순
-    return data.cohorts.flatMap((c) => c.products).sort((a, b) => {
-      if (a.isDeadStock !== b.isDeadStock) return a.isDeadStock ? -1 : 1;
-      return b.daysSinceLastOutbound - a.daysSinceLastOutbound;
-    });
-  }, [data, selectedCohort]);
+    // 사용자 정렬 적용
+    if (sortKey) {
+      items.sort((a, b) => {
+        let cmp = 0;
+        switch (sortKey) {
+          case "sku": cmp = a.sku.localeCompare(b.sku); break;
+          case "name": cmp = a.name.localeCompare(b.name); break;
+          case "currentStock": cmp = a.currentStock - b.currentStock; break;
+          case "inventoryValue": cmp = a.inventoryValue - b.inventoryValue; break;
+          case "lastOutboundDate": cmp = (a.lastOutboundDate ?? "").localeCompare(b.lastOutboundDate ?? ""); break;
+          case "daysSinceLastOutbound": cmp = a.daysSinceLastOutbound - b.daysSinceLastOutbound; break;
+        }
+        return sortDir === "asc" ? cmp : -cmp;
+      });
+    }
+    return items;
+  }, [data, selectedCohort, sortKey, sortDir]);
 
   const totalProducts = useMemo(
     () => data?.cohorts.reduce((s, c) => s + c.productCount, 0) ?? 0,
@@ -304,12 +347,12 @@ export function InventoryAging({ data, className }: InventoryAgingProps) {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="min-w-[90px]">SKU</TableHead>
-                    <TableHead className="min-w-[140px]">제품명</TableHead>
-                    <TableHead className="text-right min-w-[80px]">현재고</TableHead>
-                    <TableHead className="text-right min-w-[100px]">재고금액</TableHead>
-                    <TableHead className="min-w-[110px]">마지막 출고일</TableHead>
-                    <TableHead className="text-right min-w-[90px]">경과일수</TableHead>
+                    <TableHead className="min-w-[90px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("sku")}>SKU<SortIcon column="sku" /></TableHead>
+                    <TableHead className="min-w-[140px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("name")}>제품명<SortIcon column="name" /></TableHead>
+                    <TableHead className="text-right min-w-[80px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("currentStock")}>현재고<SortIcon column="currentStock" /></TableHead>
+                    <TableHead className="text-right min-w-[100px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("inventoryValue")}>재고금액<SortIcon column="inventoryValue" /></TableHead>
+                    <TableHead className="min-w-[110px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("lastOutboundDate")}>마지막 출고일<SortIcon column="lastOutboundDate" /></TableHead>
+                    <TableHead className="text-right min-w-[90px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("daysSinceLastOutbound")}>경과일수<SortIcon column="daysSinceLastOutbound" /></TableHead>
                     <TableHead className="min-w-[130px]">추천 조치</TableHead>
                   </TableRow>
                 </TableHeader>

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useMemo, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -10,9 +11,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { AlertTriangle, CalendarX, Package, PackageX, ShieldAlert } from "lucide-react";
+import { AlertTriangle, CalendarX, Package, PackageX, ShieldAlert, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { LotExpirySummary, ExpiringLot } from "@/server/actions/lot-expiry";
+
+// ─── 정렬 ────────────────────────────────────────────────────────────────────
+
+type LotSortKey = "lotNumber" | "sku" | "productName" | "warehouseName" | "expiryDate" | "daysUntilExpiry" | "remainingQty" | "estimatedLoss";
+type SortDir = "asc" | "desc";
 
 // ─── 유틸 ────────────────────────────────────────────────────────────────────
 
@@ -96,6 +102,49 @@ interface LotExpiryAlertProps {
 // ─── 컴포넌트 ─────────────────────────────────────────────────────────────────
 
 export function LotExpiryAlert({ data, className }: LotExpiryAlertProps) {
+  const [sortKey, setSortKey] = useState<LotSortKey | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  const handleSort = useCallback((key: LotSortKey) => {
+    setSortKey((prev) => {
+      if (prev === key) {
+        setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+        return key;
+      }
+      setSortDir("asc");
+      return key;
+    });
+  }, []);
+
+  const SortIcon = ({ column }: { column: LotSortKey }) => {
+    if (sortKey !== column) return <ArrowUpDown className="ml-1 inline h-3 w-3 text-muted-foreground/50" />;
+    return sortDir === "asc"
+      ? <ArrowUp className="ml-1 inline h-3 w-3" />
+      : <ArrowDown className="ml-1 inline h-3 w-3" />;
+  };
+
+  const sortedLots = useMemo<ExpiringLot[]>(() => {
+    if (!data) return [];
+    const items = [...data.expiringLots];
+    if (sortKey) {
+      items.sort((a, b) => {
+        let cmp = 0;
+        switch (sortKey) {
+          case "lotNumber": cmp = a.lotNumber.localeCompare(b.lotNumber); break;
+          case "sku": cmp = a.sku.localeCompare(b.sku); break;
+          case "productName": cmp = a.productName.localeCompare(b.productName); break;
+          case "warehouseName": cmp = a.warehouseName.localeCompare(b.warehouseName); break;
+          case "expiryDate": cmp = a.expiryDate.localeCompare(b.expiryDate); break;
+          case "daysUntilExpiry": cmp = a.daysUntilExpiry - b.daysUntilExpiry; break;
+          case "remainingQty": cmp = a.remainingQty - b.remainingQty; break;
+          case "estimatedLoss": cmp = a.estimatedLoss - b.estimatedLoss; break;
+        }
+        return sortDir === "asc" ? cmp : -cmp;
+      });
+    }
+    return items;
+  }, [data, sortKey, sortDir]);
+
   // 유통기한 설정 로트 없음
   if (!data || data.categories.length === 0) {
     return (
@@ -214,7 +263,7 @@ export function LotExpiryAlert({ data, className }: LotExpiryAlertProps) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {data.expiringLots.length === 0 ? (
+          {sortedLots.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
               만료됨 또는 30일 이내 만료 예정 로트가 없습니다.
             </p>
@@ -223,19 +272,19 @@ export function LotExpiryAlert({ data, className }: LotExpiryAlertProps) {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="min-w-[120px]">로트번호</TableHead>
-                    <TableHead className="min-w-[90px]">SKU</TableHead>
-                    <TableHead className="min-w-[160px]">제품명</TableHead>
-                    <TableHead className="min-w-[120px]">창고</TableHead>
-                    <TableHead className="min-w-[110px]">만료일</TableHead>
-                    <TableHead className="text-right min-w-[110px]">잔여일수</TableHead>
-                    <TableHead className="text-right min-w-[90px]">잔여수량</TableHead>
-                    <TableHead className="text-right min-w-[110px]">손실예상액</TableHead>
+                    <TableHead className="min-w-[120px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("lotNumber")}>로트번호<SortIcon column="lotNumber" /></TableHead>
+                    <TableHead className="min-w-[90px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("sku")}>SKU<SortIcon column="sku" /></TableHead>
+                    <TableHead className="min-w-[160px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("productName")}>제품명<SortIcon column="productName" /></TableHead>
+                    <TableHead className="min-w-[120px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("warehouseName")}>창고<SortIcon column="warehouseName" /></TableHead>
+                    <TableHead className="min-w-[110px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("expiryDate")}>만료일<SortIcon column="expiryDate" /></TableHead>
+                    <TableHead className="text-right min-w-[110px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("daysUntilExpiry")}>잔여일수<SortIcon column="daysUntilExpiry" /></TableHead>
+                    <TableHead className="text-right min-w-[90px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("remainingQty")}>잔여수량<SortIcon column="remainingQty" /></TableHead>
+                    <TableHead className="text-right min-w-[110px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("estimatedLoss")}>손실예상액<SortIcon column="estimatedLoss" /></TableHead>
                     <TableHead className="min-w-[80px]">긴급도</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.expiringLots.map((lot) => (
+                  {sortedLots.map((lot) => (
                     <TableRow
                       key={`${lot.lotNumber}-${lot.productId}`}
                       className={cn(
