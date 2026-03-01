@@ -20,54 +20,53 @@ export async function getDeliveryComplianceData(): Promise<DeliveryComplianceRes
   if (!orgId) {
     return {
       items: [],
-      summary: {
-        total: 0,
-        onTime: 0,
-        delayed: 0,
-        early: 0,
+      supplierSummaries: [],
+      overall: {
+        totalOrders: 0,
+        completedOrders: 0,
         onTimeRate: 0,
-        avgDelay: 0,
+        avgLeadTime: 0,
+        avgDelayDays: 0,
       },
-      bySupplier: [],
     };
   }
 
-  // 발주 데이터 조회 (취소/초안 제외)
-  const orderRows = await db
-    .select({
-      id: purchaseOrders.id,
-      orderNumber: purchaseOrders.orderNumber,
-      supplierId: purchaseOrders.supplierId,
-      orderDate: purchaseOrders.orderDate,
-      expectedDate: purchaseOrders.expectedDate,
-      actualDate: purchaseOrders.actualDate,
-      requestedDate: purchaseOrders.requestedDate,
-      status: purchaseOrders.status,
-    })
-    .from(purchaseOrders)
-    .where(
-      and(
-        eq(purchaseOrders.organizationId, orgId),
-        ne(purchaseOrders.status, "cancelled"),
-        ne(purchaseOrders.status, "draft")
-      )
-    );
-
-  // 공급자 정보 조회
-  const supplierRows = await db
-    .select({
-      id: suppliers.id,
-      name: suppliers.name,
-      avgLeadTime: suppliers.avgLeadTime,
-    })
-    .from(suppliers)
-    .where(eq(suppliers.organizationId, orgId));
+  // 발주 데이터 + 공급자 정보를 Promise.all로 병렬 조회 (독립적이므로 동시 실행)
+  const [orderRows, supplierRows] = await Promise.all([
+    db
+      .select({
+        id: purchaseOrders.id,
+        orderNumber: purchaseOrders.orderNumber,
+        supplierId: purchaseOrders.supplierId,
+        orderDate: purchaseOrders.orderDate,
+        expectedDate: purchaseOrders.expectedDate,
+        actualDate: purchaseOrders.actualDate,
+        requestedDate: purchaseOrders.requestedDate,
+        status: purchaseOrders.status,
+      })
+      .from(purchaseOrders)
+      .where(
+        and(
+          eq(purchaseOrders.organizationId, orgId),
+          ne(purchaseOrders.status, "cancelled"),
+          ne(purchaseOrders.status, "draft")
+        )
+      ),
+    db
+      .select({
+        id: suppliers.id,
+        name: suppliers.name,
+        avgLeadTime: suppliers.avgLeadTime,
+      })
+      .from(suppliers)
+      .where(eq(suppliers.organizationId, orgId)),
+  ]);
 
   const supplierMap = new Map(
     supplierRows.map((s) => [s.id, { name: s.name, avgLeadTime: s.avgLeadTime ?? 7 }])
   );
 
-  // 발주별 제품명 조회
+  // itemRows는 orderIds에 의존하므로 2단계 유지
   const orderIds = orderRows.map((o) => o.id);
   const orderProductMap = new Map<string, string[]>();
 

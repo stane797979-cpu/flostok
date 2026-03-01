@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, numeric, date, index } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, numeric, date, index, unique } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 
 // KPI 월별 스냅샷 (통합지표)
@@ -20,6 +20,7 @@ export const kpiMonthlySnapshots = pgTable("kpi_monthly_snapshots", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   index("kpi_monthly_snapshots_org_period_idx").on(table.organizationId, table.period),
+  unique("kpi_monthly_snapshots_org_period_uniq").on(table.organizationId, table.period),
 ]);
 
 export type KpiMonthlySnapshot = typeof kpiMonthlySnapshots.$inferSelect;

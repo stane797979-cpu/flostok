@@ -64,35 +64,10 @@ export async function saveKpiSnapshot(
     const orgId = user?.organizationId;
     if (!orgId) return { success: false, message: "조직 정보를 찾을 수 없습니다" };
 
-    // 기존 데이터 확인
-    const [existing] = await db
-      .select()
-      .from(kpiMonthlySnapshots)
-      .where(
-        and(
-          eq(kpiMonthlySnapshots.organizationId, orgId),
-          eq(kpiMonthlySnapshots.period, period)
-        )
-      )
-      .limit(1);
-
-    if (existing) {
-      // 업데이트
-      await db
-        .update(kpiMonthlySnapshots)
-        .set({
-          turnoverRate: data.turnoverRate?.toString() ?? existing.turnoverRate,
-          stockoutRate: data.stockoutRate?.toString() ?? existing.stockoutRate,
-          onTimeDeliveryRate: data.onTimeDeliveryRate?.toString() ?? existing.onTimeDeliveryRate,
-          fulfillmentRate: data.fulfillmentRate?.toString() ?? existing.fulfillmentRate,
-          actualShipmentRate: data.actualShipmentRate?.toString() ?? existing.actualShipmentRate,
-          comment: data.comment !== undefined ? data.comment : existing.comment,
-          updatedAt: new Date(),
-        })
-        .where(eq(kpiMonthlySnapshots.id, existing.id));
-    } else {
-      // 신규
-      await db.insert(kpiMonthlySnapshots).values({
+    // SELECT+UPDATE/INSERT → onConflictDoUpdate upsert 단일 쿼리로 처리
+    await db
+      .insert(kpiMonthlySnapshots)
+      .values({
         organizationId: orgId,
         period,
         turnoverRate: data.turnoverRate?.toString(),
@@ -101,8 +76,19 @@ export async function saveKpiSnapshot(
         fulfillmentRate: data.fulfillmentRate?.toString(),
         actualShipmentRate: data.actualShipmentRate?.toString(),
         comment: data.comment,
+      })
+      .onConflictDoUpdate({
+        target: [kpiMonthlySnapshots.organizationId, kpiMonthlySnapshots.period],
+        set: {
+          ...(data.turnoverRate !== undefined && { turnoverRate: data.turnoverRate.toString() }),
+          ...(data.stockoutRate !== undefined && { stockoutRate: data.stockoutRate.toString() }),
+          ...(data.onTimeDeliveryRate !== undefined && { onTimeDeliveryRate: data.onTimeDeliveryRate.toString() }),
+          ...(data.fulfillmentRate !== undefined && { fulfillmentRate: data.fulfillmentRate.toString() }),
+          ...(data.actualShipmentRate !== undefined && { actualShipmentRate: data.actualShipmentRate.toString() }),
+          ...(data.comment !== undefined && { comment: data.comment }),
+          updatedAt: new Date(),
+        },
       });
-    }
 
     revalidatePath("/dashboard/kpi");
     return { success: true, message: "KPI 스냅샷이 저장되었습니다" };

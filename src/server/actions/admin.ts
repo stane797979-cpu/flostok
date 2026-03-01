@@ -36,32 +36,23 @@ export async function getSystemStats(): Promise<ActionResponse<SystemStats>> {
   try {
     await requireSuperadmin()
 
-    const [orgCount] = await db
-      .select({ value: count() })
-      .from(organizations)
-      .where(ne(organizations.id, SYSTEM_ORG_ID))
-
-    const [userCount] = await db
-      .select({ value: count() })
-      .from(users)
-      .where(eq(users.isSuperadmin, false))
-
-    const [revenue] = await db
-      .select({ value: sum(paymentHistory.amount) })
-      .from(paymentHistory)
-      .where(eq(paymentHistory.status, 'success'))
-
-    const [activeSubs] = await db
-      .select({ value: count() })
-      .from(subscriptions)
-      .where(eq(subscriptions.status, 'active'))
-
     const thirtyDaysAgo = new Date()
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-    const [recentSignups] = await db
-      .select({ value: count() })
-      .from(organizations)
-      .where(and(ne(organizations.id, SYSTEM_ORG_ID), gte(organizations.createdAt, thirtyDaysAgo)))
+
+    // 독립적인 집계 쿼리 5개를 Promise.all로 병렬화 (순차 → 동시)
+    const [
+      [orgCount],
+      [userCount],
+      [revenue],
+      [activeSubs],
+      [recentSignups],
+    ] = await Promise.all([
+      db.select({ value: count() }).from(organizations).where(ne(organizations.id, SYSTEM_ORG_ID)),
+      db.select({ value: count() }).from(users).where(eq(users.isSuperadmin, false)),
+      db.select({ value: sum(paymentHistory.amount) }).from(paymentHistory).where(eq(paymentHistory.status, 'success')),
+      db.select({ value: count() }).from(subscriptions).where(eq(subscriptions.status, 'active')),
+      db.select({ value: count() }).from(organizations).where(and(ne(organizations.id, SYSTEM_ORG_ID), gte(organizations.createdAt, thirtyDaysAgo))),
+    ])
 
     return {
       success: true,

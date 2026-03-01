@@ -80,18 +80,20 @@ export async function getCurrentUserProfile(authId: string): Promise<{
   organizationName: string;
 } | null> {
   try {
-    const [user] = await db
-      .select()
+    // leftJoin으로 단일 쿼리 처리 (순차 2회 → 1회)
+    const [row] = await db
+      .select({
+        name: users.name,
+        email: users.email,
+        role: users.role,
+        organizationName: organizations.name,
+      })
       .from(users)
+      .leftJoin(organizations, eq(organizations.id, users.organizationId))
       .where(eq(users.authId, authId))
       .limit(1)
-    if (!user) return null
 
-    const [org] = await db
-      .select()
-      .from(organizations)
-      .where(eq(organizations.id, user.organizationId))
-      .limit(1)
+    if (!row) return null
 
     const roleMap: Record<string, string> = {
       admin: '관리자',
@@ -100,9 +102,9 @@ export async function getCurrentUserProfile(authId: string): Promise<{
     }
 
     return {
-      name: user.name || user.email.split('@')[0],
-      role: roleMap[user.role] || user.role,
-      organizationName: org?.name || '조직 미설정',
+      name: row.name || row.email.split('@')[0],
+      role: roleMap[row.role] || row.role,
+      organizationName: row.organizationName || '조직 미설정',
     }
   } catch {
     return null

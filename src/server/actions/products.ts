@@ -278,22 +278,24 @@ export async function updateProduct(
               )
             );
 
-          for (const inv of inventoryRecords) {
-            const statusResult = classifyInventoryStatus({
-              currentStock: inv.currentStock,
-              safetyStock: updated.safetyStock || 0,
-              reorderPoint: updated.reorderPoint || 0,
-            });
-
-            await db
-              .update(inventory)
-              .set({
-                status: statusResult.status,
-                lastUpdatedAt: new Date(),
-                updatedAt: new Date(),
-              })
-              .where(eq(inventory.id, inv.id));
-          }
+          // 메모리에서 상태를 미리 계산한 뒤 Promise.all로 병렬 UPDATE (N+1 제거)
+          await Promise.all(
+            inventoryRecords.map((inv) => {
+              const statusResult = classifyInventoryStatus({
+                currentStock: inv.currentStock,
+                safetyStock: updated.safetyStock || 0,
+                reorderPoint: updated.reorderPoint || 0,
+              });
+              return db
+                .update(inventory)
+                .set({
+                  status: statusResult.key,
+                  lastUpdatedAt: new Date(),
+                  updatedAt: new Date(),
+                })
+                .where(eq(inventory.id, inv.id));
+            })
+          );
 
           // 재고 캐시 무효화
           revalidateTag(`inventory-${user.organizationId}`);

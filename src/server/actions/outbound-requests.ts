@@ -732,44 +732,53 @@ export async function bulkConfirmOutboundRequests(
     const errors: string[] = [];
     let confirmedCount = 0;
 
-    for (const requestId of requestIds) {
-      // 요청 정보 확인
-      const [request] = await db
-        .select()
-        .from(outboundRequests)
-        .where(
-          and(
-            eq(outboundRequests.id, requestId),
-            eq(outboundRequests.organizationId, user.organizationId)
-          )
+    // 배치 조회: 전체 요청을 inArray로 한 번에 조회 (N+1 제거)
+    const allRequests = await db
+      .select()
+      .from(outboundRequests)
+      .where(
+        and(
+          inArray(outboundRequests.id, requestIds),
+          eq(outboundRequests.organizationId, user.organizationId)
         )
-        .limit(1);
+      );
+    const requestMap = new Map(allRequests.map((r) => [r.id, r]));
+
+    // 배치 조회: 전체 항목을 inArray로 한 번에 조회 (N+1 제거)
+    const allItems = await db
+      .select()
+      .from(outboundRequestItems)
+      .where(inArray(outboundRequestItems.outboundRequestId, requestIds));
+    const itemsByRequestId = new Map<string, typeof allItems>();
+    for (const item of allItems) {
+      const list = itemsByRequestId.get(item.outboundRequestId) ?? [];
+      list.push(item);
+      itemsByRequestId.set(item.outboundRequestId, list);
+    }
+
+    for (const requestId of requestIds) {
+      const request = requestMap.get(requestId);
 
       if (!request || request.status !== "pending") {
         errors.push(`${request?.requestNumber || requestId}: 이미 처리됨`);
         continue;
       }
 
-      // 항목 조회
-      const items = await db
-        .select()
-        .from(outboundRequestItems)
-        .where(eq(outboundRequestItems.outboundRequestId, requestId));
+      const items = itemsByRequestId.get(requestId) ?? [];
 
       if (items.length === 0) {
         errors.push(`${request.requestNumber}: 항목 없음`);
         continue;
       }
 
-      // confirmedQuantity = requestedQuantity 일괄 설정
-      for (const item of items) {
-        await db
-          .update(outboundRequestItems)
-          .set({ confirmedQuantity: item.requestedQuantity })
-          .where(eq(outboundRequestItems.id, item.id));
-      }
+      // confirmedQuantity = requestedQuantity 배치 UPDATE (CASE WHEN)
+      const qtyCases = items.map((i) => sql`WHEN ${i.id}::uuid THEN ${i.requestedQuantity}`);
+      await db
+        .update(outboundRequestItems)
+        .set({ confirmedQuantity: sql`CASE id ${sql.join(qtyCases, sql` `)} END` })
+        .where(inArray(outboundRequestItems.id, items.map((i) => i.id)));
 
-      // 재고 차감 순차 실행
+      // 재고 차감: processInventoryTransaction은 FIFO 보장이 필요하므로 루프 유지
       let hasError = false;
       for (const item of items) {
         if (item.requestedQuantity === 0) continue;
@@ -1071,14 +1080,15 @@ export async function getOutboundRequestsForPickingList(
   requestIds: string[]
 ): Promise<{ success: boolean; dataList?: PickingListData[]; error?: string }> {
   try {
-    const results: PickingListData[] = [];
-
-    for (const id of requestIds) {
-      const result = await getOutboundRequestForPickingList(id);
-      if (result.success && result.data) {
-        results.push(result.data);
-      }
-    }
+    // Promise.all로 병렬 조회 (순차 for-await 제거)
+    const settled = await Promise.all(
+      requestIds.map((id) =>
+        getOutboundRequestForPickingList(id).catch(() => ({ success: false as const, data: undefined }))
+      )
+    );
+    const results: PickingListData[] = settled
+      .filter((r) => r.success && r.data)
+      .map((r) => r.data as PickingListData);
 
     if (results.length === 0) {
       return { success: false, error: "조회 가능한 출고 요청이 없습니다" };
