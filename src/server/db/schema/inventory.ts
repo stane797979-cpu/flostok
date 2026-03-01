@@ -10,6 +10,7 @@ import {
   index,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { organizations } from "./organizations";
 import { products } from "./products";
 import { warehouses } from "./warehouses";
@@ -87,6 +88,8 @@ export const inventoryHistory = pgTable("inventory_history", {
   index("inventory_history_org_type_idx").on(table.organizationId, table.changeType),
   index("inventory_history_org_product_date_idx").on(table.organizationId, table.productId, table.date),
   index("inventory_history_warehouse_date_idx").on(table.warehouseId, table.date),
+  index("inventory_history_org_outbound_idx").on(table.organizationId, table.date).where(sql`change_amount < 0`),
+  index("inventory_history_org_product_outbound_idx").on(table.organizationId, table.productId, table.date).where(sql`change_amount < 0`),
 ]);
 
 // Lot 상태
@@ -123,6 +126,7 @@ export const inventoryLots = pgTable("inventory_lots", {
   index("inventory_lots_org_product_idx").on(table.organizationId, table.productId),
   index("inventory_lots_product_status_idx").on(table.productId, table.status),
   index("inventory_lots_warehouse_product_idx").on(table.warehouseId, table.productId),
+  index("inventory_lots_warehouse_status_received_idx").on(table.warehouseId, table.status, table.receivedDate).where(sql`remaining_quantity > 0`),
 ]);
 
 export type Inventory = typeof inventory.$inferSelect;

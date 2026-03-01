@@ -44,6 +44,7 @@ export const inboundRecords = pgTable("inbound_records", {
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
+  index("inbound_records_org_idx").on(table.organizationId),
   index("inbound_records_org_date_idx").on(table.organizationId, table.date),
   index("inbound_records_product_date_idx").on(table.productId, table.date),
   index("inbound_records_po_idx").on(table.purchaseOrderId),

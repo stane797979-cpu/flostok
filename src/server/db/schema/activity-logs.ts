@@ -37,16 +37,17 @@ export const activityLogs = pgTable(
       .defaultNow()
       .notNull(),
   },
-  (table) => ({
-    orgCreatedAtIdx: index("activity_logs_org_created_at_idx").on(
+  (table) => [
+    index("activity_logs_org_created_at_idx").on(
       table.organizationId,
       table.createdAt
     ),
-    entityTypeIdx: index("activity_logs_entity_type_idx").on(
+    index("activity_logs_entity_type_idx").on(
       table.organizationId,
       table.entityType
     ),
-  })
+    index("activity_logs_org_entity_id_idx").on(table.organizationId, table.entityId),
+  ]
 );
 
 export type ActivityLog = typeof activityLogs.$inferSelect;
