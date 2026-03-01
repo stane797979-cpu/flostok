@@ -27,6 +27,21 @@ import type { SimulationResult, ScenarioResult } from "@/server/services/scm/sce
 type ScenarioSortKey = "scenarioName" | "demandChangePercent" | "adjustedLeadTime" | "newSafetyStock" | "newReorderPoint" | "stockStatus" | "requiredOrderQuantity";
 type SortDir = "asc" | "desc";
 
+function ScenarioSortIcon({
+  column,
+  sortKey,
+  sortDir,
+}: {
+  column: ScenarioSortKey;
+  sortKey: ScenarioSortKey | null;
+  sortDir: SortDir;
+}) {
+  if (sortKey !== column) return <ArrowUpDown className="ml-1 inline h-3 w-3 text-muted-foreground/50" />;
+  return sortDir === "asc"
+    ? <ArrowUp className="ml-1 inline h-3 w-3" />
+    : <ArrowDown className="ml-1 inline h-3 w-3" />;
+}
+
 interface ScenarioSimulationProps {
   data: ScenarioSimulationData | null;
 }
@@ -54,12 +69,10 @@ export function ScenarioSimulation({ data }: ScenarioSimulationProps) {
     });
   }, []);
 
-  const ScenarioSortIcon = ({ column }: { column: ScenarioSortKey }) => {
-    if (scenarioSortKey !== column) return <ArrowUpDown className="ml-1 inline h-3 w-3 text-muted-foreground/50" />;
-    return scenarioSortDir === "asc"
-      ? <ArrowUp className="ml-1 inline h-3 w-3" />
-      : <ArrowDown className="ml-1 inline h-3 w-3" />;
-  };
+  const maxReorderPoint = useMemo(
+    () => (results.length > 0 ? Math.max(...results.map((r) => r.newReorderPoint)) : 0),
+    [results]
+  );
 
   const sortedResults = useMemo(() => {
     if (!scenarioSortKey) return results;
@@ -338,25 +351,25 @@ export function ScenarioSimulation({ data }: ScenarioSimulationProps) {
                   <thead>
                     <tr className="border-b dark:border-slate-700">
                       <th className="pb-3 text-left font-medium dark:text-slate-200 cursor-pointer select-none hover:text-foreground" onClick={() => handleScenarioSort("scenarioName")}>
-                        시나리오<ScenarioSortIcon column="scenarioName" />
+                        시나리오<ScenarioSortIcon column="scenarioName" sortKey={scenarioSortKey} sortDir={scenarioSortDir} />
                       </th>
                       <th className="pb-3 text-right font-medium dark:text-slate-200 cursor-pointer select-none hover:text-foreground" onClick={() => handleScenarioSort("demandChangePercent")}>
-                        수요 변동<ScenarioSortIcon column="demandChangePercent" />
+                        수요 변동<ScenarioSortIcon column="demandChangePercent" sortKey={scenarioSortKey} sortDir={scenarioSortDir} />
                       </th>
                       <th className="pb-3 text-right font-medium dark:text-slate-200 cursor-pointer select-none hover:text-foreground" onClick={() => handleScenarioSort("adjustedLeadTime")}>
-                        리드타임<ScenarioSortIcon column="adjustedLeadTime" />
+                        리드타임<ScenarioSortIcon column="adjustedLeadTime" sortKey={scenarioSortKey} sortDir={scenarioSortDir} />
                       </th>
                       <th className="pb-3 text-right font-medium dark:text-slate-200 cursor-pointer select-none hover:text-foreground" onClick={() => handleScenarioSort("newSafetyStock")}>
-                        안전재고<ScenarioSortIcon column="newSafetyStock" />
+                        안전재고<ScenarioSortIcon column="newSafetyStock" sortKey={scenarioSortKey} sortDir={scenarioSortDir} />
                       </th>
                       <th className="pb-3 text-right font-medium dark:text-slate-200 cursor-pointer select-none hover:text-foreground" onClick={() => handleScenarioSort("newReorderPoint")}>
-                        발주점<ScenarioSortIcon column="newReorderPoint" />
+                        발주점<ScenarioSortIcon column="newReorderPoint" sortKey={scenarioSortKey} sortDir={scenarioSortDir} />
                       </th>
                       <th className="pb-3 text-right font-medium dark:text-slate-200 cursor-pointer select-none hover:text-foreground" onClick={() => handleScenarioSort("stockStatus")}>
-                        재고 상태<ScenarioSortIcon column="stockStatus" />
+                        재고 상태<ScenarioSortIcon column="stockStatus" sortKey={scenarioSortKey} sortDir={scenarioSortDir} />
                       </th>
                       <th className="pb-3 text-right font-medium dark:text-slate-200 cursor-pointer select-none hover:text-foreground" onClick={() => handleScenarioSort("requiredOrderQuantity")}>
-                        발주 필요량<ScenarioSortIcon column="requiredOrderQuantity" />
+                        발주 필요량<ScenarioSortIcon column="requiredOrderQuantity" sortKey={scenarioSortKey} sortDir={scenarioSortDir} />
                       </th>
                     </tr>
                   </thead>
@@ -486,8 +499,7 @@ export function ScenarioSimulation({ data }: ScenarioSimulationProps) {
 
                 {/* 시나리오별 바 차트 */}
                 {results.map((result, index) => {
-                  const maxValue =
-                    Math.max(...results.map((r) => r.newReorderPoint)) * 1.2;
+                  const maxValue = maxReorderPoint * 1.2;
                   const barWidth =
                     maxValue > 0 ? (result.newReorderPoint / maxValue) * 100 : 0;
                   const currentStockWidth =

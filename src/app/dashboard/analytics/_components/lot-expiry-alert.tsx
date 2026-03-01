@@ -92,6 +92,23 @@ function UrgencyBadge({ urgency }: { urgency: ExpiringLot["urgency"] }) {
   }
 }
 
+// ─── 정렬 아이콘 ──────────────────────────────────────────────────────────────
+
+function SortIcon({
+  column,
+  sortKey,
+  sortDir,
+}: {
+  column: LotSortKey;
+  sortKey: LotSortKey | null;
+  sortDir: SortDir;
+}) {
+  if (sortKey !== column) return <ArrowUpDown className="ml-1 inline h-3 w-3 text-muted-foreground/50" />;
+  return sortDir === "asc"
+    ? <ArrowUp className="ml-1 inline h-3 w-3" />
+    : <ArrowDown className="ml-1 inline h-3 w-3" />;
+}
+
 // ─── Props ───────────────────────────────────────────────────────────────────
 
 interface LotExpiryAlertProps {
@@ -115,13 +132,6 @@ export function LotExpiryAlert({ data, className }: LotExpiryAlertProps) {
       return key;
     });
   }, []);
-
-  const SortIcon = ({ column }: { column: LotSortKey }) => {
-    if (sortKey !== column) return <ArrowUpDown className="ml-1 inline h-3 w-3 text-muted-foreground/50" />;
-    return sortDir === "asc"
-      ? <ArrowUp className="ml-1 inline h-3 w-3" />
-      : <ArrowDown className="ml-1 inline h-3 w-3" />;
-  };
 
   const sortedLots = useMemo<ExpiringLot[]>(() => {
     if (!data) return [];
@@ -272,14 +282,14 @@ export function LotExpiryAlert({ data, className }: LotExpiryAlertProps) {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="min-w-[120px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("lotNumber")}>로트번호<SortIcon column="lotNumber" /></TableHead>
-                    <TableHead className="min-w-[90px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("sku")}>SKU<SortIcon column="sku" /></TableHead>
-                    <TableHead className="min-w-[160px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("productName")}>제품명<SortIcon column="productName" /></TableHead>
-                    <TableHead className="min-w-[120px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("warehouseName")}>창고<SortIcon column="warehouseName" /></TableHead>
-                    <TableHead className="min-w-[110px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("expiryDate")}>만료일<SortIcon column="expiryDate" /></TableHead>
-                    <TableHead className="text-right min-w-[110px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("daysUntilExpiry")}>잔여일수<SortIcon column="daysUntilExpiry" /></TableHead>
-                    <TableHead className="text-right min-w-[90px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("remainingQty")}>잔여수량<SortIcon column="remainingQty" /></TableHead>
-                    <TableHead className="text-right min-w-[110px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("estimatedLoss")}>손실예상액<SortIcon column="estimatedLoss" /></TableHead>
+                    <TableHead className="min-w-[120px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("lotNumber")}>로트번호<SortIcon column="lotNumber" sortKey={sortKey} sortDir={sortDir} /></TableHead>
+                    <TableHead className="min-w-[90px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("sku")}>SKU<SortIcon column="sku" sortKey={sortKey} sortDir={sortDir} /></TableHead>
+                    <TableHead className="min-w-[160px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("productName")}>제품명<SortIcon column="productName" sortKey={sortKey} sortDir={sortDir} /></TableHead>
+                    <TableHead className="min-w-[120px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("warehouseName")}>창고<SortIcon column="warehouseName" sortKey={sortKey} sortDir={sortDir} /></TableHead>
+                    <TableHead className="min-w-[110px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("expiryDate")}>만료일<SortIcon column="expiryDate" sortKey={sortKey} sortDir={sortDir} /></TableHead>
+                    <TableHead className="text-right min-w-[110px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("daysUntilExpiry")}>잔여일수<SortIcon column="daysUntilExpiry" sortKey={sortKey} sortDir={sortDir} /></TableHead>
+                    <TableHead className="text-right min-w-[90px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("remainingQty")}>잔여수량<SortIcon column="remainingQty" sortKey={sortKey} sortDir={sortDir} /></TableHead>
+                    <TableHead className="text-right min-w-[110px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("estimatedLoss")}>손실예상액<SortIcon column="estimatedLoss" sortKey={sortKey} sortDir={sortDir} /></TableHead>
                     <TableHead className="min-w-[80px]">긴급도</TableHead>
                   </TableRow>
                 </TableHeader>

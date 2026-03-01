@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Loader2, ArrowLeft, ArrowRight, Sparkles } from 'lucide-react';
@@ -11,7 +12,11 @@ import { StepTrend } from './step-trend';
 import { StepImportance } from './step-importance';
 import { StepContext } from './step-context';
 import { GuideResult } from './guide-result';
-import { BulkGuideResult } from './bulk-guide-result';
+
+const BulkGuideResult = dynamic(
+  () => import('./bulk-guide-result').then((m) => ({ default: m.BulkGuideResult })),
+  { loading: () => <div className="animate-pulse h-[400px] bg-muted rounded-lg" /> }
+);
 import {
   getGuideRecommendation,
   getBulkForecastGuide,

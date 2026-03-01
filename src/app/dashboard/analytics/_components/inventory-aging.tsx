@@ -82,6 +82,23 @@ const COHORT_COLORS: Record<string, string> = {
   "180일+":   "#ef4444",
 };
 
+// ─── 정렬 아이콘 ──────────────────────────────────────────────────────────────
+
+function SortIcon({
+  column,
+  sortKey,
+  sortDir,
+}: {
+  column: SortKey;
+  sortKey: SortKey | null;
+  sortDir: SortDir;
+}) {
+  if (sortKey !== column) return <ArrowUpDown className="ml-1 inline h-3 w-3 text-muted-foreground/50" />;
+  return sortDir === "asc"
+    ? <ArrowUp className="ml-1 inline h-3 w-3" />
+    : <ArrowDown className="ml-1 inline h-3 w-3" />;
+}
+
 // ─── Props ───────────────────────────────────────────────────────────────────
 
 interface InventoryAgingProps {
@@ -106,13 +123,6 @@ export function InventoryAging({ data, className }: InventoryAgingProps) {
       return key;
     });
   }, []);
-
-  const SortIcon = ({ column }: { column: SortKey }) => {
-    if (sortKey !== column) return <ArrowUpDown className="ml-1 inline h-3 w-3 text-muted-foreground/50" />;
-    return sortDir === "asc"
-      ? <ArrowUp className="ml-1 inline h-3 w-3" />
-      : <ArrowDown className="ml-1 inline h-3 w-3" />;
-  };
 
   // 차트 데이터
   const chartData = useMemo(() => {
@@ -347,12 +357,12 @@ export function InventoryAging({ data, className }: InventoryAgingProps) {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="min-w-[90px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("sku")}>SKU<SortIcon column="sku" /></TableHead>
-                    <TableHead className="min-w-[140px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("name")}>제품명<SortIcon column="name" /></TableHead>
-                    <TableHead className="text-right min-w-[80px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("currentStock")}>현재고<SortIcon column="currentStock" /></TableHead>
-                    <TableHead className="text-right min-w-[100px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("inventoryValue")}>재고금액<SortIcon column="inventoryValue" /></TableHead>
-                    <TableHead className="min-w-[110px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("lastOutboundDate")}>마지막 출고일<SortIcon column="lastOutboundDate" /></TableHead>
-                    <TableHead className="text-right min-w-[90px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("daysSinceLastOutbound")}>경과일수<SortIcon column="daysSinceLastOutbound" /></TableHead>
+                    <TableHead className="min-w-[90px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("sku")}>SKU<SortIcon column="sku" sortKey={sortKey} sortDir={sortDir} /></TableHead>
+                    <TableHead className="min-w-[140px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("name")}>제품명<SortIcon column="name" sortKey={sortKey} sortDir={sortDir} /></TableHead>
+                    <TableHead className="text-right min-w-[80px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("currentStock")}>현재고<SortIcon column="currentStock" sortKey={sortKey} sortDir={sortDir} /></TableHead>
+                    <TableHead className="text-right min-w-[100px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("inventoryValue")}>재고금액<SortIcon column="inventoryValue" sortKey={sortKey} sortDir={sortDir} /></TableHead>
+                    <TableHead className="min-w-[110px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("lastOutboundDate")}>마지막 출고일<SortIcon column="lastOutboundDate" sortKey={sortKey} sortDir={sortDir} /></TableHead>
+                    <TableHead className="text-right min-w-[90px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("daysSinceLastOutbound")}>경과일수<SortIcon column="daysSinceLastOutbound" sortKey={sortKey} sortDir={sortDir} /></TableHead>
                     <TableHead className="min-w-[130px]">추천 조치</TableHead>
                   </TableRow>
                 </TableHeader>

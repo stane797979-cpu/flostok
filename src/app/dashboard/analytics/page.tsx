@@ -5,13 +5,40 @@ import { ABCXYZSummary } from "./_components/abc-xyz-summary";
 import { Card, CardContent } from "@/components/ui/card";
 import { Construction } from "lucide-react";
 import { getABCXYZAnalysis } from "@/server/actions/analytics";
-import { AnalyticsGradeChange } from "./_components/analytics-grade-change";
-import { AnalyticsFulfillment } from "./_components/analytics-fulfillment";
-import { AnalyticsTurnover } from "./_components/analytics-turnover";
-import { AnalyticsAging } from "./_components/analytics-aging";
-import { AnalyticsScenario } from "./_components/analytics-scenario";
-import { AnalyticsLotExpiry } from "./_components/analytics-lot-expiry";
-import { AnalyticsWarehouse } from "./_components/analytics-warehouse";
+const AnalyticsGradeChange = dynamic(
+  () => import("./_components/analytics-grade-change").then((m) => ({ default: m.AnalyticsGradeChange })),
+  { loading: () => <div className="animate-pulse h-[400px] bg-muted rounded-lg" /> }
+);
+
+const AnalyticsFulfillment = dynamic(
+  () => import("./_components/analytics-fulfillment").then((m) => ({ default: m.AnalyticsFulfillment })),
+  { loading: () => <div className="animate-pulse h-[400px] bg-muted rounded-lg" /> }
+);
+
+const AnalyticsTurnover = dynamic(
+  () => import("./_components/analytics-turnover").then((m) => ({ default: m.AnalyticsTurnover })),
+  { loading: () => <div className="animate-pulse h-[400px] bg-muted rounded-lg" /> }
+);
+
+const AnalyticsAging = dynamic(
+  () => import("./_components/analytics-aging").then((m) => ({ default: m.AnalyticsAging })),
+  { loading: () => <div className="animate-pulse h-[400px] bg-muted rounded-lg" /> }
+);
+
+const AnalyticsScenario = dynamic(
+  () => import("./_components/analytics-scenario").then((m) => ({ default: m.AnalyticsScenario })),
+  { loading: () => <div className="animate-pulse h-[400px] bg-muted rounded-lg" /> }
+);
+
+const AnalyticsLotExpiry = dynamic(
+  () => import("./_components/analytics-lot-expiry").then((m) => ({ default: m.AnalyticsLotExpiry })),
+  { loading: () => <div className="animate-pulse h-[400px] bg-muted rounded-lg" /> }
+);
+
+const AnalyticsWarehouse = dynamic(
+  () => import("./_components/analytics-warehouse").then((m) => ({ default: m.AnalyticsWarehouse })),
+  { loading: () => <div className="animate-pulse h-[400px] bg-muted rounded-lg" /> }
+);
 import { RefreshGradesButton } from "./_components/refresh-grades-button";
 import type { ProductAnalysis } from "./_components/abc-xyz-table";
 
