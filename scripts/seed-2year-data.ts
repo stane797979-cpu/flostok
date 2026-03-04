@@ -28,9 +28,9 @@ import {
   warehouses,
 } from "../src/server/db/schema";
 
-// DB 연결 (직접 연결, pgbouncer 우회)
-const DATABASE_URL = process.env.DATABASE_URL ||
-  "postgresql://postgres.hcduybfzxobkqqjqaltm:SmartProcure2026Secure@aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true";
+// DB 연결
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) throw new Error("DATABASE_URL 환경변수가 필요합니다");
 const client = postgres(DATABASE_URL, { max: 1, connect_timeout: 30 });
 const db = drizzle(client);
 
