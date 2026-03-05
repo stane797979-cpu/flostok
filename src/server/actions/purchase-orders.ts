@@ -138,14 +138,15 @@ export async function getReorderItems(options?: {
       LIMIT ${MAX_CANDIDATES}
     `);
 
-    // raw SQL 결과 → 배열
-    const candidateRows = (reorderCandidates as unknown as { rows: Array<{
+    // raw SQL 결과 → 배열 (postgres.js는 배열 직접 반환, .rows 없음)
+    type CandidateRow = {
       product_id: string; product_sku: string; product_name: string;
       safety_stock: number; reorder_point: number; moq: number; lead_time: number;
       unit_price: number; cost_price: number; abc_grade: string | null; xyz_grade: string | null;
       primary_supplier_id: string | null; total_stock: number;
       supplier_id: string | null; supplier_name: string | null; supplier_avg_lead_time: number | null;
-    }> }).rows ?? [];
+    };
+    const candidateRows = Array.from(reorderCandidates as unknown as CandidateRow[]);
 
     // 일평균 판매량을 단일 그룹 쿼리로 일괄 조회 (N+1 쿼리 제거)
     const productIds = candidateRows.map((r) => r.product_id);
