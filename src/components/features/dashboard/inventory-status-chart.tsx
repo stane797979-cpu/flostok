@@ -158,34 +158,64 @@ export const InventoryStatusChart = memo<InventoryStatusChartProps>(function Inv
                       className={cn(strokeColorMap[seg.color] || 'stroke-gray-500')}
                     />
                   ))}
-                  {/* 세그먼트 라벨 (도넛 바깥) */}
-                  {segments.map((seg) => {
-                    const pct = Math.round(seg.percentage * 100);
-                    if (pct === 0) return null;
-                    const angle = (seg.midAngle * Math.PI) / 180;
-                    const lx = center + labelRadius * Math.cos(angle);
-                    const ly = center + labelRadius * Math.sin(angle);
-                    return (
-                      <g key={`label-${seg.key}`}>
+                  {/* 세그먼트 라벨 (도넛 바깥, 충돌 해소) */}
+                  {(() => {
+                    // 1단계: 원래 위치 계산
+                    const rawLabels = segments
+                      .filter((seg) => Math.round(seg.percentage * 100) > 0)
+                      .map((seg) => {
+                        const angle = (seg.midAngle * Math.PI) / 180;
+                        return {
+                          ...seg,
+                          pct: Math.round(seg.percentage * 100),
+                          angle,
+                          x: center + labelRadius * Math.cos(angle),
+                          y: center + labelRadius * Math.sin(angle),
+                        };
+                      });
+
+                    // 2단계: y 기준 정렬 후 겹침 해소 (최소 간격 40px)
+                    const MIN_GAP = 40;
+                    const sorted = [...rawLabels].sort((a, b) => a.y - b.y);
+                    for (let i = 1; i < sorted.length; i++) {
+                      const prev = sorted[i - 1];
+                      const curr = sorted[i];
+                      const gap = curr.y - prev.y;
+                      if (gap < MIN_GAP) {
+                        const shift = (MIN_GAP - gap) / 2;
+                        sorted[i - 1] = { ...prev, y: prev.y - shift };
+                        sorted[i] = { ...curr, y: curr.y + shift };
+                        // 연쇄 보정: 이전 것도 다시 체크
+                        for (let j = i - 1; j > 0; j--) {
+                          const g = sorted[j].y - sorted[j - 1].y;
+                          if (g < MIN_GAP) {
+                            sorted[j - 1] = { ...sorted[j - 1], y: sorted[j - 1].y - (MIN_GAP - g) };
+                          }
+                        }
+                      }
+                    }
+
+                    return sorted.map((lbl) => (
+                      <g key={`label-${lbl.key}`}>
                         <text
-                          x={lx}
-                          y={ly - 10}
-                          textAnchor="middle"
-                          className={cn("text-[22px] font-bold", fillColorMap[seg.color] || 'fill-gray-600')}
+                          x={lbl.x}
+                          y={lbl.y - 10}
+                          textAnchor={lbl.x < center ? "end" : "start"}
+                          className={cn("text-[20px] font-bold", fillColorMap[lbl.color] || 'fill-gray-600')}
                         >
-                          {seg.label}
+                          {lbl.label}
                         </text>
                         <text
-                          x={lx}
-                          y={ly + 14}
-                          textAnchor="middle"
-                          className="fill-slate-500 text-[18px] font-semibold dark:fill-slate-400"
+                          x={lbl.x}
+                          y={lbl.y + 12}
+                          textAnchor={lbl.x < center ? "end" : "start"}
+                          className="fill-slate-500 text-[16px] font-semibold dark:fill-slate-400"
                         >
-                          {pct}% ({seg.count})
+                          {lbl.pct}% ({lbl.count})
                         </text>
                       </g>
-                    );
-                  })}
+                    ));
+                  })()}
                 </svg>
                 {/* 중앙 텍스트 */}
                 <div
