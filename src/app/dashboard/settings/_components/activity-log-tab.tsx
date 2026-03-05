@@ -248,16 +248,16 @@ export function ActivityLogTab() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[160px] cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("createdAt")}>
+                <TableHead className="w-[170px] cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("createdAt")}>
                   날짜/시간<SortIcon column="createdAt" sortKey={sortKey} sortDir={sortDir} />
                 </TableHead>
-                <TableHead className="w-[100px] cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("userName")}>
+                <TableHead className="w-[140px] cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("userName")}>
                   사용자<SortIcon column="userName" sortKey={sortKey} sortDir={sortDir} />
                 </TableHead>
-                <TableHead className="w-[80px] cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("action")}>
+                <TableHead className="w-[90px] cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("action")}>
                   작업<SortIcon column="action" sortKey={sortKey} sortDir={sortDir} />
                 </TableHead>
-                <TableHead className="w-[100px] cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("entityType")}>
+                <TableHead className="w-[130px] cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("entityType")}>
                   대상<SortIcon column="entityType" sortKey={sortKey} sortDir={sortDir} />
                 </TableHead>
                 <TableHead className="cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("description")}>
