@@ -26,14 +26,14 @@ interface OnboardingListClientProps {
 }
 
 const STATUS_CONFIG = {
-  draft: { label: '진행중', variant: 'secondary' as const, color: 'bg-slate-100 text-slate-700' },
-  completed: { label: '완료', variant: 'default' as const, color: 'bg-green-100 text-green-700' },
-  failed: { label: '실패', variant: 'destructive' as const, color: 'bg-red-100 text-red-700' },
-  uploaded: { label: '업로드됨', variant: 'outline' as const, color: 'bg-blue-100 text-blue-700' },
-  analyzing: { label: '분석중', variant: 'outline' as const, color: 'bg-blue-100 text-blue-700' },
-  mapping: { label: '매핑중', variant: 'outline' as const, color: 'bg-blue-100 text-blue-700' },
-  previewing: { label: '미리보기', variant: 'outline' as const, color: 'bg-blue-100 text-blue-700' },
-  importing: { label: '임포트중', variant: 'outline' as const, color: 'bg-blue-100 text-blue-700' },
+  draft: { label: '진행중', variant: 'secondary' as const, color: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200' },
+  completed: { label: '완료', variant: 'default' as const, color: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' },
+  failed: { label: '실패', variant: 'destructive' as const, color: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' },
+  uploaded: { label: '업로드됨', variant: 'outline' as const, color: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' },
+  analyzing: { label: '분석중', variant: 'outline' as const, color: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' },
+  mapping: { label: '매핑중', variant: 'outline' as const, color: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' },
+  previewing: { label: '미리보기', variant: 'outline' as const, color: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' },
+  importing: { label: '임포트중', variant: 'outline' as const, color: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' },
 }
 
 const STEP_LABELS = [
@@ -162,7 +162,7 @@ export function OnboardingListClient({ initialSessions }: OnboardingListClientPr
 
                   <div className="text-sm">
                     <span className="text-slate-500">현재 단계:</span>
-                    <span className="ml-2 font-medium text-slate-700">
+                    <span className="ml-2 font-medium text-slate-700 dark:text-slate-200">
                       {session.currentStep}단계 - {currentStepLabel}
                     </span>
                   </div>

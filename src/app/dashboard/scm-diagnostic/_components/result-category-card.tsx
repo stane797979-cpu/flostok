@@ -98,7 +98,7 @@ export function ResultCategoryCard({ result }: ResultCategoryCardProps) {
         {/* DB 실측값 */}
         {dbMetrics.length > 0 && (
           <div className="space-y-2">
-            <h4 className="text-sm font-semibold text-slate-700">실측 지표</h4>
+            <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200">실측 지표</h4>
             <div className="grid gap-2 sm:grid-cols-3">
               {dbMetrics.map((metric) => (
                 <div

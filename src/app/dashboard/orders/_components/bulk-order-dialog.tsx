@@ -195,7 +195,7 @@ export function BulkOrderDialog({
                   {items
                     .filter((item) => !item.supplierId)
                     .map((item) => (
-                      <div key={item.productId} className="text-xs text-yellow-700">
+                      <div key={item.productId} className="text-xs text-yellow-700 dark:text-yellow-300">
                         • {item.productName} ({item.sku})
                       </div>
                     ))}

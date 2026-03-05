@@ -320,14 +320,14 @@ export function StepPreviewImport({
                 {/* 오류 목록 */}
                 {activePreview.errors.length > 0 && (
                   <div className="space-y-2">
-                    <h4 className="text-sm font-semibold text-red-700">
+                    <h4 className="text-sm font-semibold text-red-700 dark:text-red-300">
                       변환 오류 ({activePreview.errors.length}건)
                     </h4>
                     <div className="max-h-[150px] overflow-auto space-y-1">
                       {activePreview.errors.slice(0, 10).map((err, i) => (
                         <div
                           key={i}
-                          className="flex items-start gap-2 text-sm p-2 bg-red-50 rounded"
+                          className="flex items-start gap-2 text-sm p-2 bg-red-50 dark:bg-red-950 rounded"
                         >
                           <XCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
                           <span>

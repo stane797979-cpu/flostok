@@ -112,7 +112,7 @@ export function ProductDetailDialog({ open, onOpenChange, product }: ProductDeta
         <div className="space-y-6 pt-2">
           {/* 기본 정보 */}
           <section>
-            <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
               <Info className="h-4 w-4" />
               기본 정보
             </h3>
@@ -138,7 +138,7 @@ export function ProductDetailDialog({ open, onOpenChange, product }: ProductDeta
 
           {/* 재고 현황 */}
           <section>
-            <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
               <Package className="h-4 w-4" />
               재고 현황
             </h3>
@@ -185,7 +185,7 @@ export function ProductDetailDialog({ open, onOpenChange, product }: ProductDeta
 
           {/* 발주 관련 */}
           <section>
-            <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
               <Truck className="h-4 w-4" />
               발주 설정
             </h3>
@@ -206,7 +206,7 @@ export function ProductDetailDialog({ open, onOpenChange, product }: ProductDeta
 
           {/* 등급 */}
           <section>
-            <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
               <BarChart3 className="h-4 w-4" />
               분류 등급
             </h3>

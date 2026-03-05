@@ -48,8 +48,8 @@ interface StepColumnMappingProps {
 }
 
 const CONFIDENCE_COLORS: Record<string, string> = {
-  high: "bg-green-100 text-green-700 border-green-300",
-  medium: "bg-yellow-100 text-yellow-700 border-yellow-300",
+  high: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 border-green-300",
+  medium: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300 border-yellow-300",
   low: "bg-slate-100 text-slate-500 border-slate-300",
   none: "bg-slate-50 text-slate-400 border-slate-200",
 };

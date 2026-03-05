@@ -225,7 +225,7 @@ export function ReorderItemsTable({
             <Checkbox checked disabled />
             <span className="text-sm font-medium">{selectedIds.length}개 품목 선택됨</span>
             {!canBulkOrder && (
-              <Badge variant="outline" className="border-yellow-300 bg-yellow-50 text-yellow-700">
+              <Badge variant="outline" className="border-yellow-300 bg-yellow-50 text-yellow-700 dark:border-yellow-700 dark:bg-yellow-950 dark:text-yellow-300">
                 일부 품목에 공급자 미지정
               </Badge>
             )}

@@ -165,14 +165,14 @@ export default function AlertsPage() {
             <div className="text-2xl font-bold">{total}</div>
           </CardContent>
         </Card>
-        <Card className={unreadCount > 0 ? "border-blue-200 bg-blue-50" : ""}>
+        <Card className={unreadCount > 0 ? "border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950" : ""}>
           <CardHeader className="pb-2">
-            <CardDescription className={unreadCount > 0 ? "text-blue-700" : ""}>
+            <CardDescription className={unreadCount > 0 ? "text-blue-700 dark:text-blue-300" : ""}>
               읽지 않은 알림
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className={cn("text-2xl font-bold", unreadCount > 0 && "text-blue-700")}>
+            <div className={cn("text-2xl font-bold", unreadCount > 0 && "text-blue-700 dark:text-blue-300")}>
               {unreadCount}
             </div>
           </CardContent>

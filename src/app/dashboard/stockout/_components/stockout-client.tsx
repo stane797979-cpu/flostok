@@ -43,10 +43,10 @@ function SortIcon({ field, currentField, direction }: SortIconProps) {
     return <ArrowUpDown className="ml-1 h-3.5 w-3.5 text-slate-400" />;
   }
   if (direction === "asc") {
-    return <ArrowUp className="ml-1 h-3.5 w-3.5 text-slate-700" />;
+    return <ArrowUp className="ml-1 h-3.5 w-3.5 text-slate-700 dark:text-slate-200" />;
   }
   if (direction === "desc") {
-    return <ArrowDown className="ml-1 h-3.5 w-3.5 text-slate-700" />;
+    return <ArrowDown className="ml-1 h-3.5 w-3.5 text-slate-700 dark:text-slate-200" />;
   }
   return <ArrowUpDown className="ml-1 h-3.5 w-3.5 text-slate-400" />;
 }

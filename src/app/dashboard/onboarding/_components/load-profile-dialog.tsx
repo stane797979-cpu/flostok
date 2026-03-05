@@ -168,9 +168,9 @@ export function LoadProfileDialog({
                           variant="outline"
                           className={
                             compat >= 70
-                              ? "text-green-700 border-green-300"
+                              ? "text-green-700 border-green-300 dark:text-green-300 dark:border-green-700"
                               : compat >= 40
-                              ? "text-yellow-700 border-yellow-300"
+                              ? "text-yellow-700 border-yellow-300 dark:text-yellow-300 dark:border-yellow-700"
                               : "text-slate-500 border-slate-300"
                           }
                         >

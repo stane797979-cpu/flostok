@@ -54,7 +54,7 @@ export default async function OnboardingDetailPage({
               {session.companyName}
             </h1>
             <div className="flex items-center gap-2 mt-1">
-              <Badge className="bg-green-100 text-green-700 font-medium">
+              <Badge className="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 font-medium">
                 완료
               </Badge>
               <CheckCircle2 className="h-4 w-4 text-green-600" />
@@ -105,7 +105,7 @@ export default async function OnboardingDetailPage({
                       </div>
                       <div className="flex items-center gap-2">
                         {file.status === "imported" ? (
-                          <Badge className="bg-green-100 text-green-700">
+                          <Badge className="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
                             <CheckCircle2 className="h-3 w-3 mr-1" />
                             임포트 완료
                             {importResult?.successCount != null &&

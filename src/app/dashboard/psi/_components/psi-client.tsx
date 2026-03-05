@@ -301,7 +301,7 @@ export function PSIClient({ data: initialData }: PSIClientProps) {
                       <div className="space-y-3 pl-7 border-l-2 border-purple-200 ml-3 mt-2">
                         <div className="space-y-1.5">
                           <Label className="text-xs font-medium flex items-center gap-1.5">
-                            <Badge variant="outline" className="text-[9px] px-1 py-0 border-blue-300 text-blue-700 bg-blue-50">정량</Badge>
+                            <Badge variant="outline" className="text-[9px] px-1 py-0 border-blue-300 text-blue-700 bg-blue-50 dark:border-blue-700 dark:text-blue-300 dark:bg-blue-950">정량</Badge>
                             정량발주 제품 산출방식
                           </Label>
                           <Select value={fixedQtySubMethod} onValueChange={(v) => setFixedQtySubMethod(v as SOPMethod)}>
@@ -318,7 +318,7 @@ export function PSIClient({ data: initialData }: PSIClientProps) {
                         </div>
                         <div className="space-y-1.5">
                           <Label className="text-xs font-medium flex items-center gap-1.5">
-                            <Badge variant="outline" className="text-[9px] px-1 py-0 border-green-300 text-green-700 bg-green-50">정기</Badge>
+                            <Badge variant="outline" className="text-[9px] px-1 py-0 border-green-300 text-green-700 bg-green-50 dark:border-green-700 dark:text-green-300 dark:bg-green-950">정기</Badge>
                             정기발주 제품 산출방식
                           </Label>
                           <Select value={fixedPeriodSubMethod} onValueChange={(v) => setFixedPeriodSubMethod(v as SOPMethod)}>
@@ -456,11 +456,11 @@ export function PSIClient({ data: initialData }: PSIClientProps) {
           <em>계획/예측 (이탤릭, 보라 배경)</em>
         </span>
         <span className="flex items-center gap-1">
-          <Badge variant="outline" className="text-[9px] px-1 py-0 border-blue-300 text-blue-700 bg-blue-50">정량</Badge>
+          <Badge variant="outline" className="text-[9px] px-1 py-0 border-blue-300 text-blue-700 bg-blue-50 dark:border-blue-700 dark:text-blue-300 dark:bg-blue-950">정량</Badge>
           정량발주
         </span>
         <span className="flex items-center gap-1">
-          <Badge variant="outline" className="text-[9px] px-1 py-0 border-green-300 text-green-700 bg-green-50">정기</Badge>
+          <Badge variant="outline" className="text-[9px] px-1 py-0 border-green-300 text-green-700 bg-green-50 dark:border-green-700 dark:text-green-300 dark:bg-green-950">정기</Badge>
           정기발주
         </span>
         <span className="flex items-center gap-1">

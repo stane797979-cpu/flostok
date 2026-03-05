@@ -241,7 +241,7 @@ function FulfillmentTable({ items }: { items: FulfillmentDrilldownItem[] }) {
               <td className="py-2.5 pr-4">
                 <span className={cn(
                   "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-                  ORDER_STATUS_COLORS[item.status] ?? "bg-slate-100 text-slate-700"
+                  ORDER_STATUS_COLORS[item.status] ?? "bg-slate-100 text-slate-700 dark:text-slate-200"
                 )}>
                   {ORDER_STATUS_LABELS[item.status] ?? item.status}
                 </span>

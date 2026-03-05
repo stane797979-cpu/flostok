@@ -59,7 +59,7 @@ const GRADE_META: Record<
   { color: string; label: string; desc: string }
 > = {
   all: {
-    color: "bg-slate-100 text-slate-700",
+    color: "bg-slate-100 text-slate-700 dark:text-slate-200",
     label: "전체",
     desc: "모든 SKU",
   },
@@ -69,7 +69,7 @@ const GRADE_META: Record<
     desc: "고매출+안정",
   },
   AY: {
-    color: "bg-green-50 text-green-700",
+    color: "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300 dark:bg-green-950 dark:text-green-300",
     label: "AY",
     desc: "고매출+변동",
   },
@@ -84,7 +84,7 @@ const GRADE_META: Record<
     desc: "중매출+안정",
   },
   BY: {
-    color: "bg-blue-50 text-blue-700",
+    color: "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 dark:bg-blue-950 dark:text-blue-300",
     label: "BY",
     desc: "중매출+변동",
   },

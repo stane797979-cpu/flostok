@@ -32,10 +32,10 @@ interface StepFileAnalysisProps {
 }
 
 const TYPE_BADGE_COLORS: Record<string, string> = {
-  text: "bg-slate-100 text-slate-700",
-  number: "bg-blue-100 text-blue-700",
-  date: "bg-green-100 text-green-700",
-  unknown: "bg-yellow-100 text-yellow-700",
+  text: "bg-slate-100 text-slate-700 dark:text-slate-200",
+  number: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
+  date: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
+  unknown: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300",
 };
 
 const TYPE_LABELS: Record<string, string> = {

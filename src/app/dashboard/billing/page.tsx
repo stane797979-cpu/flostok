@@ -14,10 +14,10 @@ import { eq } from "drizzle-orm";
 import { BillingClient } from "./_components/billing-client";
 
 const PLAN_INFO: Record<string, { label: string; description: string; color: string }> = {
-  free: { label: "Free", description: "무료 체험 중", color: "bg-slate-100 text-slate-700" },
-  starter: { label: "Starter", description: "스타터 플랜", color: "bg-blue-100 text-blue-700" },
+  free: { label: "Free", description: "무료 체험 중", color: "bg-slate-100 text-slate-700 dark:text-slate-200" },
+  starter: { label: "Starter", description: "스타터 플랜", color: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" },
   pro: { label: "Pro", description: "프로 플랜", color: "bg-purple-100 text-purple-700" },
-  enterprise: { label: "Enterprise", description: "무제한 이용 가능", color: "bg-green-100 text-green-700" },
+  enterprise: { label: "Enterprise", description: "무제한 이용 가능", color: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" },
 };
 
 export default async function BillingPage() {

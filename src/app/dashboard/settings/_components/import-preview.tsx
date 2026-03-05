@@ -47,7 +47,7 @@ export function ImportPreview({ data, errors, className }: ImportPreviewProps) {
 
       <div className="border rounded-lg overflow-hidden">
         <div className="bg-slate-50 dark:bg-slate-800/50 px-4 py-3 border-b">
-          <p className="text-sm font-medium text-slate-700">
+          <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
             데이터 미리보기 (처음 {data.length}행)
           </p>
         </div>

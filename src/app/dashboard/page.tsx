@@ -137,7 +137,7 @@ export default async function DashboardPage() {
     <div className="space-y-6">
       {/* 재고 현황 요약 */}
       <div className="flex items-center gap-2">
-        <h2 className="text-lg font-semibold text-slate-700">재고 현황 요약</h2>
+        <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200">재고 현황 요약</h2>
         <PeriodBadge
           period="실시간"
           description="현재 재고 상태 기준 집계"
@@ -147,12 +147,12 @@ export default async function DashboardPage() {
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-base font-medium text-slate-500">총 SKU</CardTitle>
+            <CardTitle className="text-base font-medium text-slate-500 dark:text-slate-400">총 SKU</CardTitle>
             <Package className="h-5 w-5 text-slate-400" />
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{stats.totalSku}</div>
-            <p className="text-sm text-slate-500">등록된 제품</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">등록된 제품</p>
           </CardContent>
         </Card>
 
@@ -301,7 +301,7 @@ export default async function DashboardPage() {
                           {product.status.label}
                         </Badge>
                       </div>
-                      <div className="mt-1 text-sm text-slate-500">
+                      <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                         현재고: {product.currentStock} / 안전재고: {product.safetyStock}
                       </div>
                     </div>

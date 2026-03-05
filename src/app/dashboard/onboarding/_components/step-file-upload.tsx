@@ -326,7 +326,7 @@ export function StepFileUpload({ sessionId, files, onFilesChange }: StepFileUplo
       {/* 업로드된 파일 목록 */}
       {files.length > 0 && (
         <div className="space-y-4">
-          <h3 className="font-medium text-slate-700">
+          <h3 className="font-medium text-slate-700 dark:text-slate-200">
             업로드된 파일 ({files.length}/{MAX_FILES})
           </h3>
 
