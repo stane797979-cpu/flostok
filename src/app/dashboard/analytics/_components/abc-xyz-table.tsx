@@ -132,10 +132,10 @@ export function ABCXYZTable({ products, selectedGrade }: ABCXYZTableProps) {
       return <ArrowUpDown className="h-4 w-4 text-slate-400" />;
     }
     if (sortDirection === "asc") {
-      return <ArrowUp className="h-4 w-4 text-slate-900" />;
+      return <ArrowUp className="h-4 w-4 text-slate-900 dark:text-slate-100" />;
     }
     if (sortDirection === "desc") {
-      return <ArrowDown className="h-4 w-4 text-slate-900" />;
+      return <ArrowDown className="h-4 w-4 text-slate-900 dark:text-slate-100" />;
     }
     return <ArrowUpDown className="h-4 w-4 text-slate-400" />;
   };
@@ -313,7 +313,7 @@ export function ABCXYZTable({ products, selectedGrade }: ABCXYZTableProps) {
                     <TableCell className="text-right font-mono">
                       {product.variationRate.toFixed(2)}
                     </TableCell>
-                    <TableCell className="text-sm text-slate-600">{product.strategy}</TableCell>
+                    <TableCell className="text-sm text-slate-600 dark:text-slate-300">{product.strategy}</TableCell>
                   </TableRow>
                 ))
               )}

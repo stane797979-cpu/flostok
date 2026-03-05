@@ -103,7 +103,7 @@ export function ResultCategoryCard({ result }: ResultCategoryCardProps) {
               {dbMetrics.map((metric) => (
                 <div
                   key={metric.key}
-                  className="rounded-lg border bg-slate-50 p-3"
+                  className="rounded-lg border bg-slate-50 dark:bg-slate-800/50 p-3"
                 >
                   <p className="text-xs text-muted-foreground">{metric.label}</p>
                   <p className={cn('text-lg font-bold', STATUS_COLORS[metric.status])}>
@@ -129,7 +129,7 @@ export function ResultCategoryCard({ result }: ResultCategoryCardProps) {
               </div>
               <ul className="space-y-1">
                 {strengths.map((s, i) => (
-                  <li key={i} className="flex items-start gap-1.5 text-sm text-slate-600">
+                  <li key={i} className="flex items-start gap-1.5 text-sm text-slate-600 dark:text-slate-300">
                     <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
                     {s}
                   </li>
@@ -146,7 +146,7 @@ export function ResultCategoryCard({ result }: ResultCategoryCardProps) {
               </div>
               <ul className="space-y-1">
                 {weaknesses.map((w, i) => (
-                  <li key={i} className="flex items-start gap-1.5 text-sm text-slate-600">
+                  <li key={i} className="flex items-start gap-1.5 text-sm text-slate-600 dark:text-slate-300">
                     <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-400" />
                     {w}
                   </li>

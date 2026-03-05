@@ -84,7 +84,7 @@ export function DiagnosticResultView({ result, onReset }: DiagnosticResultProps)
         <div className="mt-4 flex flex-col items-center gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex items-end gap-4">
             <div className="text-center sm:text-left">
-              <p className="text-sm font-medium text-slate-600">종합 점수</p>
+              <p className="text-sm font-medium text-slate-600 dark:text-slate-300">종합 점수</p>
               <p className="text-5xl font-extrabold tabular-nums tracking-tight">
                 {overallScore}
               </p>
@@ -106,13 +106,13 @@ export function DiagnosticResultView({ result, onReset }: DiagnosticResultProps)
             value={overallScore}
             className={cn('h-3', PROGRESS_COLORS[overallGrade])}
           />
-          <p className="text-sm text-slate-600">{summaryMessage}</p>
+          <p className="text-sm text-slate-600 dark:text-slate-300">{summaryMessage}</p>
         </div>
       </div>
 
       {/* 카테고리별 결과 카드 */}
       <div className="space-y-4">
-        <h3 className="text-lg font-bold text-slate-900">카테고리별 진단 결과</h3>
+        <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">카테고리별 진단 결과</h3>
         <div className="grid gap-4 lg:grid-cols-1">
           {categories.map((cat) => (
             <ResultCategoryCard key={cat.category} result={cat} />

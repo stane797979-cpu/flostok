@@ -358,16 +358,16 @@ export function OrderPolicySettingsComponent({ organizationId }: OrderPolicySett
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr>
-                  <th className="border border-slate-200 bg-slate-50 px-3 py-2 text-left font-medium text-slate-600">
+                  <th className="border border-slate-200 bg-slate-50 px-3 py-2 text-left font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
                     ABC \ XYZ
                   </th>
-                  <th className="border border-slate-200 bg-green-50 px-3 py-2 text-center font-medium text-green-700">
+                  <th className="border border-slate-200 bg-green-50 px-3 py-2 text-center font-medium text-green-700 dark:border-slate-700 dark:bg-green-950 dark:text-green-300">
                     X (안정)
                   </th>
-                  <th className="border border-slate-200 bg-yellow-50 px-3 py-2 text-center font-medium text-yellow-700">
+                  <th className="border border-slate-200 bg-yellow-50 px-3 py-2 text-center font-medium text-yellow-700 dark:border-slate-700 dark:bg-yellow-950 dark:text-yellow-300">
                     Y (보통)
                   </th>
-                  <th className="border border-slate-200 bg-red-50 px-3 py-2 text-center font-medium text-red-700">
+                  <th className="border border-slate-200 bg-red-50 px-3 py-2 text-center font-medium text-red-700 dark:border-slate-700 dark:bg-red-950 dark:text-red-300">
                     Z (불안정)
                   </th>
                 </tr>
@@ -375,7 +375,7 @@ export function OrderPolicySettingsComponent({ organizationId }: OrderPolicySett
               <tbody>
                 {(["A", "B", "C"] as const).map((abc) => (
                   <tr key={abc}>
-                    <td className="border border-slate-200 bg-slate-50 px-3 py-2 font-medium text-slate-600">
+                    <td className="border border-slate-200 bg-slate-50 px-3 py-2 font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
                       {abc} ({abc === "A" ? "매출 高" : abc === "B" ? "매출 中" : "매출 低"})
                     </td>
                     {(["X", "Y", "Z"] as const).map((xyz) => {

@@ -268,19 +268,19 @@ export function StepFileAnalysis({
                 {/* 통계 요약 */}
                 <div className="grid grid-cols-3 gap-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-slate-900">
+                    <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">
                       {activeFile.rowCount?.toLocaleString() || 0}
                     </div>
                     <div className="text-xs text-slate-500">데이터 행</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-slate-900">
+                    <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">
                       {activeFile.analyzedHeaders?.length || 0}
                     </div>
                     <div className="text-xs text-slate-500">컬럼 수</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-slate-900">
+                    <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">
                       {activeFile.sheetNames?.length || 0}
                     </div>
                     <div className="text-xs text-slate-500">시트 수</div>

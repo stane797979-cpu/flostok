@@ -18,7 +18,7 @@ const POLICY_ITEMS: PolicyItem[] = [
     priority: 1,
     strategy: "JIT 공급, 자동 발주, 높은 서비스레벨 유지",
     icon: "high",
-    color: "text-green-600 bg-green-50",
+    color: "text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/50",
   },
   {
     grade: "AY",
@@ -26,7 +26,7 @@ const POLICY_ITEMS: PolicyItem[] = [
     priority: 2,
     strategy: "정기 발주, 수요예측 정교화, 안전재고 확보",
     icon: "high",
-    color: "text-green-600 bg-green-50",
+    color: "text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/50",
   },
   {
     grade: "AZ",
@@ -34,7 +34,7 @@ const POLICY_ITEMS: PolicyItem[] = [
     priority: 3,
     strategy: "수요예측 개선, 공급자 협력, 높은 안전재고",
     icon: "high",
-    color: "text-yellow-600 bg-yellow-50",
+    color: "text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-950/50",
   },
   {
     grade: "BX",
@@ -42,7 +42,7 @@ const POLICY_ITEMS: PolicyItem[] = [
     priority: 4,
     strategy: "정기 발주, 적정 재고 유지",
     icon: "medium",
-    color: "text-blue-600 bg-blue-50",
+    color: "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50",
   },
   {
     grade: "BY",
@@ -50,7 +50,7 @@ const POLICY_ITEMS: PolicyItem[] = [
     priority: 5,
     strategy: "주기적 검토, 표준 안전재고",
     icon: "medium",
-    color: "text-blue-600 bg-blue-50",
+    color: "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50",
   },
   {
     grade: "BZ",
@@ -58,7 +58,7 @@ const POLICY_ITEMS: PolicyItem[] = [
     priority: 6,
     strategy: "수요패턴 분석, 발주 주기 조정",
     icon: "medium",
-    color: "text-orange-600 bg-orange-50",
+    color: "text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/50",
   },
   {
     grade: "CX",
@@ -66,7 +66,7 @@ const POLICY_ITEMS: PolicyItem[] = [
     priority: 7,
     strategy: "대량 발주, 낮은 발주빈도",
     icon: "low",
-    color: "text-slate-600 bg-slate-50 dark:bg-slate-800/50",
+    color: "text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50",
   },
   {
     grade: "CY",
@@ -74,7 +74,7 @@ const POLICY_ITEMS: PolicyItem[] = [
     priority: 8,
     strategy: "간헐적 검토, 최소 재고 유지",
     icon: "low",
-    color: "text-slate-600 bg-slate-50 dark:bg-slate-800/50",
+    color: "text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50",
   },
   {
     grade: "CZ",
@@ -82,7 +82,7 @@ const POLICY_ITEMS: PolicyItem[] = [
     priority: 9,
     strategy: "주문생산 검토, 재고 최소화 또는 폐기",
     icon: "low",
-    color: "text-slate-600 bg-slate-50 dark:bg-slate-800/50",
+    color: "text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50",
   },
 ];
 
@@ -109,7 +109,7 @@ export function ABCXYZPolicyGuide() {
           {POLICY_ITEMS.map((item) => (
             <div
               key={item.grade}
-              className={`rounded-lg border border-slate-200 p-4 ${item.color}`}
+              className={`rounded-lg border border-slate-200 dark:border-slate-700 p-4 ${item.color}`}
             >
               <div className="mb-2 flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -120,8 +120,8 @@ export function ABCXYZPolicyGuide() {
                 </div>
                 <PriorityIcon type={item.icon} />
               </div>
-              <p className="text-xs leading-relaxed text-slate-600">{item.strategy}</p>
-              <div className="mt-2 border-t border-slate-200 pt-2">
+              <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-300">{item.strategy}</p>
+              <div className="mt-2 border-t border-slate-200 dark:border-slate-700 pt-2">
                 <span className="text-xs text-slate-500">우선순위: {item.priority}</span>
               </div>
             </div>

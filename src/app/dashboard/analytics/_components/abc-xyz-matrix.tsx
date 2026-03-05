@@ -52,21 +52,21 @@ export function ABCXYZMatrix({ matrixData, selectedGrade, onSelectGrade }: ABCXY
       <CardContent>
         <div className="grid grid-cols-4 gap-2">
           {/* 헤더 행 */}
-          <div className="flex items-center justify-center text-sm font-medium text-slate-600">
+          <div className="flex items-center justify-center text-sm font-medium text-slate-600 dark:text-slate-300">
             ABC \ XYZ
           </div>
-          <div className="flex items-center justify-center text-sm font-medium text-slate-600">
+          <div className="flex items-center justify-center text-sm font-medium text-slate-600 dark:text-slate-300">
             X (안정)
           </div>
-          <div className="flex items-center justify-center text-sm font-medium text-slate-600">
+          <div className="flex items-center justify-center text-sm font-medium text-slate-600 dark:text-slate-300">
             Y (변동)
           </div>
-          <div className="flex items-center justify-center text-sm font-medium text-slate-600">
+          <div className="flex items-center justify-center text-sm font-medium text-slate-600 dark:text-slate-300">
             Z (불안정)
           </div>
 
           {/* A등급 행 */}
-          <div className="flex items-center justify-center text-sm font-medium text-slate-600">
+          <div className="flex items-center justify-center text-sm font-medium text-slate-600 dark:text-slate-300">
             A (상위)
           </div>
           {["AX", "AY", "AZ"].map((grade) => (
@@ -87,7 +87,7 @@ export function ABCXYZMatrix({ matrixData, selectedGrade, onSelectGrade }: ABCXY
           ))}
 
           {/* B등급 행 */}
-          <div className="flex items-center justify-center text-sm font-medium text-slate-600">
+          <div className="flex items-center justify-center text-sm font-medium text-slate-600 dark:text-slate-300">
             B (중위)
           </div>
           {["BX", "BY", "BZ"].map((grade) => (
@@ -108,7 +108,7 @@ export function ABCXYZMatrix({ matrixData, selectedGrade, onSelectGrade }: ABCXY
           ))}
 
           {/* C등급 행 */}
-          <div className="flex items-center justify-center text-sm font-medium text-slate-600">
+          <div className="flex items-center justify-center text-sm font-medium text-slate-600 dark:text-slate-300">
             C (하위)
           </div>
           {["CX", "CY", "CZ"].map((grade) => (
@@ -131,7 +131,7 @@ export function ABCXYZMatrix({ matrixData, selectedGrade, onSelectGrade }: ABCXY
 
         {selectedGrade && (
           <div className="mt-4 rounded-lg bg-slate-50 dark:bg-slate-800/50 p-3">
-            <p className="text-sm font-medium text-slate-900">
+            <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
               선택된 등급: {GRADE_LABELS[selectedGrade]}
             </p>
             <button

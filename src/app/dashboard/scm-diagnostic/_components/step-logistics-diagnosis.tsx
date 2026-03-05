@@ -29,7 +29,7 @@ export function StepLogisticsDiagnosis({ answers, onChange }: StepLogisticsDiagn
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-xl font-bold text-slate-900">물류비용 진단</h2>
+        <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">물류비용 진단</h2>
         <p className="mt-1 text-sm text-muted-foreground">총 10문항입니다. 해당되는 항목을 선택해 주세요.</p>
       </div>
 

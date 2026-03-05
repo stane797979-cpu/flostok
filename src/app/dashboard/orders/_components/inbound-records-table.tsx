@@ -81,10 +81,10 @@ function SortIcon({
     return <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />;
   }
   if (sortDirection === "asc") {
-    return <ArrowUp className="h-3.5 w-3.5 text-slate-900" />;
+    return <ArrowUp className="h-3.5 w-3.5 text-slate-900 dark:text-slate-100" />;
   }
   if (sortDirection === "desc") {
-    return <ArrowDown className="h-3.5 w-3.5 text-slate-900" />;
+    return <ArrowDown className="h-3.5 w-3.5 text-slate-900 dark:text-slate-100" />;
   }
   return <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />;
 }
@@ -180,7 +180,7 @@ export const InboundRecordsTable = memo(function InboundRecordsTable({ records, 
               <div className="space-y-0.5">
                 <p className="text-slate-600 dark:text-slate-300">입고일: {record.date}</p>
                 <p className="text-slate-500">
-                  수량: <span className="font-semibold text-slate-900">{record.receivedQuantity}</span>
+                  수량: <span className="font-semibold text-slate-900 dark:text-slate-100">{record.receivedQuantity}</span>
                   {record.acceptedQuantity != null && ` (합격: ${record.acceptedQuantity})`}
                 </p>
               </div>
@@ -207,7 +207,7 @@ export const InboundRecordsTable = memo(function InboundRecordsTable({ records, 
             <TableHead className="whitespace-nowrap">
               <button
                 onClick={() => handleSort("date")}
-                className="flex items-center gap-1 hover:text-slate-900"
+                className="flex items-center gap-1 hover:text-slate-900 dark:text-slate-100"
               >
                 입고일
                 <SortIcon field="date" sortField={sortField} sortDirection={sortDirection} />
@@ -216,7 +216,7 @@ export const InboundRecordsTable = memo(function InboundRecordsTable({ records, 
             <TableHead className="whitespace-nowrap">
               <button
                 onClick={() => handleSort("scheduledDate")}
-                className="flex items-center gap-1 hover:text-slate-900"
+                className="flex items-center gap-1 hover:text-slate-900 dark:text-slate-100"
               >
                 입고예정일
                 <SortIcon field="scheduledDate" sortField={sortField} sortDirection={sortDirection} />
@@ -225,7 +225,7 @@ export const InboundRecordsTable = memo(function InboundRecordsTable({ records, 
             <TableHead className="whitespace-nowrap">
               <button
                 onClick={() => handleSort("orderNumber")}
-                className="flex items-center gap-1 hover:text-slate-900"
+                className="flex items-center gap-1 hover:text-slate-900 dark:text-slate-100"
               >
                 발주번호
                 <SortIcon field="orderNumber" sortField={sortField} sortDirection={sortDirection} />
@@ -234,7 +234,7 @@ export const InboundRecordsTable = memo(function InboundRecordsTable({ records, 
             <TableHead className="whitespace-nowrap">
               <button
                 onClick={() => handleSort("productSku")}
-                className="flex items-center gap-1 hover:text-slate-900"
+                className="flex items-center gap-1 hover:text-slate-900 dark:text-slate-100"
               >
                 SKU
                 <SortIcon field="productSku" sortField={sortField} sortDirection={sortDirection} />
@@ -243,7 +243,7 @@ export const InboundRecordsTable = memo(function InboundRecordsTable({ records, 
             <TableHead className="whitespace-nowrap">
               <button
                 onClick={() => handleSort("productName")}
-                className="flex items-center gap-1 hover:text-slate-900"
+                className="flex items-center gap-1 hover:text-slate-900 dark:text-slate-100"
               >
                 제품명
                 <SortIcon field="productName" sortField={sortField} sortDirection={sortDirection} />
@@ -252,7 +252,7 @@ export const InboundRecordsTable = memo(function InboundRecordsTable({ records, 
             <TableHead className="whitespace-nowrap text-right">
               <button
                 onClick={() => handleSort("receivedQuantity")}
-                className="ml-auto flex items-center gap-1 hover:text-slate-900"
+                className="ml-auto flex items-center gap-1 hover:text-slate-900 dark:text-slate-100"
               >
                 입고수량
                 <SortIcon field="receivedQuantity" sortField={sortField} sortDirection={sortDirection} />
@@ -261,7 +261,7 @@ export const InboundRecordsTable = memo(function InboundRecordsTable({ records, 
             <TableHead className="whitespace-nowrap text-right">
               <button
                 onClick={() => handleSort("acceptedQuantity")}
-                className="ml-auto flex items-center gap-1 hover:text-slate-900"
+                className="ml-auto flex items-center gap-1 hover:text-slate-900 dark:text-slate-100"
               >
                 합격수량
                 <SortIcon field="acceptedQuantity" sortField={sortField} sortDirection={sortDirection} />
@@ -270,7 +270,7 @@ export const InboundRecordsTable = memo(function InboundRecordsTable({ records, 
             <TableHead className="whitespace-nowrap">
               <button
                 onClick={() => handleSort("qualityResult")}
-                className="flex items-center gap-1 hover:text-slate-900"
+                className="flex items-center gap-1 hover:text-slate-900 dark:text-slate-100"
               >
                 품질결과
                 <SortIcon field="qualityResult" sortField={sortField} sortDirection={sortDirection} />
@@ -281,7 +281,7 @@ export const InboundRecordsTable = memo(function InboundRecordsTable({ records, 
             <TableHead className="whitespace-nowrap">
               <button
                 onClick={() => handleSort("expiryDate")}
-                className="flex items-center gap-1 hover:text-slate-900"
+                className="flex items-center gap-1 hover:text-slate-900 dark:text-slate-100"
               >
                 유통기한
                 <SortIcon field="expiryDate" sortField={sortField} sortDirection={sortDirection} />

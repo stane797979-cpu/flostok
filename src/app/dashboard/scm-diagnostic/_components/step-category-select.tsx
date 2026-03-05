@@ -61,7 +61,7 @@ export function StepCategorySelect({ selected, onChange }: StepCategorySelectPro
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-bold text-slate-900">어떤 영역을 진단하시겠습니까?</h2>
+        <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">어떤 영역을 진단하시겠습니까?</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           1개만 선택해도 괜찮습니다 (각 약 2분 소요)
         </p>
@@ -99,7 +99,7 @@ export function StepCategorySelect({ selected, onChange }: StepCategorySelectPro
           variant="ghost"
           size="sm"
           onClick={handleSelectAll}
-          className="text-sm text-muted-foreground hover:text-slate-900"
+          className="text-sm text-muted-foreground hover:text-slate-900 dark:text-slate-100"
         >
           {isAllSelected ? '전체 해제' : '전체 선택'}
         </Button>

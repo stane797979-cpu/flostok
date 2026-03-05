@@ -40,10 +40,17 @@ export function Breadcrumb() {
   // /dashboard 하나만 있으면 breadcrumb 표시 안 함
   if (segments.length <= 1) return null;
 
-  const crumbs: Crumb[] = segments.map((seg, i) => ({
+  // "dashboard" 세그먼트 제거 — 모든 페이지가 /dashboard/ 하위이므로 중복 표시 불필요
+  const displaySegments: { seg: string; originalIndex: number }[] = [];
+  segments.forEach((seg, i) => {
+    if (seg !== "dashboard") displaySegments.push({ seg, originalIndex: i });
+  });
+  if (displaySegments.length === 0) return null;
+
+  const crumbs: Crumb[] = displaySegments.map(({ seg, originalIndex }, i) => ({
     label: LABELS[seg] || seg,
-    href: "/" + segments.slice(0, i + 1).join("/"),
-    isLast: i === segments.length - 1,
+    href: "/" + segments.slice(0, originalIndex + 1).join("/"),
+    isLast: i === displaySegments.length - 1,
   }));
 
   return (

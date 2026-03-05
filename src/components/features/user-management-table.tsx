@@ -109,7 +109,7 @@ export function UserManagementTable({ className }: UserManagementTableProps) {
       <div className="rounded-lg border overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="bg-slate-50">
+            <TableRow className="bg-slate-50 dark:bg-slate-800">
               <TableHead className="w-12">선택</TableHead>
               <TableHead className="min-w-[200px]">이름</TableHead>
               <TableHead className="min-w-[240px]">이메일</TableHead>
@@ -135,8 +135,8 @@ export function UserManagementTable({ className }: UserManagementTableProps) {
                     className="h-4 w-4 rounded border-gray-300 cursor-pointer"
                   />
                 </TableCell>
-                <TableCell className="font-medium text-slate-900">{user.name}</TableCell>
-                <TableCell className="text-sm text-slate-600">{user.email}</TableCell>
+                <TableCell className="font-medium text-slate-900 dark:text-slate-100">{user.name}</TableCell>
+                <TableCell className="text-sm text-slate-600 dark:text-slate-300">{user.email}</TableCell>
                 <TableCell>
                   <Select
                     value={user.role}
@@ -154,7 +154,7 @@ export function UserManagementTable({ className }: UserManagementTableProps) {
                     </SelectContent>
                   </Select>
                 </TableCell>
-                <TableCell className="text-sm text-slate-600">
+                <TableCell className="text-sm text-slate-600 dark:text-slate-300">
                   {new Date(user.joinedDate).toLocaleDateString('ko-KR', {
                     year: 'numeric',
                     month: '2-digit',

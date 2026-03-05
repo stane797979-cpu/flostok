@@ -134,21 +134,21 @@ export function GuideResult({ recommendation, productId, onReset }: GuideResultP
           </p>
           <p className="text-sm font-medium">{recommendation.supplyStrategy.name}</p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className="rounded-lg bg-slate-50 p-3">
+            <div className="rounded-lg bg-slate-50 dark:bg-slate-800/50 p-3">
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <ClipboardList className="h-3.5 w-3.5" />
                 발주 방식
               </div>
               <p className="mt-1 text-sm font-medium">{recommendation.supplyStrategy.orderType}</p>
             </div>
-            <div className="rounded-lg bg-slate-50 p-3">
+            <div className="rounded-lg bg-slate-50 dark:bg-slate-800/50 p-3">
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Shield className="h-3.5 w-3.5" />
                 안전재고 수준
               </div>
               <p className="mt-1 text-sm font-medium">{recommendation.supplyStrategy.safetyLevel}</p>
             </div>
-            <div className="rounded-lg bg-slate-50 p-3">
+            <div className="rounded-lg bg-slate-50 dark:bg-slate-800/50 p-3">
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Clock className="h-3.5 w-3.5" />
                 검토 주기

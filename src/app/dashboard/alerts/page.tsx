@@ -247,7 +247,7 @@ export default function AlertsPage() {
                         <span
                           className={cn(
                             "text-sm font-semibold",
-                            !alert.isRead && "text-slate-900"
+                            !alert.isRead && "text-slate-900 dark:text-slate-100"
                           )}
                         >
                           {alert.title}
@@ -259,7 +259,7 @@ export default function AlertsPage() {
                           <span className={cn("h-2 w-2 rounded-full", severity.dot)} />
                         )}
                       </div>
-                      <p className="mt-0.5 text-sm text-slate-600">{alert.message}</p>
+                      <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">{alert.message}</p>
                       <div className="mt-1 flex items-center gap-3 text-xs text-slate-400">
                         <span>{formatRelativeTime(alert.createdAt)}</span>
                         {alert.productSku && (

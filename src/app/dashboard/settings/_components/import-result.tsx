@@ -55,32 +55,32 @@ export function ImportResult({
                   : '일부 임포트 완료'
                 : '임포트 완료'}
             </h3>
-            <p className="text-slate-600">
+            <p className="text-slate-600 dark:text-slate-300">
               총 {total}건 중 {success}건 성공, {failed}건 실패
             </p>
           </div>
 
           {/* 통계 카드 */}
           <div className="grid grid-cols-2 gap-4 max-w-md mx-auto">
-            <div className="border rounded-lg p-4 bg-green-50 border-green-200">
-              <p className="text-sm text-green-700 font-medium mb-1">성공</p>
-              <p className="text-3xl font-bold text-green-900">{success}</p>
+            <div className="border rounded-lg p-4 bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800">
+              <p className="text-sm text-green-700 dark:text-green-300 font-medium mb-1">성공</p>
+              <p className="text-3xl font-bold text-green-900 dark:text-green-100">{success}</p>
             </div>
             <div className={cn(
               'border rounded-lg p-4',
               failed > 0
-                ? 'bg-red-50 border-red-200'
+                ? 'bg-red-50 border-red-200 dark:bg-red-950 dark:border-red-800'
                 : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200'
             )}>
               <p className={cn(
                 'text-sm font-medium mb-1',
-                failed > 0 ? 'text-red-700' : 'text-slate-500'
+                failed > 0 ? 'text-red-700 dark:text-red-300' : 'text-slate-500'
               )}>
                 실패
               </p>
               <p className={cn(
                 'text-3xl font-bold',
-                failed > 0 ? 'text-red-900' : 'text-slate-400'
+                failed > 0 ? 'text-red-900 dark:text-red-100' : 'text-slate-400'
               )}>
                 {failed}
               </p>

@@ -72,7 +72,7 @@ export function ABCXYZMiniMatrix({ matrixData }: ABCXYZMiniMatrixProps) {
             {/* 매트릭스 행 */}
             {ABC_LABELS.map((abc) => (
               <div key={abc} className="grid grid-cols-4 gap-1">
-                <div className="flex items-center justify-center text-xs font-bold text-slate-600">
+                <div className="flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300">
                   {abc}
                 </div>
                 {XYZ_LABELS.map((xyz) => {

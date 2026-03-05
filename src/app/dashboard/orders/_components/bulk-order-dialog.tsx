@@ -149,7 +149,7 @@ export function BulkOrderDialog({
                     {supplierItems.map((item) => (
                       <div
                         key={item.productId}
-                        className="rounded-lg border border-slate-200 bg-slate-50 p-3"
+                        className="rounded-lg border border-slate-200 bg-slate-50 dark:bg-slate-800/50 dark:border-slate-700 p-3"
                       >
                         <div className="flex items-start gap-3">
                           <Package className="mt-1 h-4 w-4 text-slate-400" />

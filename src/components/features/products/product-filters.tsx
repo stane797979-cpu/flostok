@@ -49,7 +49,7 @@ export function ProductFilters({ onFilterChange }: ProductFiltersProps) {
 
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <div className="flex items-center gap-2 text-sm text-slate-600">
+      <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
         <Filter className="h-4 w-4" />
         <span className="font-medium">필터:</span>
       </div>

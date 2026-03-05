@@ -204,21 +204,21 @@ export function AutoReorderRecommendationsTable({
     switch (status) {
       case "pending":
         return (
-          <Badge variant="outline" className="whitespace-nowrap border-blue-300 bg-blue-50 text-blue-700">
+          <Badge variant="outline" className="whitespace-nowrap border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950 dark:text-blue-300">
             <AlertCircle className="mr-1 h-3 w-3" />
             대기중
           </Badge>
         );
       case "approved":
         return (
-          <Badge variant="outline" className="whitespace-nowrap border-green-300 bg-green-50 text-green-700">
+          <Badge variant="outline" className="whitespace-nowrap border-green-300 bg-green-50 text-green-700 dark:border-green-700 dark:bg-green-950 dark:text-green-300">
             <CheckCircle2 className="mr-1 h-3 w-3" />
             승인됨
           </Badge>
         );
       case "rejected":
         return (
-          <Badge variant="outline" className="whitespace-nowrap border-red-300 bg-red-50 text-red-700">
+          <Badge variant="outline" className="whitespace-nowrap border-red-300 bg-red-50 text-red-700 dark:border-red-700 dark:bg-red-950 dark:text-red-300">
             <XCircle className="mr-1 h-3 w-3" />
             거부됨
           </Badge>
@@ -301,7 +301,7 @@ export function AutoReorderRecommendationsTable({
             <CardTitle className="text-3xl">{pendingCount}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-xs text-slate-500">승인 대기중인 자동 발주 추천</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">승인 대기중인 자동 발주 추천</p>
           </CardContent>
         </Card>
         <Card>
@@ -310,7 +310,7 @@ export function AutoReorderRecommendationsTable({
             <CardTitle className="text-3xl text-green-600">{approvedCount}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-xs text-slate-500">발주서로 전환된 추천</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">발주서로 전환된 추천</p>
           </CardContent>
         </Card>
         <Card>
@@ -319,14 +319,14 @@ export function AutoReorderRecommendationsTable({
             <CardTitle className="text-3xl text-red-600">{rejectedCount}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-xs text-slate-500">거부된 추천</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">거부된 추천</p>
           </CardContent>
         </Card>
       </div>
 
       {/* 일괄 승인/거부 액션 바 */}
       {selectedIds.length > 0 && (
-        <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 p-4">
+        <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950">
           <div className="flex items-center gap-2">
             <Checkbox checked disabled />
             <span className="text-sm font-medium">{selectedIds.length}개 추천 선택됨</span>
@@ -340,7 +340,7 @@ export function AutoReorderRecommendationsTable({
               disabled={actionInProgress}
               variant="outline"
               size="sm"
-              className="border-red-300 text-red-700 hover:bg-red-50"
+              className="border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-300 dark:hover:bg-red-950"
             >
               <XCircle className="mr-2 h-4 w-4" />
               거부
@@ -460,7 +460,7 @@ export function AutoReorderRecommendationsTable({
               return (
                 <TableRow
                   key={recommendation.id}
-                  className={cn(!isPending && "bg-slate-50 opacity-60")}
+                  className={cn(!isPending && "bg-slate-50 opacity-60 dark:bg-slate-800/50")}
                 >
                   <TableCell>
                     <Checkbox
@@ -490,18 +490,18 @@ export function AutoReorderRecommendationsTable({
                     ₩{recommendation.estimatedCost.toLocaleString()}
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
-                    <div className="flex items-center gap-1 text-sm text-slate-600">
+                    <div className="flex items-center gap-1 text-sm text-slate-600 dark:text-slate-300">
                       <TruckIcon className="h-3 w-3 shrink-0" />
                       {recommendation.supplierName || "-"}
                     </div>
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
-                    <div className="flex items-center gap-1 text-sm text-slate-600">
+                    <div className="flex items-center gap-1 text-sm text-slate-600 dark:text-slate-300">
                       <CalendarIcon className="h-3 w-3 shrink-0" />
                       {recommendation.expectedDate}
                     </div>
                   </TableCell>
-                  <TableCell className="text-xs text-slate-600">
+                  <TableCell className="text-xs text-slate-600 dark:text-slate-300">
                     {recommendation.reason}
                   </TableCell>
                 </TableRow>

@@ -310,7 +310,7 @@ export function StepPreviewImport({
                     <div className="text-xs text-slate-500">변환 오류</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-slate-900">
+                    <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">
                       {activePreview.totalRows}
                     </div>
                     <div className="text-xs text-slate-500">전체 행</div>

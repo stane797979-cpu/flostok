@@ -164,7 +164,7 @@ export function ExcelImportDialog({
 
         <div className="space-y-4 py-4">
           {/* 템플릿 다운로드 */}
-          <div className="flex items-center justify-between rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3">
+          <div className="flex items-center justify-between rounded-lg border border-dashed border-slate-300 bg-slate-50 dark:bg-slate-800/50 dark:border-slate-600 p-3">
             <div className="text-sm">
               <p className="font-medium text-slate-700">템플릿 다운로드</p>
               <p className="text-slate-500">올바른 형식으로 데이터를 준비하세요</p>
@@ -209,7 +209,7 @@ export function ExcelImportDialog({
             ) : (
               <>
                 <Upload className="mb-2 h-10 w-10 text-slate-400" />
-                <p className="text-sm text-slate-600">파일을 드래그하거나 클릭하여 업로드</p>
+                <p className="text-sm text-slate-600 dark:text-slate-300">파일을 드래그하거나 클릭하여 업로드</p>
                 <p className="text-xs text-slate-400">.xlsx 파일만 지원</p>
                 <input
                   type="file"

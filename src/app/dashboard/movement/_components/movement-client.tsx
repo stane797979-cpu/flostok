@@ -289,7 +289,7 @@ export function MovementClient() {
           <Card>
             <CardContent className="flex items-center gap-3 pt-6">
               <div className="rounded-lg bg-slate-100 p-2.5 dark:bg-slate-800">
-                <Package className="h-5 w-5 text-slate-600" />
+                <Package className="h-5 w-5 text-slate-600 dark:text-slate-300" />
               </div>
               <div>
                 <p className="text-sm text-slate-500">변동 제품</p>

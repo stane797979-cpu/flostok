@@ -251,7 +251,7 @@ export const InventoryTable = memo(function InventoryTable({ items, onAdjust, on
                       "ml-1 font-mono",
                       inventoryDays <= 7 && "font-medium text-red-600",
                       inventoryDays > 7 && inventoryDays <= 14 && "text-orange-600",
-                      inventoryDays > 14 && "text-slate-600"
+                      inventoryDays > 14 && "text-slate-600 dark:text-slate-300"
                     )}>
                       {inventoryDays > 365 ? "365+" : inventoryDays}일
                     </span>

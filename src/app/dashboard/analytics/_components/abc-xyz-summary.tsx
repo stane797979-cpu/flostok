@@ -99,7 +99,7 @@ export function ABCXYZSummary({
             <AlertTriangle className={cn("h-4 w-4", insights.riskCount > 0 ? "text-orange-500" : "text-slate-400")} />
           </CardHeader>
           <CardContent>
-            <div className={cn("text-2xl font-bold", insights.riskCount > 0 ? "text-orange-500" : "text-slate-600")}>
+            <div className={cn("text-2xl font-bold", insights.riskCount > 0 ? "text-orange-500" : "text-slate-600 dark:text-slate-300")}>
               {insights.riskCount}개
             </div>
             <p className="text-xs text-slate-500">
@@ -130,7 +130,7 @@ export function ABCXYZSummary({
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
-              <BarChart3 className="h-4 w-4 text-slate-600" />
+              <BarChart3 className="h-4 w-4 text-slate-600 dark:text-slate-300" />
               <CardTitle className="text-sm font-medium">ABC 분류 (매출 기여도)</CardTitle>
             </div>
           </CardHeader>
@@ -167,7 +167,7 @@ export function ABCXYZSummary({
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
-              <Activity className="h-4 w-4 text-slate-600" />
+              <Activity className="h-4 w-4 text-slate-600 dark:text-slate-300" />
               <CardTitle className="text-sm font-medium">XYZ 분류 (수요 안정성)</CardTitle>
             </div>
           </CardHeader>

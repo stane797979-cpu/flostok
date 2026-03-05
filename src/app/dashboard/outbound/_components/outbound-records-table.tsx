@@ -34,10 +34,10 @@ function SortIcon({ field, sortField, sortDirection }: { field: SortField; sortF
     return <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />;
   }
   if (sortDirection === "asc") {
-    return <ArrowUp className="h-3.5 w-3.5 text-slate-900" />;
+    return <ArrowUp className="h-3.5 w-3.5 text-slate-900 dark:text-slate-100" />;
   }
   if (sortDirection === "desc") {
-    return <ArrowDown className="h-3.5 w-3.5 text-slate-900" />;
+    return <ArrowDown className="h-3.5 w-3.5 text-slate-900 dark:text-slate-100" />;
   }
   return <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />;
 }
@@ -94,49 +94,49 @@ export function OutboundRecordsTable({ records, onEdit, onDelete }: OutboundReco
         <TableHeader>
           <TableRow>
             <TableHead>
-              <button onClick={() => handleSort("date")} className="flex items-center gap-1 hover:text-slate-900">
+              <button onClick={() => handleSort("date")} className="flex items-center gap-1 hover:text-slate-900 dark:text-slate-100">
                 날짜
                 <SortIcon field="date" sortField={sortField} sortDirection={sortDirection} />
               </button>
             </TableHead>
             <TableHead>
-              <button onClick={() => handleSort("referenceNumber")} className="flex items-center gap-1 hover:text-slate-900">
+              <button onClick={() => handleSort("referenceNumber")} className="flex items-center gap-1 hover:text-slate-900 dark:text-slate-100">
                 요청번호
                 <SortIcon field="referenceNumber" sortField={sortField} sortDirection={sortDirection} />
               </button>
             </TableHead>
             <TableHead className="w-[100px]">
-              <button onClick={() => handleSort("productSku")} className="flex items-center gap-1 hover:text-slate-900">
+              <button onClick={() => handleSort("productSku")} className="flex items-center gap-1 hover:text-slate-900 dark:text-slate-100">
                 SKU
                 <SortIcon field="productSku" sortField={sortField} sortDirection={sortDirection} />
               </button>
             </TableHead>
             <TableHead>
-              <button onClick={() => handleSort("productName")} className="flex items-center gap-1 hover:text-slate-900">
+              <button onClick={() => handleSort("productName")} className="flex items-center gap-1 hover:text-slate-900 dark:text-slate-100">
                 제품명
                 <SortIcon field="productName" sortField={sortField} sortDirection={sortDirection} />
               </button>
             </TableHead>
             <TableHead>
-              <button onClick={() => handleSort("changeTypeLabel")} className="flex items-center gap-1 hover:text-slate-900">
+              <button onClick={() => handleSort("changeTypeLabel")} className="flex items-center gap-1 hover:text-slate-900 dark:text-slate-100">
                 유형
                 <SortIcon field="changeTypeLabel" sortField={sortField} sortDirection={sortDirection} />
               </button>
             </TableHead>
             <TableHead className="text-right">
-              <button onClick={() => handleSort("changeAmount")} className="ml-auto flex items-center gap-1 hover:text-slate-900">
+              <button onClick={() => handleSort("changeAmount")} className="ml-auto flex items-center gap-1 hover:text-slate-900 dark:text-slate-100">
                 출고수량
                 <SortIcon field="changeAmount" sortField={sortField} sortDirection={sortDirection} />
               </button>
             </TableHead>
             <TableHead className="text-right">
-              <button onClick={() => handleSort("stockBefore")} className="ml-auto flex items-center gap-1 hover:text-slate-900">
+              <button onClick={() => handleSort("stockBefore")} className="ml-auto flex items-center gap-1 hover:text-slate-900 dark:text-slate-100">
                 변동 전
                 <SortIcon field="stockBefore" sortField={sortField} sortDirection={sortDirection} />
               </button>
             </TableHead>
             <TableHead className="text-right">
-              <button onClick={() => handleSort("stockAfter")} className="ml-auto flex items-center gap-1 hover:text-slate-900">
+              <button onClick={() => handleSort("stockAfter")} className="ml-auto flex items-center gap-1 hover:text-slate-900 dark:text-slate-100">
                 변동 후
                 <SortIcon field="stockAfter" sortField={sortField} sortDirection={sortDirection} />
               </button>

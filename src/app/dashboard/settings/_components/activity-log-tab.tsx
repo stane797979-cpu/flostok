@@ -297,7 +297,7 @@ export function ActivityLogTab() {
                           {actionInfo.label}
                         </Badge>
                       </TableCell>
-                      <TableCell className="whitespace-nowrap text-sm text-slate-600">
+                      <TableCell className="whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
                         {ENTITY_TYPE_LABELS[log.entityType] || log.entityType}
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-sm">

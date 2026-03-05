@@ -30,7 +30,7 @@ export function StepInventoryDiagnosis({ answers, onChange }: StepInventoryDiagn
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-xl font-bold text-slate-900">재고현황 진단</h2>
+        <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">재고현황 진단</h2>
         <p className="mt-1 text-sm text-muted-foreground">총 9문항입니다. 해당되는 항목을 선택해 주세요.</p>
       </div>
 

@@ -123,7 +123,7 @@ export function FileUploadZone({
             <div className="flex items-start gap-4">
               <FileSpreadsheet className="h-10 w-10 text-green-600 mt-1" />
               <div>
-                <p className="font-medium text-slate-900">{selectedFile.name}</p>
+                <p className="font-medium text-slate-900 dark:text-slate-100">{selectedFile.name}</p>
                 <p className="text-sm text-slate-500 mt-1">
                   {formatFileSize(selectedFile.size)}
                 </p>
@@ -133,7 +133,7 @@ export function FileUploadZone({
               variant="ghost"
               size="icon"
               onClick={onClearFile}
-              className="text-slate-400 hover:text-slate-600"
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
             >
               <X className="h-5 w-5" />
             </Button>

@@ -161,11 +161,11 @@ export function DataManagement({ isAdmin }: DataManagementProps) {
             {IMPORT_OPTIONS.map((option) => (
               <div
                 key={option.type}
-                className="flex items-start justify-between rounded-lg border p-4 transition-colors hover:bg-slate-50"
+                className="flex items-start justify-between rounded-lg border p-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
               >
                 <div className="flex gap-3">
-                  <div className="rounded-lg bg-slate-100 p-2">
-                    <option.icon className="h-5 w-5 text-slate-600" />
+                  <div className="rounded-lg bg-slate-100 dark:bg-slate-800 p-2">
+                    <option.icon className="h-5 w-5 text-slate-600 dark:text-slate-300" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
@@ -207,10 +207,10 @@ export function DataManagement({ isAdmin }: DataManagementProps) {
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 md:grid-cols-2">
-            <div className="flex items-start justify-between rounded-lg border p-4 transition-colors hover:bg-slate-50">
+            <div className="flex items-start justify-between rounded-lg border p-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800">
               <div className="flex gap-3">
-                <div className="rounded-lg bg-slate-100 p-2">
-                  <Package className="h-5 w-5 text-slate-600" />
+                <div className="rounded-lg bg-slate-100 dark:bg-slate-800 p-2">
+                  <Package className="h-5 w-5 text-slate-600 dark:text-slate-300" />
                 </div>
                 <div>
                   <h4 className="font-medium">제품 목록</h4>
@@ -233,10 +233,10 @@ export function DataManagement({ isAdmin }: DataManagementProps) {
               </Button>
             </div>
 
-            <div className="flex items-start justify-between rounded-lg border p-4 transition-colors hover:bg-slate-50">
+            <div className="flex items-start justify-between rounded-lg border p-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800">
               <div className="flex gap-3">
-                <div className="rounded-lg bg-slate-100 p-2">
-                  <ShoppingCart className="h-5 w-5 text-slate-600" />
+                <div className="rounded-lg bg-slate-100 dark:bg-slate-800 p-2">
+                  <ShoppingCart className="h-5 w-5 text-slate-600 dark:text-slate-300" />
                 </div>
                 <div>
                   <h4 className="font-medium">판매 데이터</h4>

@@ -297,9 +297,9 @@ export function PSITable({ products, periods }: PSITableProps) {
                 {product.abcGrade && product.xyzGrade ? (
                   <Badge variant="outline" className={cn(
                     "font-mono text-[9px] px-0.5 py-0",
-                    product.abcGrade === "A" && "border-red-300 text-red-700 bg-red-50",
-                    product.abcGrade === "B" && "border-yellow-300 text-yellow-700 bg-yellow-50",
-                    product.abcGrade === "C" && "border-slate-300 text-slate-600 bg-slate-50",
+                    product.abcGrade === "A" && "border-red-300 text-red-700 bg-red-50 dark:border-red-700 dark:text-red-300 dark:bg-red-950",
+                    product.abcGrade === "B" && "border-yellow-300 text-yellow-700 bg-yellow-50 dark:border-yellow-700 dark:text-yellow-300 dark:bg-yellow-950",
+                    product.abcGrade === "C" && "border-slate-300 text-slate-600 bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:bg-slate-800",
                   )}>
                     {product.abcGrade}{product.xyzGrade}
                   </Badge>
