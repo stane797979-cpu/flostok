@@ -12,7 +12,8 @@ import { Resend } from 'resend'
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'noreply@example.com'
 const RESEND_FROM_NAME = process.env.RESEND_FROM_NAME || 'FloStok'
-const IS_MOCK_MODE = process.env.NOTIFICATIONS_MOCK_MODE === 'true'
+// API 키가 없으면 자동 Mock 모드 (개발 환경 지원)
+const IS_MOCK_MODE = process.env.NOTIFICATIONS_MOCK_MODE === 'true' || !RESEND_API_KEY
 
 // ============================================
 // 클라이언트 초기화

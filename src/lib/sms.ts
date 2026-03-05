@@ -10,7 +10,9 @@
 const COOLSMS_API_KEY = process.env.COOLSMS_API_KEY
 const COOLSMS_API_SECRET = process.env.COOLSMS_API_SECRET
 const COOLSMS_SENDER_PHONE = process.env.COOLSMS_SENDER_PHONE
-const IS_MOCK_MODE = process.env.NOTIFICATIONS_MOCK_MODE === 'true'
+// API 키가 없으면 자동 Mock 모드 (개발 환경 지원)
+const IS_MOCK_MODE = process.env.NOTIFICATIONS_MOCK_MODE === 'true' ||
+  !COOLSMS_API_KEY || !COOLSMS_API_SECRET
 
 // ============================================
 // CoolSMS 클라이언트 초기화
