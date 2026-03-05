@@ -289,18 +289,18 @@ export function ActivityLogTab() {
                       <TableCell className="whitespace-nowrap font-mono text-xs">
                         {formatDateTime(log.createdAt)}
                       </TableCell>
-                      <TableCell className="text-sm">
+                      <TableCell className="whitespace-nowrap text-sm">
                         {log.userName || "-"}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="whitespace-nowrap">
                         <Badge variant={actionInfo.variant}>
                           {actionInfo.label}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-sm text-slate-600">
+                      <TableCell className="whitespace-nowrap text-sm text-slate-600">
                         {ENTITY_TYPE_LABELS[log.entityType] || log.entityType}
                       </TableCell>
-                      <TableCell className="text-sm">
+                      <TableCell className="whitespace-nowrap text-sm">
                         {log.description}
                       </TableCell>
                     </TableRow>
