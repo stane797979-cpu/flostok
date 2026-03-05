@@ -257,11 +257,11 @@ export function ExcelImportDialog({
 
               <div className="flex gap-4 text-sm">
                 <Badge variant="outline">전체: {result.totalRows}건</Badge>
-                <Badge variant="outline" className="border-green-300 text-green-700">
+                <Badge variant="outline" className="border-green-300 text-green-700 dark:border-green-700 dark:text-green-300">
                   성공: {result.successCount}건
                 </Badge>
                 {result.errorCount > 0 && (
-                  <Badge variant="outline" className="border-red-300 text-red-700">
+                  <Badge variant="outline" className="border-red-300 text-red-700 dark:border-red-700 dark:text-red-300">
                     오류: {result.errorCount}건
                   </Badge>
                 )}

@@ -288,8 +288,8 @@ export function InventoryAdjustmentDialog({
                             variant="outline"
                             className={
                               h.changeAmount > 0
-                                ? "text-[10px] border-green-200 text-green-700"
-                                : "text-[10px] border-red-200 text-red-700"
+                                ? "text-[10px] border-green-200 text-green-700 dark:border-green-800 dark:text-green-300"
+                                : "text-[10px] border-red-200 text-red-700 dark:border-red-800 dark:text-red-300"
                             }
                           >
                             {h.changeAmount > 0 ? "+" : ""}{h.changeAmount}
