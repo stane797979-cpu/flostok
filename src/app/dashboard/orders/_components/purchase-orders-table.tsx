@@ -178,7 +178,7 @@ export const PurchaseOrdersTable = memo(function PurchaseOrdersTable({ orders, o
             <div className="flex items-center justify-between">
               <div className="min-w-0 flex-1">
                 <p className="font-mono text-sm font-medium">{order.orderNumber}</p>
-                <p className="text-sm text-slate-600 truncate">{order.supplierName}</p>
+                <p className="text-sm text-slate-600 dark:text-slate-300 truncate">{order.supplierName}</p>
               </div>
               <div className="shrink-0 ml-2">
                 {getStatusBadge(order.status)}
@@ -260,10 +260,10 @@ export const PurchaseOrdersTable = memo(function PurchaseOrdersTable({ orders, o
                 {formatKRW(order.totalAmount)}
               </TableCell>
               <TableCell className="whitespace-nowrap">{getStatusBadge(order.status)}</TableCell>
-              <TableCell className="whitespace-nowrap text-sm text-slate-600">
+              <TableCell className="whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
                 {formatDate(order.orderDate)}
               </TableCell>
-              <TableCell className="whitespace-nowrap text-sm text-slate-600">
+              <TableCell className="whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
                 {order.expectedDate ? formatDate(order.expectedDate) : "-"}
               </TableCell>
               <TableCell className="text-right">

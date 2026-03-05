@@ -304,7 +304,7 @@ export function InboundDialog({
         <div className="space-y-4">
           {/* 입고 창고 선택 */}
           {warehouses.length > 0 && (
-            <div className="rounded-lg border bg-slate-50 p-4 space-y-2">
+            <div className="rounded-lg border bg-slate-50 dark:bg-slate-800 p-4 space-y-2">
               <div className="flex items-center gap-2">
                 <Warehouse className="h-4 w-4 text-slate-500" />
                 <Label className="font-medium">입고 창고</Label>
@@ -335,7 +335,7 @@ export function InboundDialog({
           )}
 
           {/* 전체 입고 버튼 */}
-          <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 p-4">
+          <div className="flex items-center justify-between rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 p-4">
             <div className="flex items-center gap-2 text-sm text-blue-900">
               <Package className="h-5 w-5" />
               <span>전체 입고 처리를 원하시면 아래 버튼을 클릭하세요</span>
@@ -414,7 +414,7 @@ export function InboundDialog({
                       <TableCell className="text-center font-medium">
                         {item.orderedQuantity}
                       </TableCell>
-                      <TableCell className="text-center text-slate-600">
+                      <TableCell className="text-center text-slate-600 dark:text-slate-300">
                         {item.receivedQuantity}
                       </TableCell>
                       <TableCell className="text-center">
@@ -464,7 +464,7 @@ export function InboundDialog({
 
           {/* 입고 요약 */}
           {Object.keys(inboundQuantities).length > 0 && (
-            <div className="rounded-lg border border-green-200 bg-green-50 p-4">
+            <div className="rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950 p-4">
               <h4 className="mb-2 font-semibold text-green-900">입고 요약</h4>
               <div className="space-y-1 text-sm text-green-800">
                 <p>

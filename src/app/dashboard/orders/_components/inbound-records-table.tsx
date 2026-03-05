@@ -178,7 +178,7 @@ export const InboundRecordsTable = memo(function InboundRecordsTable({ records, 
             </div>
             <div className="flex items-center justify-between text-sm">
               <div className="space-y-0.5">
-                <p className="text-slate-600">입고일: {record.date}</p>
+                <p className="text-slate-600 dark:text-slate-300">입고일: {record.date}</p>
                 <p className="text-slate-500">
                   수량: <span className="font-semibold text-slate-900">{record.receivedQuantity}</span>
                   {record.acceptedQuantity != null && ` (합격: ${record.acceptedQuantity})`}
@@ -312,7 +312,7 @@ export const InboundRecordsTable = memo(function InboundRecordsTable({ records, 
                 {record.acceptedQuantity ?? "-"}
               </TableCell>
               <TableCell className="whitespace-nowrap">{qualityBadge(record.qualityResult)}</TableCell>
-              <TableCell className="whitespace-nowrap text-sm text-slate-600">
+              <TableCell className="whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
                 {record.location || "-"}
               </TableCell>
               <TableCell className="whitespace-nowrap font-mono text-xs text-slate-500">

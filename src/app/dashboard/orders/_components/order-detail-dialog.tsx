@@ -396,7 +396,7 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
                                 : "미정"}
                           </p>
                           {orderData.shipmentEta && orderData.expectedDate && orderData.shipmentEta !== orderData.expectedDate && (
-                            <Badge variant="outline" className="text-[10px] text-blue-600 border-blue-200">
+                            <Badge variant="outline" className="text-[10px] text-blue-600 dark:text-blue-300 border-blue-200 dark:border-blue-700">
                               입항스케줄
                             </Badge>
                           )}
@@ -414,7 +414,7 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
                         </div>
                       )}
                       {orderData.actualDate && (
-                        <p className="mt-1 text-sm text-green-600">
+                        <p className="mt-1 text-sm text-green-600 dark:text-green-300">
                           실제: {formatDate(orderData.actualDate)}
                         </p>
                       )}

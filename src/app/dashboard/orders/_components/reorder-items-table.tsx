@@ -220,7 +220,7 @@ export function ReorderItemsTable({
     <div className="space-y-4">
       {/* 일괄 발주 액션 바 */}
       {selectedIds.length > 0 && (
-        <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 p-4">
+        <div className="flex items-center justify-between rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 p-4">
           <div className="flex items-center gap-2">
             <Checkbox checked disabled />
             <span className="text-sm font-medium">{selectedIds.length}개 품목 선택됨</span>
@@ -337,7 +337,7 @@ export function ReorderItemsTable({
                     <span className="font-semibold text-blue-600">{item.recommendedQty}</span>
                   </div>
                 </TableCell>
-                <TableCell className="text-sm text-slate-600">{item.supplierName || "-"}</TableCell>
+                <TableCell className="text-sm text-slate-600 dark:text-slate-300">{item.supplierName || "-"}</TableCell>
                 <TableCell className="text-right">
                   <Button size="sm" onClick={() => onOrderClick(item)}>
                     <ShoppingCart className="mr-1 h-4 w-4" />
