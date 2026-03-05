@@ -386,13 +386,13 @@ export function WarehouseOutboundClient() {
                       <div className="flex items-center justify-between text-sm pl-7">
                         <div className="space-y-1">
                           {req.sourceWarehouseName && (
-                            <p className="text-slate-600 font-medium">
+                            <p className="text-slate-600 dark:text-slate-300 font-medium">
                               {req.sourceWarehouseName}
                               {req.targetWarehouseName && ` → ${req.targetWarehouseName}`}
                             </p>
                           )}
                           {(req.recipientName || req.recipientCompany) && (
-                            <p className="text-slate-600">
+                            <p className="text-slate-600 dark:text-slate-300">
                               {req.recipientCompany && <span className="font-medium">{req.recipientCompany} </span>}
                               {req.recipientName}
                             </p>
@@ -573,7 +573,7 @@ export function WarehouseOutboundClient() {
                             )}
                           </TableCell>
                           <TableCell>
-                            <span className="text-sm text-slate-600">
+                            <span className="text-sm text-slate-600 dark:text-slate-300">
                               {formatDate(req.createdAt)}
                             </span>
                           </TableCell>

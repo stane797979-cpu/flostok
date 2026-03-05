@@ -248,7 +248,7 @@ export function WarehouseInboundClient({ initialOrders, warehouses }: WarehouseI
                       <div className="flex items-center justify-between text-sm">
                         <div className="space-y-1">
                           {order.destinationWarehouseName && (
-                            <p className="text-slate-600 font-medium">{order.destinationWarehouseName}</p>
+                            <p className="text-slate-600 dark:text-slate-300 font-medium">{order.destinationWarehouseName}</p>
                           )}
                           <p className="text-slate-500">예상입고: {order.expectedDate || "-"}</p>
                           <p className="text-slate-500">

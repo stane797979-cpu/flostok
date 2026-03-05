@@ -420,7 +420,7 @@ export function InboundConfirmDialog({
                       <TableCell className="text-center font-medium">
                         {item.orderedQuantity}
                       </TableCell>
-                      <TableCell className="text-center text-slate-600">
+                      <TableCell className="text-center text-slate-600 dark:text-slate-300">
                         {item.receivedQuantity}
                       </TableCell>
                       <TableCell className="text-center">

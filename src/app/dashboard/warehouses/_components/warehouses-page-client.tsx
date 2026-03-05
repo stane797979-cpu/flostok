@@ -119,12 +119,12 @@ export function WarehousesPageClient({ warehouses }: WarehousesPageClientProps) 
         </Card>
         <Card className="border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-slate-600">
+            <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-300">
               비활성 창고
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-slate-600">{inactiveCount}</div>
+            <div className="text-2xl font-bold text-slate-600 dark:text-slate-300">{inactiveCount}</div>
           </CardContent>
         </Card>
       </div>
@@ -191,7 +191,7 @@ export function WarehousesPageClient({ warehouses }: WarehousesPageClientProps) 
                       활성
                     </Badge>
                   ) : (
-                    <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200">
+                    <Badge variant="outline" className="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700">
                       비활성
                     </Badge>
                   )}
