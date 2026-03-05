@@ -1026,8 +1026,8 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
         <div className="space-y-4">
           {/* 수동발주와의 차이점 안내 */}
           <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
-            <Zap className="h-4 w-4 text-blue-600" />
-            <AlertTitle className="text-blue-800">자동발주 추천이란?</AlertTitle>
+            <Zap className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            <AlertTitle className="text-blue-800 dark:text-blue-200">자동발주 추천이란?</AlertTitle>
             <AlertDescription className="text-blue-700 dark:text-blue-300">
               시스템이 <strong>재고 상태, 수요예측, 리드타임, 안전재고</strong>를 종합 분석하여 최적 수량을 자동 계산합니다.
               담당자는 추천 내용을 확인 후 <strong>승인만 하면 즉시 발주서가 생성</strong>됩니다.
