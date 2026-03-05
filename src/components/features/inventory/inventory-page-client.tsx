@@ -353,7 +353,7 @@ export function InventoryPageClient({
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500">총 SKU</CardTitle>
+            <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">총 SKU</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{historicalStats ? historicalStats.totalProducts : stats.totalProducts}</div>
@@ -441,7 +441,7 @@ export function InventoryPageClient({
             <Button
               variant="outline"
               size="sm"
-              className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+              className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-950"
               onClick={() => {
                 setDeleteReason("");
                 setDeleteAllDialogOpen(true);
@@ -491,7 +491,7 @@ export function InventoryPageClient({
       {/* 페이지네이션 */}
       {totalItems > 0 && (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2 text-sm text-slate-500">
+          <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
             <span>전체 {totalItems.toLocaleString()}건</span>
             <span>·</span>
             <div className="flex items-center gap-1">
