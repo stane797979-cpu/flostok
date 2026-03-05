@@ -1,67 +1,77 @@
 import { NextResponse } from 'next/server'
-import { db } from '@/server/db'
-import { sql } from 'drizzle-orm'
-import { users, organizations, products, inventory } from '@/server/db/schema'
+import postgres from 'postgres'
 
 /**
  * GET /api/debug/db
  *
- * DB 연결 및 데이터 상태 진단 엔드포인트
+ * DB 연결 진단 — Drizzle 우회하여 postgres.js로 직접 연결 테스트
  * 프로덕션 문제 디버깅용 (배포 후 제거 필요)
  */
 export async function GET() {
+  const dbUrl = process.env.DATABASE_URL || ''
+
   const results: Record<string, unknown> = {
     timestamp: new Date().toISOString(),
-    DATABASE_URL_SET: !!process.env.DATABASE_URL,
-    DATABASE_URL_HOST: process.env.DATABASE_URL
-      ? new URL(process.env.DATABASE_URL.replace('postgresql://', 'http://')).hostname
+    DATABASE_URL_SET: !!dbUrl,
+    DATABASE_URL_LENGTH: dbUrl.length,
+    DATABASE_URL_PREVIEW: dbUrl
+      ? dbUrl.replace(/\/\/([^:]+):([^@]+)@/, '//$1:***@')
       : 'NOT_SET',
   }
 
-  // 1. 기본 연결 테스트
-  try {
-    const [row] = await db.execute(sql`SELECT NOW() as now, current_database() as db_name`)
-    results.db_connection = 'OK'
-    results.db_now = row?.now
-    results.db_name = row?.db_name
-  } catch (err) {
-    results.db_connection = 'FAILED'
-    results.db_error = err instanceof Error ? err.message : String(err)
+  if (!dbUrl) {
+    results.error = 'DATABASE_URL is not set'
     return NextResponse.json(results, { status: 500 })
   }
 
-  // 2. 테이블별 레코드 수 (RLS 무시 - 서버 직접 쿼리)
-  try {
-    const [orgCount] = await db.select({ count: sql<number>`count(*)` }).from(organizations)
-    const [userCount] = await db.select({ count: sql<number>`count(*)` }).from(users)
-    const [productCount] = await db.select({ count: sql<number>`count(*)` }).from(products)
-    const [inventoryCount] = await db.select({ count: sql<number>`count(*)` }).from(inventory)
+  // postgres.js로 직접 연결 테스트 (Drizzle 우회)
+  const client = postgres(dbUrl, {
+    max: 1,
+    connect_timeout: 15,
+    idle_timeout: 5,
+    prepare: false,
+  })
 
-    results.table_counts = {
-      organizations: Number(orgCount?.count ?? 0),
-      users: Number(userCount?.count ?? 0),
-      products: Number(productCount?.count ?? 0),
-      inventory: Number(inventoryCount?.count ?? 0),
+  try {
+    const rows = await client`SELECT NOW() as now, current_database() as db_name, current_user as db_user`
+    results.db_connection = 'OK'
+    results.db_now = rows[0]?.now
+    results.db_name = rows[0]?.db_name
+    results.db_user = rows[0]?.db_user
+  } catch (err: unknown) {
+    results.db_connection = 'FAILED'
+    const e = err as Record<string, unknown>
+    results.db_error = {
+      message: e?.message || String(err),
+      code: e?.code,
+      severity: e?.severity,
+      routine: e?.routine,
+      detail: e?.detail,
     }
-  } catch (err) {
-    results.table_counts_error = err instanceof Error ? err.message : String(err)
+    await client.end().catch(() => {})
+    return NextResponse.json(results, { status: 500 })
   }
 
-  // 3. 사용자 목록 (이메일만)
+  // 테이블 카운트
   try {
-    const allUsers = await db
-      .select({ email: users.email, role: users.role, orgId: users.organizationId, authId: users.authId })
-      .from(users)
-      .limit(10)
-    results.users = allUsers.map(u => ({
-      email: u.email,
-      role: u.role,
-      orgId: u.orgId,
-      hasAuthId: !!u.authId,
-    }))
-  } catch (err) {
-    results.users_error = err instanceof Error ? err.message : String(err)
+    const counts = await client`
+      SELECT
+        (SELECT count(*) FROM organizations) as orgs,
+        (SELECT count(*) FROM users) as users,
+        (SELECT count(*) FROM products) as products,
+        (SELECT count(*) FROM inventory) as inventory
+    `
+    results.table_counts = {
+      organizations: Number(counts[0]?.orgs ?? 0),
+      users: Number(counts[0]?.users ?? 0),
+      products: Number(counts[0]?.products ?? 0),
+      inventory: Number(counts[0]?.inventory ?? 0),
+    }
+  } catch (err: unknown) {
+    results.table_counts_error = (err as Error)?.message || String(err)
   }
+
+  await client.end().catch(() => {})
 
   return NextResponse.json(results, {
     status: 200,
