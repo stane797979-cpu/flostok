@@ -19,8 +19,8 @@ function getCellColor(count: number, maxCount: number): string {
   const ratio = count / Math.max(maxCount, 1);
   if (ratio >= 0.6) return "bg-green-500 text-white";
   if (ratio >= 0.3) return "bg-green-300 text-green-900";
-  if (ratio >= 0.1) return "bg-green-100 text-green-800";
-  return "bg-green-50 text-green-700";
+  if (ratio >= 0.1) return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
+  return "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300";
 }
 
 export function ABCXYZMiniMatrix({ matrixData }: ABCXYZMiniMatrixProps) {
@@ -58,10 +58,10 @@ export function ABCXYZMiniMatrix({ matrixData }: ABCXYZMiniMatrixProps) {
                   className={cn(
                     "text-center text-xs font-bold py-1 rounded",
                     xyz === "X"
-                      ? "text-green-700"
+                      ? "text-green-700 dark:text-green-300"
                       : xyz === "Y"
-                        ? "text-yellow-700"
-                        : "text-red-700"
+                        ? "text-yellow-700 dark:text-yellow-300"
+                        : "text-red-700 dark:text-red-300"
                   )}
                 >
                   {xyz}

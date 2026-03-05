@@ -166,7 +166,7 @@ export function ExcelImportDialog({
           {/* 템플릿 다운로드 */}
           <div className="flex items-center justify-between rounded-lg border border-dashed border-slate-300 bg-slate-50 dark:bg-slate-800/50 dark:border-slate-600 p-3">
             <div className="text-sm">
-              <p className="font-medium text-slate-700">템플릿 다운로드</p>
+              <p className="font-medium text-slate-700 dark:text-slate-200">템플릿 다운로드</p>
               <p className="text-slate-500">올바른 형식으로 데이터를 준비하세요</p>
             </div>
             <Button variant="outline" size="sm" onClick={handleDownloadTemplate} disabled={templateDownloading}>
@@ -180,7 +180,7 @@ export function ExcelImportDialog({
             className={cn(
               "relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 transition-colors",
               isDragOver ? "border-primary bg-primary/5" : "border-slate-300 hover:border-primary/50",
-              file && "border-green-500 bg-green-50"
+              file && "border-green-500 bg-green-50 dark:bg-green-950"
             )}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
@@ -241,7 +241,7 @@ export function ExcelImportDialog({
             <div
               className={cn(
                 "rounded-lg border p-4",
-                result.success ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"
+                result.success ? "border-green-200 bg-green-50 dark:bg-green-950" : "border-red-200 bg-red-50 dark:bg-red-950"
               )}
             >
               <div className="mb-2 flex items-center gap-2">
@@ -250,7 +250,7 @@ export function ExcelImportDialog({
                 ) : (
                   <AlertCircle className="h-5 w-5 text-red-600" />
                 )}
-                <p className={cn("font-medium", result.success ? "text-green-700" : "text-red-700")}>
+                <p className={cn("font-medium", result.success ? "text-green-700 dark:text-green-300" : "text-red-700 dark:text-red-300")}>
                   {result.message}
                 </p>
               </div>
