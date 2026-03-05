@@ -39,13 +39,13 @@ export function TurnoverTop5Card({ fastest, slowest }: TurnoverTop5CardProps) {
                   className="flex items-center justify-between rounded-md border px-3 py-2"
                 >
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-xs font-bold text-green-600 w-5">{i + 1}</span>
+                    <span className="text-xs font-bold text-green-600 dark:text-green-400 w-5">{i + 1}</span>
                     <div className="min-w-0">
                       <p className="text-sm font-medium truncate">{item.productName}</p>
                       <p className="text-xs text-muted-foreground">{item.sku}</p>
                     </div>
                   </div>
-                  <Badge variant="outline" className="ml-2 shrink-0 text-green-600 border-green-200">
+                  <Badge variant="outline" className="ml-2 shrink-0 text-green-600 border-green-200 dark:text-green-400 dark:border-green-800">
                     {item.turnoverRate.toFixed(1)}회
                   </Badge>
                 </div>
@@ -74,7 +74,7 @@ export function TurnoverTop5Card({ fastest, slowest }: TurnoverTop5CardProps) {
                   className="flex items-center justify-between rounded-md border px-3 py-2"
                 >
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-xs font-bold text-red-600 w-5">{i + 1}</span>
+                    <span className="text-xs font-bold text-red-600 dark:text-red-400 w-5">{i + 1}</span>
                     <div className="min-w-0">
                       <p className="text-sm font-medium truncate">{item.productName}</p>
                       <p className="text-xs text-muted-foreground">{item.sku}</p>
@@ -83,7 +83,7 @@ export function TurnoverTop5Card({ fastest, slowest }: TurnoverTop5CardProps) {
                   <div className="ml-2 shrink-0 flex items-center gap-1">
                     <Badge variant="outline" className={cn(
                       "text-xs",
-                      item.daysOfInventory >= 180 ? "text-red-600 border-red-200" : "text-yellow-600 border-yellow-200"
+                      item.daysOfInventory >= 180 ? "text-red-600 border-red-200 dark:text-red-400 dark:border-red-800" : "text-yellow-600 border-yellow-200 dark:text-yellow-400 dark:border-yellow-800"
                     )}>
                       {item.daysOfInventory}일
                     </Badge>

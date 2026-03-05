@@ -228,7 +228,7 @@ export const InventoryStatusChart = memo<InventoryStatusChartProps>(function Inv
                   }}
                 >
                   <div className="text-3xl font-bold">{totalSku}</div>
-                  <div className="text-sm text-slate-500">총 SKU</div>
+                  <div className="text-sm text-slate-500 dark:text-slate-400">총 SKU</div>
                 </div>
               </div>
 

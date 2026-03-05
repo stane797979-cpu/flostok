@@ -209,7 +209,7 @@ export function MovementClient() {
         <CardContent className="pt-6">
           <div className="flex items-center gap-3">
             <CalendarDays className="h-5 w-5 text-slate-500" />
-            <span className="text-sm font-medium text-slate-700">조회 기간</span>
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">조회 기간</span>
             <Input
               type="date"
               value={startDate}

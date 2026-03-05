@@ -90,7 +90,7 @@ export function QuickActions() {
                 <Icon className="h-5 w-5" />
                 <div className="text-center">
                   <div className="text-sm font-medium">{action.label}</div>
-                  <div className="text-xs text-slate-500">{action.description}</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">{action.description}</div>
                 </div>
               </Button>
             );

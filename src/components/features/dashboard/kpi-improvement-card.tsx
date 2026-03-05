@@ -143,7 +143,7 @@ export function KPIImprovementCard({ proposal, className }: KPIImprovementCardPr
             <div className="flex items-center gap-3">
               <span className="text-lg">{catConfig.icon}</span>
               <div>
-                <p className="text-xs font-medium text-slate-500">카테고리</p>
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">카테고리</p>
                 <p className="text-sm font-semibold">{catConfig.label}</p>
               </div>
             </div>
@@ -256,14 +256,14 @@ export function KPIImprovementCard({ proposal, className }: KPIImprovementCardPr
               <div className="flex items-center gap-2 rounded-lg border p-3">
                 <Calendar className="h-4 w-4 text-primary flex-shrink-0" />
                 <div>
-                  <p className="text-xs text-slate-500">예상 기간</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">예상 기간</p>
                   <p className="text-sm font-semibold">{proposal.timeToImplement}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2 rounded-lg border p-3">
                 <TrendingUp className="h-4 w-4 text-green-600 flex-shrink-0" />
                 <div>
-                  <p className="text-xs text-slate-500">예상 효과</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">예상 효과</p>
                   <p className="text-sm font-semibold text-green-700 dark:text-green-400">
                     {proposal.estimatedImpact}
                   </p>
@@ -275,7 +275,7 @@ export function KPIImprovementCard({ proposal, className }: KPIImprovementCardPr
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <h4 className="text-sm font-semibold">실행 단계</h4>
-                <span className="text-xs text-slate-500">
+                <span className="text-xs text-slate-500 dark:text-slate-400">
                   {completedSteps}/{totalSteps} 완료
                 </span>
               </div>
@@ -373,14 +373,14 @@ export function KPIImprovementCard({ proposal, className }: KPIImprovementCardPr
             {/* 우선순위 & 카테고리 */}
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-lg border p-3">
-                <p className="text-xs text-slate-500 mb-1">우선순위</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">우선순위</p>
                 <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium', config.badgeColor)}>
                   <PriorityIcon className="h-3 w-3" />
                   {config.label}
                 </span>
               </div>
               <div className="rounded-lg border p-3">
-                <p className="text-xs text-slate-500 mb-1">카테고리</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">카테고리</p>
                 <p className="text-sm font-medium">
                   {catConfig.icon} {catConfig.label}
                 </p>
@@ -400,9 +400,9 @@ export function KPIImprovementCard({ proposal, className }: KPIImprovementCardPr
 
             {/* 구현 기간 */}
             <div className="flex items-center gap-3 rounded-lg border p-4">
-              <Clock className="h-5 w-5 text-slate-500 flex-shrink-0" />
+              <Clock className="h-5 w-5 text-slate-500 dark:text-slate-400 flex-shrink-0" />
               <div>
-                <p className="text-xs text-slate-500">구현 기간</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">구현 기간</p>
                 <p className="text-sm font-semibold">{proposal.timeToImplement}</p>
               </div>
             </div>
