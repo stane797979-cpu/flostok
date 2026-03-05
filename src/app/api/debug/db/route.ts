@@ -10,13 +10,23 @@ import postgres from 'postgres'
 export async function GET() {
   const dbUrl = process.env.DATABASE_URL || ''
 
+  // 숨겨진 문자 감지
+  const trimmed = dbUrl.trim()
+  const passwordMatch = dbUrl.match(/:([^@]+)@/)
+  const password = passwordMatch ? passwordMatch[1] : 'NOT_FOUND'
+
   const results: Record<string, unknown> = {
     timestamp: new Date().toISOString(),
     DATABASE_URL_SET: !!dbUrl,
     DATABASE_URL_LENGTH: dbUrl.length,
+    DATABASE_URL_TRIMMED_LENGTH: trimmed.length,
+    HAS_HIDDEN_CHARS: dbUrl.length !== trimmed.length,
+    PASSWORD_LENGTH: password.length,
+    PASSWORD_CHARS: password.split('').map(c => `${c}(${c.charCodeAt(0)})`).join(' '),
     DATABASE_URL_PREVIEW: dbUrl
       ? dbUrl.replace(/\/\/([^:]+):([^@]+)@/, '//$1:***@')
       : 'NOT_SET',
+    DATABASE_URL_LAST_5_CHARS: dbUrl.slice(-5).split('').map(c => `${c}(${c.charCodeAt(0)})`).join(' '),
   }
 
   if (!dbUrl) {
