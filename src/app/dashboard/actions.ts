@@ -46,31 +46,36 @@ export async function getUserInfoForLayout() {
     // DB 쿼리를 unstable_cache로 감싸 30초 캐싱 (매 네비게이션마다 쿼리 방지)
     return unstable_cache(
       async () => {
-        const [dbUser] = await db
-          .select()
-          .from(users)
-          .where(eq(users.authId, authUserId!))
-          .limit(1)
+        try {
+          const [dbUser] = await db
+            .select()
+            .from(users)
+            .where(eq(users.authId, authUserId!))
+            .limit(1)
 
-        if (!dbUser) {
+          if (!dbUser) {
+            return DEFAULT_USER_INFO
+          }
+
+          const roleMap: Record<string, string> = { admin: '관리자', manager: '매니저', viewer: '뷰어', warehouse: '창고' }
+
+          const [orgName, allowedMenus] = await Promise.all([
+            db.query.organizations.findFirst({
+              where: eq(organizations.id, dbUser.organizationId),
+            }).then(org => org?.name || '').catch(() => ''),
+            getMenuPermissionsForRole(dbUser.organizationId, dbUser.role).catch(() => ['*'] as string[]),
+          ])
+
+          return {
+            name: dbUser.name || dbUser.email.split('@')[0],
+            role: roleMap[dbUser.role] || dbUser.role,
+            orgName,
+            isSuperadmin: dbUser.isSuperadmin ?? false,
+            allowedMenus,
+          }
+        } catch (err) {
+          console.error('[getUserInfoForLayout] DB 쿼리 실패:', err)
           return DEFAULT_USER_INFO
-        }
-
-        const roleMap: Record<string, string> = { admin: '관리자', manager: '매니저', viewer: '뷰어', warehouse: '창고' }
-
-        const [orgName, allowedMenus] = await Promise.all([
-          db.query.organizations.findFirst({
-            where: eq(organizations.id, dbUser.organizationId),
-          }).then(org => org?.name || '').catch(() => ''),
-          getMenuPermissionsForRole(dbUser.organizationId, dbUser.role).catch(() => ['*'] as string[]),
-        ])
-
-        return {
-          name: dbUser.name || dbUser.email.split('@')[0],
-          role: roleMap[dbUser.role] || dbUser.role,
-          orgName,
-          isSuperadmin: dbUser.isSuperadmin ?? false,
-          allowedMenus,
         }
       },
       [`layout-user-${authUserId}`],

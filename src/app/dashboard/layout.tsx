@@ -10,7 +10,7 @@ interface DashboardLayoutProps {
 
 export default async function DashboardLayout({ children }: DashboardLayoutProps) {
   const [userInfo, sidebarBadges] = await Promise.all([
-    getUserInfoForLayout(),
+    getUserInfoForLayout().catch(() => ({ name: '관리자', role: '관리자', orgName: '', isSuperadmin: false, allowedMenus: ['*'] as string[] })),
     getSidebarBadges().catch(() => ({} as Record<string, number>)),
   ])
 
