@@ -1,11 +1,11 @@
 import { getReorderItems, getPurchaseOrders } from "@/server/actions/purchase-orders";
-import { getDeliveryComplianceData } from "@/server/actions/delivery-compliance";
+import type { DeliveryComplianceResult } from "@/server/services/scm/delivery-compliance";
 import { getInboundRecords } from "@/server/actions/inbound";
 import { getWarehouses } from "@/server/actions/warehouses";
 import { OrdersClient } from "./_components/orders-client";
 
 type ReorderResult = Awaited<ReturnType<typeof getReorderItems>>;
-type DeliveryComplianceResult = Awaited<ReturnType<typeof getDeliveryComplianceData>>;
+// DeliveryComplianceResult는 서비스에서 직접 import (SSR 프리페치 제거됨)
 type PurchaseOrdersResult = Awaited<ReturnType<typeof getPurchaseOrders>>;
 type InboundRecordsResult = Awaited<ReturnType<typeof getInboundRecords>>;
 type WarehousesResult = Awaited<ReturnType<typeof getWarehouses>>;
@@ -32,11 +32,8 @@ export default async function OrdersPage({
     promises.push(getReorderItems().catch(() => ({ items: [], total: 0 })));
   }
 
-  // delivery 탭: 납기 분석
-  if (resolvedTab === "delivery") {
-    keys.push("compliance");
-    promises.push(getDeliveryComplianceData().catch(() => null));
-  }
+  // delivery 탭: 납기 분석 (필터 기반 조회로 변경 — SSR 프리페치 불필요)
+  // 클라이언트에서 조건 선택 후 조회
 
   // orders 탭: 발주 현황 (취소 제외)
   if (resolvedTab === "orders") {
@@ -63,12 +60,14 @@ export default async function OrdersPage({
   keys.push("warehouses");
   promises.push(getWarehouses().catch(() => ({ warehouses: [] })));
 
-  const results = await Promise.all(promises);
+  // Promise.allSettled: 하나가 실패해도 나머지 데이터는 정상 표시
+  const settled = await Promise.allSettled(promises);
+  const results = settled.map((r) => (r.status === "fulfilled" ? r.value : null));
   const dataMap = Object.fromEntries(keys.map((k, i) => [k, results[i]]));
 
   const serverReorderItems = (dataMap.reorder as ReorderResult | undefined)?.items ?? [];
   const serverReorderTotal = (dataMap.reorder as ReorderResult | undefined)?.total ?? 0;
-  const deliveryComplianceData = (dataMap.compliance as DeliveryComplianceResult | undefined) ?? null;
+  const deliveryComplianceData: DeliveryComplianceResult | null = null; // 클라이언트에서 조건 선택 후 조회
   const serverPurchaseOrders = (dataMap.orders as PurchaseOrdersResult | undefined)?.orders ?? undefined;
   const serverPurchaseOrdersTotal = (dataMap.orders as PurchaseOrdersResult | undefined)?.total ?? 0;
   const serverInboundRecords = (dataMap.inbound as InboundRecordsResult | undefined)?.records ?? undefined;
