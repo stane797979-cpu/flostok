@@ -213,24 +213,31 @@ export function InboundConfirmDialog({
       }
 
       try {
-        const input: ConfirmInboundInput = {
+        const confirmInput: ConfirmInboundInput = {
           orderId,
           items: inboundItems,
           notes: notes || undefined,
         };
 
-        const result = await confirmInbound(input);
+        const totalReceived = inboundItems.reduce(
+          (sum, item) => sum + item.receivedQuantity,
+          0
+        );
+
+        // 낙관적 업데이트: 즉시 성공 콜백 호출
+        toast({
+          title: "입고 처리 중...",
+          description: `${inboundItems.length}개 품목, 총 ${totalReceived}개 처리 중`,
+        });
+        onSuccess();
+
+        const result = await confirmInbound(confirmInput);
 
         if (result.success) {
-          const totalReceived = inboundItems.reduce(
-            (sum, item) => sum + item.receivedQuantity,
-            0
-          );
           toast({
             title: "입고 처리 완료",
             description: `${inboundItems.length}개 품목, 총 ${totalReceived}개 입고되었습니다`,
           });
-          onSuccess();
         } else {
           toast({
             title: "입고 처리 실패",

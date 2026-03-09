@@ -178,33 +178,39 @@ export function InboundDialog({
     setIsSubmitting(true);
 
     try {
-      const input: ConfirmInboundInput = {
+      const confirmInput: ConfirmInboundInput = {
         orderId,
         items: inboundItems,
         warehouseId: warehouseId || undefined,
         notes: notes || undefined,
       };
 
-      const result = await confirmInbound(input);
+      // 낙관적 업데이트: 즉시 다이얼로그 닫기 + 토스트 표시
+      const totalReceived = inboundItems.reduce(
+        (sum, item) => sum + item.receivedQuantity,
+        0
+      );
+      setInboundQuantities({});
+      setLocations({});
+      setLotNumbers({});
+      setExpiryDates({});
+      setWarehouseId(defaultWarehouseId || "");
+      setNotes("");
+      setIsSubmitting(false);
+      onOpenChange(false);
+
+      toast({
+        title: "입고 처리 중...",
+        description: `${inboundItems.length}개 품목, 총 ${totalReceived}개 처리 중`,
+      });
+
+      const result = await confirmInbound(confirmInput);
 
       if (result.success) {
-        const totalReceived = inboundItems.reduce(
-          (sum, item) => sum + item.receivedQuantity,
-          0
-        );
         toast({
           title: "입고 처리 완료",
           description: `${inboundItems.length}개 품목, 총 ${totalReceived}개 입고되었습니다`,
         });
-
-        // 초기화
-        setInboundQuantities({});
-        setLocations({});
-        setLotNumbers({});
-        setExpiryDates({});
-        setWarehouseId(defaultWarehouseId || "");
-        setNotes("");
-        onOpenChange(false);
       } else {
         toast({
           title: "입고 처리 실패",
@@ -214,13 +220,12 @@ export function InboundDialog({
       }
     } catch (error) {
       console.error("입고 처리 오류:", error);
+      setIsSubmitting(false);
       toast({
         title: "입고 처리 실패",
         description: "서버 오류가 발생했습니다",
         variant: "destructive",
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 

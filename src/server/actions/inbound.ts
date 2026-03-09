@@ -63,15 +63,29 @@ export async function confirmInbound(input: ConfirmInboundInput): Promise<{
     // 유효성 검사
     const validated = confirmInboundSchema.parse(input);
 
-    // 발주서 조회 (destinationWarehouseId 포함)
-    const [purchaseOrder] = await db
-      .select()
-      .from(purchaseOrders)
-      .where(
-        and(eq(purchaseOrders.id, validated.orderId), eq(purchaseOrders.organizationId, user.organizationId))
-      )
-      .limit(1);
+    // [최적화] 발주서 + 발주 항목 + 제품 정보를 병렬 조회 (순차 4쿼리 → 병렬 3쿼리)
+    const productIds = validated.items.map(item => item.productId);
 
+    const [purchaseOrderResult, orderItems, productsData] = await Promise.all([
+      db
+        .select()
+        .from(purchaseOrders)
+        .where(
+          and(eq(purchaseOrders.id, validated.orderId), eq(purchaseOrders.organizationId, user.organizationId))
+        )
+        .limit(1),
+      db
+        .select()
+        .from(purchaseOrderItems)
+        .where(eq(purchaseOrderItems.purchaseOrderId, validated.orderId)),
+      productIds.length > 0
+        ? db.select().from(products).where(
+            and(inArray(products.id, productIds), eq(products.organizationId, user.organizationId))
+          )
+        : Promise.resolve([]),
+    ]);
+
+    const purchaseOrder = purchaseOrderResult[0];
     if (!purchaseOrder) {
       return { success: false, error: "발주서를 찾을 수 없습니다" };
     }
@@ -80,14 +94,13 @@ export async function confirmInbound(input: ConfirmInboundInput): Promise<{
     const originalWarehouseId = purchaseOrder.destinationWarehouseId;
     let destinationWarehouseId = validated.warehouseId || originalWarehouseId;
     if (!destinationWarehouseId) {
-      // 발주서에 창고가 없으면 기본 창고 사용 (하위 호환)
       const { getDefaultWarehouse } = await import("./warehouses");
       const dw = await getDefaultWarehouse();
       if (!dw) return { success: false, error: "입고 대상 창고를 찾을 수 없습니다" };
       destinationWarehouseId = dw.id;
     }
 
-    // 창고가 변경된 경우 이름 조회 (이력 기록용)
+    // 창고가 변경된 경우 이름 조회 (이력 기록용, 드문 케이스라 별도 조회 유지)
     const warehouseChanged = validated.warehouseId && validated.warehouseId !== originalWarehouseId;
     let warehouseChangeDescription = "";
     if (warehouseChanged) {
@@ -110,12 +123,6 @@ export async function confirmInbound(input: ConfirmInboundInput): Promise<{
         error: `입고 처리할 수 없는 발주서 상태입니다: ${purchaseOrder.status}`,
       };
     }
-
-    // 발주 항목 조회
-    const orderItems = await db
-      .select()
-      .from(purchaseOrderItems)
-      .where(eq(purchaseOrderItems.purchaseOrderId, validated.orderId));
 
     const orderItemsMap = new Map(orderItems.map((item) => [item.id, item]));
 
@@ -141,14 +148,6 @@ export async function confirmInbound(input: ConfirmInboundInput): Promise<{
     }
 
     const today = new Date().toISOString().split("T")[0];
-
-    // [최적화] 입고 항목에 필요한 제품 정보를 배치 조회
-    const productIds = validated.items.map(item => item.productId);
-    const productsData = productIds.length > 0
-      ? await db.select().from(products).where(
-          and(inArray(products.id, productIds), eq(products.organizationId, user.organizationId))
-        )
-      : [];
     const productsMap = new Map(productsData.map(p => [p.id, p]));
 
     // 유효 항목 필터링
@@ -212,19 +211,18 @@ export async function confirmInbound(input: ConfirmInboundInput): Promise<{
         );
       }
 
-      // 4. 발주서 상태 업데이트
-      const updatedOrderItems = await tx
-        .select()
-        .from(purchaseOrderItems)
-        .where(eq(purchaseOrderItems.purchaseOrderId, validated.orderId));
+      // 4. 발주서 상태 업데이트 (재조회 없이 메모리에서 계산)
+      // itemUpdates에 반영된 수량 + 변경 없는 항목의 기존 수량으로 판단
+      const updatedReceivedMap = new Map(itemUpdates.map(u => [u.id, u.newReceivedQuantity]));
+      const allItemsFullyReceived = orderItems.every((item) => {
+        const received = updatedReceivedMap.get(item.id) ?? (item.receivedQuantity ?? 0);
+        return received >= item.quantity;
+      });
 
-      const allItemsFullyReceived = updatedOrderItems.every(
-        (item) => (item.receivedQuantity ?? 0) >= item.quantity
-      );
-
-      const hasPartiallyReceived = updatedOrderItems.some(
-        (item) => item.receivedQuantity && item.receivedQuantity > 0
-      );
+      const hasPartiallyReceived = orderItems.some((item) => {
+        const received = updatedReceivedMap.get(item.id) ?? (item.receivedQuantity ?? 0);
+        return received > 0;
+      });
 
       let newStatus: (typeof purchaseOrders.status.enumValues)[number];
       if (allItemsFullyReceived) {
@@ -267,26 +265,31 @@ export async function confirmInbound(input: ConfirmInboundInput): Promise<{
       return recordIds;
     });
 
-    await logActivity({
-      user,
-      action: "CREATE",
-      entityType: "inbound_record",
-      entityId: validated.orderId,
-      description: warehouseChangeDescription
-        ? `입고 확인 처리 (${warehouseChangeDescription})`
-        : `입고 확인 처리`,
-    });
-
-    // 창고 변경 시 별도 이력 기록
-    if (warehouseChanged && warehouseChangeDescription) {
-      await logActivity({
+    // 활동 로깅 (fire-and-forget — 입고 응답 속도에 영향 없도록)
+    const logPromises: Promise<unknown>[] = [
+      logActivity({
         user,
-        action: "UPDATE",
-        entityType: "purchase_order",
+        action: "CREATE",
+        entityType: "inbound_record",
         entityId: validated.orderId,
-        description: warehouseChangeDescription,
-      });
+        description: warehouseChangeDescription
+          ? `입고 확인 처리 (${warehouseChangeDescription})`
+          : `입고 확인 처리`,
+      }).catch(console.error),
+    ];
+    if (warehouseChanged && warehouseChangeDescription) {
+      logPromises.push(
+        logActivity({
+          user,
+          action: "UPDATE",
+          entityType: "purchase_order",
+          entityId: validated.orderId,
+          description: warehouseChangeDescription,
+        }).catch(console.error)
+      );
     }
+    // 로깅은 백그라운드로 처리
+    Promise.all(logPromises).catch(console.error);
 
     revalidatePath("/dashboard/orders");
     revalidatePath("/dashboard/inventory");
