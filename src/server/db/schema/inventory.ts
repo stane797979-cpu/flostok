@@ -59,6 +59,8 @@ export const inventory = pgTable("inventory", {
   ),
   index("inventory_org_status_idx").on(table.organizationId, table.status),
   index("inventory_warehouse_status_idx").on(table.warehouseId, table.status),
+  // 발주 필요 품목 조회 최적화: SUM(current_stock) GROUP BY product_id
+  index("inventory_org_product_idx").on(table.organizationId, table.productId),
 ]);
 
 // 재고 이력 (변동 기록)

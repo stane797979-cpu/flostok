@@ -98,6 +98,8 @@ export const purchaseOrderItems = pgTable("purchase_order_items", {
 }, (table) => [
   index("purchase_order_items_po_idx").on(table.purchaseOrderId),
   index("purchase_order_items_product_idx").on(table.productId),
+  // NOT EXISTS/LEFT JOIN 최적화: (발주서ID, 제품ID) 복합 인덱스
+  index("purchase_order_items_po_product_idx").on(table.purchaseOrderId, table.productId),
 ]);
 
 export type PurchaseOrder = typeof purchaseOrders.$inferSelect;

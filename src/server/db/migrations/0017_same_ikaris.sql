@@ -1,0 +1,2 @@
+CREATE INDEX "inventory_org_product_idx" ON "inventory" USING btree ("organization_id","product_id");--> statement-breakpoint
+CREATE INDEX "purchase_order_items_po_product_idx" ON "purchase_order_items" USING btree ("purchase_order_id","product_id");
