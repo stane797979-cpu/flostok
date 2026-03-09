@@ -1,46 +1,11 @@
 {
-  "projectSettings": {
-    "framework": "nextjs",
-    "buildCommand": "npm run build",
-    "devCommand": "npm run dev",
-    "installCommand": "npm install"
-  },
-  "env": [
-    {
-      "key": "NEXT_PUBLIC_SITE_URL",
-      "target": ["production", "preview"],
-      "comment": "Public site URL for production and preview deployments"
-    },
-    {
-      "key": "NEXT_PUBLIC_SUPABASE_URL",
-      "target": ["production", "preview", "development"],
-      "comment": "Supabase project URL (공개 정보)"
-    },
-    {
-      "key": "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-      "target": ["production", "preview", "development"],
-      "comment": "Supabase anonymous key (공개 정보)"
-    },
-    {
-      "key": "DATABASE_URL",
-      "target": ["production", "preview"],
-      "comment": "PostgreSQL connection string (비밀 정보)",
-      "type": "secret"
-    },
-    {
-      "key": "ANTHROPIC_API_KEY",
-      "target": ["production", "preview"],
-      "comment": "Anthropic Claude API key (선택, 비밀 정보)",
-      "type": "secret"
-    }
-  ],
   "headers": [
     {
       "source": "/api/:path*",
       "headers": [
         {
           "key": "Cache-Control",
-          "value": "public, max-age=60, s-maxage=60"
+          "value": "no-store, max-age=0"
         },
         {
           "key": "X-Content-Type-Options",
@@ -53,7 +18,7 @@
       "headers": [
         {
           "key": "X-Frame-Options",
-          "value": "DENY"
+          "value": "SAMEORIGIN"
         },
         {
           "key": "X-Content-Type-Options",
@@ -61,22 +26,11 @@
         },
         {
           "key": "Referrer-Policy",
-          "value": "strict-origin-when-cross-origin"
+          "value": "origin-when-cross-origin"
         }
       ]
     }
   ],
-  "redirects": [],
-  "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "/api/:path*"
-    }
-  ],
   "cleanUrls": true,
-  "trailingSlash": false,
-  "framework": {
-    "slug": "nextjs",
-    "version": "15"
-  }
+  "trailingSlash": false
 }
