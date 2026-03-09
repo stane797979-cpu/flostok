@@ -579,24 +579,31 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
     notes: string;
   }) => {
     try {
+      // 낙관적 업데이트: 서버 응답 전에 즉시 UI 반영
+      const orderedPids = new Set(data.items.map((i) => i.productId));
+      setApprovedProductIds((prev) => new Set([...prev, ...orderedPids]));
+      setSelectedIds([]);
+      setBulkOrderDialogOpen(false);
+
       const result = await createBulkPurchaseOrders({
         items: data.items,
         notes: data.notes,
       });
 
       if (result.success && result.createdOrders.length > 0) {
-        // 발주된 품목 즉시 목록에서 제거
-        const orderedPids = new Set(data.items.map((i) => i.productId));
-        setApprovedProductIds((prev) => new Set([...prev, ...orderedPids]));
         toast({
           title: "일괄 발주 완료",
           description: `${result.createdOrders.length}개의 발주서가 생성되었습니다`,
         });
-        setSelectedIds([]);
-        setBulkOrderDialogOpen(false);
-        loadPurchaseOrders();
-        loadReorderItems();
+        // 백그라운드 병렬 리로드 (UI 블로킹 없음)
+        Promise.all([loadPurchaseOrders(), loadReorderItems()]).catch(console.error);
       } else if (result.errors.length > 0) {
+        // 실패 시 낙관적 업데이트 롤백
+        setApprovedProductIds((prev) => {
+          const next = new Set(prev);
+          orderedPids.forEach((pid) => next.delete(pid));
+          return next;
+        });
         toast({
           title: "일괄 발주 실패",
           description: result.errors[0]?.error || "발주서 생성에 실패했습니다",
@@ -621,6 +628,12 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
     notes: string;
   }) => {
     try {
+      // 낙관적 업데이트: 즉시 UI 반영
+      const productName = selectedProduct?.productName;
+      setApprovedProductIds((prev) => new Set([...prev, data.productId]));
+      setSelectedProduct(null);
+      setOrderDialogOpen(false);
+
       const result = await createPurchaseOrder({
         items: [
           {
@@ -634,17 +647,19 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
       });
 
       if (result.success) {
-        // 발주된 품목 즉시 목록에서 제거
-        setApprovedProductIds((prev) => new Set([...prev, data.productId]));
         toast({
           title: "발주 완료",
-          description: `${selectedProduct?.productName} ${data.quantity}개 발주가 생성되었습니다`,
+          description: `${productName} ${data.quantity}개 발주가 생성되었습니다`,
         });
-        setSelectedProduct(null);
-        setOrderDialogOpen(false);
-        loadPurchaseOrders();
-        loadReorderItems();
+        // 백그라운드 병렬 리로드
+        Promise.all([loadPurchaseOrders(), loadReorderItems()]).catch(console.error);
       } else {
+        // 실패 시 낙관적 업데이트 롤백
+        setApprovedProductIds((prev) => {
+          const next = new Set(prev);
+          next.delete(data.productId);
+          return next;
+        });
         toast({
           title: "발주 실패",
           description: result.error || "발주서 생성에 실패했습니다",
@@ -653,6 +668,12 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
       }
     } catch (error) {
       console.error("발주 오류:", error);
+      // 에러 시 낙관적 업데이트 롤백
+      setApprovedProductIds((prev) => {
+        const next = new Set(prev);
+        next.delete(data.productId);
+        return next;
+      });
       toast({
         title: "오류",
         description: "발주 처리 중 오류가 발생했습니다",
@@ -815,39 +836,43 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
         supplierId: r.supplierId || "",
       }));
 
+      // 낙관적 업데이트: 즉시 UI에서 제거 + 선택 해제
+      const approvedPids = new Set(selectedRecs.map((r) => r.productId));
+      setApprovedProductIds((prev) => new Set([...prev, ...approvedPids]));
+      setSelectedAutoReorderIds([]);
+
       const result = await approveAutoReorders(ids, items);
 
-      // 승인 성공한 품목의 productId를 추출하여 목록에서 제거
-      const approvedPids = new Set(selectedRecs.map((r) => r.productId));
-
       if (result.success && result.errors.length === 0) {
-        // 승인된 품목 즉시 제거
-        setApprovedProductIds((prev) => new Set([...prev, ...approvedPids]));
         toast({
           title: "자동 발주 승인 완료",
           description: `${result.createdOrders.length}개의 발주서가 생성되었습니다. 발주 현황으로 이동합니다.`,
         });
-        setSelectedAutoReorderIds([]);
         // 발주현황 페이지로 자동 이동
         router.push("/dashboard/orders?tab=orders");
       } else if (result.success && result.errors.length > 0) {
-        // 성공한 품목만 제거 (실패한 품목은 남김)
+        // 실패한 품목만 롤백
         const failedPids = new Set(result.errors.map((e) => e.recommendationId));
-        const successPids = [...approvedPids].filter((pid) => !failedPids.has(pid));
-        if (successPids.length > 0) {
-          setApprovedProductIds((prev) => new Set([...prev, ...successPids]));
-        }
+        setApprovedProductIds((prev) => {
+          const next = new Set(prev);
+          failedPids.forEach((pid) => next.delete(pid));
+          return next;
+        });
         toast({
           title: "자동 발주 부분 완료",
           description: `${result.createdOrders.length}개 생성, ${result.errors.length}개 실패 (${result.errors[0]?.error || "공급자 미지정"})`,
           variant: "destructive",
         });
-        setSelectedAutoReorderIds([]);
-        // 일부라도 생성되었으면 발주현황으로 이동
         if (result.createdOrders.length > 0) {
           router.push("/dashboard/orders?tab=orders");
         }
       } else {
+        // 전체 실패 시 롤백
+        setApprovedProductIds((prev) => {
+          const next = new Set(prev);
+          approvedPids.forEach((pid) => next.delete(pid));
+          return next;
+        });
         toast({
           title: "자동 발주 승인 실패",
           description: result.errors[0]?.error || "자동 발주 승인에 실패했습니다",
