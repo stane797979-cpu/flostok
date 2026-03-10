@@ -1,4 +1,5 @@
 import { getReorderItems, getPurchaseOrders } from "@/server/actions/purchase-orders";
+import { getCurrentUser } from "@/server/actions/auth-helpers";
 import type { DeliveryComplianceResult } from "@/server/services/scm/delivery-compliance";
 import { getInboundRecords } from "@/server/actions/inbound";
 import { getWarehouses } from "@/server/actions/warehouses";
@@ -76,6 +77,10 @@ export default async function OrdersPage({
   const serverOrderHistoryTotal = (dataMap.orderHistory as PurchaseOrdersResult | undefined)?.total ?? 0;
   const warehousesList = (dataMap.warehouses as WarehousesResult | undefined)?.warehouses ?? [];
 
+  // 사용자 역할 조회 (결재 권한 분기용)
+  const user = await getCurrentUser();
+  const userRole = user?.role ?? "viewer";
+
   return (
     <OrdersClient
       key={resolvedTab}
@@ -91,6 +96,7 @@ export default async function OrdersPage({
       serverOrderHistoryTotal={serverOrderHistoryTotal}
       warehouses={warehousesList}
       preselectedProductIds={preselectedProductIds}
+      userRole={userRole}
     />
   );
 }

@@ -21,7 +21,7 @@ export interface PurchaseOrderListItem {
   supplierName: string;
   itemsCount: number;
   totalAmount: number;
-  status: "draft" | "ordered" | "pending_receipt" | "received" | "cancelled";
+  status: "draft" | "pending" | "ordered" | "pending_receipt" | "received" | "cancelled";
   orderDate: string;
   expectedDate: string | null;
 }
@@ -38,7 +38,7 @@ interface PurchaseOrdersTableProps {
 type SortKey = "orderNumber" | "supplier" | "itemsCount" | "totalAmount" | "status" | "orderDate" | "expectedDate";
 type SortDirection = "asc" | "desc";
 
-const STATUS_ORDER = ["draft", "ordered", "pending_receipt", "received", "cancelled"];
+const STATUS_ORDER = ["draft", "pending", "ordered", "pending_receipt", "received", "cancelled"];
 
 export const PurchaseOrdersTable = memo(function PurchaseOrdersTable({ orders, onViewClick, onDownloadClick, selectedIds, onSelectChange, className }: PurchaseOrdersTableProps) {
   // 모든 상태 체크 가능
@@ -138,6 +138,8 @@ export const PurchaseOrdersTable = memo(function PurchaseOrdersTable({ orders, o
     switch (status) {
       case "draft":
         return <Badge variant="outline">초안</Badge>;
+      case "pending":
+        return <Badge className="bg-yellow-600">결재대기</Badge>;
       case "ordered":
         return <Badge className="bg-blue-600">발주완료</Badge>;
       case "pending_receipt":

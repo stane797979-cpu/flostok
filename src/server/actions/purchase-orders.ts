@@ -697,11 +697,28 @@ export async function updatePurchaseOrderStatus(
     // 기존 상태 저장 (로깅용)
     const oldStatus = order.status;
 
+    // 승인(approved) 전환은 admin만 가능
+    if (newStatus === "approved" && user.role !== "admin") {
+      return { success: false, error: "발주서 승인은 관리자만 할 수 있습니다" };
+    }
+
     // 상태 업데이트
     const updateData: Record<string, unknown> = {
       status: newStatus,
       updatedAt: new Date(),
     };
+
+    // 승인 시 승인자/승인일 기록
+    if (newStatus === "approved") {
+      updateData.approvedById = user.id;
+      updateData.approvedAt = new Date();
+    }
+
+    // 승인 → 발주 확정 시에도 승인자 기록 (pending에서 바로 ordered로 전환하는 admin)
+    if (newStatus === "ordered" && oldStatus === "pending") {
+      updateData.approvedById = user.id;
+      updateData.approvedAt = new Date();
+    }
 
     // 입고완료/완료 시 실제입고일 기록
     if (newStatus === "received" || newStatus === "completed") {
@@ -1288,6 +1305,9 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
 
     const supplierEntries = [...itemsBySupplier.entries()];
 
+    // 역할 기반 발주 상태 결정: admin → ordered (즉시 발주), manager → pending (결재 대기)
+    const initialStatus = user.role === "admin" ? "ordered" as const : "pending" as const;
+
     // 성능 최적화: 공급자별 개별 트랜잭션 → 단일 트랜잭션 배치 INSERT
     // 메모리에서 모든 발주 데이터를 준비한 후, 1개 트랜잭션으로 일괄 처리
     const ordersToInsert: Array<{
@@ -1296,11 +1316,12 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
         destinationWarehouseId: string;
         orderNumber: string;
         supplierId: string;
-        status: "ordered";
+        status: "ordered" | "pending";
         totalAmount: number;
         orderDate: string;
         expectedDate: string;
         notes?: string;
+        createdById?: string;
       };
       items: Array<{ productId: string; quantity: number; unitPrice: number; totalPrice: number }>;
     }> = [];
@@ -1350,11 +1371,12 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
           destinationWarehouseId: warehouseId,
           orderNumber,
           supplierId,
-          status: "ordered",
+          status: initialStatus,
           totalAmount,
           orderDate: today.toISOString().split("T")[0],
           expectedDate,
           notes: supplierNote || validated.notes,
+          createdById: user.id,
         },
         items: orderItems,
       });

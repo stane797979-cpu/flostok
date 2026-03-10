@@ -121,7 +121,7 @@ const mapOrderStatus = (
 ): PurchaseOrderListItem["status"] => {
   const statusMap: Record<string, PurchaseOrderListItem["status"]> = {
     draft: "draft",
-    pending: "draft",
+    pending: "pending",
     approved: "ordered",
     ordered: "ordered",
     confirmed: "ordered",
@@ -167,6 +167,7 @@ interface OrdersClientProps {
   deliveryComplianceData?: DeliveryComplianceResult | null;
   warehouses?: WarehouseOption[];
   serverPurchaseOrdersTotal?: number;
+  userRole?: "admin" | "manager" | "viewer" | "warehouse";
   serverInboundTotal?: number;
   serverOrderHistoryTotal?: number;
   serverOrderHistory?: Array<{
@@ -210,7 +211,7 @@ interface OrdersClientProps {
   }>;
 }
 
-export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], serverReorderTotal = 0, deliveryComplianceData = null, serverPurchaseOrders, serverPurchaseOrdersTotal = 0, serverInboundRecords, serverInboundTotal = 0, serverOrderHistory, serverOrderHistoryTotal = 0, warehouses = [], preselectedProductIds }: OrdersClientProps) {
+export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], serverReorderTotal = 0, deliveryComplianceData = null, serverPurchaseOrders, serverPurchaseOrdersTotal = 0, serverInboundRecords, serverInboundTotal = 0, serverOrderHistory, serverOrderHistoryTotal = 0, warehouses = [], preselectedProductIds, userRole = "viewer" }: OrdersClientProps) {
   // 발주 필요 품목 (발주 후 재조회 가능하도록 state로 관리)
   const [reorderItems, setReorderItems] = useState<ReorderItem[]>(
     () => serverReorderItems.map(mapServerToClientReorderItem)
@@ -1435,6 +1436,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
           open={orderDetailDialogOpen}
           onOpenChange={setOrderDetailDialogOpen}
           orderId={selectedOrderId}
+          userRole={userRole}
           onStatusChange={() => {
             loadPurchaseOrders();
             loadReorderItems();

@@ -32,8 +32,18 @@ import { formatKRW } from "@/lib/utils";
 import { exportPurchaseOrderToExcel } from "@/server/actions/excel-export";
 
 // 상태별 다음 단계 정의 (발주확정 / 취소 / 완료만 — 입고는 입고관리에서 처리)
-const nextStatusActions: Record<string, { label: string; status: string; variant?: "default" | "outline" }[]> = {
+// pending 상태: admin만 승인/반려/발주확정 가능 (getNextStatusActions에서 역할 기반 필터링)
+const nextStatusActionsMap: Record<string, { label: string; status: string; variant?: "default" | "outline"; adminOnly?: boolean }[]> = {
   draft: [
+    { label: "발주 확정", status: "ordered" },
+    { label: "취소", status: "cancelled", variant: "outline" },
+  ],
+  pending: [
+    { label: "승인 및 발주 확정", status: "ordered", adminOnly: true },
+    { label: "승인", status: "approved", adminOnly: true },
+    { label: "반려", status: "cancelled", variant: "outline", adminOnly: true },
+  ],
+  approved: [
     { label: "발주 확정", status: "ordered" },
     { label: "취소", status: "cancelled", variant: "outline" },
   ],
@@ -53,9 +63,10 @@ interface OrderDetailDialogProps {
   onOpenChange: (open: boolean) => void;
   orderId: string;
   onStatusChange?: () => void;
+  userRole?: "admin" | "manager" | "viewer" | "warehouse";
 }
 
-export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange }: OrderDetailDialogProps) {
+export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange, userRole = "viewer" }: OrderDetailDialogProps) {
   const [orderData, setOrderData] = useState<Awaited<ReturnType<typeof getPurchaseOrderById>>>(
     null
   );
@@ -134,7 +145,7 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
       const result = await updatePurchaseOrderStatus(orderId, newStatus);
       if (result.success) {
         const statusLabels: Record<string, string> = {
-          ordered: "발주 확정", confirmed: "공급자 확인",
+          approved: "승인", ordered: "발주 확정", confirmed: "공급자 확인",
           shipped: "출하 처리", received: "입고 완료",
           completed: "완료", cancelled: "취소",
         };
@@ -335,6 +346,12 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
                   </div>
                   {getStatusBadge(orderData.status)}
                 </div>
+
+                {orderData.status === "pending" && userRole !== "admin" && (
+                  <div className="mt-3 rounded-md bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 px-4 py-3 text-sm text-yellow-800 dark:text-yellow-200">
+                    관리자 승인 대기 중입니다
+                  </div>
+                )}
 
                 <Separator className="my-4" />
 
@@ -712,9 +729,11 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
 
               {/* 상태 변경 + 액션 버튼 */}
               <div className="flex flex-wrap items-center justify-between gap-2">
-                {/* 상태 변경 버튼 */}
+                {/* 상태 변경 버튼 (역할 기반 필터링) */}
                 <div className="flex gap-2">
-                  {(nextStatusActions[orderData.status] || []).map((action) => (
+                  {(nextStatusActionsMap[orderData.status] || [])
+                    .filter((action) => !action.adminOnly || userRole === "admin")
+                    .map((action) => (
                     <Button
                       key={action.status}
                       variant={action.variant || "default"}
