@@ -862,24 +862,21 @@ export async function getPurchaseOrderById(orderId: string): Promise<
   }
   const orgId = user.organizationId;
 
-  const [orderData] = await db
-    .select({
-      order: purchaseOrders,
-      supplier: {
-        id: suppliers.id,
-        name: suppliers.name,
-        contactPhone: suppliers.contactPhone,
-      },
-    })
-    .from(purchaseOrders)
-    .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
-    .where(and(eq(purchaseOrders.id, orderId), eq(purchaseOrders.organizationId, orgId)))
-    .limit(1);
-
-  if (!orderData) return null;
-
-  // 발주 항목 + 입항스케줄 최신 예상일 병렬 조회
-  const [items, shipments] = await Promise.all([
+  // 3개 쿼리를 완전 병렬 실행 (순차 2라운드트립 → 1라운드트립)
+  const [orderRows, items, shipments] = await Promise.all([
+    db
+      .select({
+        order: purchaseOrders,
+        supplier: {
+          id: suppliers.id,
+          name: suppliers.name,
+          contactPhone: suppliers.contactPhone,
+        },
+      })
+      .from(purchaseOrders)
+      .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
+      .where(and(eq(purchaseOrders.id, orderId), eq(purchaseOrders.organizationId, orgId)))
+      .limit(1),
     db
       .select({
         item: purchaseOrderItems,
@@ -903,6 +900,9 @@ export async function getPurchaseOrderById(orderId: string): Promise<
       .orderBy(desc(importShipments.createdAt))
       .limit(1),
   ]);
+
+  const orderData = orderRows[0];
+  if (!orderData) return null;
 
   // 입항스케줄에서 예상입고일 추출 (warehouseEtaDate 우선, etaDate 폴백)
   const latestShipment = shipments[0];
