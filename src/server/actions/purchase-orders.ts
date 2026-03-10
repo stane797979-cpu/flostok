@@ -15,7 +15,7 @@ import {
 import { eq, and, desc, asc, sql, count, gte, lte, or, isNull, ne, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { salesRecords, organizations } from "@/server/db/schema";
+import { salesRecords, organizations, alerts } from "@/server/db/schema";
 import {
   convertToReorderItem,
   sortReorderItems,
@@ -1414,7 +1414,7 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
 
     revalidatePath("/dashboard/orders");
 
-    // 활동 로깅 (fire-and-forget, 발주 처리 속도에 영향 없도록)
+    // fire-and-forget: 활동 로깅 + 결재대기 알림 (응답 지연 방지)
     if (createdOrders.length > 0 && user) {
       logActivity({
         user,
@@ -1425,6 +1425,20 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
       }).catch((err: unknown) => {
         console.error("활동 로그 기록 오류:", err);
       });
+
+      // 매니저가 발주 상신(pending) 시 관리자에게 알림 생성
+      if (initialStatus === "pending") {
+        db.insert(alerts).values({
+          organizationId: orgId,
+          type: "order_pending",
+          severity: "warning",
+          title: "발주 결재 요청",
+          message: `${user.name || user.email}님이 발주서 ${createdOrders.length}건의 승인을 요청했습니다.`,
+          actionUrl: "/dashboard/orders?tab=orders",
+        }).catch((err: unknown) => {
+          console.error("결재 알림 생성 오류:", err);
+        });
+      }
     }
 
     return {

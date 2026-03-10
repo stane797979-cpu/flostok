@@ -40,7 +40,6 @@ const nextStatusActionsMap: Record<string, { label: string; status: string; vari
   ],
   pending: [
     { label: "승인 및 발주 확정", status: "ordered", adminOnly: true },
-    { label: "승인", status: "approved", adminOnly: true },
     { label: "반려", status: "cancelled", variant: "outline", adminOnly: true },
   ],
   approved: [

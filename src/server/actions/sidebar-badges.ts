@@ -11,9 +11,10 @@ import { getCurrentUser } from "@/server/actions/auth-helpers";
  * - 인증은 호출 측에서 이미 완료된 상태
  */
 async function _getSidebarBadgesInternal(
-  orgId: string
+  orgId: string,
+  userRole?: string
 ): Promise<Record<string, number>> {
-  const [inventoryCount, orderCount, alertCount] = await Promise.all([
+  const [inventoryCount, orderCount, pendingCount, alertCount] = await Promise.all([
     // 발주 필요 품목 수 (품절 + 위험 + 부족)
     db
       .select({ count: sql<number>`count(*)` })
@@ -41,6 +42,22 @@ async function _getSidebarBadgesInternal(
       .then((r) => Number(r[0]?.count || 0))
       .catch(() => 0),
 
+    // 결재대기 발주 건수 (admin에게만 표시)
+    userRole === "admin"
+      ? db
+          .select({ count: sql<number>`count(*)` })
+          .from(purchaseOrders)
+          .where(
+            and(
+              eq(purchaseOrders.organizationId, orgId),
+              sql`${purchaseOrders.status} = 'pending'`,
+              isNull(purchaseOrders.deletedAt)
+            )
+          )
+          .then((r) => Number(r[0]?.count || 0))
+          .catch(() => 0)
+      : Promise.resolve(0),
+
     // 읽지 않은 알림 수
     db
       .select({ count: sql<number>`count(*)` })
@@ -52,7 +69,9 @@ async function _getSidebarBadgesInternal(
 
   const badges: Record<string, number> = {};
   if (inventoryCount > 0) badges["/dashboard/inventory"] = inventoryCount;
-  if (orderCount > 0) badges["/dashboard/orders"] = orderCount;
+  // 발주 현황: 진행중 + 결재대기 합산
+  const totalOrderBadge = orderCount + pendingCount;
+  if (totalOrderBadge > 0) badges["/dashboard/orders"] = totalOrderBadge;
   if (alertCount > 0) badges["/dashboard/alerts"] = alertCount;
   return badges;
 }
@@ -69,10 +88,11 @@ export async function getSidebarBadges(): Promise<Record<string, number>> {
   if (!user?.organizationId) return {};
 
   const orgId = user.organizationId;
+  const userRole = user.role;
 
   return unstable_cache(
-    () => _getSidebarBadgesInternal(orgId),
-    [`sidebar-badges-${orgId}`],
+    () => _getSidebarBadgesInternal(orgId, userRole),
+    [`sidebar-badges-${orgId}-${userRole}`],
     { revalidate: 30, tags: [`sidebar-badges-${orgId}`] }
   )();
 }
