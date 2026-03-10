@@ -78,6 +78,40 @@ export const DEFAULT_ALERT_SETTINGS: AlertSettings = {
 };
 
 /**
+ * 데이터 보관 정책 설정
+ * 각 항목별 보관 기간(개월). 0 = 삭제 안 함(영구 보관)
+ */
+export interface RetentionPolicySettings {
+  /** 취소/완료된 발주서 보관 기간 (개월) */
+  purchaseOrdersMonths: number;
+  /** 입고 기록 보관 기간 (개월) */
+  inboundRecordsMonths: number;
+  /** 출고(재고변동) 이력 보관 기간 (개월) */
+  inventoryHistoryMonths: number;
+  /** 판매 기록 보관 기간 (개월) */
+  salesRecordsMonths: number;
+  /** 읽은 알림 보관 기간 (개월) */
+  alertsMonths: number;
+  /** 활동 로그 보관 기간 (개월) */
+  activityLogMonths: number;
+  /** 수요 예측 데이터 보관 기간 (개월) */
+  demandForecastsMonths: number;
+}
+
+/**
+ * 데이터 보관 정책 기본값
+ */
+export const DEFAULT_RETENTION_POLICY: RetentionPolicySettings = {
+  purchaseOrdersMonths: 12,
+  inboundRecordsMonths: 12,
+  inventoryHistoryMonths: 6,
+  salesRecordsMonths: 24,
+  alertsMonths: 3,
+  activityLogMonths: 6,
+  demandForecastsMonths: 12,
+};
+
+/**
  * 조직 전체 설정
  */
 export interface OrganizationSettings {
@@ -85,6 +119,8 @@ export interface OrganizationSettings {
   orderPolicy?: OrderPolicySettings;
   /** 알림 임계값 설정 */
   alertSettings?: AlertSettings;
+  /** 데이터 보관 정책 */
+  retentionPolicy?: RetentionPolicySettings;
   /** 알림 채널 설정 */
   notifications?: {
     email?: boolean;
