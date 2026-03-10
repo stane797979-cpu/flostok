@@ -138,7 +138,20 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange,
     }
   };
 
+  // 취소/반려 확인 상태
+  const [cancelConfirmStatus, setCancelConfirmStatus] = useState<string | null>(null);
+
+  const handleStatusChangeRequest = (newStatus: string) => {
+    // 취소/반려는 확인 다이얼로그를 먼저 표시
+    if (newStatus === "cancelled") {
+      setCancelConfirmStatus(newStatus);
+      return;
+    }
+    handleStatusChange(newStatus);
+  };
+
   const handleStatusChange = async (newStatus: string) => {
+    setCancelConfirmStatus(null);
     setIsUpdatingStatus(true);
     try {
       const result = await updatePurchaseOrderStatus(orderId, newStatus);
@@ -737,7 +750,7 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange,
                       key={action.status}
                       variant={action.variant || "default"}
                       size="sm"
-                      onClick={() => handleStatusChange(action.status)}
+                      onClick={() => handleStatusChangeRequest(action.status)}
                       disabled={isUpdatingStatus}
                     >
                       {action.status === "cancelled" ? (
@@ -758,6 +771,36 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange,
                   </Button>
                 </div>
               </div>
+
+              {/* 취소/반려 확인 다이얼로그 */}
+              {cancelConfirmStatus && (
+                <div className="mt-3 rounded-lg border-2 border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950">
+                  <p className="text-sm font-semibold text-red-800 dark:text-red-200">
+                    {orderData.status === "pending" ? "정말 반려하시겠습니까?" : "정말 취소하시겠습니까?"}
+                  </p>
+                  <p className="mt-1 text-xs text-red-600 dark:text-red-400">
+                    이 작업은 되돌릴 수 없습니다.
+                  </p>
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => handleStatusChange(cancelConfirmStatus)}
+                      disabled={isUpdatingStatus}
+                    >
+                      {orderData.status === "pending" ? "반려 확인" : "취소 확인"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCancelConfirmStatus(null)}
+                      disabled={isUpdatingStatus}
+                    >
+                      돌아가기
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </DialogContent>
