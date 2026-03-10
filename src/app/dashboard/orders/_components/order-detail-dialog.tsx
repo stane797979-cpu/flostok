@@ -22,11 +22,8 @@ import {
 import { Package, Calendar, Building2, FileText, Download, ChevronRight, XCircle, Ship, Plus, Pencil, Check, X, History, Clock } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getPurchaseOrderById, updatePurchaseOrderStatus, updatePurchaseOrderExpectedDate } from "@/server/actions/purchase-orders";
+import { getPurchaseOrderById, getPurchaseOrderDetail, updatePurchaseOrderStatus, updatePurchaseOrderExpectedDate } from "@/server/actions/purchase-orders";
 import { createImportShipment } from "@/server/actions/import-shipments";
-import { getInboundRecords } from "@/server/actions/inbound";
-import { getEntityActivityLogs } from "@/server/actions/activity-logs";
-import type { ActivityLog } from "@/server/actions/activity-logs";
 import { useToast } from "@/hooks/use-toast";
 import { formatKRW } from "@/lib/utils";
 import { exportPurchaseOrderToExcel } from "@/server/actions/excel-export";
@@ -95,7 +92,13 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange,
     receivedQuantity: number;
     qualityResult: string | null;
   }>>([]);
-  const [activityLogsList, setActivityLogsList] = useState<ActivityLog[]>([]);
+  const [activityLogsList, setActivityLogsList] = useState<Array<{
+    id: string;
+    description: string;
+    userName: string | null;
+    action: string;
+    createdAt: Date;
+  }>>([]);
   const { toast } = useToast();
 
   // 발주서 데이터 로드
@@ -109,23 +112,16 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange,
   const loadOrderData = async () => {
     setIsLoading(true);
     try {
-      const [data, inboundResult, logs] = await Promise.all([
-        getPurchaseOrderById(orderId),
-        getInboundRecords({ orderId, limit: 100 }),
-        getEntityActivityLogs(orderId, 30),
-      ]);
-      setOrderData(data);
-      setInboundRecordsList(
-        inboundResult.records.map((r) => ({
-          id: r.id,
-          date: r.date,
-          productName: r.productName,
-          productSku: r.productSku,
-          receivedQuantity: r.receivedQuantity,
-          qualityResult: r.qualityResult,
-        }))
-      );
-      setActivityLogsList(logs);
+      // 단일 서버 액션으로 발주서 + 입고기록 + 변경이력 통합 조회
+      // (3개 별도 호출 → 1회 HTTP + 인증 1회 + DB 5개 병렬)
+      const result = await getPurchaseOrderDetail(orderId);
+      if (result) {
+        setOrderData(result.order);
+        setInboundRecordsList(result.inboundRecords);
+        setActivityLogsList(result.activityLogs);
+      } else {
+        setOrderData(null);
+      }
     } catch (error) {
       console.error("발주서 조회 오류:", error);
       toast({

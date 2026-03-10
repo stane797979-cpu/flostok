@@ -15,7 +15,7 @@ import {
 import { eq, and, desc, asc, sql, count, gte, lte, or, isNull, ne, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { salesRecords, organizations, alerts } from "@/server/db/schema";
+import { salesRecords, organizations, alerts, inboundRecords, activityLogs } from "@/server/db/schema";
 import {
   convertToReorderItem,
   sortReorderItems,
@@ -916,6 +916,133 @@ export async function getPurchaseOrderById(orderId: string): Promise<
       product: row.product,
     })),
     shipmentEta,
+  };
+}
+
+/**
+ * 발주서 상세 + 입고 기록 + 변경 이력을 단일 요청으로 조회
+ * (클라이언트에서 서버 액션 3개를 별도 호출하면 각각 HTTP 요청 + 인증 = 느림)
+ */
+export async function getPurchaseOrderDetail(orderId: string): Promise<{
+  order: Awaited<ReturnType<typeof getPurchaseOrderById>>;
+  inboundRecords: Array<{
+    id: string;
+    date: string;
+    productName: string;
+    productSku: string;
+    receivedQuantity: number;
+    qualityResult: string | null;
+  }>;
+  activityLogs: Array<{
+    id: string;
+    description: string;
+    userName: string | null;
+    action: string;
+    createdAt: Date;
+  }>;
+} | null> {
+  const user = await getCurrentUser();
+  if (!user?.organizationId) return null;
+  const orgId = user.organizationId;
+
+  // 5개 쿼리를 단일 인증 + 완전 병렬로 실행
+  const [orderRows, items, shipments, inboundRows, logs] = await Promise.all([
+    // 1. 발주서 기본 정보
+    db
+      .select({
+        order: purchaseOrders,
+        supplier: {
+          id: suppliers.id,
+          name: suppliers.name,
+          contactPhone: suppliers.contactPhone,
+        },
+      })
+      .from(purchaseOrders)
+      .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
+      .where(and(eq(purchaseOrders.id, orderId), eq(purchaseOrders.organizationId, orgId)))
+      .limit(1),
+    // 2. 발주 항목
+    db
+      .select({
+        item: purchaseOrderItems,
+        product: {
+          sku: products.sku,
+          name: products.name,
+          unit: products.unit,
+        },
+      })
+      .from(purchaseOrderItems)
+      .innerJoin(products, eq(purchaseOrderItems.productId, products.id))
+      .where(eq(purchaseOrderItems.purchaseOrderId, orderId))
+      .orderBy(asc(purchaseOrderItems.createdAt)),
+    // 3. 입항스케줄
+    db
+      .select({
+        warehouseEtaDate: importShipments.warehouseEtaDate,
+        etaDate: importShipments.etaDate,
+      })
+      .from(importShipments)
+      .where(eq(importShipments.purchaseOrderId, orderId))
+      .orderBy(desc(importShipments.createdAt))
+      .limit(1),
+    // 4. 입고 기록 (인라인 — 별도 서버 액션 호출 제거)
+    db
+      .select({
+        id: inboundRecords.id,
+        date: inboundRecords.date,
+        receivedQuantity: inboundRecords.receivedQuantity,
+        qualityResult: inboundRecords.qualityResult,
+        productName: products.name,
+        productSku: products.sku,
+      })
+      .from(inboundRecords)
+      .innerJoin(products, eq(inboundRecords.productId, products.id))
+      .where(
+        and(
+          eq(inboundRecords.organizationId, orgId),
+          eq(inboundRecords.purchaseOrderId, orderId)
+        )
+      )
+      .orderBy(desc(inboundRecords.createdAt))
+      .limit(100),
+    // 5. 변경 이력 (인라인 — 별도 서버 액션 호출 제거)
+    db
+      .select({
+        id: activityLogs.id,
+        description: activityLogs.description,
+        userName: activityLogs.userName,
+        action: activityLogs.action,
+        createdAt: activityLogs.createdAt,
+      })
+      .from(activityLogs)
+      .where(
+        and(
+          eq(activityLogs.organizationId, orgId),
+          eq(activityLogs.entityId, orderId)
+        )
+      )
+      .orderBy(desc(activityLogs.createdAt))
+      .limit(30),
+  ]);
+
+  const orderData = orderRows[0];
+  if (!orderData) return null;
+
+  const latestShipment = shipments[0];
+  const shipmentEta = latestShipment?.warehouseEtaDate || latestShipment?.etaDate || null;
+
+  return {
+    order: {
+      ...orderData.order,
+      supplier: orderData.supplier?.id ? orderData.supplier : null,
+      items: items.map((row) => ({
+        ...row.item,
+        product: row.product,
+      })),
+      shipmentEta,
+    },
+    inboundRecords: inboundRows,
+    activityLogs: logs,
   };
 }
 
