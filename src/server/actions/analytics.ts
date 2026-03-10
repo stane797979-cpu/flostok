@@ -14,10 +14,8 @@ import { products, salesRecords, inventory, inventoryHistory, demandForecasts } 
 import { eq, and, gte, sql } from 'drizzle-orm'
 import {
   performABCAnalysis,
-  performXYZAnalysis,
   combineABCXYZ,
   type ABCAnalysisItem,
-  type XYZAnalysisItem,
 } from '@/server/services/scm/abc-xyz-analysis'
 import {
   forecastDemand,
@@ -29,6 +27,11 @@ import {
 
 /**
  * ABC-XYZ 분석 데이터 조회 내부 로직 (캐싱 대상)
+ *
+ * 최적화:
+ * - 5쿼리 → 2쿼리 (salesRecords 집계 + inventoryHistory 집계)
+ * - 각 쿼리에서 제품별 SUM(매출/수량), STDDEV(월별 수량), AVG(월별 수량)를 한 번에 계산
+ * - 날짜 필터를 반드시 양쪽 쿼리에 적용 (184,000+ 행 전체 스캔 방지)
  */
 async function _getABCXYZAnalysisInternal(orgId: string) {
   // 최근 6개월 시작일
@@ -36,68 +39,11 @@ async function _getABCXYZAnalysisInternal(orgId: string) {
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
   const startDate = sixMonthsAgo.toISOString().split('T')[0]
 
-  // 병렬 데이터 로드 (salesRecords + inventoryHistory 출고 데이터 병렬 조회)
-  const [allProducts, salesByProduct, monthlySales, historyByProduct, historyMonthlySales] = await Promise.all([
-    // 1. 전체 제품 목록 조회 (FMR 등급 포함)
-    db
-      .select({ id: products.id, sku: products.sku, name: products.name, fmrGrade: products.fmrGrade })
-      .from(products)
-      .where(eq(products.organizationId, orgId)),
-
-    // 2. 제품별 매출 합계 (ABC용, salesRecords)
-    db
-      .select({
-        productId: salesRecords.productId,
-        totalRevenue: sql<number>`COALESCE(SUM(${salesRecords.totalAmount}), 0)`,
-      })
-      .from(salesRecords)
-      .where(and(eq(salesRecords.organizationId, orgId), gte(salesRecords.date, startDate)))
-      .groupBy(salesRecords.productId),
-
-    // 3. 제품별 월별 판매량 (XYZ용, salesRecords)
-    db
-      .select({
-        productId: salesRecords.productId,
-        month: sql<string>`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`,
-        totalQuantity: sql<number>`COALESCE(SUM(${salesRecords.quantity}), 0)`,
-      })
-      .from(salesRecords)
-      .where(and(eq(salesRecords.organizationId, orgId), gte(salesRecords.date, startDate)))
-      .groupBy(salesRecords.productId, sql`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`),
-
-    // 4. 제품별 출고수량 합계 (ABC 보충용, inventoryHistory)
-    db
-      .select({
-        productId: inventoryHistory.productId,
-        totalQuantity: sql<number>`COALESCE(SUM(ABS(${inventoryHistory.changeAmount})), 0)`,
-      })
-      .from(inventoryHistory)
-      .where(
-        and(
-          eq(inventoryHistory.organizationId, orgId),
-          gte(inventoryHistory.date, startDate),
-          sql`${inventoryHistory.changeAmount} < 0`,
-        )
-      )
-      .groupBy(inventoryHistory.productId),
-
-    // 5. 제품별 월별 출고수량 (XYZ 보충용, inventoryHistory)
-    db
-      .select({
-        productId: inventoryHistory.productId,
-        month: sql<string>`TO_CHAR(${inventoryHistory.date}::date, 'YYYY-MM')`,
-        totalQuantity: sql<number>`COALESCE(SUM(ABS(${inventoryHistory.changeAmount})), 0)`,
-      })
-      .from(inventoryHistory)
-      .where(
-        and(
-          eq(inventoryHistory.organizationId, orgId),
-          gte(inventoryHistory.date, startDate),
-          sql`${inventoryHistory.changeAmount} < 0`,
-        )
-      )
-      .groupBy(inventoryHistory.productId, sql`TO_CHAR(${inventoryHistory.date}::date, 'YYYY-MM')`),
-  ])
+  // 전체 제품 목록은 분석의 기준이므로 별도 조회 유지
+  const allProducts = await db
+    .select({ id: products.id, sku: products.sku, name: products.name, fmrGrade: products.fmrGrade })
+    .from(products)
+    .where(eq(products.organizationId, orgId))
 
   if (allProducts.length === 0) {
     return {
@@ -132,74 +78,137 @@ async function _getABCXYZAnalysisInternal(orgId: string) {
     }
   }
 
-  // salesRecords 기준 매출 맵 생성
-  const revenueMap = new Map(salesByProduct.map((s) => [s.productId, Number(s.totalRevenue)]))
+  /**
+   * 쿼리 1: salesRecords 기반 — 제품별 매출 합계(ABC) + 월별 변동계수(XYZ) 동시 계산
+   * STDDEV_POP / AVG 는 PostgreSQL 집계 함수로 서버에서 직접 처리
+   * 날짜 필터로 6개월 범위만 스캔
+   */
+  const salesAggQuery = db
+    .select({
+      productId: salesRecords.productId,
+      totalRevenue: sql<number>`COALESCE(SUM(${salesRecords.totalAmount}), 0)`,
+      // XYZ 계산용: 월별 수량의 평균과 표준편차를 서버에서 계산
+      // STDDEV_POP(월별집계) 는 서브쿼리 집계가 필요하므로 월별 수량 합계를 직접 계산
+      monthlyAvgQty: sql<number>`COALESCE(AVG(monthly_qty.total_qty), 0)`,
+      monthlyStddevQty: sql<number>`COALESCE(STDDEV_POP(monthly_qty.total_qty), 0)`,
+    })
+    .from(salesRecords)
+    // 월별 집계를 인라인 서브쿼리로 JOIN하여 STDDEV_POP 계산
+    .innerJoin(
+      sql`(
+        SELECT product_id, TO_CHAR(date::date, 'YYYY-MM') AS ym, SUM(quantity) AS total_qty
+        FROM sales_records
+        WHERE organization_id = ${orgId}
+          AND date >= ${startDate}
+        GROUP BY product_id, TO_CHAR(date::date, 'YYYY-MM')
+      ) AS monthly_qty`,
+      sql`monthly_qty.product_id = ${salesRecords.productId}`
+    )
+    .where(and(eq(salesRecords.organizationId, orgId), gte(salesRecords.date, startDate)))
+    .groupBy(salesRecords.productId)
 
-  // salesRecords에 없는 제품은 inventoryHistory 출고 수량으로 보충 (ABC용)
-  // inventoryHistory에는 금액 정보가 없으므로 출고 수량을 value로 사용
-  const salesProductIds = new Set(salesByProduct.map((s) => s.productId))
-  for (const row of historyByProduct) {
+  /**
+   * 쿼리 2: inventoryHistory 출고 기반 — salesRecords 없는 제품 보충용
+   * changeAmount < 0 (출고) 조건 + 날짜 필터 반드시 적용
+   */
+  const historyAggQuery = db
+    .select({
+      productId: inventoryHistory.productId,
+      totalQty: sql<number>`COALESCE(SUM(ABS(${inventoryHistory.changeAmount})), 0)`,
+      monthlyAvgQty: sql<number>`COALESCE(AVG(monthly_hist.total_qty), 0)`,
+      monthlyStddevQty: sql<number>`COALESCE(STDDEV_POP(monthly_hist.total_qty), 0)`,
+    })
+    .from(inventoryHistory)
+    .innerJoin(
+      sql`(
+        SELECT product_id, TO_CHAR(date::date, 'YYYY-MM') AS ym, SUM(ABS(change_amount)) AS total_qty
+        FROM inventory_history
+        WHERE organization_id = ${orgId}
+          AND date >= ${startDate}
+          AND change_amount < 0
+        GROUP BY product_id, TO_CHAR(date::date, 'YYYY-MM')
+      ) AS monthly_hist`,
+      sql`monthly_hist.product_id = ${inventoryHistory.productId}`
+    )
+    .where(
+      and(
+        eq(inventoryHistory.organizationId, orgId),
+        gte(inventoryHistory.date, startDate),
+        sql`${inventoryHistory.changeAmount} < 0`,
+      )
+    )
+    .groupBy(inventoryHistory.productId)
+
+  // 두 집계 쿼리를 병렬 실행
+  const [salesAgg, historyAgg] = await Promise.all([salesAggQuery, historyAggQuery])
+
+  // salesRecords 기준 매출·변동계수 맵 구성
+  const revenueMap = new Map<string, number>()
+  const cvMap = new Map<string, number>() // 변동계수 (CV = stddev / avg)
+
+  for (const row of salesAgg) {
+    revenueMap.set(row.productId, Number(row.totalRevenue))
+    const avg = Number(row.monthlyAvgQty)
+    const std = Number(row.monthlyStddevQty)
+    cvMap.set(row.productId, avg > 0 ? std / avg : Infinity)
+  }
+
+  // salesRecords에 없는 제품은 inventoryHistory 출고 데이터로 보충
+  const salesProductIds = new Set(salesAgg.map((s) => s.productId))
+  for (const row of historyAgg) {
     if (!salesProductIds.has(row.productId)) {
-      revenueMap.set(row.productId, Number(row.totalQuantity))
+      revenueMap.set(row.productId, Number(row.totalQty))
+      const avg = Number(row.monthlyAvgQty)
+      const std = Number(row.monthlyStddevQty)
+      cvMap.set(row.productId, avg > 0 ? std / avg : Infinity)
     }
   }
 
-  // 월별 데이터를 제품별로 그룹핑 (salesRecords)
-  const monthlyMap = new Map<string, number[]>()
-  for (const row of monthlySales) {
-    const arr = monthlyMap.get(row.productId) || []
-    arr.push(Number(row.totalQuantity))
-    monthlyMap.set(row.productId, arr)
-  }
-
-  // salesRecords에 없는 제품은 inventoryHistory 월별 출고 수량으로 보충 (XYZ용)
-  const monthlyProductIds = new Set(monthlySales.map((s) => s.productId))
-  for (const row of historyMonthlySales) {
-    if (!monthlyProductIds.has(row.productId)) {
-      const arr = monthlyMap.get(row.productId) || []
-      arr.push(Number(row.totalQuantity))
-      monthlyMap.set(row.productId, arr)
-    }
-  }
-
-  // 4. ABC 분석 입력 데이터 생성
+  // ABC 분석 입력 데이터 생성
   const abcItems: ABCAnalysisItem[] = allProducts.map((p) => ({
     id: p.id,
     name: p.name,
     value: revenueMap.get(p.id) || 0,
   }))
 
-  // 5. XYZ 분석 입력 데이터 생성
-  const xyzItems: XYZAnalysisItem[] = allProducts.map((p) => ({
-    id: p.id,
-    name: p.name,
-    demandHistory: monthlyMap.get(p.id) || [0],
-  }))
+  // XYZ 분석: SQL에서 이미 CV를 계산했으므로 직접 등급 분류
+  // performXYZAnalysis 인터페이스 호환을 위해 demandHistory는 [avg, avg±std] 형태로 근사
+  // 대신 CV를 직접 사용하여 등급 부여 후 XYZAnalysisResult 형태로 구성
+  const xyzResults = allProducts.map((p) => {
+    const cv = cvMap.get(p.id) ?? Infinity
+    const grade: 'X' | 'Y' | 'Z' = cv < 0.5 ? 'X' : cv < 1.0 ? 'Y' : 'Z'
+    return {
+      id: p.id,
+      name: p.name,
+      averageDemand: 0, // 호출자가 참조하지 않음
+      stdDev: 0,        // 호출자가 참조하지 않음
+      coefficientOfVariation: cv === Infinity ? 999 : Math.round(cv * 100) / 100,
+      grade,
+    }
+  })
 
-  // 6. 분석 수행
+  // 분석 수행
   const abcResults = performABCAnalysis(abcItems)
-  const xyzResults = performXYZAnalysis(xyzItems)
   const combined = combineABCXYZ(abcResults, xyzResults)
 
   // 7. UI에 전달할 형태로 변환
   const skuMap = new Map(allProducts.map((p) => [p.id, p.sku]))
   const fmrMap = new Map(allProducts.map((p) => [p.id, p.fmrGrade]))
+  // O(n²) find() → O(1) Map 조회
+  const xyzCvMap = new Map(xyzResults.map((x) => [x.id, x.coefficientOfVariation]))
 
-  const analysisProducts = combined.map((item) => {
-    const xyzResult = xyzResults.find((x) => x.id === item.id)
-    return {
-      id: item.id,
-      sku: skuMap.get(item.id) || '',
-      name: item.name,
-      abcGrade: item.abcGrade,
-      xyzGrade: item.xyzGrade,
-      fmrGrade: (fmrMap.get(item.id) || null) as 'F' | 'M' | 'R' | null,
-      combinedGrade: item.combinedGrade,
-      revenue: revenueMap.get(item.id) || 0,
-      variationRate: xyzResult?.coefficientOfVariation || 0,
-      strategy: item.strategy,
-    }
-  })
+  const analysisProducts = combined.map((item) => ({
+    id: item.id,
+    sku: skuMap.get(item.id) || '',
+    name: item.name,
+    abcGrade: item.abcGrade,
+    xyzGrade: item.xyzGrade,
+    fmrGrade: (fmrMap.get(item.id) || null) as 'F' | 'M' | 'R' | null,
+    combinedGrade: item.combinedGrade,
+    revenue: revenueMap.get(item.id) || 0,
+    variationRate: xyzCvMap.get(item.id) || 0,
+    strategy: item.strategy,
+  }))
 
   // 8. 매트릭스 데이터
   const grades = ['AX', 'AY', 'AZ', 'BX', 'BY', 'BZ', 'CX', 'CY', 'CZ']
@@ -359,11 +368,13 @@ export async function getDemandForecast(options?: {
         : Promise.resolve(null),
       !productId
         ? db
+            // 날짜 필터 추가: 전체 스캔 방지 (이전에는 필터 없이 184,000+ 행 전체 스캔)
             .select({ productId: inventoryHistory.productId, totalQty: sql<number>`SUM(ABS(${inventoryHistory.changeAmount}))` })
             .from(inventoryHistory)
             .where(
               and(
                 eq(inventoryHistory.organizationId, orgId),
+                gte(inventoryHistory.date, startDate),
                 sql`${inventoryHistory.changeAmount} < 0`,
               )
             )
