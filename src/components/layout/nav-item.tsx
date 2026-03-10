@@ -93,6 +93,11 @@ export function NavItem({
         >
           <Icon className={cn("h-5 w-5 shrink-0", isActive && "text-primary-600")} />
           <span className="flex-1 text-left">{title}</span>
+          {badge !== undefined && badge > 0 && (
+            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-medium text-white">
+              {badge > 99 ? "99+" : badge}
+            </span>
+          )}
           {expanded ? (
             <ChevronDown className="h-4 w-4 text-slate-400" />
           ) : (

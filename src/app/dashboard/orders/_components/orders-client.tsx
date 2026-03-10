@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ChevronLeft, ChevronRight, Download, Loader2, PackagePlus, XCircle, Upload, Zap, ClipboardEdit } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Loader2, PackagePlus, XCircle, Upload, Zap, ClipboardEdit, CheckCircle } from "lucide-react";
 import type { DeliveryComplianceResult } from "@/server/services/scm/delivery-compliance";
 import { ReorderSummary } from "./reorder-summary";
 import { ReorderItemsTable, type ReorderItem } from "./reorder-items-table";
@@ -43,6 +43,7 @@ import {
   getReorderItems,
   cancelBulkPurchaseOrders,
   uploadPurchaseOrderExcel,
+  updatePurchaseOrderStatus,
 } from "@/server/actions/purchase-orders";
 import { exportPurchaseOrderToExcel, exportInboundRecordsToExcel, exportPurchaseOrdersListToExcel } from "@/server/actions/excel-export";
 import { getInboundRecords } from "@/server/actions/inbound";
@@ -269,6 +270,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
   // 발주 현황 체크박스
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [isCancellingOrders, setIsCancellingOrders] = useState(false);
+  const [isApprovingOrders, setIsApprovingOrders] = useState(false);
   const [hideReceived, setHideReceived] = useState(false);
 
   // 수동발주 페이지네이션 (클라이언트)
@@ -804,6 +806,64 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
     }
   };
 
+  // 개별 승인 (목록에서 바로)
+  const handleApproveOrder = async (orderId: string) => {
+    try {
+      const result = await updatePurchaseOrderStatus(orderId, "ordered");
+      if (result.success) {
+        toast({ title: "승인 완료", description: "발주가 승인 및 확정되었습니다" });
+        loadPurchaseOrders();
+      } else {
+        toast({ title: "승인 실패", description: result.error || "승인에 실패했습니다", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "오류", description: "승인 처리 중 오류가 발생했습니다", variant: "destructive" });
+    }
+  };
+
+  // 일괄 승인 (선택된 pending 건)
+  const handleBulkApprove = async () => {
+    const pendingIds = selectedOrderIds.filter((id) =>
+      purchaseOrders.find((o) => o.id === id && o.status === "pending")
+    );
+    if (pendingIds.length === 0) {
+      toast({ title: "대상 없음", description: "결재대기 상태인 발주서가 선택되지 않았습니다", variant: "destructive" });
+      return;
+    }
+
+    setIsApprovingOrders(true);
+    let successCount = 0;
+    const errors: string[] = [];
+
+    // 병렬 승인 처리 (Promise.allSettled)
+    const results = await Promise.allSettled(
+      pendingIds.map((id) => updatePurchaseOrderStatus(id, "ordered"))
+    );
+
+    results.forEach((r, i) => {
+      if (r.status === "fulfilled" && r.value.success) {
+        successCount++;
+      } else {
+        const errMsg = r.status === "fulfilled" ? r.value.error : "처리 실패";
+        errors.push(`${pendingIds[i]}: ${errMsg}`);
+      }
+    });
+
+    if (successCount > 0) {
+      toast({ title: "일괄 승인 완료", description: `${successCount}건의 발주서가 승인되었습니다` });
+      setSelectedOrderIds([]);
+      loadPurchaseOrders();
+    }
+    if (errors.length > 0) {
+      toast({
+        title: successCount > 0 ? "일부 승인 실패" : "승인 실패",
+        description: `${errors.length}건 실패`,
+        variant: "destructive",
+      });
+    }
+    setIsApprovingOrders(false);
+  };
+
   const handleOrderExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1145,6 +1205,21 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                     )}
                     전체 엑셀 다운로드
                   </Button>
+                  {selectedOrderIds.length > 0 && userRole === "admin" && selectedOrderIds.some((id) => purchaseOrders.find((o) => o.id === id && o.status === "pending")) && (
+                    <Button
+                      size="sm"
+                      onClick={handleBulkApprove}
+                      disabled={isApprovingOrders}
+                      className="bg-green-600 hover:bg-green-700"
+                    >
+                      {isApprovingOrders ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <CheckCircle className="mr-2 h-4 w-4" />
+                      )}
+                      {selectedOrderIds.filter((id) => purchaseOrders.find((o) => o.id === id && o.status === "pending")).length}건 일괄 승인
+                    </Button>
+                  )}
                   {selectedOrderIds.length > 0 && (
                     <Button
                       variant="destructive"
@@ -1174,8 +1249,10 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                     orders={hideReceived ? purchaseOrders.filter((o) => o.status !== "received") : purchaseOrders}
                     onViewClick={handleViewOrder}
                     onDownloadClick={handleDownloadOrder}
+                    onApproveClick={handleApproveOrder}
                     selectedIds={selectedOrderIds}
                     onSelectChange={setSelectedOrderIds}
+                    isAdmin={userRole === "admin"}
                   />
                   {ordersTotalItems > 0 && (
                     <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Eye, Download, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Eye, Download, ArrowUpDown, ArrowUp, ArrowDown, CheckCircle } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn, formatKRW } from "@/lib/utils";
 
@@ -30,8 +30,10 @@ interface PurchaseOrdersTableProps {
   orders: PurchaseOrderListItem[];
   onViewClick: (orderId: string) => void;
   onDownloadClick?: (orderId: string) => void;
+  onApproveClick?: (orderId: string) => void;
   selectedIds?: string[];
   onSelectChange?: (ids: string[]) => void;
+  isAdmin?: boolean;
   className?: string;
 }
 
@@ -40,7 +42,7 @@ type SortDirection = "asc" | "desc";
 
 const STATUS_ORDER = ["draft", "pending", "ordered", "pending_receipt", "received", "cancelled"];
 
-export const PurchaseOrdersTable = memo(function PurchaseOrdersTable({ orders, onViewClick, onDownloadClick, selectedIds, onSelectChange, className }: PurchaseOrdersTableProps) {
+export const PurchaseOrdersTable = memo(function PurchaseOrdersTable({ orders, onViewClick, onDownloadClick, onApproveClick, selectedIds, onSelectChange, isAdmin, className }: PurchaseOrdersTableProps) {
   // 모든 상태 체크 가능
   const checkableOrders = orders;
   const allCheckableSelected = checkableOrders.length > 0 && checkableOrders.every((o) => selectedIds?.includes(o.id));
@@ -191,10 +193,18 @@ export const PurchaseOrdersTable = memo(function PurchaseOrdersTable({ orders, o
                 <p className="font-semibold">{formatKRW(order.totalAmount)}</p>
                 <p className="text-slate-500">{formatDate(order.orderDate)} · {order.itemsCount}품목</p>
               </div>
-              <Button size="sm" variant="outline" onClick={() => onViewClick(order.id)}>
-                <Eye className="mr-1 h-4 w-4" />
-                상세
-              </Button>
+              <div className="flex gap-1.5">
+                {isAdmin && order.status === "pending" && onApproveClick && (
+                  <Button size="sm" onClick={() => onApproveClick(order.id)} className="bg-green-600 hover:bg-green-700">
+                    <CheckCircle className="mr-1 h-4 w-4" />
+                    승인
+                  </Button>
+                )}
+                <Button size="sm" variant="outline" onClick={() => onViewClick(order.id)}>
+                  <Eye className="mr-1 h-4 w-4" />
+                  상세
+                </Button>
+              </div>
             </div>
           </div>
         ))}
@@ -269,7 +279,13 @@ export const PurchaseOrdersTable = memo(function PurchaseOrdersTable({ orders, o
                 {order.expectedDate ? formatDate(order.expectedDate) : "-"}
               </TableCell>
               <TableCell className="text-right">
-                <div className="flex justify-end gap-2">
+                <div className="flex justify-end gap-1.5">
+                  {isAdmin && order.status === "pending" && onApproveClick && (
+                    <Button size="sm" onClick={() => onApproveClick(order.id)} className="bg-green-600 hover:bg-green-700">
+                      <CheckCircle className="mr-1 h-4 w-4" />
+                      승인
+                    </Button>
+                  )}
                   <Button size="sm" variant="outline" onClick={() => onViewClick(order.id)}>
                     <Eye className="mr-1 h-4 w-4" />
                     상세
