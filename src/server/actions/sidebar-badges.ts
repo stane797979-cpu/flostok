@@ -14,7 +14,7 @@ async function _getSidebarBadgesInternal(
   orgId: string,
   userRole?: string
 ): Promise<Record<string, number>> {
-  const [inventoryCount, orderCount, pendingCount, alertCount] = await Promise.all([
+  const [inventoryCount, pendingCount, alertCount] = await Promise.all([
     // 발주 필요 품목 수 (품절 + 위험 + 부족)
     db
       .select({ count: sql<number>`count(*)` })
@@ -23,20 +23,6 @@ async function _getSidebarBadgesInternal(
         and(
           eq(inventory.organizationId, orgId),
           sql`${inventory.status} IN ('out_of_stock', 'critical', 'shortage')`
-        )
-      )
-      .then((r) => Number(r[0]?.count || 0))
-      .catch(() => 0),
-
-    // 진행중 발주 건수 (발주완료 + 승인됨, 삭제되지 않은 건)
-    db
-      .select({ count: sql<number>`count(*)` })
-      .from(purchaseOrders)
-      .where(
-        and(
-          eq(purchaseOrders.organizationId, orgId),
-          sql`${purchaseOrders.status} IN ('ordered', 'approved')`,
-          isNull(purchaseOrders.deletedAt)
         )
       )
       .then((r) => Number(r[0]?.count || 0))
@@ -69,9 +55,8 @@ async function _getSidebarBadgesInternal(
 
   const badges: Record<string, number> = {};
   if (inventoryCount > 0) badges["/dashboard/inventory"] = inventoryCount;
-  // 발주 현황: 진행중 + 결재대기 합산
-  const totalOrderBadge = orderCount + pendingCount;
-  if (totalOrderBadge > 0) badges["/dashboard/orders"] = totalOrderBadge;
+  // 결재대기 건수만 표시
+  if (pendingCount > 0) badges["/dashboard/orders"] = pendingCount;
   if (alertCount > 0) badges["/dashboard/alerts"] = alertCount;
   return badges;
 }

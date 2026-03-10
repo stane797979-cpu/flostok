@@ -13,7 +13,7 @@ import {
   type PurchaseOrderItem,
 } from "@/server/db/schema";
 import { eq, and, desc, asc, sql, count, gte, lte, or, isNull, ne, inArray } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 import { salesRecords, organizations, alerts, inboundRecords, activityLogs } from "@/server/db/schema";
 import {
@@ -731,6 +731,7 @@ export async function updatePurchaseOrderStatus(
       .where(eq(purchaseOrders.id, orderId));
 
     revalidatePath("/dashboard/orders");
+    revalidateTag(`sidebar-badges-${orgId}`);
 
     // 활동 로깅
     await logActivity({
