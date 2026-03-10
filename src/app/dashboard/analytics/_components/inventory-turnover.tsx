@@ -82,9 +82,10 @@ export function InventoryTurnover({ data, className }: InventoryTurnoverProps) {
         avgTurnoverRate: data.avgTurnoverRate.toFixed(1),
         avgDOI: data.avgDaysOfInventory,
         lowTurnoverCount: data.lowTurnoverCount,
+        periodLabel: data.periodLabel ?? "",
       };
     }
-    return { avgTurnoverRate: "0", avgDOI: 0, lowTurnoverCount: 0 };
+    return { avgTurnoverRate: "0", avgDOI: 0, lowTurnoverCount: 0, periodLabel: "" };
   }, [data]);
 
   // 정렬 처리
