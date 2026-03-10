@@ -44,45 +44,64 @@ const confirmInboundSchema = z.object({
 export type ConfirmInboundInput = z.infer<typeof confirmInboundSchema>;
 
 /**
+ * 일괄 입고확인 시 사전 조회 데이터를 주입하기 위한 컨텍스트
+ * bulkConfirmInbound에서 배치 조회한 데이터를 재사용하여 N+1 쿼리 제거
+ */
+interface ConfirmInboundContext {
+  user?: { organizationId: string; id: string; role: string };
+  purchaseOrder?: typeof purchaseOrders.$inferSelect;
+  orderItems?: (typeof purchaseOrderItems.$inferSelect)[];
+  productsData?: (typeof products.$inferSelect)[];
+}
+
+/**
  * 입고 확인 처리
  *
  * 발주서의 입고를 확인하고 재고를 자동 증가시킵니다.
  * 부분 입고도 지원합니다.
  *
  * @param input - 입고 확인 데이터
+ * @param context - 선택적 컨텍스트 (일괄 처리 시 사전 조회 데이터 주입)
  * @returns 성공 여부 및 생성된 입고 기록 ID 배열
  */
-export async function confirmInbound(input: ConfirmInboundInput): Promise<{
+export async function confirmInbound(input: ConfirmInboundInput, context?: ConfirmInboundContext): Promise<{
   success: boolean;
   recordIds?: string[];
   error?: string;
 }> {
   try {
-    const user = await requireAuth();
+    const user = context?.user ?? await requireAuth();
 
     // 유효성 검사
     const validated = confirmInboundSchema.parse(input);
 
     // [최적화] 발주서 + 발주 항목 + 제품 정보를 병렬 조회 (순차 4쿼리 → 병렬 3쿼리)
+    // bulkConfirmInbound에서 context로 사전 조회 데이터가 주입된 경우 DB 조회 생략
     const productIds = validated.items.map(item => item.productId);
 
     const [purchaseOrderResult, orderItems, productsData] = await Promise.all([
-      db
-        .select()
-        .from(purchaseOrders)
-        .where(
-          and(eq(purchaseOrders.id, validated.orderId), eq(purchaseOrders.organizationId, user.organizationId))
-        )
-        .limit(1),
-      db
-        .select()
-        .from(purchaseOrderItems)
-        .where(eq(purchaseOrderItems.purchaseOrderId, validated.orderId)),
-      productIds.length > 0
-        ? db.select().from(products).where(
-            and(inArray(products.id, productIds), eq(products.organizationId, user.organizationId))
-          )
-        : Promise.resolve([]),
+      context?.purchaseOrder
+        ? Promise.resolve([context.purchaseOrder])
+        : db
+            .select()
+            .from(purchaseOrders)
+            .where(
+              and(eq(purchaseOrders.id, validated.orderId), eq(purchaseOrders.organizationId, user.organizationId))
+            )
+            .limit(1),
+      context?.orderItems
+        ? Promise.resolve(context.orderItems)
+        : db
+            .select()
+            .from(purchaseOrderItems)
+            .where(eq(purchaseOrderItems.purchaseOrderId, validated.orderId)),
+      context?.productsData
+        ? Promise.resolve(context.productsData)
+        : productIds.length > 0
+          ? db.select().from(products).where(
+              and(inArray(products.id, productIds), eq(products.organizationId, user.organizationId))
+            )
+          : Promise.resolve([]),
     ]);
 
     const purchaseOrder = purchaseOrderResult[0];
@@ -720,6 +739,14 @@ export async function bulkConfirmInbound(
       itemsByOrderId.set(item.purchaseOrderId, existing);
     }
 
+    // 모든 제품을 한 번에 배치 조회 (confirmInbound 내부 N번 조회 제거)
+    const allProductIds = [...new Set(allItems.map(item => item.productId))];
+    const allProducts = allProductIds.length > 0
+      ? await db.select().from(products).where(
+          and(eq(products.organizationId, user.organizationId), inArray(products.id, allProductIds))
+        )
+      : [];
+
     // 각 발주서에 대한 입고 처리 작업 목록 생성
     // 상태가 유효하지 않거나 이미 완료된 항목은 사전 필터링
     type OrderTask =
@@ -784,7 +811,18 @@ export async function bulkConfirmInbound(
     const activeTasks = tasks.filter((t): t is Extract<OrderTask, { skip: false }> => !t.skip);
 
     const results = await Promise.allSettled(
-      activeTasks.map((task) => confirmInbound(task.input))
+      activeTasks.map((task) => {
+        const order = orders.find(o => o.id === task.orderId);
+        const orderItems = itemsByOrderId.get(task.orderId) || [];
+        const taskProductIds = task.input.items.map(i => i.productId);
+        const taskProducts = allProducts.filter(p => taskProductIds.includes(p.id));
+        return confirmInbound(task.input, {
+          user,
+          purchaseOrder: order,
+          orderItems,
+          productsData: taskProducts,
+        });
+      })
     );
 
     for (let i = 0; i < results.length; i++) {

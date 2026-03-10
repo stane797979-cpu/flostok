@@ -20,7 +20,7 @@ import { deductByFIFO, formatDeductionNotes } from "@/server/services/inventory/
 import { requireAuth, requireManagerOrAbove, type AuthUser } from "./auth-helpers";
 import { logActivity } from "@/server/services/activity-log";
 import { createDeletionRequest } from "@/server/services/deletion/deletion-workflow";
-import { checkAndCreateInventoryAlert } from "@/server/services/notifications/inventory-alerts";
+import { checkAndCreateInventoryAlert, checkAndCreateInventoryAlertsBatch } from "@/server/services/notifications/inventory-alerts";
 
 /**
  * 재고 변동 입력 스키마
@@ -366,6 +366,8 @@ export async function getInventoryByProductId(
 interface InventoryTransactionContext {
   user?: AuthUser;
   product?: typeof products.$inferSelect;
+  /** 사전 조회된 현재 재고 — 배치 처리 시 inventoryMap에서 주입하여 DB 재조회 생략 */
+  currentInventory?: typeof inventory.$inferSelect | null;
   skipRevalidate?: boolean;
   skipActivityLog?: boolean;
   /** Drizzle 트랜잭션 객체 — 외부 트랜잭션과 동일한 커넥션에서 실행하려면 전달 */
@@ -416,19 +418,24 @@ export async function processInventoryTransaction(
       return { success: false, error: "제품을 찾을 수 없습니다" };
     }
 
-    // 현재 재고 조회 (창고별)
-    const invResult = await dbOrTx
-      .select()
-      .from(inventory)
-      .where(
-        and(
-          eq(inventory.productId, validated.productId),
-          eq(inventory.organizationId, user.organizationId),
-          eq(inventory.warehouseId, warehouseId)
+    // 현재 재고 조회 (창고별) — context에 사전 조회 데이터가 있으면 DB 조회 생략
+    let currentInventory: typeof inventory.$inferSelect | null;
+    if (context?.currentInventory !== undefined) {
+      currentInventory = context.currentInventory;
+    } else {
+      const invResult = await dbOrTx
+        .select()
+        .from(inventory)
+        .where(
+          and(
+            eq(inventory.productId, validated.productId),
+            eq(inventory.organizationId, user.organizationId),
+            eq(inventory.warehouseId, warehouseId)
+          )
         )
-      )
-      .limit(1);
-    let currentInventory: typeof inventory.$inferSelect | null = invResult[0] || null;
+        .limit(1);
+      currentInventory = invResult[0] || null;
+    }
     const stockBefore = currentInventory?.currentStock || 0;
 
     // 출고 시 재고 부족 체크
@@ -708,7 +715,7 @@ export async function processBatchInventoryTransactions(
           const wId = item.warehouseId || defaultWarehouseId;
           const result = await processInventoryTransaction(
             { ...item, warehouseId: wId },
-            { user, product, tx: context?.tx, skipRevalidate: true, skipActivityLog: true }
+            { user, product, currentInventory: inventoryMap.get(productId) ?? null, tx: context?.tx, skipRevalidate: true, skipActivityLog: true }
           );
           results.push({ productId, success: result.success, stockAfter: result.stockAfter, error: result.error });
         }
@@ -801,15 +808,17 @@ export async function processBatchInventoryTransactions(
       await dbOrTx.insert(inventoryHistory).values(historyInserts);
     }
 
-    // 8. 알림 트리거 (fire-and-forget)
-    for (const upd of batchUpdates) {
-      checkAndCreateInventoryAlert({
-        organizationId: user.organizationId,
-        productId: upd.productId,
-        stockBefore: upd.stockBefore,
-        stockAfter: upd.stockAfter,
-        newStatus: upd.newStatus,
-      }).catch(() => {});
+    // 8. 알림 트리거 (fire-and-forget, 배치)
+    if (batchUpdates.length > 0) {
+      checkAndCreateInventoryAlertsBatch(
+        batchUpdates.map(upd => ({
+          organizationId: user.organizationId,
+          productId: upd.productId,
+          stockBefore: upd.stockBefore,
+          stockAfter: upd.stockAfter,
+          newStatus: upd.newStatus,
+        }))
+      ).catch(() => {});
     }
 
     if (!context?.skipRevalidate) {
