@@ -13,7 +13,7 @@ import {
   type PurchaseOrderItem,
 } from "@/server/db/schema";
 import { eq, and, desc, asc, sql, count, gte, lte, or, isNull, ne, inArray } from "drizzle-orm";
-import { revalidatePath, revalidateTag } from "next/cache";
+import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 import { z } from "zod";
 import { salesRecords, organizations, alerts, inboundRecords, activityLogs } from "@/server/db/schema";
 import {
@@ -187,7 +187,7 @@ export async function getReorderItemsInternal(
         .where(
           and(
             eq(salesRecords.organizationId, orgId),
-            sql`${salesRecords.productId} IN ${productIds}`,
+            inArray(salesRecords.productId, productIds),
             gte(salesRecords.date, thirtyDaysAgoStr),
             lte(salesRecords.date, todayStr)
           )
@@ -204,7 +204,7 @@ export async function getReorderItemsInternal(
         .where(
           and(
             eq(demandForecasts.organizationId, orgId),
-            sql`${demandForecasts.productId} IN ${productIds}`,
+            inArray(demandForecasts.productId, productIds),
             gte(demandForecasts.period, forecastStartStr),
             lte(demandForecasts.period, forecastEndStr)
           )
@@ -305,8 +305,19 @@ export async function getReorderItems(options?: {
     if (!user?.organizationId) {
       throw new Error("인증된 사용자를 찾을 수 없습니다");
     }
-    // organizations SELECT는 getReorderItemsInternal 내부에서 처리 (orgSettings 미전달 시)
-    return await getReorderItemsInternal(user.organizationId, undefined, options);
+    const orgId = user.organizationId;
+    const { urgencyLevel, abcGrade, limit } = options || {};
+    const optionKey = `${urgencyLevel ?? "all"}-${abcGrade ?? "all"}-${limit ?? "default"}`;
+
+    // 60초 캐시: 발주 탭 열 때마다 full DB 스캔 방지
+    // revalidate-reorder-items-{orgId} 태그로 발주 생성/취소 시 즉시 무효화
+    const cachedFetch = unstable_cache(
+      () => getReorderItemsInternal(orgId, undefined, options),
+      [`reorder-items-${orgId}-${optionKey}`],
+      { revalidate: 60, tags: [`reorder-items-${orgId}`] }
+    );
+
+    return await cachedFetch();
   } catch (error) {
     if (error instanceof z.ZodError) {
       throw new Error(`입력 데이터가 올바르지 않습니다: ${error.issues[0]?.message}`);
@@ -517,7 +528,7 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
       db
         .select()
         .from(products)
-        .where(and(sql`${products.id} IN ${productIds}`, eq(products.organizationId, orgId))),
+        .where(and(inArray(products.id, productIds), eq(products.organizationId, orgId))),
     ]);
 
     const supplier = supplierResult[0];
@@ -608,6 +619,8 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
     });
 
     revalidatePath("/dashboard/orders");
+    // 발주 생성 시 발주 필요 품목 캐시 즉시 무효화 (새 PO가 active_po_products에 반영되어야 함)
+    revalidateTag(`reorder-items-${orgId}`);
 
     // 활동 로깅 (비동기 — 응답 지연 방지)
     if (user) {
@@ -829,7 +842,7 @@ export async function getPurchaseOrders(options?: {
         count: sql<number>`count(*)`,
       })
       .from(purchaseOrderItems)
-      .where(sql`${purchaseOrderItems.purchaseOrderId} IN ${orderIds}`)
+      .where(inArray(purchaseOrderItems.purchaseOrderId, orderIds))
       .groupBy(purchaseOrderItems.purchaseOrderId);
     itemsCountMap = new Map(itemsCounts.map((r) => [r.purchaseOrderId, Number(r.count)]));
   }
@@ -1131,7 +1144,7 @@ export async function cancelBulkPurchaseOrders(
       .where(
         and(
           eq(purchaseOrders.organizationId, orgId),
-          sql`${purchaseOrders.id} IN ${orderIds}`
+          inArray(purchaseOrders.id, orderIds)
         )
       );
 
@@ -1157,13 +1170,15 @@ export async function cancelBulkPurchaseOrders(
         .where(
           and(
             eq(purchaseOrders.organizationId, orgId),
-            sql`${purchaseOrders.id} IN ${cancellableIds}`
+            inArray(purchaseOrders.id, cancellableIds)
           )
         );
       cancelledCount = cancellableIds.length;
     }
 
     revalidatePath("/dashboard/orders");
+    // 발주 취소 시 발주 필요 품목 캐시 무효화 (취소된 PO는 active_po_products에서 제외됨)
+    if (cancelledCount > 0) revalidateTag(`reorder-items-${orgId}`);
     if (user && cancelledCount > 0) {
       await logActivity({
         user,
@@ -1383,10 +1398,10 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
       warehousePromise,
       checkOrderLimit(orgId),
       db.select().from(suppliers).where(
-        and(eq(suppliers.organizationId, orgId), sql`${suppliers.id} IN ${allSupplierIds}`)
+        and(eq(suppliers.organizationId, orgId), inArray(suppliers.id, allSupplierIds))
       ),
       db.select().from(products).where(
-        and(eq(products.organizationId, orgId), sql`${products.id} IN ${allProductIds}`)
+        and(eq(products.organizationId, orgId), inArray(products.id, allProductIds))
       ),
       db.select({ count: sql<number>`count(*)` })
         .from(purchaseOrders)

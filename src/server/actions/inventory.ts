@@ -8,7 +8,7 @@ import {
   type Inventory,
   type InventoryHistory,
 } from "@/server/db/schema";
-import { eq, and, desc, sql, gte, lte, inArray } from "drizzle-orm";
+import { eq, and, desc, sql, gte, lte, lt, inArray } from "drizzle-orm";
 import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 import { z } from "zod";
 import { classifyInventoryStatus } from "@/server/services/scm/inventory-status";
@@ -165,7 +165,7 @@ export async function getInventoryList(options?: {
                 and(
                   eq(inventoryHistory.organizationId, orgId),
                   gte(inventoryHistory.date, thirtyDaysAgoStr),
-                  sql`${inventoryHistory.changeAmount} < 0`,
+                  lt(inventoryHistory.changeAmount, 0),
                   inArray(inventoryHistory.productId, pageProductIds),
                   warehouseId ? eq(inventoryHistory.warehouseId, warehouseId) : undefined
                 )
