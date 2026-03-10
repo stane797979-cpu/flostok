@@ -40,62 +40,69 @@ const reorderOptionsSchema = z.object({
 });
 
 /**
- * 발주 필요 품목 목록 조회
+ * 발주 필요 품목 목록 조회 (내부 함수 — 인증 세션 불필요)
  *
+ * 크론잡 등 서버 내부에서 orgId를 직접 알고 있는 경우 사용합니다.
+ * orgSettings를 전달하면 organizations SELECT를 생략합니다.
+ *
+ * @param orgId - 조직 ID
+ * @param orgSettings - 조직 settings (전달 시 organizations SELECT 생략)
  * @param options - 필터링 옵션
  * @returns 발주 필요 품목 목록
  */
-export async function getReorderItems(options?: {
-  urgencyLevel?: number;
-  abcGrade?: "A" | "B" | "C";
-  limit?: number;
-}): Promise<{
+export async function getReorderItemsInternal(
+  orgId: string,
+  orgSettings?: Record<string, unknown> | null,
+  options?: {
+    urgencyLevel?: number;
+    abcGrade?: "A" | "B" | "C";
+    limit?: number;
+  }
+): Promise<{
   items: ReorderItem[];
   total: number;
 }> {
-  try {
-    const user = await getCurrentUser();
-    if (!user?.organizationId) {
-      throw new Error("인증된 사용자를 찾을 수 없습니다");
-    }
-    const orgId = user.organizationId;
+  // 옵션 유효성 검사
+  const validatedOptions = reorderOptionsSchema.parse(options || {});
+  const { urgencyLevel, abcGrade, limit = 500 } = validatedOptions;
 
-    // 옵션 유효성 검사
-    const validatedOptions = reorderOptionsSchema.parse(options || {});
-    const { urgencyLevel, abcGrade, limit = 500 } = validatedOptions;
-
-    // 조직 설정에서 보정계수 로드
+  // 조직 설정에서 보정계수 로드 (orgSettings가 전달되지 않은 경우만 DB 조회)
+  let resolvedSettings: OrganizationSettings | null = null;
+  if (orgSettings !== undefined) {
+    resolvedSettings = orgSettings as OrganizationSettings | null;
+  } else {
     const [orgData] = await db
       .select({ settings: organizations.settings })
       .from(organizations)
       .where(eq(organizations.id, orgId))
       .limit(1);
-    const orgSettings = orgData?.settings as OrganizationSettings | null;
-    const supplyCoefficients = orgSettings?.orderPolicy?.supplyCoefficients;
+    resolvedSettings = orgData?.settings as OrganizationSettings | null;
+  }
+  const supplyCoefficients = resolvedSettings?.orderPolicy?.supplyCoefficients;
 
-    // 발주 필요 제품 조회 (전 창고 합산 현재고 <= 발주점, 활성 PO 없는 제품만)
-    // 성능 최적화: NOT EXISTS 서브쿼리를 사전 조회 + LEFT JOIN IS NULL로 변경
-    const MAX_CANDIDATES = 500;
+  // 발주 필요 제품 조회 (전 창고 합산 현재고 <= 발주점, 활성 PO 없는 제품만)
+  // 성능 최적화: NOT EXISTS 서브쿼리를 사전 조회 + LEFT JOIN IS NULL로 변경
+  const MAX_CANDIDATES = 500;
 
-    // 1단계: 활성 PO에 포함된 제품 ID를 먼저 한 번만 조회 (인덱스 활용)
-    const reorderCandidates = await db.execute<{
-      product_id: string;
-      product_sku: string;
-      product_name: string;
-      safety_stock: number;
-      reorder_point: number;
-      moq: number;
-      lead_time: number;
-      unit_price: number;
-      cost_price: number;
-      abc_grade: string | null;
-      xyz_grade: string | null;
-      primary_supplier_id: string | null;
-      total_stock: number;
-      supplier_id: string | null;
-      supplier_name: string | null;
-      supplier_avg_lead_time: number | null;
-    }>(sql`
+  // 1단계: 활성 PO에 포함된 제품 ID를 먼저 한 번만 조회 (인덱스 활용)
+  const reorderCandidates = await db.execute<{
+    product_id: string;
+    product_sku: string;
+    product_name: string;
+    safety_stock: number;
+    reorder_point: number;
+    moq: number;
+    lead_time: number;
+    unit_price: number;
+    cost_price: number;
+    abc_grade: string | null;
+    xyz_grade: string | null;
+    primary_supplier_id: string | null;
+    total_stock: number;
+    supplier_id: string | null;
+    supplier_name: string | null;
+    supplier_avg_lead_time: number | null;
+  }>(sql`
       WITH active_po_products AS (
         SELECT DISTINCT poi.product_id
         FROM purchase_order_items poi
@@ -144,151 +151,162 @@ export async function getReorderItems(options?: {
       LIMIT ${MAX_CANDIDATES}
     `);
 
-    // raw SQL 결과 → 배열 (postgres.js는 배열 직접 반환, .rows 없음)
-    type CandidateRow = {
-      product_id: string; product_sku: string; product_name: string;
-      safety_stock: number; reorder_point: number; moq: number; lead_time: number;
-      unit_price: number; cost_price: number; abc_grade: string | null; xyz_grade: string | null;
-      primary_supplier_id: string | null; total_stock: number;
-      supplier_id: string | null; supplier_name: string | null; supplier_avg_lead_time: number | null;
+  type CandidateRow = {
+    product_id: string; product_sku: string; product_name: string;
+    safety_stock: number; reorder_point: number; moq: number; lead_time: number;
+    unit_price: number; cost_price: number; abc_grade: string | null; xyz_grade: string | null;
+    primary_supplier_id: string | null; total_stock: number;
+    supplier_id: string | null; supplier_name: string | null; supplier_avg_lead_time: number | null;
+  };
+  const candidateRows = Array.from(reorderCandidates as unknown as CandidateRow[]);
+
+  const productIds = candidateRows.map((r) => r.product_id);
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split("T")[0];
+  const todayStr = new Date().toISOString().split("T")[0];
+
+  const avgSalesMap = new Map<string, number>();
+  const forecastMap = new Map<string, { dailySales: number; method: string }>();
+
+  if (productIds.length > 0) {
+    const forecastStart = new Date();
+    forecastStart.setDate(1);
+    const forecastEnd = new Date();
+    forecastEnd.setMonth(forecastEnd.getMonth() + 3);
+    const forecastStartStr = forecastStart.toISOString().split("T")[0];
+    const forecastEndStr = forecastEnd.toISOString().split("T")[0];
+
+    const [salesData, forecastData] = await Promise.all([
+      db
+        .select({
+          productId: salesRecords.productId,
+          totalQuantity: sql<number>`coalesce(sum(${salesRecords.quantity}), 0)`,
+        })
+        .from(salesRecords)
+        .where(
+          and(
+            eq(salesRecords.organizationId, orgId),
+            sql`${salesRecords.productId} IN ${productIds}`,
+            gte(salesRecords.date, thirtyDaysAgoStr),
+            lte(salesRecords.date, todayStr)
+          )
+        )
+        .groupBy(salesRecords.productId),
+
+      db
+        .select({
+          productId: demandForecasts.productId,
+          avgMonthlyForecast: sql<number>`coalesce(avg(${demandForecasts.forecastQuantity}), 0)`,
+          method: sql<string>`(array_agg(${demandForecasts.method} ORDER BY ${demandForecasts.updatedAt} DESC))[1]`,
+        })
+        .from(demandForecasts)
+        .where(
+          and(
+            eq(demandForecasts.organizationId, orgId),
+            sql`${demandForecasts.productId} IN ${productIds}`,
+            gte(demandForecasts.period, forecastStartStr),
+            lte(demandForecasts.period, forecastEndStr)
+          )
+        )
+        .groupBy(demandForecasts.productId),
+    ]);
+
+    for (const row of salesData) {
+      avgSalesMap.set(row.productId, Math.round((Number(row.totalQuantity) / 30) * 100) / 100);
+    }
+
+    const methodLabelMap: Record<string, string> = {
+      sma_3: "SMA", sma_6: "SMA", ses: "SES", holt: "Holt's", wma: "WMA", holt_winters: "Holt-Winters",
     };
-    const candidateRows = Array.from(reorderCandidates as unknown as CandidateRow[]);
-
-    // 일평균 판매량을 단일 그룹 쿼리로 일괄 조회 (N+1 쿼리 제거)
-    const productIds = candidateRows.map((r) => r.product_id);
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split("T")[0];
-    const todayStr = new Date().toISOString().split("T")[0];
-
-    // 실적 기반 일평균 + 수요예측 기반 일평균을 병렬 조회
-    const avgSalesMap = new Map<string, number>();
-    const forecastMap = new Map<string, { dailySales: number; method: string }>();
-
-    if (productIds.length > 0) {
-      // 향후 3개월 예측 기간
-      const forecastStart = new Date();
-      forecastStart.setDate(1); // 이번 달 1일
-      const forecastEnd = new Date();
-      forecastEnd.setMonth(forecastEnd.getMonth() + 3);
-      const forecastStartStr = forecastStart.toISOString().split("T")[0];
-      const forecastEndStr = forecastEnd.toISOString().split("T")[0];
-
-      const [salesData, forecastData] = await Promise.all([
-        // 실적 기반: 최근 30일 판매량
-        db
-          .select({
-            productId: salesRecords.productId,
-            totalQuantity: sql<number>`coalesce(sum(${salesRecords.quantity}), 0)`,
-          })
-          .from(salesRecords)
-          .where(
-            and(
-              eq(salesRecords.organizationId, orgId),
-              sql`${salesRecords.productId} IN ${productIds}`,
-              gte(salesRecords.date, thirtyDaysAgoStr),
-              lte(salesRecords.date, todayStr)
-            )
-          )
-          .groupBy(salesRecords.productId),
-
-        // 수요예측 기반: 향후 3개월 예측 월평균 → 일평균 환산
-        db
-          .select({
-            productId: demandForecasts.productId,
-            avgMonthlyForecast: sql<number>`coalesce(avg(${demandForecasts.forecastQuantity}), 0)`,
-            method: sql<string>`(array_agg(${demandForecasts.method} ORDER BY ${demandForecasts.updatedAt} DESC))[1]`,
-          })
-          .from(demandForecasts)
-          .where(
-            and(
-              eq(demandForecasts.organizationId, orgId),
-              sql`${demandForecasts.productId} IN ${productIds}`,
-              gte(demandForecasts.period, forecastStartStr),
-              lte(demandForecasts.period, forecastEndStr)
-            )
-          )
-          .groupBy(demandForecasts.productId),
-      ]);
-
-      for (const row of salesData) {
-        avgSalesMap.set(row.productId, Math.round((Number(row.totalQuantity) / 30) * 100) / 100);
+    for (const row of forecastData) {
+      const monthlyAvg = Number(row.avgMonthlyForecast);
+      if (monthlyAvg > 0) {
+        forecastMap.set(row.productId, {
+          dailySales: Math.round((monthlyAvg / 30) * 100) / 100,
+          method: methodLabelMap[row.method] || row.method,
+        });
       }
+    }
+  }
 
-      // 수요예측: 월 평균 예측량 → 일평균 (÷30)
-      const methodLabelMap: Record<string, string> = {
-        sma_3: "SMA", sma_6: "SMA", ses: "SES", holt: "Holt's", wma: "WMA", holt_winters: "Holt-Winters",
+  const allReorderItems = candidateRows
+    .map((row) => {
+      const avgDailySales = avgSalesMap.get(row.product_id) || 0;
+      const forecast = forecastMap.get(row.product_id);
+
+      const data: ProductReorderData = {
+        productId: row.product_id,
+        sku: row.product_sku,
+        productName: row.product_name,
+        currentStock: Number(row.total_stock) || 0,
+        safetyStock: Number(row.safety_stock) || 0,
+        reorderPoint: Number(row.reorder_point) || 0,
+        avgDailySales,
+        abcGrade: (row.abc_grade as "A" | "B" | "C") || undefined,
+        xyzGrade: (row.xyz_grade as "X" | "Y" | "Z") || undefined,
+        moq: Number(row.moq) || 1,
+        leadTime: Number(row.supplier_avg_lead_time) || Number(row.lead_time) || 7,
+        unitPrice: Number(row.unit_price) || 0,
+        costPrice: Number(row.cost_price) || 0,
+        supplierId: row.supplier_id ?? undefined,
+        supplierName: row.supplier_name ?? undefined,
+        supplyCoefficients,
+        forecastDailySales: forecast?.dailySales,
+        forecastMethod: forecast?.method,
       };
-      for (const row of forecastData) {
-        const monthlyAvg = Number(row.avgMonthlyForecast);
-        if (monthlyAvg > 0) {
-          forecastMap.set(row.productId, {
-            dailySales: Math.round((monthlyAvg / 30) * 100) / 100,
-            method: methodLabelMap[row.method] || row.method,
-          });
-        }
-      }
+
+      return convertToReorderItem(data);
+    })
+    .filter((item): item is ReorderItem => item !== null);
+
+  const abcGradesMap = new Map<string, "A" | "B" | "C">();
+  candidateRows.forEach((row) => {
+    if (row.abc_grade) {
+      abcGradesMap.set(row.product_id, row.abc_grade as "A" | "B" | "C");
     }
+  });
 
-    // 발주 아이템 변환 (DB 호출 없이 메모리에서 처리)
-    const allReorderItems = candidateRows
-      .map((row) => {
-        const avgDailySales = avgSalesMap.get(row.product_id) || 0;
-        const forecast = forecastMap.get(row.product_id);
+  let filteredItems = allReorderItems;
+  if (urgencyLevel !== undefined) {
+    filteredItems = filterByUrgency(filteredItems, urgencyLevel);
+  }
+  if (abcGrade) {
+    filteredItems = filterByABCGrade(filteredItems, abcGradesMap, abcGrade);
+  }
 
-        const data: ProductReorderData = {
-          productId: row.product_id,
-          sku: row.product_sku,
-          productName: row.product_name,
-          currentStock: Number(row.total_stock) || 0,
-          safetyStock: Number(row.safety_stock) || 0,
-          reorderPoint: Number(row.reorder_point) || 0,
-          avgDailySales,
-          abcGrade: (row.abc_grade as "A" | "B" | "C") || undefined,
-          xyzGrade: (row.xyz_grade as "X" | "Y" | "Z") || undefined,
-          moq: Number(row.moq) || 1,
-          leadTime: Number(row.supplier_avg_lead_time) || Number(row.lead_time) || 7,
-          unitPrice: Number(row.unit_price) || 0,
-          costPrice: Number(row.cost_price) || 0,
-          supplierId: row.supplier_id ?? undefined,
-          supplierName: row.supplier_name ?? undefined,
-          supplyCoefficients,
-          // 수요예측 기반 일평균 (있으면 우선 사용)
-          forecastDailySales: forecast?.dailySales,
-          forecastMethod: forecast?.method,
-        };
+  const sortedItems = sortReorderItems(filteredItems, abcGradesMap);
+  const limitedItems = sortedItems.slice(0, limit);
 
-        return convertToReorderItem(data);
-      })
-      .filter((item): item is ReorderItem => item !== null);
+  return {
+    items: limitedItems,
+    total: filteredItems.length,
+  };
+}
 
-    // ABC 등급 매핑
-    const abcGradesMap = new Map<string, "A" | "B" | "C">();
-    candidateRows.forEach((row) => {
-      if (row.abc_grade) {
-        abcGradesMap.set(row.product_id, row.abc_grade as "A" | "B" | "C");
-      }
-    });
-
-    // 필터링
-    let filteredItems = allReorderItems;
-    if (urgencyLevel !== undefined) {
-      filteredItems = filterByUrgency(filteredItems, urgencyLevel);
+/**
+ * 발주 필요 품목 목록 조회
+ *
+ * 인증 세션에서 orgId를 추출하여 getReorderItemsInternal에 위임합니다.
+ *
+ * @param options - 필터링 옵션
+ * @returns 발주 필요 품목 목록
+ */
+export async function getReorderItems(options?: {
+  urgencyLevel?: number;
+  abcGrade?: "A" | "B" | "C";
+  limit?: number;
+}): Promise<{
+  items: ReorderItem[];
+  total: number;
+}> {
+  try {
+    const user = await getCurrentUser();
+    if (!user?.organizationId) {
+      throw new Error("인증된 사용자를 찾을 수 없습니다");
     }
-    if (abcGrade) {
-      filteredItems = filterByABCGrade(filteredItems, abcGradesMap, abcGrade);
-    }
-
-    // 우선순위 정렬
-    const sortedItems = sortReorderItems(filteredItems, abcGradesMap);
-
-    // limit 적용
-    const limitedItems = sortedItems.slice(0, limit);
-
-    return {
-      items: limitedItems,
-      total: filteredItems.length,
-    };
+    // organizations SELECT는 getReorderItemsInternal 내부에서 처리 (orgSettings 미전달 시)
+    return await getReorderItemsInternal(user.organizationId, undefined, options);
   } catch (error) {
     if (error instanceof z.ZodError) {
       throw new Error(`입력 데이터가 올바르지 않습니다: ${error.issues[0]?.message}`);
@@ -1032,6 +1050,7 @@ const createBulkPurchaseOrdersSchema = z.object({
         productId: z.string().uuid("유효한 제품 ID가 아닙니다"),
         quantity: z.number().min(1, "수량은 1 이상이어야 합니다"),
         supplierId: z.string().uuid("유효한 공급자 ID가 아닙니다"),
+        supplierNotes: z.string().optional(),
       })
     )
     .min(1, "최소 1개 이상의 품목이 필요합니다"),
@@ -1322,6 +1341,9 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
       const sequence = (baseCount + idx + 1).toString().padStart(3, "0");
       const orderNumber = `PO-${dateStr}-${sequence}`;
 
+      // 공급자 그룹 내 아이템의 supplierNotes가 있으면 우선 사용
+      const supplierNote = validItems.find((item) => item.supplierNotes)?.supplierNotes;
+
       ordersToInsert.push({
         orderValues: {
           organizationId: orgId,
@@ -1332,7 +1354,7 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
           totalAmount,
           orderDate: today.toISOString().split("T")[0],
           expectedDate,
-          notes: validated.notes,
+          notes: supplierNote || validated.notes,
         },
         items: orderItems,
       });
@@ -1564,16 +1586,14 @@ export async function uploadPurchaseOrderExcel(
       };
     }
 
-    // 공급자별 발주서 생성
-    const createdItems = [];
+    // 모든 공급자의 items를 하나의 배열로 통합 (supplierNotes에 공급자별 메모 포함)
+    const allBulkItems: Array<{
+      productId: string;
+      quantity: number;
+      supplierId: string;
+      supplierNotes?: string;
+    }> = [];
     for (const [supplierId, items] of itemsBySupplier.entries()) {
-      const bulkItems = items.map((item) => ({
-        productId: item.productId,
-        quantity: item.quantity,
-        supplierId,
-      }));
-
-      // 메모에 B/L, 컨테이너 정보 포함
       const noteParts: string[] = [];
       const blNumbers = items.map((i) => i.blNumber).filter(Boolean);
       const containerNumbers = items.map((i) => i.containerNumber).filter(Boolean);
@@ -1581,16 +1601,23 @@ export async function uploadPurchaseOrderExcel(
       if (blNumbers.length > 0) noteParts.push(`B/L: ${[...new Set(blNumbers)].join(", ")}`);
       if (containerNumbers.length > 0) noteParts.push(`CNTR: ${[...new Set(containerNumbers)].join(", ")}`);
       if (itemNotes.length > 0) noteParts.push(itemNotes.join("; "));
+      const supplierNotes = noteParts.length > 0 ? `[엑셀 업로드] ${noteParts.join(" | ")}` : "[엑셀 업로드]";
 
-      const result = await createBulkPurchaseOrders({
-        items: bulkItems,
-        notes: noteParts.length > 0 ? `[엑셀 업로드] ${noteParts.join(" | ")}` : "[엑셀 업로드]",
-      });
-
-      if (result.success) {
-        createdItems.push(...result.createdOrders);
+      for (const item of items) {
+        allBulkItems.push({
+          productId: item.productId,
+          quantity: item.quantity,
+          supplierId,
+          supplierNotes,
+        });
       }
     }
+
+    const result = await createBulkPurchaseOrders({
+      items: allBulkItems,
+      notes: "[엑셀 업로드]",
+    });
+    const createdItems = result.success ? result.createdOrders : [];
 
     revalidatePath("/dashboard/orders");
 

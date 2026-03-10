@@ -73,9 +73,9 @@ export async function GET(request: NextRequest) {
           }
         }
 
-        // 발주 필요 제품 조회
-        const { getReorderItems } = await import('@/server/actions/purchase-orders')
-        const { items: recommendations } = await getReorderItems({ limit: 100 })
+        // 발주 필요 제품 조회 (크론잡은 인증 세션 없으므로 내부 함수 사용, org.settings 재활용으로 organizations 중복 조회 제거)
+        const { getReorderItemsInternal } = await import('@/server/actions/purchase-orders')
+        const { items: recommendations } = await getReorderItemsInternal(org.id, org.settings as Record<string, unknown> | null, { limit: 100 })
 
         if (recommendations.length === 0) {
           console.log(`[Auto-Reorder Cron] 조직 ${org.name}: 발주 필요 제품 없음`)
