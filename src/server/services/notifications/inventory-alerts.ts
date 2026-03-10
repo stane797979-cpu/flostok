@@ -8,7 +8,7 @@
 
 import { db } from "@/server/db";
 import { alerts, products } from "@/server/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 
 interface InventoryAlertContext {
   organizationId: string;
@@ -140,5 +140,101 @@ export async function checkAndCreateInventoryAlert(
   } catch (error) {
     // fire-and-forget: 에러 로깅만 하고 메인 작업에 영향 없음
     console.error("재고 알림 자동 생성 실패:", error);
+  }
+}
+
+/**
+ * 재고 변동 후 자동 알림을 배치로 생성합니다.
+ * N+1 쿼리 없이 3개의 쿼리(기존 알림 조회 + 제품 조회 + 알림 INSERT)로 처리합니다.
+ * fire-and-forget으로 호출되므로 에러가 발생해도 메인 작업에 영향을 주지 않습니다.
+ */
+export async function checkAndCreateInventoryAlertsBatch(
+  contexts: InventoryAlertContext[]
+): Promise<void> {
+  try {
+    if (contexts.length === 0) return;
+
+    // 알림 대상 상태인 항목만 필터링 + 템플릿 매핑
+    const alertable = contexts
+      .filter(ctx => ALERTABLE_STATUSES.has(ctx.newStatus))
+      .map(ctx => ({ ctx, template: ALERT_TEMPLATES[ctx.newStatus]! }))
+      .filter(({ template }) => template !== undefined);
+
+    if (alertable.length === 0) return;
+
+    // organizationId는 배치 내 모두 동일하다고 가정 (호출부 구조상 보장됨)
+    const organizationId = alertable[0].ctx.organizationId;
+    const productIds = [...new Set(alertable.map(({ ctx }) => ctx.productId))];
+
+    // 쿼리 1: 미읽은 기존 알림 일괄 조회
+    const existingAlerts = await db
+      .select({
+        productId: alerts.productId,
+        type: alerts.type,
+      })
+      .from(alerts)
+      .where(
+        and(
+          eq(alerts.organizationId, organizationId),
+          inArray(alerts.productId, productIds),
+          eq(alerts.isRead, false)
+        )
+      );
+
+    // (productId, type) 조합으로 중복 체크용 Set 구성
+    const existingSet = new Set(
+      existingAlerts.map(a => `${a.productId}::${a.type}`)
+    );
+
+    // 신규 알림이 필요한 항목만 추려냄
+    const needsAlert = alertable.filter(
+      ({ ctx, template }) =>
+        !existingSet.has(`${ctx.productId}::${template.type}`)
+    );
+
+    if (needsAlert.length === 0) return;
+
+    // 쿼리 2: 신규 알림 대상 제품 정보 일괄 조회
+    const needsProductIds = [
+      ...new Set(needsAlert.map(({ ctx }) => ctx.productId)),
+    ];
+    const productRows = await db
+      .select({ id: products.id, sku: products.sku, name: products.name })
+      .from(products)
+      .where(inArray(products.id, needsProductIds));
+
+    const productMap = new Map(productRows.map(p => [p.id, p]));
+
+    // 삽입할 알림 배열 계산 (메모리 내 중복 제거 포함)
+    const seenInsert = new Set<string>();
+    const insertValues = needsAlert.flatMap(({ ctx, template }) => {
+      const product = productMap.get(ctx.productId);
+      if (!product) return [];
+
+      // 같은 배치 내 (productId, type) 중복 방지
+      const key = `${ctx.productId}::${template.type}`;
+      if (seenInsert.has(key)) return [];
+      seenInsert.add(key);
+
+      return [
+        {
+          organizationId: ctx.organizationId,
+          type: template.type,
+          severity: template.severity,
+          productId: ctx.productId,
+          title: template.title,
+          message: template.message(product.name, product.sku, ctx.stockAfter),
+          actionUrl: `/dashboard/inventory?productId=${ctx.productId}`,
+        },
+      ];
+    });
+
+    if (insertValues.length === 0) return;
+
+    // 쿼리 3: 알림 배치 INSERT
+    await db.insert(alerts).values(insertValues);
+  } catch (error) {
+    // fire-and-forget: 에러 로깅만 하고 메인 작업에 영향 없음
+    console.error("재고 알림 배치 생성 실패:", error);
   }
 }
