@@ -112,6 +112,29 @@ export async function getDefaultWarehouse(): Promise<Warehouse | null> {
 }
 
 /**
+ * 기본 창고 ID 조회 (인증 불필요 — orgId 직접 전달)
+ * 내부 함수: createBulkPurchaseOrders 등에서 병렬 조회용
+ */
+export async function getDefaultWarehouseId(orgId: string): Promise<string | null> {
+  try {
+    const [result] = await db
+      .select({ id: warehouses.id })
+      .from(warehouses)
+      .where(
+        and(
+          eq(warehouses.organizationId, orgId),
+          eq(warehouses.isDefault, true),
+          eq(warehouses.isActive, true)
+        )
+      )
+      .limit(1);
+    return result?.id || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 창고 생성 (SUPERADMIN만 가능)
  */
 export async function createWarehouse(

@@ -78,6 +78,10 @@ export const purchaseOrders = pgTable("purchase_orders", {
   index("purchase_orders_dest_warehouse_idx").on(table.destinationWarehouseId),
   // 부분 인덱스: soft-delete 쿼리 성능 최적화 (deleted_at IS NULL인 행만 인덱싱)
   index("purchase_orders_org_active_idx").on(table.organizationId).where(sql`deleted_at IS NULL`),
+  // 발주번호 채번 쿼리용 (DATE(created_at) = CURRENT_DATE)
+  index("purchase_orders_org_created_at_idx").on(table.organizationId, table.createdAt),
+  // getReorderItems CTE용 (status + deleted_at 복합 부분 인덱스)
+  index("purchase_orders_org_status_active_idx").on(table.organizationId, table.status).where(sql`deleted_at IS NULL`),
 ]);
 
 // 발주 항목

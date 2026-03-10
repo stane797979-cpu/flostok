@@ -1131,19 +1131,19 @@ export async function approveAutoReorders(
       notes: "자동 발주 추천에 의해 생성된 발주서",
     });
 
-    // 활동 로그 기록
+    // 활동 로그 기록 (fire-and-forget — 응답 지연 방지)
     const user = await getCurrentUser();
     if (user) {
-      await logActivity({
+      logActivity({
         user,
         action: "CREATE",
         entityType: "purchase_order",
         description: `자동 발주 추천 ${recommendationIds.length}건 승인 → 발주서 ${result.createdOrders.length}건 생성`,
         metadata: { recommendationIds, createdOrders: result.createdOrders },
-      });
+      }).catch((err: unknown) => console.error("활동 로그 기록 오류:", err));
     }
 
-    revalidatePath("/dashboard/orders");
+    // revalidatePath는 createBulkPurchaseOrders 내부에서 이미 호출됨 — 중복 제거
 
     return {
       success: result.success,
@@ -1233,18 +1233,7 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
     }
     const orgId = user.organizationId;
 
-    // warehouseId 결정: 입력값 또는 기본 창고
-    let warehouseId = validated.warehouseId;
-    if (!warehouseId) {
-      const { getDefaultWarehouse } = await import("./warehouses");
-      const dw = await getDefaultWarehouse();
-      if (!dw) {
-        return { success: false, createdOrders: [], errors: [{ productId: "WAREHOUSE", error: "기본 창고를 찾을 수 없습니다" }] };
-      }
-      warehouseId = dw.id;
-    }
-
-    // 1. 공급자별로 품목 그룹화
+    // 1. 공급자별로 품목 그룹화 (메모리 작업, DB 쿼리 전에 먼저 수행)
     const itemsBySupplier = new Map<string, typeof validated.items>();
     validated.items.forEach((item) => {
       const supplierItems = itemsBySupplier.get(item.supplierId) || [];
@@ -1252,11 +1241,44 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
       itemsBySupplier.set(item.supplierId, supplierItems);
     });
 
-    // 발주 제한 확인 (생성할 발주서 수만큼 확인)
-    const { checkOrderLimit } = await import("@/server/services/subscription/limits");
-    const limit = await checkOrderLimit(orgId);
-    const ordersToCreate = itemsBySupplier.size;
+    const allSupplierIds = [...itemsBySupplier.keys()];
+    const allProductIds = validated.items.map((i) => i.productId);
 
+    // 2. 모든 사전 데이터를 단일 Promise.all로 병렬 조회
+    //    (warehouseId, checkOrderLimit, suppliers, products, baseCount — 5개 쿼리 동시 실행)
+    const { checkOrderLimit } = await import("@/server/services/subscription/limits");
+    const warehousePromise = validated.warehouseId
+      ? Promise.resolve(validated.warehouseId)
+      : import("./warehouses").then(({ getDefaultWarehouseId }) => getDefaultWarehouseId(orgId));
+
+    const [resolvedWarehouseId, limit, allSuppliersData, allProductsData, baseCountRow] = await Promise.all([
+      warehousePromise,
+      checkOrderLimit(orgId),
+      db.select().from(suppliers).where(
+        and(eq(suppliers.organizationId, orgId), sql`${suppliers.id} IN ${allSupplierIds}`)
+      ),
+      db.select().from(products).where(
+        and(eq(products.organizationId, orgId), sql`${products.id} IN ${allProductIds}`)
+      ),
+      db.select({ count: sql<number>`count(*)` })
+        .from(purchaseOrders)
+        .where(
+          and(
+            eq(purchaseOrders.organizationId, orgId),
+            sql`DATE(${purchaseOrders.createdAt}) = CURRENT_DATE`
+          )
+        )
+        .then((r) => r[0]),
+    ]);
+
+    // warehouseId 검증
+    if (!resolvedWarehouseId) {
+      return { success: false, createdOrders: [], errors: [{ productId: "WAREHOUSE", error: "기본 창고를 찾을 수 없습니다" }] };
+    }
+    const warehouseId = resolvedWarehouseId;
+
+    // 발주 제한 확인
+    const ordersToCreate = itemsBySupplier.size;
     if (limit.limit !== Infinity && limit.current + ordersToCreate > limit.limit) {
       return {
         success: false,
@@ -1270,37 +1292,10 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
       };
     }
 
-    // 2. 사전 데이터 로드 (루프 밖에서 1회만 조회)
-    const allSupplierIds = [...itemsBySupplier.keys()];
-    const allProductIds = validated.items.map((i) => i.productId);
-
-    const [allSuppliersData, allProductsData] = await Promise.all([
-      // 전체 공급자 한번에 조회
-      db.select().from(suppliers).where(
-        and(eq(suppliers.organizationId, orgId), sql`${suppliers.id} IN ${allSupplierIds}`)
-      ),
-      // 전체 제품 한번에 조회
-      db.select().from(products).where(
-        and(eq(products.organizationId, orgId), sql`${products.id} IN ${allProductIds}`)
-      ),
-    ]);
-
     const suppliersMap = new Map(allSuppliersData.map((s) => [s.id, s]));
     const productsMap = new Map(allProductsData.map((p) => [p.id, p]));
     const today = new Date();
     const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
-
-    // 3. 공급자별로 발주서 병렬 생성
-    // 발주번호 중복 방지: 오늘 기존 발주 수를 미리 조회한 뒤 각 공급자에 offset 부여
-    const [baseCountRow] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(purchaseOrders)
-      .where(
-        and(
-          eq(purchaseOrders.organizationId, orgId),
-          sql`DATE(${purchaseOrders.createdAt}) = CURRENT_DATE`
-        )
-      );
     const baseCount = Number(baseCountRow?.count || 0);
 
     const supplierEntries = [...itemsBySupplier.entries()];

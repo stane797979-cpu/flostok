@@ -9,7 +9,7 @@
 
 import { db } from "@/server/db";
 import { products, purchaseOrders, users } from "@/server/db/schema";
-import { eq, and, gte } from "drizzle-orm";
+import { eq, and, gte, sql } from "drizzle-orm";
 import {
   getActiveSubscription,
   getPlanInfo,
@@ -28,16 +28,16 @@ export async function checkProductLimit(organizationId: string): Promise<{
   limit: number;
   plan: string;
 }> {
-  const subscription = await getActiveSubscription(organizationId);
+  const [subscription, [countRow]] = await Promise.all([
+    getActiveSubscription(organizationId),
+    db.select({ count: sql<number>`count(*)` })
+      .from(products)
+      .where(eq(products.organizationId, organizationId)),
+  ]);
   const plan = subscription
     ? getPlanInfo(subscription.plan)
     : SUBSCRIPTION_PLANS.FREE;
-
-  const currentCount = await db
-    .select({ count: products.id })
-    .from(products)
-    .where(eq(products.organizationId, organizationId))
-    .then((rows) => rows.length);
+  const currentCount = Number(countRow?.count || 0);
 
   return {
     allowed: currentCount < plan.features.maxProducts,
@@ -59,25 +59,24 @@ export async function checkOrderLimit(organizationId: string): Promise<{
   limit: number;
   plan: string;
 }> {
-  const subscription = await getActiveSubscription(organizationId);
-  const plan = subscription
-    ? getPlanInfo(subscription.plan)
-    : SUBSCRIPTION_PLANS.FREE;
-
-  // 이번 달 시작일
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const currentCount = await db
-    .select({ count: purchaseOrders.id })
-    .from(purchaseOrders)
-    .where(
-      and(
-        eq(purchaseOrders.organizationId, organizationId),
-        gte(purchaseOrders.createdAt, monthStart)
-      )
-    )
-    .then((rows) => rows.length);
+  const [subscription, [countRow]] = await Promise.all([
+    getActiveSubscription(organizationId),
+    db.select({ count: sql<number>`count(*)` })
+      .from(purchaseOrders)
+      .where(
+        and(
+          eq(purchaseOrders.organizationId, organizationId),
+          gte(purchaseOrders.createdAt, monthStart)
+        )
+      ),
+  ]);
+  const plan = subscription
+    ? getPlanInfo(subscription.plan)
+    : SUBSCRIPTION_PLANS.FREE;
+  const currentCount = Number(countRow?.count || 0);
 
   return {
     allowed:
@@ -106,11 +105,11 @@ export async function checkUserLimit(organizationId: string): Promise<{
     ? getPlanInfo(subscription.plan)
     : SUBSCRIPTION_PLANS.FREE;
 
-  const currentCount = await db
-    .select({ count: users.id })
+  const [countRow] = await db
+    .select({ count: sql<number>`count(*)` })
     .from(users)
-    .where(eq(users.organizationId, organizationId))
-    .then((rows) => rows.length);
+    .where(eq(users.organizationId, organizationId));
+  const currentCount = Number(countRow?.count || 0);
 
   return {
     allowed:

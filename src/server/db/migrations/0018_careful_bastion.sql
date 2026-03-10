@@ -1,0 +1,2 @@
+CREATE INDEX "purchase_orders_org_created_at_idx" ON "purchase_orders" USING btree ("organization_id","created_at");--> statement-breakpoint
+CREATE INDEX "purchase_orders_org_status_active_idx" ON "purchase_orders" USING btree ("organization_id","status") WHERE deleted_at IS NULL;
