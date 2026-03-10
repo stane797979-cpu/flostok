@@ -61,6 +61,10 @@ export default async function OrdersPage({
   keys.push("warehouses");
   promises.push(getWarehouses().catch(() => ({ warehouses: [] })));
 
+  // 사용자 역할 조회 (결재 권한 분기용) — 다른 데이터와 병렬 실행
+  keys.push("currentUser");
+  promises.push(getCurrentUser().catch(() => null));
+
   // Promise.allSettled: 하나가 실패해도 나머지 데이터는 정상 표시
   const settled = await Promise.allSettled(promises);
   const results = settled.map((r) => (r.status === "fulfilled" ? r.value : null));
@@ -77,9 +81,8 @@ export default async function OrdersPage({
   const serverOrderHistoryTotal = (dataMap.orderHistory as PurchaseOrdersResult | undefined)?.total ?? 0;
   const warehousesList = (dataMap.warehouses as WarehousesResult | undefined)?.warehouses ?? [];
 
-  // 사용자 역할 조회 (결재 권한 분기용)
-  const user = await getCurrentUser();
-  const userRole = user?.role ?? "viewer";
+  type CurrentUserResult = Awaited<ReturnType<typeof getCurrentUser>>;
+  const userRole = (dataMap.currentUser as CurrentUserResult | null)?.role ?? "viewer";
 
   return (
     <OrdersClient

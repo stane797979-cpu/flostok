@@ -3,7 +3,7 @@
 import { db } from "@/server/db";
 import { warehouses, type Warehouse } from "@/server/db/schema";
 import { eq, and, desc, asc, sql } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, unstable_cache } from "next/cache";
 import { z } from "zod";
 import { getCurrentUser, requireAuth } from "./auth-helpers";
 import { logActivity } from "@/server/services/activity-log";
@@ -60,6 +60,24 @@ const transferInventorySchema = z.object({
 export type TransferInventoryInput = z.infer<typeof transferInventorySchema>;
 
 /**
+ * 창고 목록 DB 조회 (캐시용 내부 함수)
+ * orgId 기반으로 5분간 캐시 — 창고 데이터는 거의 변경되지 않음
+ */
+const fetchWarehousesByOrg = (orgId: string) =>
+  unstable_cache(
+    async (): Promise<Warehouse[]> => {
+      const result = await db
+        .select()
+        .from(warehouses)
+        .where(eq(warehouses.organizationId, orgId))
+        .orderBy(desc(warehouses.isDefault), asc(warehouses.code));
+      return result;
+    },
+    [`warehouses-list-${orgId}`],
+    { revalidate: 300, tags: [`warehouses-${orgId}`] }
+  )();
+
+/**
  * 조직의 창고 목록 조회
  */
 export async function getWarehouses(): Promise<{ warehouses: Warehouse[] }> {
@@ -69,12 +87,7 @@ export async function getWarehouses(): Promise<{ warehouses: Warehouse[] }> {
   }
 
   try {
-    const result = await db
-      .select()
-      .from(warehouses)
-      .where(eq(warehouses.organizationId, user.organizationId))
-      .orderBy(desc(warehouses.isDefault), asc(warehouses.code));
-
+    const result = await fetchWarehousesByOrg(user.organizationId);
     return { warehouses: result };
   } catch (error) {
     console.error("창고 목록 조회 오류:", error);
