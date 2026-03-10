@@ -100,6 +100,22 @@ export default function SignupPage() {
       });
 
       if (authError) {
+        // "이미 가입된 이메일"이면 로그인 시도 (이전 가입에서 Auth만 성공한 경우)
+        if (authError.message === 'User already registered') {
+          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+            email: formData.email,
+            password: formData.password,
+          });
+          if (signInError) {
+            setError(translateAuthError(authError.message));
+            return;
+          }
+          if (signInData.user) {
+            // DB 레코드가 없으면 자동 프로비저닝됨 (auth-cache.ts)
+            router.push('/dashboard');
+            return;
+          }
+        }
         setError(translateAuthError(authError.message));
         return;
       }
@@ -118,11 +134,11 @@ export default function SignupPage() {
       });
 
       if (!result.success) {
-        setError(result.error);
-        return;
+        // DB 실패해도 Auth 세션은 유지 — auth-cache에서 자동 프로비저닝
+        console.error('DB 레코드 생성 실패 (자동 프로비저닝 예정):', result.error);
       }
 
-      // 3. 대시보드로 이동
+      // 3. 대시보드로 이동 (DB 실패해도 auth-cache에서 자동 복구)
       router.push('/dashboard');
     } catch {
       setError('회원가입에 실패했습니다. 다시 시도해주세요.');
