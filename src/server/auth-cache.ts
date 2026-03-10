@@ -9,7 +9,7 @@
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/server/db";
-import { users } from "@/server/db/schema";
+import { users, organizations } from "@/server/db/schema";
 import { eq, or } from "drizzle-orm";
 
 export type AuthUser = {
@@ -78,7 +78,50 @@ export const getCachedCurrentUser = cache(
         .where(whereCondition)
         .limit(1);
 
-      if (!dbUser) return null;
+      if (!dbUser) {
+        // Auth는 있지만 DB 레코드가 없는 경우 자동 프로비저닝
+        // (회원가입 시 Auth 성공 후 DB 생성 실패한 경우 복구)
+        if (user.email) {
+          try {
+            const userName =
+              user.user_metadata?.name ||
+              user.email.split("@")[0] ||
+              "사용자";
+            const orgName =
+              user.user_metadata?.organization_name ||
+              `${userName}님의 조직`;
+            const baseSlug = user.email
+              .split("@")[0]
+              .toLowerCase()
+              .replace(/[^a-z0-9]/g, "-")
+              .slice(0, 40);
+            const slug = `${baseSlug}-${Date.now().toString(36)}`;
+
+            const [newOrg] = await db
+              .insert(organizations)
+              .values({ name: orgName, slug, plan: "free" })
+              .returning();
+
+            if (newOrg) {
+              const [newUser] = await db
+                .insert(users)
+                .values({
+                  authId: user.id,
+                  organizationId: newOrg.id,
+                  email: user.email,
+                  name: userName,
+                  role: "admin",
+                })
+                .returning();
+
+              if (newUser) return newUser;
+            }
+          } catch (provisionError) {
+            console.error("사용자 자동 프로비저닝 실패:", provisionError);
+          }
+        }
+        return null;
+      }
 
       // 탈퇴한 사용자 차단
       if (dbUser.deletedAt) return null;
