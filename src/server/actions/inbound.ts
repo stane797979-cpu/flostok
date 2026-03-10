@@ -10,7 +10,7 @@ import {
   suppliers,
   warehouses,
 } from "@/server/db/schema";
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 import { processInventoryTransaction, processBatchInventoryTransactions } from "./inventory";
@@ -882,80 +882,56 @@ export async function getWarehouseInboundOrders(): Promise<{
   try {
     const user = await requireAuth();
 
-    // 입고 대기중인 발주서 조회
+    // 입고 대기중인 발주서 조회 (항목 통계 LEFT JOIN으로 단일 쿼리 처리)
     const inboundCapableStatuses = ["ordered", "confirmed", "shipped", "partially_received"] as (typeof purchaseOrders.status.enumValues)[number][];
 
-    const ordersData = await db
+    const ordersWithStats = await db
       .select({
-        order: purchaseOrders,
-        supplier: {
-          name: suppliers.name,
-        },
-        warehouse: {
-          name: warehouses.name,
-        },
+        // 발주서 필드
+        id: purchaseOrders.id,
+        orderNumber: purchaseOrders.orderNumber,
+        status: purchaseOrders.status,
+        orderDate: purchaseOrders.orderDate,
+        expectedDate: purchaseOrders.expectedDate,
+        organizationId: purchaseOrders.organizationId,
+        supplierId: purchaseOrders.supplierId,
+        destinationWarehouseId: purchaseOrders.destinationWarehouseId,
+        // 공급업체
+        supplierName: suppliers.name,
+        // 창고
+        warehouseName: warehouses.name,
+        // 항목 집계 통계
+        itemsCount: sql<number>`count(${purchaseOrderItems.id})`.as('items_count'),
+        totalQuantity: sql<number>`coalesce(sum(${purchaseOrderItems.quantity}), 0)`.as('total_quantity'),
+        receivedQuantity: sql<number>`coalesce(sum(${purchaseOrderItems.receivedQuantity}), 0)`.as('received_quantity'),
       })
       .from(purchaseOrders)
       .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
       .leftJoin(warehouses, eq(purchaseOrders.destinationWarehouseId, warehouses.id))
+      .leftJoin(purchaseOrderItems, eq(purchaseOrderItems.purchaseOrderId, purchaseOrders.id))
       .where(
         and(
           eq(purchaseOrders.organizationId, user.organizationId),
-          inArray(purchaseOrders.status, inboundCapableStatuses)
+          inArray(purchaseOrders.status, inboundCapableStatuses),
+          isNull(purchaseOrders.deletedAt)
         )
       )
+      .groupBy(purchaseOrders.id, suppliers.name, warehouses.name)
       .orderBy(sql`${purchaseOrders.expectedDate} ASC NULLS LAST, ${purchaseOrders.orderDate} ASC`);
 
-    // 각 발주서의 항목 통계 조회
-    const orderIds = ordersData.map((row) => row.order.id);
-
-    if (orderIds.length === 0) {
-      return { orders: [] };
-    }
-
-    const itemsStats = await db
-      .select({
-        purchaseOrderId: purchaseOrderItems.purchaseOrderId,
-        itemsCount: sql<number>`count(*)`,
-        totalQuantity: sql<number>`coalesce(sum(${purchaseOrderItems.quantity}), 0)`,
-        receivedQuantity: sql<number>`coalesce(sum(${purchaseOrderItems.receivedQuantity}), 0)`,
-      })
-      .from(purchaseOrderItems)
-      .where(inArray(purchaseOrderItems.purchaseOrderId, orderIds))
-      .groupBy(purchaseOrderItems.purchaseOrderId);
-
-    const statsMap = new Map(
-      itemsStats.map((stat) => [
-        stat.purchaseOrderId,
-        {
-          itemsCount: Number(stat.itemsCount),
-          totalQuantity: Number(stat.totalQuantity),
-          receivedQuantity: Number(stat.receivedQuantity),
-        },
-      ])
-    );
-
     return {
-      orders: ordersData.map((row) => {
-        const stats = statsMap.get(row.order.id) || {
-          itemsCount: 0,
-          totalQuantity: 0,
-          receivedQuantity: 0,
-        };
-
-        return {
-          id: row.order.id,
-          orderNumber: row.order.orderNumber,
-          supplierName: row.supplier?.name || null,
-          destinationWarehouseName: row.warehouse?.name || null,
-          status: row.order.status,
-          expectedDate: row.order.expectedDate,
-          orderDate: row.order.orderDate,
-          itemsCount: stats.itemsCount,
-          totalQuantity: stats.totalQuantity,
-          receivedQuantity: stats.receivedQuantity,
-        };
-      }),
+      orders: ordersWithStats.map((row) => ({
+        id: row.id,
+        orderNumber: row.orderNumber,
+        supplierName: row.supplierName || null,
+        destinationWarehouseName: row.warehouseName || null,
+        status: row.status,
+        expectedDate: row.expectedDate,
+        orderDate: row.orderDate,
+        itemsCount: Number(row.itemsCount),
+        totalQuantity: Number(row.totalQuantity),
+        receivedQuantity: Number(row.receivedQuantity),
+      })),
     };
   } catch (error) {
     console.error("창고 입고예정 목록 조회 오류:", error);

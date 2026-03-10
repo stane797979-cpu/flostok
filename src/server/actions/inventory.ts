@@ -109,7 +109,8 @@ export async function getInventoryList(options?: {
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split("T")[0];
 
-      const [items, countResult, outboundData] = await Promise.all([
+      // Phase 1: 현재 페이지 재고 목록 + 전체 건수 병렬 조회
+      const [items, countResult] = await Promise.all([
         db
           .select({
             id: inventory.id,
@@ -146,22 +147,31 @@ export async function getInventoryList(options?: {
           .select({ count: sql<number>`count(*)` })
           .from(inventory)
           .where(and(...conditions)),
-        // 최근 30일 제품별 총 출고수량 (inventory_history에서 음수 변동 합산)
-        db
-          .select({
-            productId: inventoryHistory.productId,
-            totalOutbound: sql<number>`coalesce(sum(abs(${inventoryHistory.changeAmount})), 0)`,
-          })
-          .from(inventoryHistory)
-          .where(
-            and(
-              eq(inventoryHistory.organizationId, orgId),
-              gte(inventoryHistory.date, thirtyDaysAgoStr),
-              sql`${inventoryHistory.changeAmount} < 0`
-            )
-          )
-          .groupBy(inventoryHistory.productId),
       ]);
+
+      // Phase 1 결과에서 현재 페이지 제품 ID 추출
+      const pageProductIds = items.map((item) => item.productId).filter(Boolean);
+
+      // Phase 2: 현재 페이지 제품에 한해서만 최근 30일 출고수량 집계 (전체 org 스캔 방지)
+      const outboundData =
+        pageProductIds.length > 0
+          ? await db
+              .select({
+                productId: inventoryHistory.productId,
+                totalOutbound: sql<number>`coalesce(sum(abs(${inventoryHistory.changeAmount})), 0)`,
+              })
+              .from(inventoryHistory)
+              .where(
+                and(
+                  eq(inventoryHistory.organizationId, orgId),
+                  gte(inventoryHistory.date, thirtyDaysAgoStr),
+                  sql`${inventoryHistory.changeAmount} < 0`,
+                  inArray(inventoryHistory.productId, pageProductIds),
+                  warehouseId ? eq(inventoryHistory.warehouseId, warehouseId) : undefined
+                )
+              )
+              .groupBy(inventoryHistory.productId)
+          : [];
 
       // 제품별 일평균출고량 매핑
       const avgDailyOutboundMap = new Map<string, number>();

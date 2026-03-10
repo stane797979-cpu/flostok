@@ -55,7 +55,7 @@ interface WarehouseInboundClientProps {
 
 export function WarehouseInboundClient({ initialOrders, warehouses }: WarehouseInboundClientProps) {
   const [orders, setOrders] = useState<WarehouseOrder[]>(initialOrders ?? []);
-  const [isLoading, setIsLoading] = useState(!initialOrders || initialOrders.length === 0);
+  const [isLoading, setIsLoading] = useState(initialOrders === undefined);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
@@ -81,7 +81,7 @@ export function WarehouseInboundClient({ initialOrders, warehouses }: WarehouseI
   }, [toast]);
 
   useEffect(() => {
-    if (initialOrders && initialOrders.length > 0) {
+    if (initialOrders !== undefined) {
       setIsLoading(false);
       return;
     }
