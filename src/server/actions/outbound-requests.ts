@@ -226,49 +226,87 @@ export async function getOutboundRequests(options?: {
     );
   }
 
-  // 요청 목록 조회
-  const requestsData = await db
-    .select({
-      id: outboundRequests.id,
-      requestNumber: outboundRequests.requestNumber,
-      status: outboundRequests.status,
-      outboundType: outboundRequests.outboundType,
-      customerType: outboundRequests.customerType,
-      sourceWarehouseId: outboundRequests.sourceWarehouseId,
-      requestedByName: users.name,
-      sourceWarehouseName: sql<string | null>`sw.name`,
-      targetWarehouseName: sql<string | null>`tw.name`,
-      recipientCompany: outboundRequests.recipientCompany,
-      recipientName: outboundRequests.recipientName,
-      recipientAddress: outboundRequests.recipientAddress,
-      recipientPhone: outboundRequests.recipientPhone,
-      courierName: outboundRequests.courierName,
-      trackingNumber: outboundRequests.trackingNumber,
-      createdAt: outboundRequests.createdAt,
-    })
-    .from(outboundRequests)
-    .leftJoin(users, eq(outboundRequests.requestedById, users.id))
-    .leftJoin(sql`${warehouses} as sw`, sql`sw.id = ${outboundRequests.sourceWarehouseId}`)
-    .leftJoin(sql`${warehouses} as tw`, sql`tw.id = ${outboundRequests.targetWarehouseId}`)
-    .where(and(...conditions))
-    .orderBy(desc(outboundRequests.createdAt))
-    .limit(limit)
-    .offset(offset);
+  // 요청 목록 + 전체 개수 병렬 조회 (쿼리 1, 6 동시 실행)
+  const [requestsData, [countResult]] = await Promise.all([
+    db
+      .select({
+        id: outboundRequests.id,
+        requestNumber: outboundRequests.requestNumber,
+        status: outboundRequests.status,
+        outboundType: outboundRequests.outboundType,
+        customerType: outboundRequests.customerType,
+        sourceWarehouseId: outboundRequests.sourceWarehouseId,
+        requestedByName: users.name,
+        sourceWarehouseName: sql<string | null>`sw.name`,
+        targetWarehouseName: sql<string | null>`tw.name`,
+        recipientCompany: outboundRequests.recipientCompany,
+        recipientName: outboundRequests.recipientName,
+        recipientAddress: outboundRequests.recipientAddress,
+        recipientPhone: outboundRequests.recipientPhone,
+        courierName: outboundRequests.courierName,
+        trackingNumber: outboundRequests.trackingNumber,
+        createdAt: outboundRequests.createdAt,
+      })
+      .from(outboundRequests)
+      .leftJoin(users, eq(outboundRequests.requestedById, users.id))
+      .leftJoin(sql`${warehouses} as sw`, sql`sw.id = ${outboundRequests.sourceWarehouseId}`)
+      .leftJoin(sql`${warehouses} as tw`, sql`tw.id = ${outboundRequests.targetWarehouseId}`)
+      .where(and(...conditions))
+      .orderBy(desc(outboundRequests.createdAt))
+      .limit(limit)
+      .offset(offset),
+    // 전체 개수 (조건 동일, 페이지네이션 불필요)
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(outboundRequests)
+      .where(and(...conditions)),
+  ]);
 
-  // 각 요청의 항목 수 및 총 수량 계산
+  // requestIds 확보 후 항목 통계·현재고·품목 목록 병렬 조회 (쿼리 2, 3, 4 동시 실행)
   const requestIds = requestsData.map((r) => r.id);
-  const itemsStats = requestIds.length
-    ? await db
-        .select({
-          outboundRequestId: outboundRequestItems.outboundRequestId,
-          itemsCount: sql<number>`count(*)`,
-          totalQuantity: sql<number>`sum(${outboundRequestItems.requestedQuantity})`,
-        })
-        .from(outboundRequestItems)
-        .where(inArray(outboundRequestItems.outboundRequestId, requestIds))
-        .groupBy(outboundRequestItems.outboundRequestId)
-    : [];
 
+  const [itemsStats, stockRows, requestItems] = requestIds.length > 0
+    ? await Promise.all([
+        // 쿼리 2: 각 요청의 항목 수 및 총 수량 계산
+        db
+          .select({
+            outboundRequestId: outboundRequestItems.outboundRequestId,
+            itemsCount: sql<number>`count(*)`,
+            totalQuantity: sql<number>`sum(${outboundRequestItems.requestedQuantity})`,
+          })
+          .from(outboundRequestItems)
+          .where(inArray(outboundRequestItems.outboundRequestId, requestIds))
+          .groupBy(outboundRequestItems.outboundRequestId),
+        // 쿼리 3: 현재고 조회 — 출발 창고 기준 품목별 현재고 합산
+        db
+          .select({
+            outboundRequestId: outboundRequestItems.outboundRequestId,
+            totalCurrentStock: sql<number>`COALESCE(SUM(COALESCE(${inventory.currentStock}, 0)), 0)`,
+          })
+          .from(outboundRequestItems)
+          .innerJoin(outboundRequests, eq(outboundRequestItems.outboundRequestId, outboundRequests.id))
+          .leftJoin(
+            inventory,
+            and(
+              eq(inventory.productId, outboundRequestItems.productId),
+              eq(inventory.warehouseId, outboundRequests.sourceWarehouseId)
+            )
+          )
+          .where(inArray(outboundRequestItems.outboundRequestId, requestIds))
+          .groupBy(outboundRequestItems.outboundRequestId),
+        // 쿼리 4: 백로그 계산용 품목 목록 수집 (productId + 요청별 수량)
+        db
+          .select({
+            outboundRequestId: outboundRequestItems.outboundRequestId,
+            productId: outboundRequestItems.productId,
+            requestedQuantity: outboundRequestItems.requestedQuantity,
+          })
+          .from(outboundRequestItems)
+          .where(inArray(outboundRequestItems.outboundRequestId, requestIds)),
+      ])
+    : [[], [], []];
+
+  // 항목 통계 맵 구성
   const statsMap = new Map(
     itemsStats.map((s) => [
       s.outboundRequestId,
@@ -279,46 +317,17 @@ export async function getOutboundRequests(options?: {
     ])
   );
 
-  // 현재고 조회: 각 요청의 품목별 현재고 합산
-  // outbound_request_items -> inventory (출발 창고 기준)
+  // 현재고 맵 구성
   const stockMap = new Map<string, number>();
-  if (requestIds.length > 0) {
-    const stockRows = await db
-      .select({
-        outboundRequestId: outboundRequestItems.outboundRequestId,
-        totalCurrentStock: sql<number>`COALESCE(SUM(COALESCE(${inventory.currentStock}, 0)), 0)`,
-      })
-      .from(outboundRequestItems)
-      .innerJoin(outboundRequests, eq(outboundRequestItems.outboundRequestId, outboundRequests.id))
-      .leftJoin(
-        inventory,
-        and(
-          eq(inventory.productId, outboundRequestItems.productId),
-          eq(inventory.warehouseId, outboundRequests.sourceWarehouseId)
-        )
-      )
-      .where(inArray(outboundRequestItems.outboundRequestId, requestIds))
-      .groupBy(outboundRequestItems.outboundRequestId);
-
-    for (const row of stockRows) {
-      stockMap.set(row.outboundRequestId, Number(row.totalCurrentStock));
-    }
+  for (const row of stockRows) {
+    stockMap.set(row.outboundRequestId, Number(row.totalCurrentStock));
   }
 
   // 백로그 조회: 같은 제품에 대한 다른 pending 출고 요청의 수량 합
   const backlogMap = new Map<string, number>();
-  if (requestIds.length > 0) {
-    // 1) 현재 페이지 요청들의 모든 품목 productId 수집
-    const requestItems = await db
-      .select({
-        outboundRequestId: outboundRequestItems.outboundRequestId,
-        productId: outboundRequestItems.productId,
-        requestedQuantity: outboundRequestItems.requestedQuantity,
-      })
-      .from(outboundRequestItems)
-      .where(inArray(outboundRequestItems.outboundRequestId, requestIds));
-
-    // 2) 모든 productId에 대해 pending 상태의 전체 출고 대기 수량 조회
+  if (requestItems.length > 0) {
+    // 쿼리 5: 모든 productId에 대해 pending 상태의 전체 출고 대기 수량 조회
+    // (쿼리 4의 requestItems 결과에 의존하므로 순차 실행)
     const allProductIds = [...new Set(requestItems.map((i) => i.productId))];
     if (allProductIds.length > 0) {
       const pendingTotals = await db
@@ -341,7 +350,7 @@ export async function getOutboundRequests(options?: {
         pendingTotals.map((p) => [p.productId, Number(p.totalPending)])
       );
 
-      // 3) 각 요청별 백로그 = (해당 제품들의 전체 pending 합) - (자기 요청 수량)
+      // 각 요청별 백로그 = (해당 제품들의 전체 pending 합) - (자기 요청 수량)
       const requestItemsGrouped = new Map<string, { productId: string; qty: number }[]>();
       for (const item of requestItems) {
         const arr = requestItemsGrouped.get(item.outboundRequestId) || [];
@@ -360,12 +369,6 @@ export async function getOutboundRequests(options?: {
       }
     }
   }
-
-  // 전체 개수
-  const [countResult] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(outboundRequests)
-    .where(and(...conditions));
 
   return {
     requests: requestsData.map((r) => {
