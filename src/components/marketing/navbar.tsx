@@ -54,7 +54,12 @@ export function Navbar() {
             <Link
               key={item.href}
               href={item.href}
-              className="text-xl font-bold text-gray-800 transition-colors hover:text-primary-600"
+              className={cn(
+                "text-xl font-bold transition-colors",
+                scrolled
+                  ? "text-gray-800 hover:text-primary-600"
+                  : "text-white hover:text-gray-300"
+              )}
             >
               {item.name}
             </Link>
@@ -63,7 +68,12 @@ export function Navbar() {
 
         {/* CTA 버튼 - 우측 */}
         <div className="hidden flex-shrink-0 md:block">
-          <Button size="lg" className="bg-primary-600 px-7 text-base font-bold shadow-lg hover:bg-primary-700" asChild>
+          <Button size="lg" className={cn(
+            "px-7 text-base font-bold shadow-lg",
+            scrolled
+              ? "bg-primary-600 hover:bg-primary-700"
+              : "bg-white text-gray-900 hover:bg-gray-100"
+          )} asChild>
             <Link href="/contact">상담/무료진단 신청</Link>
           </Button>
         </div>
