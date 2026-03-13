@@ -29,7 +29,7 @@ export function Navbar() {
         "sticky top-0 z-50 w-full transition-all duration-300",
         scrolled
           ? "border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80"
-          : "bg-transparent"
+          : "bg-slate-900/90 backdrop-blur"
       )}
     >
       <div className="mx-auto flex h-16 max-w-7xl items-center px-4 sm:h-20 md:h-28 sm:px-6 lg:px-8">
