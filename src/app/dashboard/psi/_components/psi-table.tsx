@@ -148,7 +148,7 @@ export function PSITable({ products, periods }: PSITableProps) {
 
   return (
     <div className="border rounded-lg overflow-hidden">
-    <div className="overflow-auto max-h-[75vh]">
+    <div className="overflow-x-auto">
       <Table className="text-xs">
         <TableHeader className="sticky top-0 z-30 bg-white dark:bg-slate-950">
           {/* 1행: 기본정보 + 월 레이블 */}
