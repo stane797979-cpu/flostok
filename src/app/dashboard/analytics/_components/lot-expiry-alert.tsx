@@ -12,6 +12,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AlertTriangle, CalendarX, Package, PackageX, ShieldAlert, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import type { LotExpirySummary, ExpiringLot } from "@/server/actions/lot-expiry";
 
@@ -121,6 +123,8 @@ interface LotExpiryAlertProps {
 export function LotExpiryAlert({ data, className }: LotExpiryAlertProps) {
   const [sortKey, setSortKey] = useState<LotSortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [pageSize, setPageSize] = useState(20);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const handleSort = useCallback((key: LotSortKey) => {
     setSortKey((prev) => {
@@ -294,7 +298,7 @@ export function LotExpiryAlert({ data, className }: LotExpiryAlertProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sortedLots.map((lot) => (
+                  {sortedLots.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((lot) => (
                     <TableRow
                       key={`${lot.lotNumber}-${lot.productId}`}
                       className={cn(
@@ -335,6 +339,26 @@ export function LotExpiryAlert({ data, className }: LotExpiryAlertProps) {
                   ))}
                 </TableBody>
               </Table>
+              {/* 페이지네이션 */}
+              <div className="flex items-center justify-between px-4 py-3 border-t text-sm text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <span>페이지당</span>
+                  <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }}>
+                    <SelectTrigger className="h-7 w-16 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <span>개 · 총 {sortedLots.length}개</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)}>이전</Button>
+                  <span className="px-2">{currentPage} / {Math.max(1, Math.ceil(sortedLots.length / pageSize))}</span>
+                  <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={currentPage >= Math.ceil(sortedLots.length / pageSize)} onClick={() => setCurrentPage((p) => p + 1)}>다음</Button>
+                </div>
+              </div>
             </div>
           )}
         </CardContent>

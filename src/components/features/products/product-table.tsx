@@ -12,12 +12,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { MoreHorizontal, Eye, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import {
   DropdownMenu,
@@ -25,6 +19,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { type Product } from "@/server/db/schema";
 
@@ -63,6 +58,8 @@ export function ProductTable({ products = [], onView, onEdit, onDelete, onBulkDe
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [pageSize, setPageSize] = useState(20);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -174,7 +171,7 @@ export function ProductTable({ products = [], onView, onEdit, onDelete, onBulkDe
               <TableHead className="w-[50px]">
                 <Checkbox checked={isAllSelected} onCheckedChange={handleSelectAll} />
               </TableHead>
-              <TableHead className="min-w-[220px]">
+              <TableHead className="w-[100px]">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -245,7 +242,7 @@ export function ProductTable({ products = [], onView, onEdit, onDelete, onBulkDe
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sortedProducts.map((product) => (
+            {sortedProducts.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((product) => (
               <TableRow
                 key={product.id}
                 className={cn(selectedIds.has(product.id) && "bg-slate-50 dark:bg-slate-900")}
@@ -256,7 +253,7 @@ export function ProductTable({ products = [], onView, onEdit, onDelete, onBulkDe
                     onCheckedChange={(checked) => handleSelectOne(product.id, checked as boolean)}
                   />
                 </TableCell>
-                <TableCell className="font-mono text-sm whitespace-nowrap">{product.sku}</TableCell>
+                <TableCell className="font-mono text-sm">{product.sku}</TableCell>
                 <TableCell className="font-medium">{product.name}</TableCell>
                 <TableCell className="text-slate-500">{product.category || "-"}</TableCell>
                 <TableCell className="text-right font-mono">
@@ -279,59 +276,26 @@ export function ProductTable({ products = [], onView, onEdit, onDelete, onBulkDe
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  <div className="flex items-center gap-1">
-                    {isNewProduct(product) ? (
-                      <Badge className="bg-blue-500 text-white border-blue-600 font-bold text-xs">
-                        NEW
-                      </Badge>
-                    ) : product.abcGrade && product.xyzGrade ? (
-                      <Badge variant="outline" className="font-mono">
-                        {product.abcGrade}{product.xyzGrade}
-                      </Badge>
-                    ) : product.abcGrade || product.xyzGrade ? (
-                      <Badge variant="outline" className="font-mono text-slate-400">
-                        {product.abcGrade || "?"}{product.xyzGrade || "?"}
-                      </Badge>
-                    ) : (
-                      <span className="text-slate-400">-</span>
-                    )}
-                    {product.fmrGrade && (
-                      <TooltipProvider delayDuration={200}>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Badge
-                              variant="outline"
-                              className={cn(
-                                "font-mono text-[10px] px-1.5 cursor-help",
-                                product.fmrGrade === "F" && "border-red-300 bg-red-50 text-red-700",
-                                product.fmrGrade === "M" && "border-yellow-300 bg-yellow-50 text-yellow-700",
-                                product.fmrGrade === "R" && "border-slate-300 bg-slate-50 text-slate-500",
-                              )}
-                            >
-                              {product.fmrGrade}
-                            </Badge>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" className="max-w-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 shadow-lg">
-                            <p className="font-semibold">
-                              {product.fmrGrade === "F" && "Fast Moving (고빈도 출고)"}
-                              {product.fmrGrade === "M" && "Medium Moving (중빈도 출고)"}
-                              {product.fmrGrade === "R" && "Rare Moving (저빈도 출고)"}
-                            </p>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                              {product.fmrGrade === "F" && "월 10회 이상 출고 — 상시 재고 확보 필요"}
-                              {product.fmrGrade === "M" && "월 4~9회 출고 — 정기 보충 관리"}
-                              {product.fmrGrade === "R" && "월 3회 이하 출고 — 재고 최소화 또는 주문생산 검토"}
-                            </p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    )}
-                  </div>
+                  {isNewProduct(product) ? (
+                    <Badge className="bg-blue-500 text-white border-blue-600 font-bold text-xs">
+                      NEW
+                    </Badge>
+                  ) : product.abcGrade && product.xyzGrade ? (
+                    <Badge variant="outline" className="font-mono">
+                      {product.abcGrade}{product.xyzGrade}
+                    </Badge>
+                  ) : product.abcGrade || product.xyzGrade ? (
+                    <Badge variant="outline" className="font-mono text-slate-400">
+                      {product.abcGrade || "?"}{product.xyzGrade || "?"}
+                    </Badge>
+                  ) : (
+                    <span className="text-slate-400">-</span>
+                  )}
                 </TableCell>
                 <TableCell>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="더보기 메뉴">
+                      <Button variant="ghost" size="icon" className="h-8 w-8">
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
@@ -358,6 +322,26 @@ export function ProductTable({ products = [], onView, onEdit, onDelete, onBulkDe
             ))}
           </TableBody>
         </Table>
+      </div>
+      {/* 페이지네이션 */}
+      <div className="flex items-center justify-between px-4 py-3 border-t text-sm text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <span>페이지당</span>
+          <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }}>
+            <SelectTrigger className="h-7 w-16 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="20">20</SelectItem>
+              <SelectItem value="50">50</SelectItem>
+              <SelectItem value="100">100</SelectItem>
+            </SelectContent>
+          </Select>
+          <span>개 · 총 {sortedProducts.length}개</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)}>이전</Button>
+          <span className="px-2">{currentPage} / {Math.max(1, Math.ceil(sortedProducts.length / pageSize))}</span>
+          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={currentPage >= Math.ceil(sortedProducts.length / pageSize)} onClick={() => setCurrentPage((p) => p + 1)}>다음</Button>
+        </div>
       </div>
     </div>
   );
