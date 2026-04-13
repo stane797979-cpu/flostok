@@ -11,6 +11,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   TrendingUp,
   TrendingDown,
@@ -40,7 +42,7 @@ function TurnoverStatusBadge({ status }: { status: TurnoverData["status"] }) {
     low: {
       label: "저회전",
       variant: "outline" as const,
-      className: "border-orange-500 text-orange-700 dark:border-orange-600 dark:text-orange-400",
+      className: "border-orange-500 text-orange-700",
     },
     critical: { label: "위험", variant: "destructive" as const, className: "" },
   };
@@ -72,6 +74,8 @@ interface InventoryTurnoverProps {
 export function InventoryTurnover({ data, className }: InventoryTurnoverProps) {
   const [sortKey, setSortKey] = useState<SortKey>("turnoverRate");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
+  const [pageSize, setPageSize] = useState(20);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const items = useMemo(() => data?.items || [], [data]);
 
@@ -82,10 +86,9 @@ export function InventoryTurnover({ data, className }: InventoryTurnoverProps) {
         avgTurnoverRate: data.avgTurnoverRate.toFixed(1),
         avgDOI: data.avgDaysOfInventory,
         lowTurnoverCount: data.lowTurnoverCount,
-        periodLabel: data.periodLabel ?? "",
       };
     }
-    return { avgTurnoverRate: "0", avgDOI: 0, lowTurnoverCount: 0, periodLabel: "" };
+    return { avgTurnoverRate: "0", avgDOI: 0, lowTurnoverCount: 0 };
   }, [data]);
 
   // 정렬 처리
@@ -155,13 +158,6 @@ export function InventoryTurnover({ data, className }: InventoryTurnoverProps) {
 
   return (
     <div className={cn("space-y-6", className)}>
-      {/* 기준 기간 */}
-      <div className="flex items-center gap-2">
-        <Badge variant="outline" className="text-xs px-2.5 py-1">
-          기준: {summary.periodLabel}
-        </Badge>
-      </div>
-
       {/* 요약 카드 */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
@@ -297,8 +293,7 @@ export function InventoryTurnover({ data, className }: InventoryTurnoverProps) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
+          <Table>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[100px]">
@@ -423,7 +418,7 @@ export function InventoryTurnover({ data, className }: InventoryTurnoverProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sortedData.map((item) => (
+              {sortedData.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((item) => (
                 <TableRow key={item.id}>
                   <TableCell className="font-medium">{item.sku}</TableCell>
                   <TableCell>{item.name}</TableCell>
@@ -446,6 +441,25 @@ export function InventoryTurnover({ data, className }: InventoryTurnoverProps) {
               ))}
             </TableBody>
           </Table>
+          {/* 페이지네이션 */}
+          <div className="flex items-center justify-between px-4 py-3 border-t text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <span>페이지당</span>
+              <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }}>
+                <SelectTrigger className="h-7 w-16 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="20">20</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+              </Select>
+              <span>개 · 총 {sortedData.length}개</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)}>이전</Button>
+              <span className="px-2">{currentPage} / {Math.max(1, Math.ceil(sortedData.length / pageSize))}</span>
+              <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={currentPage >= Math.ceil(sortedData.length / pageSize)} onClick={() => setCurrentPage((p) => p + 1)}>다음</Button>
+            </div>
           </div>
         </CardContent>
       </Card>
