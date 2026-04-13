@@ -11,6 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -41,7 +42,7 @@ function RateBadge({ rate }: { rate: number }) {
   }
   if (rate > 110) {
     return (
-      <Badge variant="outline" className="border-yellow-500 text-yellow-700 dark:border-yellow-600 dark:text-yellow-400">
+      <Badge variant="outline" className="border-yellow-500 text-yellow-700">
         {rate}%
       </Badge>
     );
@@ -66,6 +67,8 @@ export function FulfillmentRateTable({ data }: FulfillmentRateTableProps) {
   const [selectedPeriod, setSelectedPeriod] = useState<string>("all");
   const [sortField, setSortField] = useState<SortField | null>("sku");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [pageSize, setPageSize] = useState(20);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const filteredItems = useMemo(() => {
     if (!data) return [];
@@ -149,13 +152,6 @@ export function FulfillmentRateTable({ data }: FulfillmentRateTableProps) {
 
   return (
     <div className="space-y-6">
-      {/* 기준 기간 */}
-      <div className="flex items-center gap-2">
-        <Badge variant="outline" className="text-xs px-2.5 py-1">
-          기준: {data.periodLabel}
-        </Badge>
-      </div>
-
       {/* 요약 카드 */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
@@ -216,8 +212,7 @@ export function FulfillmentRateTable({ data }: FulfillmentRateTableProps) {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
+          <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>
@@ -286,7 +281,7 @@ export function FulfillmentRateTable({ data }: FulfillmentRateTableProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sortedItems.map((item, idx) => (
+              {sortedItems.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((item, idx) => (
                 <TableRow key={`${item.productId}-${item.period}-${idx}`}>
                   <TableCell className="font-medium text-xs">{item.sku}</TableCell>
                   <TableCell className="max-w-[120px] truncate">{item.name}</TableCell>
@@ -316,6 +311,29 @@ export function FulfillmentRateTable({ data }: FulfillmentRateTableProps) {
               ))}
             </TableBody>
           </Table>
+          {/* 페이지네이션 */}
+          <div className="flex items-center justify-between px-4 py-3 border-t text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <span>페이지당</span>
+              <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }}>
+                <SelectTrigger className="h-7 w-16 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="20">20</SelectItem>
+
+                  <SelectItem value="50">50</SelectItem>
+
+                  <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+              </Select>
+              <span>개 · 총 {sortedItems.length}개</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)}>이전</Button>
+              <span className="px-2">{currentPage} / {Math.max(1, Math.ceil(sortedItems.length / pageSize))}</span>
+              <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={currentPage >= Math.ceil(sortedItems.length / pageSize)} onClick={() => setCurrentPage((p) => p + 1)}>다음</Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -336,7 +354,7 @@ export function FulfillmentRateTable({ data }: FulfillmentRateTableProps) {
               <span className="text-sm">양호</span>
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant="outline" className="border-yellow-500 text-yellow-700 dark:border-yellow-600 dark:text-yellow-400">
+              <Badge variant="outline" className="border-yellow-500 text-yellow-700">
                 110%+
               </Badge>
               <span className="text-sm">예측 초과</span>

@@ -1,41 +1,13 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Search, RefreshCw, Download, Loader2, Trash2, AlertTriangle, ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Search, RefreshCw, Download, Loader2 } from "lucide-react";
 import { exportInventoryToExcel } from "@/server/actions/excel-export";
-import { deleteInventoryItem, deleteInventoryItems, deleteAllInventory, getInventoryAsOfDate } from "@/server/actions/inventory";
 import { useToast } from "@/hooks/use-toast";
 import {
   InventoryTable,
@@ -53,92 +25,39 @@ interface InventoryStats {
   excess: number;
 }
 
-interface Warehouse {
-  id: string;
-  code: string;
-  name: string;
-}
-
 interface InventoryPageClientProps {
   items: InventoryItem[];
   stats: InventoryStats;
-  warehouses: Warehouse[];
-  selectedWarehouseId?: string;
-  currentPage: number;
-  totalPages: number;
-  totalItems: number;
-  pageSize: number;
 }
 
-export function InventoryPageClient({
-  items,
-  stats,
-  warehouses,
-  selectedWarehouseId,
-  currentPage,
-  totalPages,
-  totalItems,
-  pageSize,
-}: InventoryPageClientProps) {
+export function InventoryPageClient({ items, stats }: InventoryPageClientProps) {
   const [search, setSearch] = useState("");
   const [adjustTarget, setAdjustTarget] = useState<AdjustmentTarget | null>(null);
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-
-  // 기준일 선택 (과거 재고 조회)
-  const [asOfDate, setAsOfDate] = useState("");
-  const [historicalItems, setHistoricalItems] = useState<InventoryItem[] | null>(null);
-  const [historicalStats, setHistoricalStats] = useState<{ totalProducts: number; totalStock: number } | null>(null);
-  const [isLoadingHistorical, setIsLoadingHistorical] = useState(false);
-
-  // 삭제 관련 상태
-  const [deleteTarget, setDeleteTarget] = useState<InventoryItem | null>(null);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
-  const [bulkDeleteIds, setBulkDeleteIds] = useState<string[]>([]);
-  const [deleteAllDialogOpen, setDeleteAllDialogOpen] = useState(false);
-  const [deleteReason, setDeleteReason] = useState("");
-  const [isDeleting, setIsDeleting] = useState(false);
-
+  const [pageSize, setPageSize] = useState(20);
+  const [currentPage, setCurrentPage] = useState(1);
   const router = useRouter();
   const { toast } = useToast();
 
-  // URL 쿼리 빌더 (창고, 페이지, 사이즈 유지)
-  const buildUrl = (overrides: { warehouseId?: string; page?: number; size?: number }) => {
-    const url = new URLSearchParams();
-    const wh = overrides.warehouseId !== undefined ? overrides.warehouseId : selectedWarehouseId;
-    const pg = overrides.page ?? currentPage;
-    const sz = overrides.size ?? pageSize;
-    if (wh && wh !== "all") url.set("warehouseId", wh);
-    if (pg > 1) url.set("page", String(pg));
-    if (sz !== 50) url.set("size", String(sz));
-    return `/dashboard/inventory?${url.toString()}`;
-  };
-
-  // 창고 필터 변경
-  const handleWarehouseChange = (value: string) => {
-    router.push(buildUrl({ warehouseId: value, page: 1 }));
-  };
-
-  // 페이지 이동
-  const handlePageChange = (page: number) => {
-    router.push(buildUrl({ page }));
-  };
-
-  // 페이지 사이즈 변경
-  const handlePageSizeChange = (size: string) => {
-    router.push(buildUrl({ size: Number(size), page: 1 }));
-  };
-
   // 클라이언트 검색 필터링
-  const filtered = search
-    ? items.filter(
-        (item) =>
-          item.product.name.toLowerCase().includes(search.toLowerCase()) ||
-          item.product.sku.toLowerCase().includes(search.toLowerCase())
-      )
-    : items;
+  const filtered = useMemo(() => {
+    setCurrentPage(1);
+    return search
+      ? items.filter(
+          (item) =>
+            item.product.name.toLowerCase().includes(search.toLowerCase()) ||
+            item.product.sku.toLowerCase().includes(search.toLowerCase())
+        )
+      : items;
+  }, [items, search]);
+
+  const pagedItems = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, currentPage, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
 
   const handleAdjust = (item: InventoryItem) => {
     setAdjustTarget({
@@ -151,141 +70,7 @@ export function InventoryPageClient({
   };
 
   const handleRefresh = () => {
-    setSelectedIds([]);
-    setAsOfDate("");
-    setHistoricalItems(null);
-    setHistoricalStats(null);
     router.refresh();
-  };
-
-  // 기준일 변경 시 과거 재고 조회
-  const handleAsOfDateChange = useCallback(async (dateStr: string) => {
-    setAsOfDate(dateStr);
-
-    if (!dateStr) {
-      setHistoricalItems(null);
-      setHistoricalStats(null);
-      return;
-    }
-
-    // 오늘 날짜면 현재 재고 표시
-    const today = new Date().toISOString().split("T")[0];
-    if (dateStr >= today) {
-      setHistoricalItems(null);
-      setHistoricalStats(null);
-      return;
-    }
-
-    setIsLoadingHistorical(true);
-    try {
-      const result = await getInventoryAsOfDate(dateStr, { limit: 500 });
-      const mapped: InventoryItem[] = result.items.map((item) => ({
-        id: item.id,
-        productId: item.productId,
-        warehouseId: item.warehouseId,
-        currentStock: item.currentStock,
-        availableStock: item.availableStock,
-        daysOfInventory: null,
-        location: null,
-        product: {
-          sku: item.product.sku,
-          name: item.product.name,
-          safetyStock: item.product.safetyStock,
-          reorderPoint: item.product.reorderPoint,
-          abcGrade: (item.product.abcGrade as "A" | "B" | "C" | null),
-          xyzGrade: (item.product.xyzGrade as "X" | "Y" | "Z" | null),
-        },
-        warehouse: null,
-      }));
-      setHistoricalItems(mapped);
-      setHistoricalStats(result.stats);
-    } catch (error) {
-      console.error("기준일 재고 조회 오류:", error);
-      toast({ title: "오류", description: "기준일 재고를 조회하지 못했습니다", variant: "destructive" });
-    } finally {
-      setIsLoadingHistorical(false);
-    }
-  }, [toast]);
-
-  // 개별 삭제
-  const handleDeleteClick = (item: InventoryItem) => {
-    setDeleteTarget(item);
-    setDeleteReason("");
-    setDeleteDialogOpen(true);
-  };
-
-  const handleDeleteConfirm = async () => {
-    if (!deleteTarget) return;
-    setIsDeleting(true);
-    try {
-      const result = await deleteInventoryItem(deleteTarget.id, deleteReason || undefined);
-      if (result.success) {
-        if (result.isRequest) {
-          toast({ title: "삭제 요청 제출됨", description: `${deleteTarget.product.name} 삭제 요청이 제출되었습니다. 슈퍼관리자 승인 후 삭제됩니다.` });
-        } else {
-          toast({ title: "삭제 완료", description: `${deleteTarget.product.name} 재고가 삭제되었습니다` });
-        }
-        setDeleteDialogOpen(false);
-        handleRefresh();
-      } else {
-        toast({ title: "삭제 실패", description: result.error, variant: "destructive" });
-      }
-    } catch {
-      toast({ title: "오류", description: "재고 삭제 중 오류가 발생했습니다", variant: "destructive" });
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  // 선택 삭제
-  const handleBulkDeleteClick = (ids: string[]) => {
-    setBulkDeleteIds(ids);
-    setDeleteReason("");
-    setBulkDeleteDialogOpen(true);
-  };
-
-  const handleBulkDeleteConfirm = async () => {
-    setIsDeleting(true);
-    try {
-      const result = await deleteInventoryItems(bulkDeleteIds, deleteReason || undefined);
-      if (result.success) {
-        if (result.isRequest) {
-          toast({ title: "삭제 요청 제출됨", description: `${result.requestedCount}건의 삭제 요청이 제출되었습니다. 슈퍼관리자 승인 후 삭제됩니다.` });
-        } else {
-          toast({ title: "삭제 완료", description: `${result.deletedCount}건의 재고가 삭제되었습니다` });
-        }
-        setBulkDeleteDialogOpen(false);
-        setSelectedIds([]);
-        handleRefresh();
-      } else {
-        toast({ title: "삭제 실패", description: result.error, variant: "destructive" });
-      }
-    } catch {
-      toast({ title: "오류", description: "재고 삭제 중 오류가 발생했습니다", variant: "destructive" });
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  // 전체 삭제
-  const handleDeleteAllConfirm = async () => {
-    if (!deleteReason.trim()) return;
-    setIsDeleting(true);
-    try {
-      const result = await deleteAllInventory(deleteReason);
-      if (result.success) {
-        toast({ title: "전체 삭제 완료", description: `${result.deletedCount}건의 재고가 모두 삭제되었습니다` });
-        setDeleteAllDialogOpen(false);
-        setDeleteReason("");
-        handleRefresh();
-      } else {
-        toast({ title: "삭제 실패", description: result.error, variant: "destructive" });
-      }
-    } catch {
-      toast({ title: "오류", description: "전체 재고 삭제 중 오류가 발생했습니다", variant: "destructive" });
-    } finally {
-      setIsDeleting(false);
-    }
   };
 
   const handleDownload = useCallback(async () => {
@@ -336,27 +121,14 @@ export function InventoryPageClient({
 
   return (
     <div className="space-y-6">
-      {/* 기준일 표시 */}
-      {historicalItems && (
-        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2">
-          <CalendarDays className="h-4 w-4 text-amber-600" />
-          <span className="text-sm font-medium text-amber-800">
-            {asOfDate} 기준 과거 재고를 조회하고 있습니다
-          </span>
-          <Badge variant="outline" className="border-amber-300 text-amber-700">
-            {historicalStats?.totalProducts || 0}개 제품 · 총 {(historicalStats?.totalStock || 0).toLocaleString()}개
-          </Badge>
-        </div>
-      )}
-
       {/* 요약 카드 */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500 dark:text-slate-400">총 SKU</CardTitle>
+            <CardTitle className="text-sm font-medium text-slate-500">총 SKU</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{historicalStats ? historicalStats.totalProducts : stats.totalProducts}</div>
+            <div className="text-2xl font-bold">{stats.totalProducts}</div>
           </CardContent>
         </Card>
         <Card className="border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950">
@@ -388,69 +160,18 @@ export function InventoryPageClient({
       </div>
 
       {/* 액션 바 */}
-      <div className="flex flex-col gap-4">
-        {/* 필터 영역 */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-          <div className="relative w-full sm:w-80">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input
-              type="search"
-              placeholder="제품명, SKU 검색..."
-              className="pl-9"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <Select
-            value={selectedWarehouseId || "all"}
-            onValueChange={handleWarehouseChange}
-          >
-            <SelectTrigger className="w-full sm:w-[200px]">
-              <SelectValue placeholder="전체 창고" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">전체 창고</SelectItem>
-              {warehouses.map((w) => (
-                <SelectItem key={w.id} value={w.id}>
-                  {w.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <div className="flex items-center gap-2">
-            <CalendarDays className="h-4 w-4 text-slate-400 shrink-0" />
-            <Input
-              type="date"
-              className="w-[160px]"
-              value={asOfDate}
-              max={new Date().toISOString().split("T")[0]}
-              onChange={(e) => handleAsOfDateChange(e.target.value)}
-              title="기준일 선택 (과거 재고 조회)"
-            />
-            {asOfDate && (
-              <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={handleRefresh}>
-                현재로
-              </Button>
-            )}
-          </div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full sm:w-80">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Input
+            type="search"
+            placeholder="제품명, SKU 검색..."
+            className="pl-9"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
-
-        {/* 액션 버튼 */}
-        <div className="flex items-center justify-end gap-2">
-          {items.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-950"
-              onClick={() => {
-                setDeleteReason("");
-                setDeleteAllDialogOpen(true);
-              }}
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              전체 삭제
-            </Button>
-          )}
+        <div className="flex items-center gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -472,171 +193,38 @@ export function InventoryPageClient({
       </div>
 
       {/* 재고 테이블 */}
-      {isLoadingHistorical ? (
-        <div className="flex h-48 items-center justify-center text-slate-400">
-          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-          {asOfDate} 기준 재고를 조회하는 중...
-        </div>
-      ) : (
-        <InventoryTable
-          items={historicalItems ?? filtered}
-          onAdjust={historicalItems ? undefined : handleAdjust}
-          onDelete={historicalItems ? undefined : handleDeleteClick}
-          onBulkDelete={historicalItems ? undefined : handleBulkDeleteClick}
-          selectedIds={historicalItems ? [] : selectedIds}
-          onSelectionChange={historicalItems ? undefined : setSelectedIds}
-        />
-      )}
+      <InventoryTable items={pagedItems} onAdjust={handleAdjust} />
 
       {/* 페이지네이션 */}
-      {totalItems > 0 && (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-            <span>전체 {totalItems.toLocaleString()}건</span>
-            <span>·</span>
-            <div className="flex items-center gap-1">
-              <span>표시</span>
-              <Select value={String(pageSize)} onValueChange={handlePageSizeChange}>
-                <SelectTrigger className="h-8 w-[80px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="50">50개</SelectItem>
-                  <SelectItem value="100">100개</SelectItem>
-                  <SelectItem value="200">200개</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={currentPage <= 1}
-              onClick={() => handlePageChange(currentPage - 1)}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="text-sm font-medium">
-              {currentPage} / {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={currentPage >= totalPages}
-              onClick={() => handlePageChange(currentPage + 1)}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
+      <div className="flex items-center justify-between text-sm text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <span>페이지당</span>
+          <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }}>
+            <SelectTrigger className="h-7 w-16 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="20">20</SelectItem>
+              <SelectItem value="50">50</SelectItem>
+              <SelectItem value="100">100</SelectItem>
+            </SelectContent>
+          </Select>
+          <span>개 · 총 {filtered.length}개</span>
         </div>
-      )}
+        <div className="flex items-center gap-1">
+          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)}>이전</Button>
+          <span className="px-2">{currentPage} / {totalPages}</span>
+          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={currentPage >= totalPages} onClick={() => setCurrentPage((p) => p + 1)}>다음</Button>
+        </div>
+      </div>
 
       {/* 재고 조정 다이얼로그 */}
       <InventoryAdjustmentDialog
         open={adjustOpen}
         onOpenChange={setAdjustOpen}
         target={adjustTarget}
-        warehouses={warehouses}
         onSuccess={handleRefresh}
       />
-
-      {/* 개별 삭제 확인 다이얼로그 */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-red-500" />
-              재고 삭제
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              <strong>{deleteTarget?.product.name}</strong> ({deleteTarget?.product.sku})의 재고를 삭제하시겠습니까?
-              <br />
-              현재고 <strong>{deleteTarget?.currentStock.toLocaleString()}</strong>개가 0으로 처리됩니다.
-              변동 이력은 보존됩니다.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>취소</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteConfirm}
-              disabled={isDeleting}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              삭제
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* 선택 삭제 확인 다이얼로그 */}
-      <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-red-500" />
-              선택 재고 삭제
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              선택한 <strong>{bulkDeleteIds.length}건</strong>의 재고를 삭제하시겠습니까?
-              모든 수량이 0으로 처리되며, 변동 이력은 보존됩니다.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>취소</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleBulkDeleteConfirm}
-              disabled={isDeleting}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {bulkDeleteIds.length}건 삭제
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* 전체 삭제 다이얼로그 (사유 필수) */}
-      <Dialog open={deleteAllDialogOpen} onOpenChange={setDeleteAllDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-600">
-              <AlertTriangle className="h-5 w-5" />
-              전체 재고 삭제
-            </DialogTitle>
-            <DialogDescription>
-              <strong>모든 재고 ({items.length}건)</strong>를 삭제합니다.
-              이 작업은 되돌릴 수 없습니다. 변동 이력은 보존됩니다.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 py-2">
-            <div className="space-y-2">
-              <Label htmlFor="delete-all-reason">삭제 사유 (필수)</Label>
-              <Textarea
-                id="delete-all-reason"
-                value={deleteReason}
-                onChange={(e) => setDeleteReason(e.target.value)}
-                placeholder="전체 삭제 사유를 입력하세요..."
-                rows={3}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteAllDialogOpen(false)} disabled={isDeleting}>
-              취소
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDeleteAllConfirm}
-              disabled={!deleteReason.trim() || isDeleting}
-            >
-              {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              전체 삭제 실행
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

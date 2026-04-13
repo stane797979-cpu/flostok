@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, useTransition, useCallback } from "react";
+import { useState, useMemo, useRef, useTransition } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,10 +22,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Upload, Download, Calculator, ChevronLeft, ChevronRight, Loader2, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Upload, Download, Calculator } from "lucide-react";
 import { PSIFilters } from "./psi-filters";
 import { PSITable } from "./psi-table";
-import { uploadPSIPlanExcel, generateSOPQuantities, getPSIData, type SOPMethod } from "@/server/actions/psi";
+import { uploadPSIPlanExcel, generateSOPQuantities, type SOPMethod } from "@/server/actions/psi";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import type { PSIResult } from "@/server/services/scm/psi-aggregation";
@@ -62,13 +62,12 @@ const SOP_METHODS: Array<{ value: SOPMethod; label: string; description: string 
   },
 ];
 
-export function PSIClient({ data: initialData }: PSIClientProps) {
-  const [data, setData] = useState(initialData);
-  const [monthOffset, setMonthOffset] = useState(0);
-  const [isLoadingPSI, setIsLoadingPSI] = useState(false);
+export function PSIClient({ data }: PSIClientProps) {
   const [search, setSearch] = useState("");
   const [abcFilter, setAbcFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [pageSize, setPageSize] = useState(20);
+  const [currentPage, setCurrentPage] = useState(1);
   const [isPending, startTransition] = useTransition();
   const [sopMethod, setSopMethod] = useState<SOPMethod>("by_order_method");
   const [targetDays, setTargetDays] = useState(30);
@@ -78,33 +77,6 @@ export function PSIClient({ data: initialData }: PSIClientProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const router = useRouter();
-
-  // 월 이동 (기간 창 이동)
-  const loadPSIWithOffset = useCallback(async (offset: number) => {
-    setIsLoadingPSI(true);
-    try {
-      const result = await getPSIData(offset);
-      setData(result);
-      setMonthOffset(offset);
-    } catch (error) {
-      console.error("PSI 데이터 조회 오류:", error);
-      toast({ title: "오류", description: "PSI 데이터를 불러오지 못했습니다", variant: "destructive" });
-    } finally {
-      setIsLoadingPSI(false);
-    }
-  }, [toast]);
-
-  const handlePrevPeriod = useCallback(() => {
-    loadPSIWithOffset(monthOffset - 3);
-  }, [monthOffset, loadPSIWithOffset]);
-
-  const handleNextPeriod = useCallback(() => {
-    loadPSIWithOffset(monthOffset + 3);
-  }, [monthOffset, loadPSIWithOffset]);
-
-  const handleResetPeriod = useCallback(() => {
-    loadPSIWithOffset(0);
-  }, [loadPSIWithOffset]);
 
   // 카테고리 목록 추출
   const categories = useMemo(() => {
@@ -117,6 +89,7 @@ export function PSIClient({ data: initialData }: PSIClientProps) {
 
   // 필터링
   const filteredProducts = useMemo(() => {
+    setCurrentPage(1);
     return data.products.filter((p) => {
       if (search) {
         const q = search.toLowerCase();
@@ -130,36 +103,19 @@ export function PSIClient({ data: initialData }: PSIClientProps) {
     });
   }, [data.products, search, abcFilter, categoryFilter]);
 
+  // 페이지네이션
+  const totalPages = Math.ceil(filteredProducts.length / pageSize);
+  const pagedProducts = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredProducts.slice(start, start + pageSize);
+  }, [filteredProducts, currentPage, pageSize]);
+
   // 요약 통계
   const totalSKU = data.totalProducts;
   const stockoutCount = data.products.filter((p) => p.currentStock === 0).length;
   const belowSafetyCount = data.products.filter(
     (p) => p.currentStock > 0 && p.currentStock < p.safetyStock
   ).length;
-
-  // 부족 개월 수 계산: 미래 계획 기말재고 < 안전재고인 (제품, 월) 조합 수
-  const now = new Date();
-  const currentPeriodStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-
-  const shortageMonthCount = useMemo(() => {
-    let count = 0;
-    for (const product of data.products) {
-      for (const month of product.months) {
-        // 미래 기간만 계산
-        if (month.period <= currentPeriodStr) continue;
-        if (month.plannedEndingStock < product.safetyStock) {
-          count++;
-        }
-      }
-    }
-    return count;
-  }, [data.products, currentPeriodStr]);
-
-  // 미래 기간 총 (제품 × 미래월) 조합 수
-  const totalFutureMonthCount = useMemo(() => {
-    const futureMonths = data.periods.filter((p) => p > currentPeriodStr).length;
-    return data.products.length * futureMonths;
-  }, [data.products, data.periods, currentPeriodStr]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -301,7 +257,7 @@ export function PSIClient({ data: initialData }: PSIClientProps) {
                       <div className="space-y-3 pl-7 border-l-2 border-purple-200 ml-3 mt-2">
                         <div className="space-y-1.5">
                           <Label className="text-xs font-medium flex items-center gap-1.5">
-                            <Badge variant="outline" className="text-[9px] px-1 py-0 border-blue-300 text-blue-700 bg-blue-50 dark:border-blue-700 dark:text-blue-300 dark:bg-blue-950">정량</Badge>
+                            <Badge variant="outline" className="text-[9px] px-1 py-0 border-blue-300 text-blue-700 bg-blue-50">정량</Badge>
                             정량발주 제품 산출방식
                           </Label>
                           <Select value={fixedQtySubMethod} onValueChange={(v) => setFixedQtySubMethod(v as SOPMethod)}>
@@ -318,7 +274,7 @@ export function PSIClient({ data: initialData }: PSIClientProps) {
                         </div>
                         <div className="space-y-1.5">
                           <Label className="text-xs font-medium flex items-center gap-1.5">
-                            <Badge variant="outline" className="text-[9px] px-1 py-0 border-green-300 text-green-700 bg-green-50 dark:border-green-700 dark:text-green-300 dark:bg-green-950">정기</Badge>
+                            <Badge variant="outline" className="text-[9px] px-1 py-0 border-green-300 text-green-700 bg-green-50">정기</Badge>
                             정기발주 제품 산출방식
                           </Label>
                           <Select value={fixedPeriodSubMethod} onValueChange={(v) => setFixedPeriodSubMethod(v as SOPMethod)}>
@@ -413,34 +369,6 @@ export function PSIClient({ data: initialData }: PSIClientProps) {
         </div>
       </div>
 
-      {/* 재고 부족 경고 배너 */}
-      {shortageMonthCount > 0 ? (
-        <div className="flex items-start gap-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-4 py-3">
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
-          <div>
-            <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
-              향후 {data.periods.filter((p) => p > currentPeriodStr).length}개월 중{" "}
-              <span className="text-red-600 dark:text-red-400">{shortageMonthCount}건</span> 재고 부족 예상
-            </p>
-            <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">
-              계획 기말재고가 안전재고 미달인 (제품 × 월) 조합입니다. PSI 테이블에서 붉은색 셀을 확인하세요.
-            </p>
-          </div>
-        </div>
-      ) : totalFutureMonthCount > 0 ? (
-        <div className="flex items-start gap-3 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3">
-          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-          <div>
-            <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
-              향후 {data.periods.filter((p) => p > currentPeriodStr).length}개월 재고 충분
-            </p>
-            <p className="mt-0.5 text-xs text-emerald-700 dark:text-emerald-400">
-              전체 제품의 계획 기말재고가 안전재고 이상으로 유지됩니다.
-            </p>
-          </div>
-        </div>
-      ) : null}
-
       {/* 범례 */}
       <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
         <span className="flex items-center gap-1">
@@ -456,20 +384,12 @@ export function PSIClient({ data: initialData }: PSIClientProps) {
           <em>계획/예측 (이탤릭, 보라 배경)</em>
         </span>
         <span className="flex items-center gap-1">
-          <Badge variant="outline" className="text-[9px] px-1 py-0 border-blue-300 text-blue-700 bg-blue-50 dark:border-blue-700 dark:text-blue-300 dark:bg-blue-950">정량</Badge>
+          <Badge variant="outline" className="text-[9px] px-1 py-0 border-blue-300 text-blue-700 bg-blue-50">정량</Badge>
           정량발주
         </span>
         <span className="flex items-center gap-1">
-          <Badge variant="outline" className="text-[9px] px-1 py-0 border-green-300 text-green-700 bg-green-50 dark:border-green-700 dark:text-green-300 dark:bg-green-950">정기</Badge>
+          <Badge variant="outline" className="text-[9px] px-1 py-0 border-green-300 text-green-700 bg-green-50">정기</Badge>
           정기발주
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="text-[9px] font-bold text-sky-500">A</span>
-          <span>자동예측(F/C)</span>
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="text-[9px] font-bold text-amber-500">M</span>
-          <span>수동예측(F/C)</span>
         </span>
         <span>SCM = AI가이드 · P = 계획 · A = 실적</span>
       </div>
@@ -489,31 +409,10 @@ export function PSIClient({ data: initialData }: PSIClientProps) {
             <CardTitle className="text-sm font-medium">조회 기간</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon" className="h-7 w-7" onClick={handlePrevPeriod} disabled={isLoadingPSI} aria-label="이전 기간">
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <div className="flex-1 text-center">
-                {isLoadingPSI ? (
-                  <Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-400" />
-                ) : (
-                  <>
-                    <div className="text-lg font-bold">{data.periods.length}개월</div>
-                    <p className="text-xs text-muted-foreground">
-                      {data.periods[0]} ~ {data.periods[data.periods.length - 1]}
-                    </p>
-                  </>
-                )}
-              </div>
-              <Button variant="outline" size="icon" className="h-7 w-7" onClick={handleNextPeriod} disabled={isLoadingPSI} aria-label="다음 기간">
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-            {monthOffset !== 0 && (
-              <Button variant="ghost" size="sm" className="mt-1 h-6 w-full text-xs text-muted-foreground" onClick={handleResetPeriod} disabled={isLoadingPSI}>
-                현재로 돌아가기
-              </Button>
-            )}
+            <div className="text-2xl font-bold">{data.periods.length}개월</div>
+            <p className="text-xs text-muted-foreground">
+              {data.periods[0]} ~ {data.periods[data.periods.length - 1]}
+            </p>
           </CardContent>
         </Card>
         <Card className="border-red-200">
@@ -557,7 +456,53 @@ export function PSIClient({ data: initialData }: PSIClientProps) {
           />
         </CardHeader>
         <CardContent className="p-0">
-          <PSITable products={filteredProducts} periods={data.periods} />
+          <PSITable products={pagedProducts} periods={data.periods} />
+          {/* 페이지네이션 */}
+          <div className="flex items-center justify-between px-4 py-3 border-t text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <span>페이지당</span>
+              <Select
+                value={String(pageSize)}
+                onValueChange={(v) => {
+                  setPageSize(Number(v));
+                  setCurrentPage(1);
+                }}
+              >
+                <SelectTrigger className="h-7 w-16 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="20">20</SelectItem>
+
+                  <SelectItem value="50">50</SelectItem>
+
+                  <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+              </Select>
+              <span>개 · 총 {filteredProducts.length}개</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((p) => p - 1)}
+              >
+                이전
+              </Button>
+              <span className="px-2">{currentPage} / {totalPages || 1}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage((p) => p + 1)}
+              >
+                다음
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>

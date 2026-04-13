@@ -19,14 +19,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
-import type { ABCGrade, XYZGrade, FMRGrade } from "@/server/services/scm/abc-xyz-analysis";
-import { cn } from "@/lib/utils";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Button } from "@/components/ui/button";
+import type { ABCGrade, XYZGrade } from "@/server/services/scm/abc-xyz-analysis";
 
 export interface ProductAnalysis {
   id: string;
@@ -34,7 +28,6 @@ export interface ProductAnalysis {
   name: string;
   abcGrade: ABCGrade;
   xyzGrade: XYZGrade;
-  fmrGrade?: FMRGrade | null;
   combinedGrade: string;
   revenue: number;
   variationRate: number;
@@ -50,29 +43,24 @@ type SortField = "name" | "abcGrade" | "xyzGrade" | "revenue" | "variationRate";
 type SortDirection = "asc" | "desc" | null;
 
 const ABC_BADGE_COLORS: Record<ABCGrade, string> = {
-  A: "bg-green-100 text-green-800 hover:bg-green-100 dark:bg-green-950/50 dark:text-green-300 dark:hover:bg-green-950/50",
-  B: "bg-blue-100 text-blue-800 hover:bg-blue-100 dark:bg-blue-950/50 dark:text-blue-300 dark:hover:bg-blue-950/50",
-  C: "bg-slate-100 text-slate-800 hover:bg-slate-100 dark:bg-slate-800/50 dark:text-slate-300 dark:hover:bg-slate-800/50",
+  A: "bg-green-100 text-green-800 hover:bg-green-100",
+  B: "bg-blue-100 text-blue-800 hover:bg-blue-100",
+  C: "bg-slate-100 text-slate-800 hover:bg-slate-100",
 };
 
 const XYZ_BADGE_COLORS: Record<XYZGrade, string> = {
-  X: "bg-emerald-100 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-300 dark:hover:bg-emerald-950/50",
-  Y: "bg-yellow-100 text-yellow-800 hover:bg-yellow-100 dark:bg-yellow-950/50 dark:text-yellow-300 dark:hover:bg-yellow-950/50",
-  Z: "bg-orange-100 text-orange-800 hover:bg-orange-100 dark:bg-orange-950/50 dark:text-orange-300 dark:hover:bg-orange-950/50",
-};
-
-const FMR_BADGE_COLORS: Record<FMRGrade, string> = {
-  F: "border-red-300 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/50 dark:text-red-300",
-  M: "border-yellow-300 bg-yellow-50 text-yellow-700 dark:border-yellow-800 dark:bg-yellow-950/50 dark:text-yellow-300",
-  R: "border-slate-300 bg-slate-50 text-slate-500 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-400",
+  X: "bg-emerald-100 text-emerald-800 hover:bg-emerald-100",
+  Y: "bg-yellow-100 text-yellow-800 hover:bg-yellow-100",
+  Z: "bg-orange-100 text-orange-800 hover:bg-orange-100",
 };
 
 export function ABCXYZTable({ products, selectedGrade }: ABCXYZTableProps) {
   const [abcFilter, setAbcFilter] = useState<string>("all");
   const [xyzFilter, setXyzFilter] = useState<string>("all");
-  const [fmrFilter, setFmrFilter] = useState<string>("all");
   const [sortField, setSortField] = useState<SortField>("revenue");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [pageSize, setPageSize] = useState(20);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // 필터링
   let filteredProducts = products;
@@ -87,10 +75,6 @@ export function ABCXYZTable({ products, selectedGrade }: ABCXYZTableProps) {
 
   if (xyzFilter !== "all") {
     filteredProducts = filteredProducts.filter((p) => p.xyzGrade === xyzFilter);
-  }
-
-  if (fmrFilter !== "all") {
-    filteredProducts = filteredProducts.filter((p) => p.fmrGrade === fmrFilter);
   }
 
   // 정렬
@@ -132,10 +116,10 @@ export function ABCXYZTable({ products, selectedGrade }: ABCXYZTableProps) {
       return <ArrowUpDown className="h-4 w-4 text-slate-400" />;
     }
     if (sortDirection === "asc") {
-      return <ArrowUp className="h-4 w-4 text-slate-900 dark:text-slate-100" />;
+      return <ArrowUp className="h-4 w-4 text-slate-900" />;
     }
     if (sortDirection === "desc") {
-      return <ArrowDown className="h-4 w-4 text-slate-900 dark:text-slate-100" />;
+      return <ArrowDown className="h-4 w-4 text-slate-900" />;
     }
     return <ArrowUpDown className="h-4 w-4 text-slate-400" />;
   };
@@ -169,21 +153,10 @@ export function ABCXYZTable({ products, selectedGrade }: ABCXYZTableProps) {
                 <SelectItem value="Z">Z등급</SelectItem>
               </SelectContent>
             </Select>
-
-            <Select value={fmrFilter} onValueChange={setFmrFilter}>
-              <SelectTrigger className="w-full sm:w-32">
-                <SelectValue placeholder="FMR 등급" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">전체</SelectItem>
-                <SelectItem value="F">F (고빈도)</SelectItem>
-                <SelectItem value="M">M (중빈도)</SelectItem>
-                <SelectItem value="R">R (저빈도)</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
         </div>
         <p className="text-sm text-slate-500">총 {filteredProducts.length}개 제품</p>
+
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto">
@@ -218,22 +191,6 @@ export function ABCXYZTable({ products, selectedGrade }: ABCXYZTableProps) {
                     <SortIcon field="xyzGrade" />
                   </button>
                 </TableHead>
-                <TableHead className="text-center">
-                  <TooltipProvider delayDuration={200}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="cursor-help rounded bg-orange-100 px-1.5 py-0.5 text-orange-700 font-semibold border border-orange-300 dark:bg-orange-950/50 dark:text-orange-300 dark:border-orange-800">FMR</span>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="max-w-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 shadow-lg">
-                        <p className="font-semibold">출고 빈도 분석 (Fast-Medium-Rare)</p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                          ABC = &quot;얼마나 많이 팔리는가&quot;(금액),
-                          FMR = &quot;얼마나 자주 출고되는가&quot;(횟수)
-                        </p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </TableHead>
                 <TableHead className="text-right">
                   <button
                     onClick={() => handleSort("revenue")}
@@ -258,12 +215,12 @@ export function ABCXYZTable({ products, selectedGrade }: ABCXYZTableProps) {
             <TableBody>
               {filteredProducts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="py-8 text-center text-slate-400">
+                  <TableCell colSpan={7} className="py-8 text-center text-slate-400">
                     조건에 맞는 제품이 없습니다
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredProducts.map((product) => (
+                filteredProducts.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((product) => (
                   <TableRow key={product.id}>
                     <TableCell className="font-mono text-sm">{product.sku}</TableCell>
                     <TableCell className="font-medium">{product.name}</TableCell>
@@ -277,48 +234,42 @@ export function ABCXYZTable({ products, selectedGrade }: ABCXYZTableProps) {
                         {product.xyzGrade}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-center">
-                      {product.fmrGrade ? (
-                        <TooltipProvider delayDuration={200}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Badge
-                                variant="outline"
-                                className={cn("font-mono cursor-help", FMR_BADGE_COLORS[product.fmrGrade])}
-                              >
-                                {product.fmrGrade}
-                              </Badge>
-                            </TooltipTrigger>
-                            <TooltipContent side="top" className="max-w-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 shadow-lg">
-                              <p className="font-semibold">
-                                {product.fmrGrade === "F" && "Fast Moving (고빈도 출고)"}
-                                {product.fmrGrade === "M" && "Medium Moving (중빈도 출고)"}
-                                {product.fmrGrade === "R" && "Rare Moving (저빈도 출고)"}
-                              </p>
-                              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                                {product.fmrGrade === "F" && "월 10회 이상 출고"}
-                                {product.fmrGrade === "M" && "월 4~9회 출고"}
-                                {product.fmrGrade === "R" && "월 3회 이하 출고"}
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      ) : (
-                        <span className="text-slate-400">-</span>
-                      )}
-                    </TableCell>
                     <TableCell className="text-right font-mono">
                       {product.revenue.toLocaleString()}원
                     </TableCell>
                     <TableCell className="text-right font-mono">
                       {product.variationRate.toFixed(2)}
                     </TableCell>
-                    <TableCell className="text-sm text-slate-600 dark:text-slate-300">{product.strategy}</TableCell>
+                    <TableCell className="text-sm text-slate-600">{product.strategy}</TableCell>
                   </TableRow>
                 ))
               )}
             </TableBody>
           </Table>
+        </div>
+        {/* 페이지네이션 */}
+        <div className="flex items-center justify-between px-4 py-3 border-t text-sm text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <span>페이지당</span>
+            <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }}>
+              <SelectTrigger className="h-7 w-16 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="20">20</SelectItem>
+
+                <SelectItem value="50">50</SelectItem>
+
+                <SelectItem value="100">100</SelectItem>
+              </SelectContent>
+            </Select>
+            <span>개 · 총 {filteredProducts.length}개</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)}>이전</Button>
+            <span className="px-2">{currentPage} / {Math.max(1, Math.ceil(filteredProducts.length / pageSize))}</span>
+            <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={currentPage >= Math.ceil(filteredProducts.length / pageSize)} onClick={() => setCurrentPage((p) => p + 1)}>다음</Button>
+          </div>
         </div>
       </CardContent>
     </Card>

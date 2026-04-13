@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowUp, ArrowDown, ArrowUpDown, Minus, Sparkles, AlertTriangle, TrendingDown } from "lucide-react";
 import type { GradeChangeResult } from "@/server/actions/grade-change";
 
@@ -97,7 +98,7 @@ function RiskBadge({ level }: { level: string }) {
       );
     case "medium":
       return (
-        <Badge variant="outline" className="border-yellow-500 text-yellow-700 text-xs dark:border-yellow-600 dark:text-yellow-400">
+        <Badge variant="outline" className="border-yellow-500 text-yellow-700 text-xs">
           보통
         </Badge>
       );
@@ -113,6 +114,8 @@ function RiskBadge({ level }: { level: string }) {
 export function GradeChangeTable({ data }: GradeChangeTableProps) {
   const [sortField, setSortField] = useState<SortField>("sku");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [pageSize, setPageSize] = useState(20);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -193,13 +196,6 @@ export function GradeChangeTable({ data }: GradeChangeTableProps) {
 
   return (
     <div className="space-y-6">
-      {/* 기준 기간 */}
-      <div className="flex items-center gap-2">
-        <Badge variant="outline" className="text-xs px-2.5 py-1">
-          기준: {data.periodLabel}
-        </Badge>
-      </div>
-
       {/* 요약 카드 */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
@@ -241,8 +237,7 @@ export function GradeChangeTable({ data }: GradeChangeTableProps) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
+          <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>
@@ -316,7 +311,7 @@ export function GradeChangeTable({ data }: GradeChangeTableProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sortedChanges.map((item) => (
+              {sortedChanges.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((item) => (
                 <TableRow key={item.productId}>
                   <TableCell className="font-medium text-xs">{item.sku}</TableCell>
                   <TableCell className="max-w-[120px] truncate">{item.name}</TableCell>
@@ -350,6 +345,29 @@ export function GradeChangeTable({ data }: GradeChangeTableProps) {
               ))}
             </TableBody>
           </Table>
+          {/* 페이지네이션 */}
+          <div className="flex items-center justify-between px-4 py-3 border-t text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <span>페이지당</span>
+              <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }}>
+                <SelectTrigger className="h-7 w-16 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="20">20</SelectItem>
+
+                  <SelectItem value="50">50</SelectItem>
+
+                  <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+              </Select>
+              <span>개 · 총 {sortedChanges.length}개</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)}>이전</Button>
+              <span className="px-2">{currentPage} / {Math.max(1, Math.ceil(sortedChanges.length / pageSize))}</span>
+              <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={currentPage >= Math.ceil(sortedChanges.length / pageSize)} onClick={() => setCurrentPage((p) => p + 1)}>다음</Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -362,14 +380,13 @@ export function GradeChangeTable({ data }: GradeChangeTableProps) {
             <CardDescription>월별 X(안정)/Y(보통)/Z(불안정) 품목 수 변화</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
+            <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>기간</TableHead>
-                  <TableHead className="text-center text-green-700 dark:text-green-400">X (안정)</TableHead>
-                  <TableHead className="text-center text-yellow-700 dark:text-yellow-400">Y (보통)</TableHead>
-                  <TableHead className="text-center text-red-700 dark:text-red-400">Z (불안정)</TableHead>
+                  <TableHead className="text-center text-green-700">X (안정)</TableHead>
+                  <TableHead className="text-center text-yellow-700">Y (보통)</TableHead>
+                  <TableHead className="text-center text-red-700">Z (불안정)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -383,7 +400,6 @@ export function GradeChangeTable({ data }: GradeChangeTableProps) {
                 ))}
               </TableBody>
             </Table>
-            </div>
           </CardContent>
         </Card>
       )}
