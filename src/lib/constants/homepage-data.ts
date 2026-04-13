@@ -137,6 +137,7 @@ export const CEO_SKILLS = [
   "수출입",
   "ITT 통번역사",
   "국제무역사",
+  "CPIM",
 ] as const;
 
 export const CEO_INDUSTRIES = [
