@@ -39,6 +39,11 @@ const AnalyticsWarehouse = dynamic(
   () => import("./_components/analytics-warehouse").then((m) => ({ default: m.AnalyticsWarehouse })),
   { loading: () => <div className="animate-pulse h-[400px] bg-muted rounded-lg" /> }
 );
+
+const AnalyticsFMR = dynamic(
+  () => import("./_components/analytics-fmr").then((m) => ({ default: m.AnalyticsFMR })),
+  { loading: () => <div className="animate-pulse h-[400px] bg-muted rounded-lg" /> }
+);
 import { RefreshGradesButton } from "./_components/refresh-grades-button";
 import type { ProductAnalysis } from "./_components/abc-xyz-table";
 
@@ -93,6 +98,8 @@ export default async function AnalyticsPage() {
   // 기본 탭(ABC-XYZ) 데이터만 즉시 로드 — 나머지 탭은 Suspense로 독립 스트리밍
   let products: ProductAnalysis[] = [];
   let matrixData: { grade: string; count: number }[] = [];
+  type FMRItem = Awaited<ReturnType<typeof getABCXYZAnalysis>>["fmrProducts"][number];
+  let fmrProducts: FMRItem[] = [];
   type ABCSummary = Awaited<ReturnType<typeof getABCXYZAnalysis>>["summary"];
   type ABCInsights = Awaited<ReturnType<typeof getABCXYZAnalysis>>["insights"];
 
@@ -135,6 +142,7 @@ export default async function AnalyticsPage() {
     matrixData = abcResult.matrixData;
     summary = abcResult.summary;
     insights = abcResult.insights;
+    fmrProducts = abcResult.fmrProducts ?? [];
   } catch (err) {
     console.error("[분석] 데이터 로드 실패:", err);
   }
@@ -156,6 +164,7 @@ export default async function AnalyticsPage() {
       <Tabs defaultValue="abc-xyz" className="space-y-6">
         <TabsList>
           <TabsTrigger value="abc-xyz">ABC-XYZ 분석</TabsTrigger>
+          <TabsTrigger value="fmr">FMR 분석</TabsTrigger>
           <TabsTrigger value="grade-change">등급변동</TabsTrigger>
           <TabsTrigger value="fulfillment">실출고율</TabsTrigger>
           <TabsTrigger value="demand-forecast">수요예측</TabsTrigger>
@@ -182,6 +191,22 @@ export default async function AnalyticsPage() {
                 <p className="mt-2 max-w-md text-sm text-muted-foreground/70">
                   제품을 등록하고 판매 데이터를 입력하면 ABC-XYZ 분석 결과가 표시됩니다. 설정
                   &gt; 데이터 관리에서 Excel로 데이터를 일괄 등록할 수 있습니다.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="fmr" className="space-y-6">
+          {hasData ? (
+            <AnalyticsFMR items={fmrProducts} />
+          ) : (
+            <Card className="border-dashed">
+              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                <Construction className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                <h3 className="text-lg font-semibold text-muted-foreground">분석 데이터 없음</h3>
+                <p className="mt-2 max-w-md text-sm text-muted-foreground/70">
+                  판매 데이터가 입력되면 FMR 분석 결과가 표시됩니다.
                 </p>
               </CardContent>
             </Card>
