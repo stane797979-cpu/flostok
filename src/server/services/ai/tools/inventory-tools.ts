@@ -9,7 +9,9 @@ import { eq, and, sql, gte, lte, desc } from "drizzle-orm";
 import { classifyInventoryStatus } from "@/server/services/scm/inventory-status";
 import { calculateSafetyStock } from "@/server/services/scm/safety-stock";
 import { getAverageDailySales } from "@/server/actions/sales";
-import { getCurrentUser } from "@/server/actions/auth-helpers";
+
+// TODO: 인증 구현 후 실제 organizationId로 교체
+const TEMP_ORG_ID = "00000000-0000-0000-0000-000000000001";
 
 /**
  * 재고 상태 조회 도구 정의
@@ -109,9 +111,6 @@ export async function executeGetInventoryStatus(input: {
   error?: string;
 }> {
   try {
-    const user = await getCurrentUser();
-    const orgId = user?.organizationId || "";
-
     const { productId, sku, status, limit = 20 } = input;
 
     // SKU로 제품 ID 조회
@@ -120,7 +119,7 @@ export async function executeGetInventoryStatus(input: {
       const [product] = await db
         .select({ id: products.id })
         .from(products)
-        .where(and(eq(products.sku, sku), eq(products.organizationId, orgId)))
+        .where(and(eq(products.sku, sku), eq(products.organizationId, TEMP_ORG_ID)))
         .limit(1);
       targetProductId = product?.id;
     }
@@ -134,7 +133,7 @@ export async function executeGetInventoryStatus(input: {
         })
         .from(products)
         .leftJoin(inventory, eq(products.id, inventory.productId))
-        .where(and(eq(products.id, targetProductId), eq(products.organizationId, orgId)))
+        .where(and(eq(products.id, targetProductId), eq(products.organizationId, TEMP_ORG_ID)))
         .limit(1);
 
       if (!result) {
@@ -187,7 +186,7 @@ export async function executeGetInventoryStatus(input: {
     }
 
     // 전체 현황 조회
-    const conditions = [eq(inventory.organizationId, orgId)];
+    const conditions = [eq(inventory.organizationId, TEMP_ORG_ID)];
     if (status) {
       conditions.push(
         eq(inventory.status, status as (typeof inventory.status.enumValues)[number])
@@ -202,7 +201,7 @@ export async function executeGetInventoryStatus(input: {
         totalValue: sql<number>`sum(${inventory.inventoryValue})`,
       })
       .from(inventory)
-      .where(eq(inventory.organizationId, orgId))
+      .where(eq(inventory.organizationId, TEMP_ORG_ID))
       .groupBy(inventory.status);
 
     const summary = {
@@ -367,9 +366,6 @@ export async function executeCalculateSafetyStock(input: {
   error?: string;
 }> {
   try {
-    const user = await getCurrentUser();
-    const orgId = user?.organizationId || "";
-
     const { productId: inputProductId, sku, serviceLevel = 0.95, periodDays = 90 } = input;
 
     // 제품 ID 확인
@@ -378,7 +374,7 @@ export async function executeCalculateSafetyStock(input: {
       const [product] = await db
         .select({ id: products.id })
         .from(products)
-        .where(and(eq(products.sku, sku), eq(products.organizationId, orgId)))
+        .where(and(eq(products.sku, sku), eq(products.organizationId, TEMP_ORG_ID)))
         .limit(1);
       productId = product?.id;
     }
@@ -391,7 +387,7 @@ export async function executeCalculateSafetyStock(input: {
     const [product] = await db
       .select()
       .from(products)
-      .where(and(eq(products.id, productId), eq(products.organizationId, orgId)))
+      .where(and(eq(products.id, productId), eq(products.organizationId, TEMP_ORG_ID)))
       .limit(1);
 
     if (!product) {
@@ -411,7 +407,7 @@ export async function executeCalculateSafetyStock(input: {
       .from(salesRecords)
       .where(
         and(
-          eq(salesRecords.organizationId, orgId),
+          eq(salesRecords.organizationId, TEMP_ORG_ID),
           eq(salesRecords.productId, productId),
           gte(salesRecords.date, startDate.toISOString().split("T")[0]),
           lte(salesRecords.date, endDate.toISOString().split("T")[0])
@@ -428,13 +424,15 @@ export async function executeCalculateSafetyStock(input: {
         ? dailySales.reduce((sum, v) => sum + v, 0) / periodDays
         : 0;
 
-    const demandStdDev =
-      dailySales.length > 1
-        ? Math.sqrt(
-            dailySales.reduce((sum, v) => sum + Math.pow(v - avgDailySales, 2), 0) /
-              dailySales.length
-          )
-        : avgDailySales * 0.3; // 데이터 부족 시 평균의 30%
+    const demandStdDev = (() => {
+      if (dailySales.length > 1) {
+        // 데이터 충분: MAD 기반 표준편차 추정 (σ ≈ 1.25 × MAD)
+        const mad = dailySales.reduce((sum, v) => sum + Math.abs(v - avgDailySales), 0) / dailySales.length;
+        return 1.25 * mad;
+      }
+      // 데이터 부족: MAD 추정 불가 → 평균의 30% 폴백
+      return avgDailySales * 0.3;
+    })();
 
     const leadTimeDays = product.leadTime || 7;
 
