@@ -1,11 +1,18 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   Package,
   ShieldCheck,
   AlertTriangle,
   BarChart3,
   Activity,
+  Info,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -169,6 +176,23 @@ export function ABCXYZSummary({
             <div className="flex items-center gap-2">
               <Activity className="h-4 w-4 text-slate-600 dark:text-slate-300" />
               <CardTitle className="text-sm font-medium">XYZ 분류 (수요 안정성)</CardTitle>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3.5 w-3.5 text-slate-400 cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="max-w-[260px] text-xs leading-relaxed">
+                    <p className="font-semibold mb-1">CV (변동계수, Coefficient of Variation)</p>
+                    <p className="mb-2">CV = 표준편차 ÷ 평균</p>
+                    <p>수요가 평균 대비 얼마나 불규칙한지를 나타냅니다.</p>
+                    <ul className="mt-2 space-y-1">
+                      <li>· CV &lt; 0.5 → X등급 (안정적)</li>
+                      <li>· 0.5 ≤ CV &lt; 1.0 → Y등급 (보통)</li>
+                      <li>· CV ≥ 1.0 → Z등급 (불규칙)</li>
+                    </ul>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
