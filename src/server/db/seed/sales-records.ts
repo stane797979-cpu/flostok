@@ -54,7 +54,7 @@ export async function seedSalesRecords(
   productList: Product[]
 ): Promise<void> {
   const today = new Date();
-  const DAYS_BACK = 90; // 최근 90일
+  const DAYS_BACK = 180; // 최근 180일 (FMR 분석 6개월 기준)
 
   let totalRecords = 0;
 

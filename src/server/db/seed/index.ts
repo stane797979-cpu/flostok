@@ -9,6 +9,7 @@
  */
 
 import { db } from "../index";
+import { sql } from "drizzle-orm";
 import {
   organizations,
   users,
@@ -69,6 +70,17 @@ async function seed() {
     // 2. 조직 생성
     const org = await seedOrganization();
     console.log(`\n📁 조직 생성: ${org.name} (${org.id})\n`);
+
+    // 2.5. 기본 창고 생성 (warehouse_id NOT NULL 제약 대응)
+    const warehouseRows = await db.execute(sql`
+      INSERT INTO warehouses (organization_id, name, code, is_active)
+      VALUES (${org.id}, '본사 창고', 'WH-MAIN', true)
+      RETURNING id
+    `);
+    const warehouseId = (warehouseRows[0] as { id: string })?.id;
+    if (!warehouseId) throw new Error("창고 생성 실패");
+    console.log(`🏭 창고 생성: ${warehouseId}\n`);
+    process.env._SEED_WAREHOUSE_ID = warehouseId;
 
     // 3. 공급자 생성
     const supplierList = await seedSuppliers(org.id);

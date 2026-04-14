@@ -5,7 +5,8 @@
  */
 
 import { db } from "../index";
-import { inventory, type Product } from "../schema";
+import { sql } from "drizzle-orm";
+import { type Product } from "../schema";
 import { classifyInventoryStatus } from "@/server/services/scm/inventory-status";
 
 interface InventoryScenario {
@@ -55,23 +56,18 @@ export async function seedInventory(organizationId: string, productList: Product
     // 재고 금액 계산
     const inventoryValue = currentStock * (product.costPrice || 0);
 
-    await db.insert(inventory).values({
-      organizationId,
-      productId: product.id,
-      currentStock,
-      availableStock: currentStock, // 예약재고 없음
-      reservedStock: 0,
-      incomingStock: 0,
-      status: statusResult.key as
-        | "out_of_stock"
-        | "critical"
-        | "shortage"
-        | "caution"
-        | "optimal"
-        | "excess"
-        | "overstock",
-      inventoryValue,
-    });
+    const warehouseId = process.env._SEED_WAREHOUSE_ID;
+    if (!warehouseId) throw new Error("_SEED_WAREHOUSE_ID 환경변수 없음");
+
+    // Drizzle 스키마에 warehouseId 없으므로 raw SQL로 삽입
+    await db.execute(sql`
+      INSERT INTO inventory
+        (organization_id, product_id, warehouse_id, current_stock, available_stock,
+         reserved_stock, incoming_stock, status, inventory_value)
+      VALUES
+        (${organizationId}, ${product.id}, ${warehouseId}, ${currentStock}, ${currentStock},
+         0, 0, ${statusResult.key}, ${inventoryValue})
+    `);
 
     const statusEmoji = getStatusEmoji(statusResult.key);
     console.log(

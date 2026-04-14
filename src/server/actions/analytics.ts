@@ -11,7 +11,7 @@ import { unstable_cache } from 'next/cache'
 import { requireAuth } from './auth-helpers'
 import { db } from '@/server/db'
 import { products, salesRecords, inventory, demandForecasts } from '@/server/db/schema'
-import { eq, and, gte, sql } from 'drizzle-orm'
+import { eq, and, gte, sql, desc } from 'drizzle-orm'
 import {
   performABCAnalysis,
   performXYZAnalysis,
@@ -558,5 +558,55 @@ export async function getDemandForecast(options?: {
   } catch (error) {
     console.error('수요예측 조회 오류:', error)
     return { products: [], forecast: null }
+  }
+}
+
+/**
+ * 판매 추이 조회
+ * - 최근 N일 일별 판매액 + 판매 수량 반환
+ */
+export async function getSalesTrend(days: number = 30): Promise<{
+  data: Array<{ date: string; sales: number; quantity: number }>;
+  hasData: boolean;
+}> {
+  try {
+    const user = await requireAuth()
+    const orgId = user.organizationId
+
+    const startDate = new Date()
+    startDate.setDate(startDate.getDate() - days)
+    const startDateStr = startDate.toISOString().split('T')[0]
+
+    const rows = await db
+      .select({
+        date: salesRecords.date,
+        sales: sql<number>`COALESCE(SUM(${salesRecords.totalAmount}), 0)`,
+        quantity: sql<number>`COALESCE(SUM(${salesRecords.quantity}), 0)`,
+      })
+      .from(salesRecords)
+      .where(and(eq(salesRecords.organizationId, orgId), gte(salesRecords.date, startDateStr)))
+      .groupBy(salesRecords.date)
+      .orderBy(salesRecords.date)
+
+    if (rows.length === 0) {
+      return { data: [], hasData: false }
+    }
+
+    // 날짜 공백 채우기 (판매 없는 날 = 0)
+    const dataMap = new Map(rows.map((r) => [r.date, { sales: Number(r.sales), quantity: Number(r.quantity) }]))
+    const data: Array<{ date: string; sales: number; quantity: number }> = []
+
+    for (let i = days; i >= 0; i--) {
+      const d = new Date()
+      d.setDate(d.getDate() - i)
+      const dateStr = d.toISOString().split('T')[0]
+      const entry = dataMap.get(dateStr) ?? { sales: 0, quantity: 0 }
+      data.push({ date: dateStr, ...entry })
+    }
+
+    return { data, hasData: true }
+  } catch (error) {
+    console.error('판매 추이 조회 오류:', error)
+    return { data: [], hasData: false }
   }
 }
