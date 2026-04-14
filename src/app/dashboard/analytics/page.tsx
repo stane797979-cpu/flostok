@@ -110,6 +110,12 @@ export default async function AnalyticsPage() {
     yPercentage: 0,
     zCount: 0,
     zPercentage: 0,
+    fCount: 0,
+    fPercentage: 0,
+    mCount: 0,
+    mPercentage: 0,
+    rCount: 0,
+    rPercentage: 0,
     period: "최근 6개월",
   };
   let insights: ABCInsights = {

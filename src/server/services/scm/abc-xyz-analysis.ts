@@ -162,6 +162,138 @@ export function performXYZAnalysis(
   });
 }
 
+// ── FMR 분석 ─────────────────────────────────────────────
+
+export interface FMRAnalysisItem {
+  id: string;
+  name: string;
+  /** 월별 출고 건수 배열 */
+  monthlyOutboundCounts: number[];
+}
+
+export interface FMRAnalysisResult {
+  id: string;
+  name: string;
+  /** 월평균 출고 건수 */
+  avgMonthlyCount: number;
+  /** FMR 등급 */
+  grade: FMRGrade;
+}
+
+/**
+ * FMR 분석 수행
+ *
+ * 기준 (월평균 출고 건수):
+ * - F (Fast):   10회 이상 (고빈도)
+ * - M (Medium): 4~9회    (중빈도)
+ * - R (Rare):   3회 이하  (저빈도)
+ */
+export function performFMRAnalysis(
+  items: FMRAnalysisItem[],
+  thresholds: { f: number; m: number } = { f: 10, m: 4 }
+): FMRAnalysisResult[] {
+  return items.map((item) => {
+    const avg =
+      item.monthlyOutboundCounts.length > 0
+        ? item.monthlyOutboundCounts.reduce((s, v) => s + v, 0) / item.monthlyOutboundCounts.length
+        : 0;
+
+    let grade: FMRGrade;
+    if (avg >= thresholds.f) {
+      grade = "F";
+    } else if (avg >= thresholds.m) {
+      grade = "M";
+    } else {
+      grade = "R";
+    }
+
+    return {
+      id: item.id,
+      name: item.name,
+      avgMonthlyCount: Math.round(avg * 10) / 10,
+      grade,
+    };
+  });
+}
+
+// ── ABC-XYZ-FMR 3중 복합 분석 ────────────────────────────
+
+export interface ABCXYZFMRItem {
+  id: string;
+  name: string;
+  abcGrade: ABCGrade;
+  xyzGrade: XYZGrade;
+  fmrGrade: FMRGrade;
+  /** 3중 복합 등급 (예: "AXF", "BYM", "CZR") */
+  combinedGrade: string;
+  /** 관리 우선순위 */
+  priority: number;
+  /** 권장 관리 전략 */
+  strategy: string;
+}
+
+/**
+ * ABC + XYZ + FMR 3중 복합 분석
+ */
+export function combineABCXYZFMR(
+  abcResults: ABCAnalysisResult[],
+  xyzResults: XYZAnalysisResult[],
+  fmrResults: FMRAnalysisResult[]
+): ABCXYZFMRItem[] {
+  const xyzMap = new Map(xyzResults.map((r) => [r.id, r]));
+  const fmrMap = new Map(fmrResults.map((r) => [r.id, r]));
+
+  return abcResults
+    .map((abc) => {
+      const xyz = xyzMap.get(abc.id);
+      const fmr = fmrMap.get(abc.id);
+      if (!xyz || !fmr) return null;
+
+      const combinedGrade = `${abc.grade}${xyz.grade}${fmr.grade}`;
+
+      // 우선순위: ABC 가중치 5, XYZ 가중치 3, FMR 가중치 2
+      const abcScore = abc.grade === "A" ? 1 : abc.grade === "B" ? 2 : 3;
+      const xyzScore = xyz.grade === "X" ? 1 : xyz.grade === "Y" ? 2 : 3;
+      const fmrScore = fmr.grade === "F" ? 1 : fmr.grade === "M" ? 2 : 3;
+      const priority = abcScore * 5 + xyzScore * 3 + fmrScore * 2;
+
+      // 전략 결정
+      const strategy = getFMRStrategy(abc.grade, xyz.grade, fmr.grade);
+
+      return {
+        id: abc.id,
+        name: abc.name,
+        abcGrade: abc.grade,
+        xyzGrade: xyz.grade,
+        fmrGrade: fmr.grade,
+        combinedGrade,
+        priority,
+        strategy,
+      };
+    })
+    .filter((item): item is ABCXYZFMRItem => item !== null)
+    .sort((a, b) => a.priority - b.priority);
+}
+
+function getFMRStrategy(abc: ABCGrade, xyz: XYZGrade, fmr: FMRGrade): string {
+  // A등급 전략
+  if (abc === "A") {
+    if (fmr === "F") return "자동발주 + 높은 서비스레벨, JIT 공급 유지";
+    if (fmr === "M") return "정기발주, 안전재고 확보, 수요예측 정교화";
+    return "고가치 저빈도 — 수요예측 강화, 공급자 협력";
+  }
+  // B등급 전략
+  if (abc === "B") {
+    if (fmr === "F") return "정량발주, 적정 안전재고 유지";
+    if (fmr === "M") return "주기적 검토, 표준 안전재고";
+    return "발주 주기 조정, 재고 최소화";
+  }
+  // C등급 전략
+  if (fmr === "F") return "소액 다빈도 — 대량 일괄발주, 발주비용 절감";
+  if (fmr === "M") return "간헐적 검토, 최소 재고 유지";
+  return "주문생산 검토, 재고 최소화 또는 단종 검토";
+}
+
 export interface ABCXYZMatrixItem {
   id: string;
   name: string;
@@ -268,58 +400,4 @@ export function getABCXYZGrade(
   }
 
   return { abc, xyz, combined: `${abc}${xyz}` };
-}
-
-// ── FMR 분석 (이동빈도 기반) ────────────────────────────────
-
-export interface FMRAnalysisItem {
-  id: string;
-  name: string;
-  /** 월별 출고 횟수 배열 (건수, 금액 아님) */
-  monthlyOutboundCounts: number[];
-}
-
-export interface FMRAnalysisResult {
-  id: string;
-  name: string;
-  /** 월평균 출고 횟수 */
-  avgMonthlyOutboundCount: number;
-  /** FMR 등급 */
-  grade: FMRGrade;
-}
-
-/**
- * FMR 분석 수행
- *
- * 기준 (월평균 출고 횟수):
- * - F (Fast Moving): 월 10회 이상 출고
- * - M (Medium Moving): 월 4~9회 출고
- * - R (Rare Moving): 월 3회 이하 출고
- *
- * @param items 분석 대상 품목 목록 (월별 출고 횟수)
- * @param thresholds 등급 경계값 { f: 10, m: 4 }
- */
-export function performFMRAnalysis(
-  items: FMRAnalysisItem[],
-  thresholds: { f: number; m: number } = { f: 10, m: 4 }
-): FMRAnalysisResult[] {
-  return items.map((item) => {
-    const avg = calculateMean(item.monthlyOutboundCounts);
-
-    let grade: FMRGrade;
-    if (avg >= thresholds.f) {
-      grade = "F";
-    } else if (avg >= thresholds.m) {
-      grade = "M";
-    } else {
-      grade = "R";
-    }
-
-    return {
-      id: item.id,
-      name: item.name,
-      avgMonthlyOutboundCount: Math.round(avg * 10) / 10,
-      grade,
-    };
-  });
 }

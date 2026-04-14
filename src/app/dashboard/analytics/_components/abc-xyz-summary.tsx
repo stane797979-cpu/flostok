@@ -30,6 +30,12 @@ interface ABCXYZSummaryProps {
   yPercentage: number;
   zCount: number;
   zPercentage: number;
+  fCount?: number;
+  fPercentage?: number;
+  mCount?: number;
+  mPercentage?: number;
+  rCount?: number;
+  rPercentage?: number;
   period: string;
   insights: {
     totalRevenue: number;
@@ -67,6 +73,12 @@ export function ABCXYZSummary({
   yPercentage,
   zCount,
   zPercentage,
+  fCount = 0,
+  fPercentage = 0,
+  mCount = 0,
+  mPercentage = 0,
+  rCount = 0,
+  rPercentage = 0,
   period,
   insights,
 }: ABCXYZSummaryProps) {
@@ -165,6 +177,58 @@ export function ABCXYZSummary({
               count={cCount}
               total={totalCount}
               percentage={cPercentage}
+              color="bg-slate-400"
+            />
+          </CardContent>
+        </Card>
+
+        {/* FMR 분포 */}
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-slate-600 dark:text-slate-300" />
+              <CardTitle className="text-sm font-medium">FMR 분류 (출고 빈도)</CardTitle>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3.5 w-3.5 text-slate-400 cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="max-w-[260px] text-xs leading-relaxed">
+                    <p className="font-semibold mb-1">FMR 분석</p>
+                    <p className="mb-2">월평균 출고 건수 기준. ABC(금액)와 달리 출고 횟수를 측정합니다.</p>
+                    <ul className="space-y-1">
+                      <li>· F (Fast): 월 10회 이상 — 자동발주 적합</li>
+                      <li>· M (Medium): 월 4~9회 — 정기 검토</li>
+                      <li>· R (Rare): 월 3회 이하 — 재고 최소화</li>
+                    </ul>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <GradeBar
+              label="F등급"
+              sublabel="월 10회 이상"
+              count={fCount}
+              total={totalCount}
+              percentage={fPercentage}
+              color="bg-blue-500"
+            />
+            <GradeBar
+              label="M등급"
+              sublabel="월 4~9회"
+              count={mCount}
+              total={totalCount}
+              percentage={mPercentage}
+              color="bg-indigo-400"
+            />
+            <GradeBar
+              label="R등급"
+              sublabel="월 3회 이하"
+              count={rCount}
+              total={totalCount}
+              percentage={rPercentage}
               color="bg-slate-400"
             />
           </CardContent>
