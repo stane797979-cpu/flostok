@@ -1,6 +1,12 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Target, TrendingUp, AlertTriangle } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Target, TrendingUp, AlertTriangle, Info } from "lucide-react";
 
 interface PolicyItem {
   grade: string;
@@ -131,18 +137,65 @@ export function ABCXYZPolicyGuide() {
         <div className="mt-6 rounded-lg border border-blue-200 bg-blue-50 p-4">
           <h4 className="mb-2 text-sm font-medium text-blue-900">분류 기준 설명</h4>
           <div className="space-y-2 text-xs text-blue-800">
-            <div>
-              <span className="font-medium">ABC 분석 (매출 기여도):</span> 매출액 기준 누적 비율 — A: 상위 80%, B:
-              80-95%, C: 95-100%
+            <div className="flex items-center gap-1">
+              <span className="font-medium">ABC 분석 (매출 기여도):</span>
+              <span>매출액 기준 누적 비율 — A: 상위 80%, B: 80-95%, C: 95-100%</span>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3 w-3 text-blue-500 cursor-help shrink-0" />
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="max-w-[240px] text-xs leading-relaxed">
+                    <p className="font-semibold mb-1">ABC 분석 (파레토 법칙)</p>
+                    <p className="mb-2">전체 매출의 대부분을 소수 제품이 차지한다는 원리.</p>
+                    <ul className="space-y-1">
+                      <li>· A등급: 누적 매출 상위 80% — 핵심 제품</li>
+                      <li>· B등급: 누적 매출 80~95% — 중요 제품</li>
+                      <li>· C등급: 누적 매출 95~100% — 일반 제품</li>
+                    </ul>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
-            <div>
-              <span className="font-medium">XYZ 분석 (수요 안정성):</span> 수요 변동계수(CV) 기준 — X: CV&lt;0.5 (안정), Y:
-              0.5≤CV&lt;1.0 (변동), Z: CV≥1.0 (불안정)
+            <div className="flex items-center gap-1">
+              <span className="font-medium">XYZ 분석 (수요 안정성):</span>
+              <span>수요 변동계수(CV) 기준 — X: CV&lt;0.5 (안정), Y: 0.5≤CV&lt;1.0 (변동), Z: CV≥1.0 (불안정)</span>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3 w-3 text-blue-500 cursor-help shrink-0" />
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="max-w-[240px] text-xs leading-relaxed">
+                    <p className="font-semibold mb-1">CV (변동계수)</p>
+                    <p className="mb-2">CV = 표준편차 ÷ 평균. 수요가 평균 대비 얼마나 불규칙한지 측정.</p>
+                    <ul className="space-y-1">
+                      <li>· X: CV &lt; 0.5 — 안정적, 수요예측 용이</li>
+                      <li>· Y: 0.5 ≤ CV &lt; 1.0 — 보통 변동</li>
+                      <li>· Z: CV ≥ 1.0 — 불규칙, 안전재고 확보 필요</li>
+                    </ul>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
-            <div>
-              <span className="font-medium">FMR 분석 (출고 빈도):</span> 월평균 출고 건수 기준 — F: 10회 이상 (고빈도), M:
-              4~9회 (중빈도), R: 3회 이하 (저빈도). ABC가 &quot;얼마나 많이 팔리는가&quot;(금액)라면, FMR은
-              &quot;얼마나 자주 출고되는가&quot;(횟수)를 측정합니다.
+            <div className="flex items-center gap-1">
+              <span className="font-medium">FMR 분석 (출고 빈도):</span>
+              <span>월평균 출고 건수 기준 — F: 10회 이상 (고빈도), M: 4~9회 (중빈도), R: 3회 이하 (저빈도)</span>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3 w-3 text-blue-500 cursor-help shrink-0" />
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="max-w-[240px] text-xs leading-relaxed">
+                    <p className="font-semibold mb-1">FMR 분석</p>
+                    <p className="mb-2">ABC가 &quot;얼마나 많이 팔리는가&quot;(금액)라면, FMR은 &quot;얼마나 자주 출고되는가&quot;(횟수)를 측정.</p>
+                    <ul className="space-y-1">
+                      <li>· F (Fast): 월 10회 이상 — 자동발주 적합</li>
+                      <li>· M (Medium): 월 4~9회 — 정기 검토</li>
+                      <li>· R (Rare): 월 3회 이하 — 재고 최소화</li>
+                    </ul>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
           </div>
         </div>
