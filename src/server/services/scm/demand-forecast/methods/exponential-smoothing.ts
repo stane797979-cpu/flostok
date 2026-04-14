@@ -62,6 +62,25 @@ export function simpleExponentialSmoothing(
 }
 
 /**
+ * CV(변동계수) 기반 α 기본값 결정
+ * CV = σ/평균 (MAD 기반 σ = 1.25 × MAD)
+ *
+ * CV < 0.2  → 안정적 수요 → α 높게 (0.6) : 최근값 빠르게 반영
+ * CV 0.2~0.5 → 보통 수요  → α 중간 (0.4)
+ * CV > 0.5  → 불규칙 수요 → α 낮게 (0.2) : 노이즈 흡수, 안정 유지
+ */
+export function getAlphaByCV(history: number[]): number {
+  if (history.length < 2) return 0.3;
+  const mean = history.reduce((s, v) => s + v, 0) / history.length;
+  if (mean === 0) return 0.3;
+  const mad = history.reduce((s, v) => s + Math.abs(v - mean), 0) / history.length;
+  const cv = (1.25 * mad) / mean;
+  if (cv < 0.2) return 0.6;
+  if (cv <= 0.5) return 0.4;
+  return 0.2;
+}
+
+/**
  * Alpha 자동 최적화
  * Grid Search로 MAPE 최소화하는 α 값 탐색
  *
@@ -71,8 +90,8 @@ export function simpleExponentialSmoothing(
  */
 export function optimizeAlpha(history: number[], testSize: number = 3): number {
   if (history.length < testSize + 3) {
-    // 데이터가 부족하면 기본값 반환
-    return 0.3;
+    // 데이터 부족 시 CV 기반 동적 기본값
+    return getAlphaByCV(history);
   }
 
   const alphaRange = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9];
@@ -111,16 +130,18 @@ export function optimizeAlpha(history: number[], testSize: number = 3): number {
  * @param xyzGrade XYZ 등급
  * @returns 권장 alpha 값
  */
-export function getDefaultAlpha(xyzGrade?: "X" | "Y" | "Z"): number {
+export function getDefaultAlpha(xyzGrade?: "X" | "Y" | "Z", history?: number[]): number {
+  // XYZ 등급 있으면 등급 우선 (CV 기반과 동일 방향)
   switch (xyzGrade) {
-    case "X": // 안정 수요: 낮은 α (과거 반영 많음)
-      return 0.2;
-    case "Y": // 변동 수요: 중간 α
-      return 0.4;
-    case "Z": // 불규칙 수요: 높은 α (최근 반영 많음)
+    case "X": // 안정 수요 (CV<0.2) → α 높게
       return 0.6;
+    case "Y": // 보통 수요 (CV 0.2~0.5) → α 중간
+      return 0.4;
+    case "Z": // 불규칙 수요 (CV>0.5) → α 낮게
+      return 0.2;
     default:
-      return 0.3; // 기본값
+      // 등급 없으면 실제 데이터로 CV 계산
+      return history ? getAlphaByCV(history) : 0.4;
   }
 }
 
