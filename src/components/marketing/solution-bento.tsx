@@ -21,7 +21,7 @@ export function SolutionBento() {
             AI가 관리하는 스마트한 재고 시스템
           </p>
           <p className="mt-6 text-lg leading-8 text-gray-600">
-            22년 현장 경험이 녹아든 SCM 로직 + AI 기술의 결합
+            20년 현장 경험이 녹아든 SCM 로직 + AI 기술의 결합
           </p>
         </div>
 

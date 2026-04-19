@@ -12,7 +12,7 @@ import {
 
 export const metadata: Metadata = {
   title: `대표 소개 | ${COMPANY.name}`,
-  description: "Stock & Logis 대표 - 22년 SCM 현장 경력의 전문가",
+  description: "Stock & Logis 대표 - 20년 SCM 현장 경력의 전문가",
 };
 
 export default function CeoPage() {
@@ -121,7 +121,7 @@ export default function CeoPage() {
       <section className="bg-primary-600 px-6 py-16 lg:px-8">
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="text-2xl font-bold text-white">
-            22년 현장 경험으로 귀사의 공급망을 진단해 드립니다
+            20년 현장 경험으로 귀사의 공급망을 진단해 드립니다
           </h2>
           <div className="mt-8">
             <Button size="lg" variant="secondary" asChild>

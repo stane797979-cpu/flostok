@@ -21,7 +21,7 @@ export default function CurriculumPage() {
             SCM 실무 교육 커리큘럼
           </h1>
           <p className="mt-6 text-lg text-gray-300">
-            22년간 제조·유통 현장에서 검증된 실전 노하우를
+            20년간 제조·유통 현장에서 검증된 실전 노하우를
             <br />
             실무자가 바로 적용할 수 있는 4단계 과정으로 전달합니다.
           </p>

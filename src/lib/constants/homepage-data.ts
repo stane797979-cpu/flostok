@@ -29,7 +29,7 @@ export const COMPANY = {
   slogan: "Less Stock, More Profit",
   sloganKo: "재고는 줄이고, 이익은 높이는 SCM의 정석",
   description:
-    "22년 현장 경력의 SCM 전문가가 직접 설계한 컨설팅, 교육, 그리고 AI 솔루션",
+    "20년 현장 경력의 SCM 전문가가 직접 설계한 컨설팅, 교육, 그리고 AI 솔루션",
   ceoName: "이동욱",
   solutionName: "FloStok",
   email: "logisglobalceo@gmail.com",
@@ -54,7 +54,7 @@ export const MARKETING_NAV: MarketingNavItem[] = [
 export const HERO = {
   headline: "재고는 줄이고 이익은 높이는 SCM의 정석",
   subCopy:
-    "22년 현장 경력의 SCM 전문가가 직접 설계한 컨설팅, 교육, 그리고 AI 솔루션.\n감이 아닌 데이터로, 경험이 아닌 시스템으로 공급망을 바꿉니다.",
+    "20년 현장 경력의 SCM 전문가가 직접 설계한 컨설팅, 교육, 그리고 AI 솔루션.\n감이 아닌 데이터로, 경험이 아닌 시스템으로 공급망을 바꿉니다.",
   ctaPrimary: "무료 재고 진단 신청",
   ctaSecondary: "솔루션 더 알아보기",
 } as const;
@@ -79,7 +79,7 @@ export const SERVICES: ServiceItem[] = [
     title: "교육 / 강의",
     icon: GraduationCap,
     description:
-      "SCM은 이론만으로 완성되지 않습니다. 22년간 제조·유통 현장에서 검증된 실전 노하우를 실무자가 바로 적용할 수 있는 커리큘럼으로 전달합니다.",
+      "SCM은 이론만으로 완성되지 않습니다. 20년간 제조·유통 현장에서 검증된 실전 노하우를 실무자가 바로 적용할 수 있는 커리큘럼으로 전달합니다.",
     href: "/curriculum",
   },
   {
@@ -98,9 +98,9 @@ export const CEO_HIGHLIGHT = {
   quote:
     "현장에서 통하지 않는 이론은 이론이 아닙니다.",
   summary:
-    "제조·유통 현장에서 22년, 다양한 산업의 재고를 직접 관리하며 체득한 SCM 실전 전문가.",
+    "제조·유통 현장에서 20년, 다양한 산업의 재고를 직접 관리하며 체득한 SCM 실전 전문가.",
   stats: [
-    { label: "현장 경력", value: "22년+" },
+    { label: "현장 경력", value: "20년+" },
     { label: "근무 기업", value: "5개사" },
     { label: "산업 경험", value: "8개 산업" },
     { label: "글로벌", value: "50개국" },
@@ -311,7 +311,7 @@ export const DIFFERENTIATORS: Differentiator[] = [
   {
     title: "현장 실무 + 기술의 결합",
     description:
-      "대부분의 SCM 컨설팅은 이론 중심, 대부분의 SaaS는 기능 중심입니다. Stock & Logis는 22년 현장 경력의 전문가가 직접 로직을 설계하고 솔루션에 녹여냈습니다.",
+      "대부분의 SCM 컨설팅은 이론 중심, 대부분의 SaaS는 기능 중심입니다. Stock & Logis는 20년 현장 경력의 전문가가 직접 로직을 설계하고 솔루션에 녹여냈습니다.",
     icon: Users,
   },
   {
@@ -376,7 +376,7 @@ export const ABOUT = {
     "규모와 관계없이, 모든 기업이 감이 아닌 시스템으로 재고를 최적화하는 SCM 생태계를 만듭니다.",
   mission: "현장의 언어로 SCM을 설계하고, 기술로 실행을 완성한다",
   missionDetail:
-    "22년 현장 경험을 컨설팅, 교육, AI 솔루션에 담아 기업의 재고 비용을 줄이고 수익성을 높입니다.",
+    "20년 현장 경험을 컨설팅, 교육, AI 솔루션에 담아 기업의 재고 비용을 줄이고 수익성을 높입니다.",
   values: [
     {
       title: "현장 중심",
@@ -426,7 +426,7 @@ export const HISTORY: HistoryItem[] = [
     events: [
       "Stock & Logis 설립",
       "FloStok 솔루션 개발 착수",
-      "22년 SCM 노하우 솔루션화 시작",
+      "20년 SCM 노하우 솔루션화 시작",
     ],
   },
 ];
@@ -435,7 +435,7 @@ export const HISTORY: HistoryItem[] = [
 export const CTA = {
   headline: "재고 문제, 더 이상 혼자 고민하지 마세요.",
   subCopy:
-    "무료 재고 진단으로 귀사의 개선 가능성을 확인해 보세요.\n22년 경력의 SCM 전문가가 직접 답변드립니다.",
+    "무료 재고 진단으로 귀사의 개선 가능성을 확인해 보세요.\n20년 경력의 SCM 전문가가 직접 답변드립니다.",
   ctaPrimary: "무료 재고 진단 신청",
   ctaSecondary: "솔루션 더 알아보기",
 } as const;

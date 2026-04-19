@@ -88,7 +88,7 @@ export default function ContactPage() {
           <p className="mt-6 text-lg text-gray-300">
             귀사의 재고 현황을 진단하고 개선 가능성을 알려드립니다.
             <br />
-            22년 경력의 SCM 전문가가 직접 답변드립니다.
+            20년 경력의 SCM 전문가가 직접 답변드립니다.
           </p>
         </div>
       </section>

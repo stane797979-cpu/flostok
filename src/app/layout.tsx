@@ -18,7 +18,7 @@ export const metadata: Metadata = {
     template: "%s | Stock & Logis",
   },
   description:
-    "22년 현장 경력의 SCM 전문가가 직접 설계한 컨설팅, 교육, 그리고 AI 솔루션. 재고는 줄이고 이익은 높이는 SCM의 정석.",
+    "20년 현장 경력의 SCM 전문가가 직접 설계한 컨설팅, 교육, 그리고 AI 솔루션. 재고는 줄이고 이익은 높이는 SCM의 정석.",
   keywords: [
     "SCM 컨설팅",
     "재고관리",
@@ -41,7 +41,7 @@ export const metadata: Metadata = {
     siteName: "Stock & Logis",
     title: "Stock & Logis | SCM 컨설팅 · 교육 · AI 재고관리 솔루션",
     description:
-      "22년 현장 경력의 SCM 전문가가 직접 설계한 컨설팅, 교육, 그리고 AI 솔루션. 재고는 줄이고 이익은 높이는 SCM의 정석.",
+      "20년 현장 경력의 SCM 전문가가 직접 설계한 컨설팅, 교육, 그리고 AI 솔루션. 재고는 줄이고 이익은 높이는 SCM의 정석.",
     images: [{ url: "/logo.jpg", width: 480, height: 120, alt: "Stock & Logis" }],
   },
   robots: {

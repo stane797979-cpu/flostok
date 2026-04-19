@@ -112,7 +112,7 @@ export default function SolutionPage() {
             FloStok
           </h1>
           <p className="mt-6 text-lg text-gray-300">
-            22년 현장 경험이 녹아든 SCM 로직과 AI 기술의 결합.
+            20년 현장 경험이 녹아든 SCM 로직과 AI 기술의 결합.
             <br />
             수요예측부터 KPI 개선 제안까지, End-to-End 재고관리 솔루션.
           </p>
@@ -397,7 +397,7 @@ export default function SolutionPage() {
               솔루션 + 컨설팅, 함께하면 더 강력합니다
             </h2>
             <p className="mt-4 text-gray-600">
-              FloStok 솔루션에 22년 경력 SCM 전문가의 컨설팅을 결합하여
+              FloStok 솔루션에 20년 경력 SCM 전문가의 컨설팅을 결합하여
               <br />
               귀사의 공급망을 근본적으로 개선합니다
             </p>
