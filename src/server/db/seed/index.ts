@@ -10,6 +10,7 @@
 
 import { db } from "../index";
 import { sql } from "drizzle-orm";
+import { eq, not } from "drizzle-orm";
 import {
   organizations,
   users,
@@ -27,16 +28,15 @@ import { seedSalesRecords } from "./sales-records";
 
 const SYSTEM_ORG_ID = "00000000-0000-0000-0000-000000000000";
 
-async function clearDatabase() {
-  console.log("🗑️  기존 데이터 삭제 중...");
+async function clearDatabase(orgId: string) {
+  console.log(`🗑️  기존 데이터 삭제 중... (조직: ${orgId})`);
 
-  // 순서 중요: 외래키 참조 순서 역순으로 삭제
-  await db.delete(inventoryHistory);
-  await db.delete(salesRecords);
-  await db.delete(inventory);
-  await db.delete(products);
-  await db.delete(suppliers);
-  await db.delete(organizations);
+  // 해당 조직의 데이터만 삭제 (다른 조직 데이터 보호)
+  await db.delete(inventoryHistory).where(eq(inventoryHistory.organizationId, orgId));
+  await db.delete(salesRecords).where(eq(salesRecords.organizationId, orgId));
+  await db.delete(inventory).where(eq(inventory.organizationId, orgId));
+  await db.delete(products).where(eq(products.organizationId, orgId));
+  await db.delete(suppliers).where(eq(suppliers.organizationId, orgId));
 
   console.log("✅ 기존 데이터 삭제 완료");
 }
@@ -45,9 +45,6 @@ async function seed() {
   console.log("🌱 시드 데이터 생성 시작...\n");
 
   try {
-    // 1. 기존 데이터 삭제
-    await clearDatabase();
-
     // 1.5. System 조직 + 슈퍼관리자 생성
     await db.insert(organizations).values({
       id: SYSTEM_ORG_ID,
@@ -67,11 +64,14 @@ async function seed() {
 
     console.log("🛡️  System 조직 + 슈퍼관리자 생성 완료\n");
 
-    // 2. 조직 생성
+    // 2. 조직 확인/생성
     const org = await seedOrganization();
-    console.log(`\n📁 조직 생성: ${org.name} (${org.id})\n`);
+    console.log(`\n📁 조직: ${org.name} (${org.id})\n`);
 
-    // 2.5. 기본 창고 생성 (warehouse_id NOT NULL 제약 대응)
+    // 3. 해당 조직의 기존 데이터만 삭제
+    await clearDatabase(org.id);
+
+    // 4. 기본 창고 생성 (warehouse_id NOT NULL 제약 대응)
     const warehouseRows = await db.execute(sql`
       INSERT INTO warehouses (organization_id, name, code, is_active)
       VALUES (${org.id}, '본사 창고', 'WH-MAIN', true)
@@ -82,19 +82,19 @@ async function seed() {
     console.log(`🏭 창고 생성: ${warehouseId}\n`);
     process.env._SEED_WAREHOUSE_ID = warehouseId;
 
-    // 3. 공급자 생성
+    // 5. 공급자 생성
     const supplierList = await seedSuppliers(org.id);
     console.log(`👥 공급자 ${supplierList.length}개 생성\n`);
 
-    // 4. 제품 생성
+    // 6. 제품 생성
     const productList = await seedProducts(org.id, supplierList);
     console.log(`📦 제품 ${productList.length}개 생성\n`);
 
-    // 5. 재고 생성
+    // 7. 재고 생성
     await seedInventory(org.id, productList);
     console.log(`📊 재고 데이터 생성 완료\n`);
 
-    // 6. 판매 기록 생성 (최근 90일)
+    // 8. 판매 기록 생성 (최근 90일)
     await seedSalesRecords(org.id, productList);
     console.log(`💰 판매 기록 생성 완료\n`);
 
