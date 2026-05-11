@@ -1,22 +1,19 @@
 /**
- * ABC-XYZ-FMR 등급 갱신 서비스
+ * ABC-XYZ 등급 갱신 서비스
  *
- * - 판매 이력 2개월 미만: 신제품(NEW) 태그, ABC-XYZ 등급 미부여
- * - 판매 이력 2개월 이상: ABC-XYZ 분석 수행, 등급 자동 부여
- * - FMR: 출고 이력(inventory_history) 기반, 신제품 여부 무관하게 전 제품 산출
+ * - 판매 이력 3개월 미만: 신제품(NEW) 태그, 등급 미부여
+ * - 판매 이력 3개월 이상: ABC-XYZ 분석 수행, 등급 자동 부여
  * - products.metadata.gradeInfo에 메타데이터 저장 (스키마 변경 없음)
  */
 
 import { db } from "@/server/db";
-import { products, salesRecords, gradeHistory, inventoryHistory } from "@/server/db/schema";
+import { products, salesRecords, gradeHistory } from "@/server/db/schema";
 import { eq, and, sql, min, inArray } from "drizzle-orm";
 import {
   performABCAnalysis,
   performXYZAnalysis,
-  performFMRAnalysis,
   type ABCAnalysisItem,
   type XYZAnalysisItem,
-  type FMRAnalysisItem,
 } from "./abc-xyz-analysis";
 
 export interface GradeInfo {
@@ -28,13 +25,12 @@ export interface GradeInfo {
 export interface GradeRefreshResult {
   totalProducts: number;
   updatedCount: number;
-  unchangedCount: number;
   newProductCount: number;
   errors: string[];
 }
 
 /** 신제품 판단 기준: 판매 이력 개월 수 */
-const NEW_PRODUCT_THRESHOLD_MONTHS = 2;
+const NEW_PRODUCT_THRESHOLD_MONTHS = 3;
 
 /**
  * 조직의 전체 제품 등급을 갱신합니다.
@@ -45,21 +41,17 @@ export async function refreshGradesForOrganization(
   const result: GradeRefreshResult = {
     totalProducts: 0,
     updatedCount: 0,
-    unchangedCount: 0,
     newProductCount: 0,
     errors: [],
   };
 
   try {
-    // 1. 조직의 활성 제품 목록 조회 (기존 등급 포함 — 변경 비교용)
+    // 1. 조직의 활성 제품 목록 조회
     const productList = await db
       .select({
         id: products.id,
         name: products.name,
         metadata: products.metadata,
-        abcGrade: products.abcGrade,
-        xyzGrade: products.xyzGrade,
-        fmrGrade: products.fmrGrade,
       })
       .from(products)
       .where(
@@ -75,41 +67,19 @@ export async function refreshGradesForOrganization(
       return result;
     }
 
-    // 2. 각 제품별 최초 판매일 조회 (salesRecords + inventoryHistory 출고 병합)
-    const [salesFirstDates, outboundFirstDates] = await Promise.all([
-      db
-        .select({
-          productId: salesRecords.productId,
-          firstSaleDate: min(salesRecords.date),
-        })
-        .from(salesRecords)
-        .where(eq(salesRecords.organizationId, organizationId))
-        .groupBy(salesRecords.productId),
-      db
-        .select({
-          productId: inventoryHistory.productId,
-          firstSaleDate: min(inventoryHistory.date),
-        })
-        .from(inventoryHistory)
-        .where(
-          and(
-            eq(inventoryHistory.organizationId, organizationId),
-            sql`${inventoryHistory.changeAmount} < 0`
-          )
-        )
-        .groupBy(inventoryHistory.productId),
-    ]);
+    // 2. 각 제품별 최초 판매일 조회 (단일 쿼리로 처리)
+    const firstSaleDates = await db
+      .select({
+        productId: salesRecords.productId,
+        firstSaleDate: min(salesRecords.date),
+      })
+      .from(salesRecords)
+      .where(eq(salesRecords.organizationId, organizationId))
+      .groupBy(salesRecords.productId);
 
-    // salesRecords 우선, 없으면 inventoryHistory 출고 데이터로 보충
-    const firstSaleMap = new Map<string, string | null>();
-    for (const r of salesFirstDates) {
-      firstSaleMap.set(r.productId, r.firstSaleDate);
-    }
-    for (const r of outboundFirstDates) {
-      if (!firstSaleMap.has(r.productId)) {
-        firstSaleMap.set(r.productId, r.firstSaleDate);
-      }
-    }
+    const firstSaleMap = new Map(
+      firstSaleDates.map((r) => [r.productId, r.firstSaleDate])
+    );
 
     // 3. 제품별 판매 이력 기간 계산 → 신제품/분석 대상 분류
     const now = new Date();
@@ -139,77 +109,21 @@ export async function refreshGradesForOrganization(
 
     result.newProductCount = newProducts.length;
 
-    // 3.5. FMR 분석 — 전 제품 대상 (출고 이력 기반, 신제품 여부 무관)
-    const allProductIds = productList.map((p) => p.id);
-    let fmrMap = new Map<string, string | null>(); // productId → FMR grade
-
-    try {
-      const sixMonthsAgo = new Date();
-      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-      const fmrStartDate = sixMonthsAgo.toISOString().split("T")[0];
-
-      // 출고 건수 조회 (OUTBOUND_* changeType, 월별 건수)
-      const outboundData = await db
-        .select({
-          productId: inventoryHistory.productId,
-          date: inventoryHistory.date,
-        })
-        .from(inventoryHistory)
-        .where(
-          and(
-            eq(inventoryHistory.organizationId, organizationId),
-            sql`${inventoryHistory.changeType} LIKE 'OUTBOUND_%'`,
-            sql`${inventoryHistory.date} >= ${fmrStartDate}`
-          )
-        );
-
-      // 제품별 월별 출고 횟수 집계
-      const outboundByProduct = new Map<string, Map<string, number>>();
-      for (const row of outboundData) {
-        if (!outboundByProduct.has(row.productId)) {
-          outboundByProduct.set(row.productId, new Map());
-        }
-        const monthKey = row.date.substring(0, 7);
-        const monthly = outboundByProduct.get(row.productId)!;
-        monthly.set(monthKey, (monthly.get(monthKey) || 0) + 1);
-      }
-
-      // 최근 6개월의 월 키 생성
-      const fmrMonthKeys: string[] = [];
-      for (let i = 5; i >= 0; i--) {
-        const d = new Date();
-        d.setMonth(d.getMonth() - i);
-        fmrMonthKeys.push(
-          `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
-        );
-      }
-
-      const fmrItems: FMRAnalysisItem[] = allProductIds.map((id) => {
-        const productInfo = productList.find((p) => p.id === id);
-        const monthlyData = outboundByProduct.get(id);
-        const monthlyOutboundCounts = fmrMonthKeys.map(
-          (key) => monthlyData?.get(key) || 0
-        );
-        return {
-          id,
-          name: productInfo?.name || "",
-          monthlyOutboundCounts,
-        };
-      });
-
-      const fmrResults = performFMRAnalysis(fmrItems);
-      fmrMap = new Map(fmrResults.map((r) => [r.id, r.grade]));
-    } catch (error) {
-      result.errors.push(
-        `FMR 분석 실패: ${error instanceof Error ? error.message : "알 수 없는 오류"}`
-      );
-    }
-
-    // 4. 신제품: 배치 metadata 업데이트 (ABC-XYZ는 null, FMR은 설정)
+    // 4. 신제품: metadata 업데이트 (등급은 null로 설정)
     if (newProducts.length > 0) {
-      try {
-        // 각 제품별 gradeInfo JSON 생성
-        const valueRows = newProducts.map((productId) => {
+      const gradeInfo: GradeInfo = {
+        isNewProduct: true,
+        salesMonths: 0,
+        lastGradeRefresh: now.toISOString(),
+      };
+
+      for (const productId of newProducts) {
+        try {
+          const product = productList.find((p) => p.id === productId);
+          const existingMetadata =
+            (product?.metadata as Record<string, unknown>) || {};
+
+          // 판매 이력이 있는 경우 실제 개월 수 계산
           const firstSaleDate = firstSaleMap.get(productId);
           let salesMonths = 0;
           if (firstSaleDate) {
@@ -218,32 +132,24 @@ export async function refreshGradesForOrganization(
               (now.getFullYear() - firstDate.getFullYear()) * 12 +
               (now.getMonth() - firstDate.getMonth());
           }
-          const gradeInfo: GradeInfo = {
-            isNewProduct: true,
-            salesMonths,
-            lastGradeRefresh: now.toISOString(),
-          };
-          const fmrGrade = fmrMap.get(productId) || null;
-          return sql`(${productId}::uuid, ${JSON.stringify(gradeInfo)}::jsonb, ${fmrGrade})`;
-        });
 
-        // 단일 UPDATE ... FROM (VALUES ...) 쿼리로 배치 처리
-        const nowIso = now.toISOString();
-        await db.execute(sql`
-          UPDATE products
-          SET
-            abc_grade = NULL,
-            xyz_grade = NULL,
-            fmr_grade = v.fmr_grade::fmr_grade,
-            metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('gradeInfo', v.grade_info),
-            updated_at = ${nowIso}
-          FROM (VALUES ${sql.join(valueRows, sql`, `)}) AS v(product_id, grade_info, fmr_grade)
-          WHERE products.id = v.product_id
-        `);
-      } catch (error) {
-        result.errors.push(
-          `신제품 배치 업데이트 실패: ${error instanceof Error ? error.message : "알 수 없는 오류"}`
-        );
+          await db
+            .update(products)
+            .set({
+              abcGrade: null,
+              xyzGrade: null,
+              metadata: {
+                ...existingMetadata,
+                gradeInfo: { ...gradeInfo, salesMonths },
+              },
+              updatedAt: now,
+            })
+            .where(eq(products.id, productId));
+        } catch (error) {
+          result.errors.push(
+            `신제품 ${productId} 업데이트 실패: ${error instanceof Error ? error.message : "알 수 없는 오류"}`
+          );
+        }
       }
     }
 
@@ -254,42 +160,21 @@ export async function refreshGradesForOrganization(
       sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
       const startDate = sixMonthsAgo.toISOString().split("T")[0];
 
-      // salesRecords + inventoryHistory 출고 데이터 병렬 조회
-      const [salesData, outboundSalesData] = await Promise.all([
-        db
-          .select({
-            productId: salesRecords.productId,
-            date: salesRecords.date,
-            quantity: salesRecords.quantity,
-            totalAmount: salesRecords.totalAmount,
-          })
-          .from(salesRecords)
-          .where(
-            and(
-              eq(salesRecords.organizationId, organizationId),
-              inArray(salesRecords.productId, eligibleProducts),
-              sql`${salesRecords.date} >= ${startDate}`
-            )
-          ),
-        db
-          .select({
-            productId: inventoryHistory.productId,
-            date: inventoryHistory.date,
-            quantity: sql<number>`ABS(${inventoryHistory.changeAmount})`,
-          })
-          .from(inventoryHistory)
-          .where(
-            and(
-              eq(inventoryHistory.organizationId, organizationId),
-              inArray(inventoryHistory.productId, eligibleProducts),
-              sql`${inventoryHistory.date} >= ${startDate}`,
-              sql`${inventoryHistory.changeAmount} < 0`
-            )
-          ),
-      ]);
-
-      // salesRecords에 데이터가 있는 제품 ID 집합
-      const productsWithSalesData = new Set(salesData.map((s) => s.productId));
+      const salesData = await db
+        .select({
+          productId: salesRecords.productId,
+          date: salesRecords.date,
+          quantity: salesRecords.quantity,
+          totalAmount: salesRecords.totalAmount,
+        })
+        .from(salesRecords)
+        .where(
+          and(
+            eq(salesRecords.organizationId, organizationId),
+            inArray(salesRecords.productId, eligibleProducts),
+            sql`${salesRecords.date} >= ${startDate}`
+          )
+        );
 
       // 5-2. ABC 분석용 데이터 집계 (매출액 기준)
       const salesByProduct = new Map<
@@ -312,25 +197,6 @@ export async function refreshGradesForOrganization(
         entry.monthlyQuantities.set(
           monthKey,
           (entry.monthlyQuantities.get(monthKey) || 0) + sale.quantity
-        );
-      }
-
-      // 5-2b. salesRecords에 없는 제품은 inventoryHistory 출고 데이터로 보충
-      for (const row of outboundSalesData) {
-        if (productsWithSalesData.has(row.productId)) continue;
-        if (!salesByProduct.has(row.productId)) {
-          salesByProduct.set(row.productId, {
-            totalValue: 0,
-            monthlyQuantities: new Map(),
-          });
-        }
-        const entry = salesByProduct.get(row.productId)!;
-        // 출고 이력에는 totalAmount가 없으므로 수량만 집계 (ABC는 수량 기반으로 대체)
-        entry.totalValue += Number(row.quantity);
-        const monthKey = row.date.substring(0, 7);
-        entry.monthlyQuantities.set(
-          monthKey,
-          (entry.monthlyQuantities.get(monthKey) || 0) + Number(row.quantity)
         );
       }
 
@@ -373,113 +239,66 @@ export async function refreshGradesForOrganization(
 
       const xyzResults = performXYZAnalysis(xyzItems);
 
-      // 5-5. 결과를 DB에 반영 (변경된 제품만 + 트랜잭션)
+      // 5-5. 결과를 DB에 반영
       const abcMap = new Map(abcResults.map((r) => [r.id, r.grade]));
       const xyzMap = new Map(xyzResults.map((r) => [r.id, r]));
 
-      // 기존 등급을 빠르게 조회하기 위한 맵
-      const existingGradeMap = new Map(
-        productList.map((p) => [p.id, { abc: p.abcGrade, xyz: p.xyzGrade, fmr: p.fmrGrade }])
-      );
-
-      // 5-5a. 등급 변경 여부 비교 → 변경된 제품만 필터링
-      const changedProducts: string[] = [];
-      const unchangedProducts: string[] = [];
-
       for (const productId of eligibleProducts) {
-        const newAbc = abcMap.get(productId) || null;
-        const newXyz = xyzMap.get(productId)?.grade || null;
-        const newFmr = fmrMap.get(productId) || null;
-        const existing = existingGradeMap.get(productId);
-
-        if (
-          existing &&
-          existing.abc === newAbc &&
-          existing.xyz === newXyz &&
-          existing.fmr === newFmr
-        ) {
-          unchangedProducts.push(productId);
-        } else {
-          changedProducts.push(productId);
-        }
-      }
-
-      result.unchangedCount = unchangedProducts.length;
-
-      // 5-5b. 변경된 제품만 products UPDATE + grade_history INSERT (트랜잭션)
-      if (changedProducts.length > 0) {
         try {
-          await db.transaction(async (tx) => {
-            // products 배치 UPDATE
-            const updateRows = changedProducts.map((productId) => {
-              const abcGrade = abcMap.get(productId) || null;
-              const xyzResult = xyzMap.get(productId);
-              const xyzGrade = xyzResult?.grade || null;
-              const fmrGrade = fmrMap.get(productId) || null;
+          const abcGrade = abcMap.get(productId) || null;
+          const xyzResult = xyzMap.get(productId);
+          const xyzGrade = xyzResult?.grade || null;
 
-              const firstSaleDate = firstSaleMap.get(productId);
-              let salesMonths = 0;
-              if (firstSaleDate) {
-                const firstDate = new Date(firstSaleDate);
-                salesMonths =
-                  (now.getFullYear() - firstDate.getFullYear()) * 12 +
-                  (now.getMonth() - firstDate.getMonth());
-              }
+          const product = productList.find((p) => p.id === productId);
+          const existingMetadata =
+            (product?.metadata as Record<string, unknown>) || {};
 
-              const gradeInfo: GradeInfo = {
-                isNewProduct: false,
-                salesMonths,
-                lastGradeRefresh: now.toISOString(),
-              };
+          const firstSaleDate = firstSaleMap.get(productId);
+          let salesMonths = 0;
+          if (firstSaleDate) {
+            const firstDate = new Date(firstSaleDate);
+            salesMonths =
+              (now.getFullYear() - firstDate.getFullYear()) * 12 +
+              (now.getMonth() - firstDate.getMonth());
+          }
 
-              return sql`(${productId}::uuid, ${abcGrade}, ${xyzGrade}, ${fmrGrade}, ${JSON.stringify(gradeInfo)}::jsonb)`;
-            });
+          const gradeInfo: GradeInfo = {
+            isNewProduct: false,
+            salesMonths,
+            lastGradeRefresh: now.toISOString(),
+          };
 
-            const nowIso2 = now.toISOString();
-            await tx.execute(sql`
-              UPDATE products
-              SET
-                abc_grade = v.abc_grade,
-                xyz_grade = v.xyz_grade,
-                fmr_grade = v.fmr_grade::fmr_grade,
-                metadata = COALESCE(products.metadata, '{}'::jsonb) || jsonb_build_object('gradeInfo', v.grade_info),
-                updated_at = ${nowIso2}
-              FROM (VALUES ${sql.join(updateRows, sql`, `)}) AS v(product_id, abc_grade, xyz_grade, fmr_grade, grade_info)
-              WHERE products.id = v.product_id
-            `);
+          await db
+            .update(products)
+            .set({
+              abcGrade,
+              xyzGrade,
+              metadata: { ...existingMetadata, gradeInfo },
+              updatedAt: now,
+            })
+            .where(eq(products.id, productId));
 
-            // grade_history 배치 INSERT (변경된 제품만)
-            const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+          // 등급 이력 저장 (grade_history)
+          const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+          const combinedGrade = abcGrade && xyzGrade ? `${abcGrade}${xyzGrade}` : null;
+          const salesValue = salesByProduct.get(productId)?.totalValue || 0;
+          const cv = xyzResult?.coefficientOfVariation ?? null;
 
-            const historyRows = changedProducts.map((productId) => {
-              const abcGrade = abcMap.get(productId) || null;
-              const xyzResult = xyzMap.get(productId);
-              const xyzGrade = xyzResult?.grade || null;
-              const combinedGrade = abcGrade && xyzGrade ? `${abcGrade}${xyzGrade}` : null;
-              const salesValue = salesByProduct.get(productId)?.totalValue || 0;
-              const cv = xyzResult?.coefficientOfVariation ?? null;
-
-              return {
-                organizationId,
-                productId,
-                period,
-                abcGrade,
-                xyzGrade,
-                combinedGrade,
-                salesValue: salesValue.toString(),
-                coefficientOfVariation: cv !== null ? cv.toFixed(2) : null,
-              };
-            });
-
-            if (historyRows.length > 0) {
-              await tx.insert(gradeHistory).values(historyRows);
-            }
+          await db.insert(gradeHistory).values({
+            organizationId,
+            productId,
+            period,
+            abcGrade,
+            xyzGrade,
+            combinedGrade,
+            salesValue: salesValue.toString(),
+            coefficientOfVariation: cv !== null ? cv.toFixed(2) : null,
           });
 
-          result.updatedCount = changedProducts.length;
+          result.updatedCount++;
         } catch (error) {
           result.errors.push(
-            `제품 등급 배치 업데이트/이력 저장 실패: ${error instanceof Error ? error.message : "알 수 없는 오류"}`
+            `제품 ${productId} 등급 업데이트 실패: ${error instanceof Error ? error.message : "알 수 없는 오류"}`
           );
         }
       }

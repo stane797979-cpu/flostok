@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { refreshGrades } from "@/server/actions/analytics";
+import { refreshGrades } from "@/server/actions/grade-refresh";
 import { useRouter } from "next/navigation";
 
 export function RefreshGradesButton() {
@@ -16,10 +16,11 @@ export function RefreshGradesButton() {
     setIsLoading(true);
     try {
       const result = await refreshGrades();
-      if (result.success) {
+      if (result.success && result.result) {
+        const { totalProducts, updatedCount, newProductCount } = result.result;
         toast({
           title: "등급 갱신 완료",
-          description: `전체 ${result.totalProducts}개 제품 중 ${result.updatedCount}개 갱신, 미변경 ${result.unchangedCount ?? 0}개, 신제품 ${result.newProductCount}개`,
+          description: `전체 ${totalProducts}개 제품 중 ${updatedCount}개 갱신, 신제품 ${newProductCount}개`,
         });
         router.refresh();
       } else {
