@@ -37,7 +37,6 @@ export default async function OrdersPage({
 
   return (
     <OrdersClient
-      key={resolvedTab}
       initialTab={resolvedTab}
       serverReorderItems={serverReorderItems}
       deliveryComplianceData={deliveryComplianceData}

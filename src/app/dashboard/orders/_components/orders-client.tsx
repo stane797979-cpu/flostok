@@ -150,8 +150,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
 
   const switchTab = useCallback((tab: string) => {
     setActiveTab(tab as typeof initialTab);
-    router.replace(`/dashboard/orders?tab=${tab}`, { scroll: false });
-  }, [router]);
+  }, []);
 
   // 발주 필요 품목 (발주 후 재조회 가능하도록 state로 관리)
   const [reorderItems, setReorderItems] = useState<ReorderItem[]>(
@@ -324,15 +323,15 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
     }
   }, [inboundMonth, toast]);
 
-  // 초기 로드 (탭에 따라 필요한 데이터만 로드)
+  // 초기 로드 (최초 1회)
   useEffect(() => {
-    if (activeTab === "orders" && !serverPurchaseOrders) {
+    if (initialTab === "orders" && !serverPurchaseOrders) {
       loadPurchaseOrders();
-    } else if (activeTab === "inbound") {
+    } else if (initialTab === "inbound") {
       loadInboundRecords(inboundMonth);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
+  }, []);
 
   // 긴급도별 카운트
   const urgentCount = reorderItems.filter((item) => item.urgencyLevel <= 1).length;
