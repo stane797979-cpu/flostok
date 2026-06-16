@@ -174,11 +174,6 @@ export function StockoutClient({ data }: StockoutClientProps) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">결품관리</h1>
-        <p className="mt-2 text-slate-500">품절/결품 현황 감지, 원인 분석 및 조치 추적</p>
-      </div>
-
       {/* 요약 카드 */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card>

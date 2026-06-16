@@ -1,16 +1,17 @@
 import { getInventoryList, getInventoryStats } from "@/server/actions/inventory";
+import { getStockoutData } from "@/server/actions/stockout";
 import { InventoryPageClient } from "@/components/features/inventory/inventory-page-client";
 
 export const dynamic = "force-dynamic";
 
 export default async function InventoryPage() {
   try {
-    const [{ items }, stats] = await Promise.all([
+    const [{ items }, stats, stockoutData] = await Promise.all([
       getInventoryList({ limit: 500 }),
       getInventoryStats(),
+      getStockoutData(),
     ]);
 
-    // InventoryItem 형태로 매핑
     const inventoryItems = items.map((item) => ({
       id: item.id,
       productId: item.productId,
@@ -29,7 +30,6 @@ export default async function InventoryPage() {
       },
     }));
 
-    // 통계 계산
     const clientStats = {
       totalProducts: stats.totalProducts,
       needsOrder: stats.outOfStock + stats.critical + stats.shortage,
@@ -37,13 +37,20 @@ export default async function InventoryPage() {
       excess: stats.excess,
     };
 
-    return <InventoryPageClient items={inventoryItems} stats={clientStats} />;
+    return (
+      <InventoryPageClient
+        items={inventoryItems}
+        stats={clientStats}
+        stockoutData={stockoutData}
+      />
+    );
   } catch (error) {
     console.error("재고 현황 데이터 로드 실패:", error);
     return (
       <InventoryPageClient
         items={[]}
         stats={{ totalProducts: 0, needsOrder: 0, outOfStockAndCritical: 0, excess: 0 }}
+        stockoutData={{ records: [], totalProducts: 0, stockoutCount: 0, criticalCount: 0, normalizedCount: 0 }}
       />
     );
   }
