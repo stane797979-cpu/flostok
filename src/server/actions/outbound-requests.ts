@@ -376,11 +376,17 @@ export async function confirmOutboundRequest(
       return { success: false, error: "출고 요청을 찾을 수 없습니다" };
     }
 
-    if (request.status !== "pending") {
+    if (!["pending", "holding"].includes(request.status!)) {
       return {
         success: false,
         error: "이미 처리되었거나 취소된 요청입니다",
       };
+    }
+
+    // 전체 확인수량이 0이면 확정 불가
+    const totalConfirmed = validated.items.reduce((sum, i) => sum + i.confirmedQuantity, 0);
+    if (totalConfirmed === 0) {
+      return { success: false, error: "확인수량이 모두 0입니다. 최소 1개 이상 입력하세요." };
     }
 
     // 항목별 확정 수량 업데이트 및 재고 차감
