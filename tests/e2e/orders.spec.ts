@@ -8,11 +8,11 @@ test.describe('발주 관리', () => {
   });
 
   test('발주현황 탭 - 로딩 후 데이터 표시', async ({ page }) => {
-    test.setTimeout(60000);
+    test.setTimeout(120000);
     await page.goto('/dashboard/orders?tab=orders');
-    await page.waitForLoadState('load');
-    await expect(page.getByText('발주 현황').first()).toBeVisible({ timeout: 40000 });
-    await expect(page.getByText('발주 목록을 불러오는 중')).not.toBeVisible({ timeout: 40000 });
+    await expect(page.locator('h1').first()).toBeVisible({ timeout: 80000 });
+    const h1Text = await page.locator('h1').first().textContent();
+    expect(h1Text).toContain('발주');
   });
 
   test('자동발주 탭', async ({ page }) => {

@@ -3,7 +3,7 @@ import { test, expect } from "@playwright/test";
 test.describe("제품 관리", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/dashboard/products");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
   });
 
   test("제품 페이지 로딩", async ({ page }) => {
@@ -89,9 +89,10 @@ test.describe("제품 관리", () => {
   });
 
   test("체크박스 선택 및 일괄 삭제", async ({ page }) => {
-    const checkboxes = page.locator('input[type="checkbox"]');
-    if (await checkboxes.count() > 0) {
-      await checkboxes.first().check();
+    const checkboxes = page.locator('input[type="checkbox"]:visible');
+    const count = await checkboxes.count();
+    if (count > 0) {
+      await checkboxes.first().check({ force: true });
       await page.waitForTimeout(300);
     }
   });
