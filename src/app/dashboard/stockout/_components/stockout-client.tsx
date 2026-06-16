@@ -456,6 +456,19 @@ export function StockoutClient({ data }: StockoutClientProps) {
           )}
         </CardContent>
       </Card>
+
+      {/* 결품 기준 범례 */}
+      <div className="rounded-lg border bg-slate-50 px-4 py-3 text-xs text-slate-500 dark:bg-slate-900 space-y-1.5">
+        <p className="font-semibold text-slate-700">결품 판정 기준</p>
+        <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+          <span><span className="font-medium text-red-600">품절(결품)</span> — 현재고 = 0, 즉시 판매 불가</span>
+          <span><span className="font-medium text-orange-600">위험</span> — 현재고 &lt; 안전재고 × 0.5, 조만간 품절 예상</span>
+          <span><span className="font-medium text-yellow-600">납기지연</span> — 발주 후 입고가 납기일을 초과</span>
+          <span><span className="font-medium text-blue-600">수요급증</span> — 예측 대비 실제 출고량이 급격히 증가</span>
+          <span><span className="font-medium text-slate-600">지속일수</span> — 결품 시작일부터 해소일까지 경과 일수</span>
+          <span><span className="font-medium text-green-600">정상화</span> — 입고 완료로 재고가 안전재고 이상 회복</span>
+        </div>
+      </div>
     </div>
   );
 }
