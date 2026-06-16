@@ -307,8 +307,8 @@ export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
                         안전재고 <span className="text-[10px] text-primary-600">{sortLabel("safetyStock")}</span><SortIcon columnKey="safetyStock" />
                       </div>
                     </TooltipTrigger>
-                    <TooltipContent side="top" className="max-w-[220px] text-xs">
-                      품절 방지를 위한 최소 보유 수량. 현재고에 포함된 수량으로, 이 수량 이하로 내려가면 발주를 권장.
+                    <TooltipContent side="top" className="max-w-[180px] text-xs">
+                      현재고에 포함된 최소 보유 수량. 이 수량 이하 시 발주 필요.
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
@@ -320,7 +320,7 @@ export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
                 <div className="flex items-center justify-end gap-0.5">재고일수 <span className="text-[10px] text-primary-600">{sortLabel("daysOfInventory")}</span><SortIcon columnKey="daysOfInventory" /></div>
               </TableHead>
               <TableHead className={cn("text-center", sortableHeadClass)} onClick={() => handleSort("location")}>
-                <div className="flex items-center justify-center gap-0.5">위치 <span className="text-[10px] text-primary-600">{sortLabel("location")}</span><SortIcon columnKey="location" /></div>
+                <div className="flex items-center justify-center gap-0.5">창고구분 <span className="text-[10px] text-primary-600">{sortLabel("location")}</span><SortIcon columnKey="location" /></div>
               </TableHead>
               <TableHead className="w-[80px]"></TableHead>
             </TableRow>
