@@ -12,10 +12,10 @@ import {
   type PurchaseOrder,
   type PurchaseOrderItem,
 } from "@/server/db/schema";
-import { eq, and, desc, asc, sql, count, gte, lte, or, isNull, ne, inArray } from "drizzle-orm";
-import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
+import { eq, and, desc, asc, sql, gte, lte, or } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { salesRecords, organizations, alerts, inboundRecords, activityLogs } from "@/server/db/schema";
+import { salesRecords, organizations } from "@/server/db/schema";
 import {
   convertToReorderItem,
   sortReorderItems,
@@ -27,8 +27,10 @@ import {
 } from "@/server/services/scm/reorder-recommendation";
 import { getCurrentUser } from "./auth-helpers";
 import { logActivity } from "@/server/services/activity-log";
-import { parseExcelBuffer, sheetToJson } from "@/server/services/excel/parser";
 import type { OrganizationSettings } from "@/types/organization-settings";
+
+// TODO: 인증 구현 후 실제 organizationId로 교체
+const TEMP_ORG_ID = "00000000-0000-0000-0000-000000000001";
 
 /**
  * 발주 필요 품목 조회 옵션 스키마
@@ -36,258 +38,11 @@ import type { OrganizationSettings } from "@/types/organization-settings";
 const reorderOptionsSchema = z.object({
   urgencyLevel: z.number().min(0).max(3).optional(),
   abcGrade: z.enum(["A", "B", "C"]).optional(),
-  limit: z.number().min(1).max(500).optional(),
+  limit: z.number().min(1).max(1000).optional(),
 });
 
 /**
- * 발주 필요 품목 목록 조회 (내부 함수 — 인증 세션 불필요)
- *
- * 크론잡 등 서버 내부에서 orgId를 직접 알고 있는 경우 사용합니다.
- * orgSettings를 전달하면 organizations SELECT를 생략합니다.
- *
- * @param orgId - 조직 ID
- * @param orgSettings - 조직 settings (전달 시 organizations SELECT 생략)
- * @param options - 필터링 옵션
- * @returns 발주 필요 품목 목록
- */
-export async function getReorderItemsInternal(
-  orgId: string,
-  orgSettings?: Record<string, unknown> | null,
-  options?: {
-    urgencyLevel?: number;
-    abcGrade?: "A" | "B" | "C";
-    limit?: number;
-  }
-): Promise<{
-  items: ReorderItem[];
-  total: number;
-}> {
-  // 옵션 유효성 검사
-  const validatedOptions = reorderOptionsSchema.parse(options || {});
-  const { urgencyLevel, abcGrade, limit = 500 } = validatedOptions;
-
-  // 조직 설정에서 보정계수 로드 (orgSettings가 전달되지 않은 경우만 DB 조회)
-  let resolvedSettings: OrganizationSettings | null = null;
-  if (orgSettings !== undefined) {
-    resolvedSettings = orgSettings as OrganizationSettings | null;
-  } else {
-    const [orgData] = await db
-      .select({ settings: organizations.settings })
-      .from(organizations)
-      .where(eq(organizations.id, orgId))
-      .limit(1);
-    resolvedSettings = orgData?.settings as OrganizationSettings | null;
-  }
-  const supplyCoefficients = resolvedSettings?.orderPolicy?.supplyCoefficients;
-
-  // 발주 필요 제품 조회 (전 창고 합산 현재고 <= 발주점, 활성 PO 없는 제품만)
-  // 성능 최적화: NOT EXISTS 서브쿼리를 사전 조회 + LEFT JOIN IS NULL로 변경
-  const MAX_CANDIDATES = 500;
-
-  // 1단계: 활성 PO에 포함된 제품 ID를 먼저 한 번만 조회 (인덱스 활용)
-  const reorderCandidates = await db.execute<{
-    product_id: string;
-    product_sku: string;
-    product_name: string;
-    safety_stock: number;
-    reorder_point: number;
-    moq: number;
-    lead_time: number;
-    unit_price: number;
-    cost_price: number;
-    abc_grade: string | null;
-    xyz_grade: string | null;
-    primary_supplier_id: string | null;
-    total_stock: number;
-    supplier_id: string | null;
-    supplier_name: string | null;
-    supplier_avg_lead_time: number | null;
-  }>(sql`
-      WITH active_po_products AS (
-        SELECT DISTINCT poi.product_id
-        FROM purchase_order_items poi
-        JOIN purchase_orders po ON po.id = poi.purchase_order_id
-        WHERE po.organization_id = ${orgId}
-          AND po.status NOT IN ('cancelled', 'received', 'completed')
-          AND po.deleted_at IS NULL
-      ),
-      inv_agg AS (
-        SELECT product_id, SUM(current_stock) AS total_stock
-        FROM inventory
-        WHERE organization_id = ${orgId}
-        GROUP BY product_id
-      )
-      SELECT
-        p.id AS product_id,
-        p.sku AS product_sku,
-        p.name AS product_name,
-        COALESCE(p.safety_stock, 0) AS safety_stock,
-        COALESCE(p.reorder_point, 0) AS reorder_point,
-        COALESCE(p.moq, 1) AS moq,
-        COALESCE(p.lead_time, 7) AS lead_time,
-        COALESCE(p.unit_price, 0) AS unit_price,
-        COALESCE(p.cost_price, 0) AS cost_price,
-        p.abc_grade,
-        p.xyz_grade,
-        p.primary_supplier_id,
-        COALESCE(ia.total_stock, 0) AS total_stock,
-        s.id AS supplier_id,
-        s.name AS supplier_name,
-        s.avg_lead_time AS supplier_avg_lead_time
-      FROM products p
-      LEFT JOIN inv_agg ia ON ia.product_id = p.id
-      LEFT JOIN suppliers s ON s.id = p.primary_supplier_id
-      LEFT JOIN active_po_products app ON app.product_id = p.id
-      WHERE p.organization_id = ${orgId}
-        AND p.deleted_at IS NULL
-        AND COALESCE(ia.total_stock, 0) <= COALESCE(p.reorder_point, 0)
-        AND app.product_id IS NULL
-      ORDER BY
-        CASE WHEN COALESCE(ia.total_stock, 0) = 0 THEN 0
-             WHEN COALESCE(ia.total_stock, 0) < COALESCE(p.safety_stock, 0) * 0.5 THEN 1
-             ELSE 2
-        END ASC,
-        COALESCE(ia.total_stock, 0) ASC
-      LIMIT ${MAX_CANDIDATES}
-    `);
-
-  type CandidateRow = {
-    product_id: string; product_sku: string; product_name: string;
-    safety_stock: number; reorder_point: number; moq: number; lead_time: number;
-    unit_price: number; cost_price: number; abc_grade: string | null; xyz_grade: string | null;
-    primary_supplier_id: string | null; total_stock: number;
-    supplier_id: string | null; supplier_name: string | null; supplier_avg_lead_time: number | null;
-  };
-  const candidateRows = Array.from(reorderCandidates as unknown as CandidateRow[]);
-
-  const productIds = candidateRows.map((r) => r.product_id);
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split("T")[0];
-  const todayStr = new Date().toISOString().split("T")[0];
-
-  const avgSalesMap = new Map<string, number>();
-  const forecastMap = new Map<string, { dailySales: number; method: string }>();
-
-  if (productIds.length > 0) {
-    const forecastStart = new Date();
-    forecastStart.setDate(1);
-    const forecastEnd = new Date();
-    forecastEnd.setMonth(forecastEnd.getMonth() + 3);
-    const forecastStartStr = forecastStart.toISOString().split("T")[0];
-    const forecastEndStr = forecastEnd.toISOString().split("T")[0];
-
-    const [salesData, forecastData] = await Promise.all([
-      db
-        .select({
-          productId: salesRecords.productId,
-          totalQuantity: sql<number>`coalesce(sum(${salesRecords.quantity}), 0)`,
-        })
-        .from(salesRecords)
-        .where(
-          and(
-            eq(salesRecords.organizationId, orgId),
-            inArray(salesRecords.productId, productIds),
-            gte(salesRecords.date, thirtyDaysAgoStr),
-            lte(salesRecords.date, todayStr)
-          )
-        )
-        .groupBy(salesRecords.productId),
-
-      db
-        .select({
-          productId: demandForecasts.productId,
-          avgMonthlyForecast: sql<number>`coalesce(avg(${demandForecasts.forecastQuantity}), 0)`,
-          method: sql<string>`(array_agg(${demandForecasts.method} ORDER BY ${demandForecasts.updatedAt} DESC))[1]`,
-        })
-        .from(demandForecasts)
-        .where(
-          and(
-            eq(demandForecasts.organizationId, orgId),
-            inArray(demandForecasts.productId, productIds),
-            gte(demandForecasts.period, forecastStartStr),
-            lte(demandForecasts.period, forecastEndStr)
-          )
-        )
-        .groupBy(demandForecasts.productId),
-    ]);
-
-    for (const row of salesData) {
-      avgSalesMap.set(row.productId, Math.round((Number(row.totalQuantity) / 30) * 100) / 100);
-    }
-
-    const methodLabelMap: Record<string, string> = {
-      sma_3: "SMA", sma_6: "SMA", ses: "SES", holt: "Holt's", wma: "WMA", holt_winters: "Holt-Winters",
-    };
-    for (const row of forecastData) {
-      const monthlyAvg = Number(row.avgMonthlyForecast);
-      if (monthlyAvg > 0) {
-        forecastMap.set(row.productId, {
-          dailySales: Math.round((monthlyAvg / 30) * 100) / 100,
-          method: methodLabelMap[row.method] || row.method,
-        });
-      }
-    }
-  }
-
-  const allReorderItems = candidateRows
-    .map((row) => {
-      const avgDailySales = avgSalesMap.get(row.product_id) || 0;
-      const forecast = forecastMap.get(row.product_id);
-
-      const data: ProductReorderData = {
-        productId: row.product_id,
-        sku: row.product_sku,
-        productName: row.product_name,
-        currentStock: Number(row.total_stock) || 0,
-        safetyStock: Number(row.safety_stock) || 0,
-        reorderPoint: Number(row.reorder_point) || 0,
-        avgDailySales,
-        abcGrade: (row.abc_grade as "A" | "B" | "C") || undefined,
-        xyzGrade: (row.xyz_grade as "X" | "Y" | "Z") || undefined,
-        moq: Number(row.moq) || 1,
-        leadTime: Number(row.supplier_avg_lead_time) || Number(row.lead_time) || 7,
-        unitPrice: Number(row.unit_price) || 0,
-        costPrice: Number(row.cost_price) || 0,
-        supplierId: row.supplier_id ?? undefined,
-        supplierName: row.supplier_name ?? undefined,
-        supplyCoefficients,
-        forecastDailySales: forecast?.dailySales,
-        forecastMethod: forecast?.method,
-      };
-
-      return convertToReorderItem(data);
-    })
-    .filter((item): item is ReorderItem => item !== null);
-
-  const abcGradesMap = new Map<string, "A" | "B" | "C">();
-  candidateRows.forEach((row) => {
-    if (row.abc_grade) {
-      abcGradesMap.set(row.product_id, row.abc_grade as "A" | "B" | "C");
-    }
-  });
-
-  let filteredItems = allReorderItems;
-  if (urgencyLevel !== undefined) {
-    filteredItems = filterByUrgency(filteredItems, urgencyLevel);
-  }
-  if (abcGrade) {
-    filteredItems = filterByABCGrade(filteredItems, abcGradesMap, abcGrade);
-  }
-
-  const sortedItems = sortReorderItems(filteredItems, abcGradesMap);
-  const limitedItems = sortedItems.slice(0, limit);
-
-  return {
-    items: limitedItems,
-    total: filteredItems.length,
-  };
-}
-
-/**
  * 발주 필요 품목 목록 조회
- *
- * 인증 세션에서 orgId를 추출하여 getReorderItemsInternal에 위임합니다.
  *
  * @param options - 필터링 옵션
  * @returns 발주 필요 품목 목록
@@ -302,22 +57,196 @@ export async function getReorderItems(options?: {
 }> {
   try {
     const user = await getCurrentUser();
-    if (!user?.organizationId) {
-      throw new Error("인증된 사용자를 찾을 수 없습니다");
+    const orgId = user?.organizationId || TEMP_ORG_ID;
+
+    // 옵션 유효성 검사
+    const validatedOptions = reorderOptionsSchema.parse(options || {});
+    const { urgencyLevel, abcGrade, limit = 100 } = validatedOptions;
+
+    // 조직 설정에서 보정계수 로드
+    const [orgData] = await db
+      .select({ settings: organizations.settings })
+      .from(organizations)
+      .where(eq(organizations.id, orgId))
+      .limit(1);
+    const orgSettings = orgData?.settings as OrganizationSettings | null;
+    const supplyCoefficients = orgSettings?.orderPolicy?.supplyCoefficients;
+
+    // 발주 필요 제품 조회 (현재고 <= 발주점)
+    const reorderCandidates = await db
+      .select({
+        product: {
+          id: products.id,
+          sku: products.sku,
+          name: products.name,
+          safetyStock: products.safetyStock,
+          reorderPoint: products.reorderPoint,
+          moq: products.moq,
+          leadTime: products.leadTime,
+          unitPrice: products.unitPrice,
+          costPrice: products.costPrice,
+          abcGrade: products.abcGrade,
+          xyzGrade: products.xyzGrade,
+          primarySupplierId: products.primarySupplierId,
+        },
+        inventory: {
+          currentStock: inventory.currentStock,
+        },
+        supplier: {
+          id: suppliers.id,
+          name: suppliers.name,
+          avgLeadTime: suppliers.avgLeadTime,
+        },
+      })
+      .from(products)
+      .leftJoin(inventory, eq(products.id, inventory.productId))
+      .leftJoin(suppliers, eq(products.primarySupplierId, suppliers.id))
+      .where(
+        and(
+          eq(products.organizationId, orgId),
+          // 현재고 <= 발주점
+          or(
+            sql`${inventory.currentStock} IS NULL`,
+            sql`${inventory.currentStock} <= ${products.reorderPoint}`
+          )
+        )
+      );
+
+    // 일평균 판매량을 단일 그룹 쿼리로 일괄 조회 (N+1 쿼리 제거)
+    const productIds = reorderCandidates.map((r) => r.product.id);
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split("T")[0];
+    const todayStr = new Date().toISOString().split("T")[0];
+
+    // 실적 기반 일평균 + 수요예측 기반 일평균을 병렬 조회
+    const avgSalesMap = new Map<string, number>();
+    const forecastMap = new Map<string, { dailySales: number; method: string }>();
+
+    if (productIds.length > 0) {
+      // 향후 3개월 예측 기간
+      const forecastStart = new Date();
+      forecastStart.setDate(1); // 이번 달 1일
+      const forecastEnd = new Date();
+      forecastEnd.setMonth(forecastEnd.getMonth() + 3);
+      const forecastStartStr = forecastStart.toISOString().split("T")[0];
+      const forecastEndStr = forecastEnd.toISOString().split("T")[0];
+
+      const [salesData, forecastData] = await Promise.all([
+        // 실적 기반: 최근 30일 판매량
+        db
+          .select({
+            productId: salesRecords.productId,
+            totalQuantity: sql<number>`coalesce(sum(${salesRecords.quantity}), 0)`,
+          })
+          .from(salesRecords)
+          .where(
+            and(
+              eq(salesRecords.organizationId, orgId),
+              sql`${salesRecords.productId} IN ${productIds}`,
+              gte(salesRecords.date, thirtyDaysAgoStr),
+              lte(salesRecords.date, todayStr)
+            )
+          )
+          .groupBy(salesRecords.productId),
+
+        // 수요예측 기반: 향후 3개월 예측 월평균 → 일평균 환산
+        db
+          .select({
+            productId: demandForecasts.productId,
+            avgMonthlyForecast: sql<number>`coalesce(avg(${demandForecasts.forecastQuantity}), 0)`,
+            method: sql<string>`(array_agg(${demandForecasts.method} ORDER BY ${demandForecasts.updatedAt} DESC))[1]`,
+          })
+          .from(demandForecasts)
+          .where(
+            and(
+              eq(demandForecasts.organizationId, orgId),
+              sql`${demandForecasts.productId} IN ${productIds}`,
+              gte(demandForecasts.period, forecastStartStr),
+              lte(demandForecasts.period, forecastEndStr)
+            )
+          )
+          .groupBy(demandForecasts.productId),
+      ]);
+
+      for (const row of salesData) {
+        avgSalesMap.set(row.productId, Math.round((Number(row.totalQuantity) / 30) * 100) / 100);
+      }
+
+      // 수요예측: 월 평균 예측량 → 일평균 (÷30)
+      const methodLabelMap: Record<string, string> = {
+        sma_3: "SMA", sma_6: "SMA", ses: "SES", holt: "Holt's", wma: "WMA", holt_winters: "Holt-Winters",
+      };
+      for (const row of forecastData) {
+        const monthlyAvg = Number(row.avgMonthlyForecast);
+        if (monthlyAvg > 0) {
+          forecastMap.set(row.productId, {
+            dailySales: Math.round((monthlyAvg / 30) * 100) / 100,
+            method: methodLabelMap[row.method] || row.method,
+          });
+        }
+      }
     }
-    const orgId = user.organizationId;
-    const { urgencyLevel, abcGrade, limit } = options || {};
-    const optionKey = `${urgencyLevel ?? "all"}-${abcGrade ?? "all"}-${limit ?? "default"}`;
 
-    // 60초 캐시: 발주 탭 열 때마다 full DB 스캔 방지
-    // revalidate-reorder-items-{orgId} 태그로 발주 생성/취소 시 즉시 무효화
-    const cachedFetch = unstable_cache(
-      () => getReorderItemsInternal(orgId, undefined, options),
-      [`reorder-items-${orgId}-${optionKey}`],
-      { revalidate: 60, tags: [`reorder-items-${orgId}`] }
-    );
+    // 발주 아이템 변환 (DB 호출 없이 메모리에서 처리)
+    const allReorderItems = reorderCandidates
+      .map((row) => {
+        const avgDailySales = avgSalesMap.get(row.product.id) || 0;
+        const forecast = forecastMap.get(row.product.id);
 
-    return await cachedFetch();
+        const data: ProductReorderData = {
+          productId: row.product.id,
+          sku: row.product.sku,
+          productName: row.product.name,
+          currentStock: row.inventory?.currentStock || 0,
+          safetyStock: row.product.safetyStock || 0,
+          reorderPoint: row.product.reorderPoint || 0,
+          avgDailySales,
+          abcGrade: row.product.abcGrade || undefined,
+          xyzGrade: row.product.xyzGrade || undefined,
+          moq: row.product.moq || 1,
+          leadTime: row.supplier?.avgLeadTime || row.product.leadTime || 7,
+          unitPrice: row.product.unitPrice || 0,
+          costPrice: row.product.costPrice || 0,
+          supplierId: row.supplier?.id,
+          supplierName: row.supplier?.name,
+          supplyCoefficients,
+          // 수요예측 기반 일평균 (있으면 우선 사용)
+          forecastDailySales: forecast?.dailySales,
+          forecastMethod: forecast?.method,
+        };
+
+        return convertToReorderItem(data);
+      })
+      .filter((item): item is ReorderItem => item !== null);
+
+    // ABC 등급 매핑
+    const abcGradesMap = new Map<string, "A" | "B" | "C">();
+    reorderCandidates.forEach((row) => {
+      if (row.product.abcGrade) {
+        abcGradesMap.set(row.product.id, row.product.abcGrade);
+      }
+    });
+
+    // 필터링
+    let filteredItems = allReorderItems;
+    if (urgencyLevel !== undefined) {
+      filteredItems = filterByUrgency(filteredItems, urgencyLevel);
+    }
+    if (abcGrade) {
+      filteredItems = filterByABCGrade(filteredItems, abcGradesMap, abcGrade);
+    }
+
+    // 우선순위 정렬
+    const sortedItems = sortReorderItems(filteredItems, abcGradesMap);
+
+    // limit 적용
+    const limitedItems = sortedItems.slice(0, limit);
+
+    return {
+      items: limitedItems,
+      total: filteredItems.length,
+    };
   } catch (error) {
     if (error instanceof z.ZodError) {
       throw new Error(`입력 데이터가 올바르지 않습니다: ${error.issues[0]?.message}`);
@@ -350,53 +279,45 @@ export async function calculateReorderQuantity(productId: string): Promise<{
     // 유효성 검사
     calculateReorderQtySchema.parse({ productId });
 
-    // 인증 먼저 (orgId 필요)
-    const user = await getCurrentUser();
-    if (!user?.organizationId) {
-      throw new Error("인증된 사용자를 찾을 수 없습니다");
-    }
-    const orgId = user.organizationId;
+    // 제품 정보 조회
+    const [productData] = await db
+      .select({
+        product: products,
+        inventory: inventory,
+        supplier: suppliers,
+      })
+      .from(products)
+      .leftJoin(inventory, eq(products.id, inventory.productId))
+      .leftJoin(suppliers, eq(products.primarySupplierId, suppliers.id))
+      .where(and(eq(products.id, productId), eq(products.organizationId, TEMP_ORG_ID)))
+      .limit(1);
 
-    // 제품 + 판매량 + 조직설정 3개 병렬 조회
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    const [productDataArr, salesResult, singleOrgDataArr] = await Promise.all([
-      db
-        .select({
-          product: products,
-          inventory: inventory,
-          supplier: suppliers,
-        })
-        .from(products)
-        .leftJoin(inventory, eq(products.id, inventory.productId))
-        .leftJoin(suppliers, eq(products.primarySupplierId, suppliers.id))
-        .where(eq(products.id, productId))
-        .limit(1),
-      db
-        .select({ total: sql<number>`coalesce(sum(${salesRecords.quantity}), 0)` })
-        .from(salesRecords)
-        .where(
-          and(
-            eq(salesRecords.organizationId, orgId),
-            eq(salesRecords.productId, productId),
-            gte(salesRecords.date, thirtyDaysAgo.toISOString().split("T")[0])
-          )
-        ),
-      db
-        .select({ settings: organizations.settings })
-        .from(organizations)
-        .where(eq(organizations.id, orgId))
-        .limit(1),
-    ]);
-
-    const productData = productDataArr[0];
     if (!productData) {
       throw new Error("제품을 찾을 수 없습니다");
     }
 
+    // 일평균 판매량 조회 (최근 30일)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const salesResult = await db
+      .select({ total: sql<number>`coalesce(sum(${salesRecords.quantity}), 0)` })
+      .from(salesRecords)
+      .where(
+        and(
+          eq(salesRecords.organizationId, TEMP_ORG_ID),
+          eq(salesRecords.productId, productId),
+          gte(salesRecords.date, thirtyDaysAgo.toISOString().split("T")[0])
+        )
+      );
     const avgDailySales = Math.round((Number(salesResult[0]?.total || 0) / 30) * 100) / 100;
-    const singleOrgSettings = singleOrgDataArr[0]?.settings as OrganizationSettings | null;
+
+    // 조직 설정에서 보정계수 로드
+    const [singleOrgData] = await db
+      .select({ settings: organizations.settings })
+      .from(organizations)
+      .where(eq(organizations.id, TEMP_ORG_ID))
+      .limit(1);
+    const singleOrgSettings = singleOrgData?.settings as OrganizationSettings | null;
 
     // 추천 수량 계산
     const data: ProductReorderData = {
@@ -482,7 +403,6 @@ const createPurchaseOrderSchema = z.object({
     )
     .min(1, "최소 1개 이상의 품목이 필요합니다"),
   supplierId: z.string().uuid("유효한 공급자 ID가 아닙니다"),
-  warehouseId: z.string().uuid().optional(),
   expectedDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -509,17 +429,14 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
 
     // 조직 ID 가져오기
     const user = await getCurrentUser();
-    if (!user?.organizationId) {
-      return { success: false, error: "인증된 사용자를 찾을 수 없습니다" };
-    }
-    const orgId = user.organizationId;
+    const orgId = user?.organizationId || TEMP_ORG_ID;
 
     // 공급자 + 제품 + 발주번호 시퀀스 병렬 조회
     const productIds = validated.items.map((item) => item.productId);
     const today = new Date();
     const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
 
-    const [supplierResult, productsData] = await Promise.all([
+    const [supplierResult, productsData, todayOrders] = await Promise.all([
       db
         .select()
         .from(suppliers)
@@ -528,7 +445,16 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
       db
         .select()
         .from(products)
-        .where(and(inArray(products.id, productIds), eq(products.organizationId, orgId))),
+        .where(and(sql`${products.id} IN ${productIds}`, eq(products.organizationId, orgId))),
+      db
+        .select({ count: sql<number>`count(*)` })
+        .from(purchaseOrders)
+        .where(
+          and(
+            eq(purchaseOrders.organizationId, orgId),
+            sql`DATE(${purchaseOrders.createdAt}) = CURRENT_DATE`
+          )
+        ),
     ]);
 
     const supplier = supplierResult[0];
@@ -559,14 +485,9 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
       };
     });
 
-    // warehouseId 결정: 입력값 또는 기본 창고
-    let warehouseId = validated.warehouseId;
-    if (!warehouseId) {
-      const { getDefaultWarehouse } = await import("./warehouses");
-      const dw = await getDefaultWarehouse();
-      if (!dw) return { success: false, error: "기본 창고를 찾을 수 없습니다" };
-      warehouseId = dw.id;
-    }
+    // 발주번호 생성 (PO-YYYYMMDD-XXX)
+    const sequence = (Number(todayOrders[0]?.count || 0) + 1).toString().padStart(3, "0");
+    const orderNumber = `PO-${dateStr}-${sequence}`;
 
     // 예상입고일 계산 (리드타임 기반)
     let expectedDate = validated.expectedDate;
@@ -576,27 +497,13 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
       expectedDate = expectedDateObj.toISOString().split("T")[0];
     }
 
-    // 트랜잭션으로 발주번호 시퀀스 + 발주서 + 발주 항목 원자적 생성
+    // 트랜잭션으로 발주서 및 발주 항목 생성
     const newOrder = await db.transaction(async (tx) => {
-      // 발주번호 시퀀스를 트랜잭션 안에서 생성 (동시 요청 시 중복 방지)
-      const [todayCount] = await tx
-        .select({ count: sql<number>`count(*)` })
-        .from(purchaseOrders)
-        .where(
-          and(
-            eq(purchaseOrders.organizationId, orgId),
-            sql`DATE(${purchaseOrders.createdAt}) = CURRENT_DATE`
-          )
-        );
-      const sequence = (Number(todayCount?.count || 0) + 1).toString().padStart(3, "0");
-      const orderNumber = `PO-${dateStr}-${sequence}`;
-
-      // 발주서 생성 (destinationWarehouseId 포함)
+      // 발주서 생성
       const [order] = await tx
         .insert(purchaseOrders)
         .values({
           organizationId: orgId,
-          destinationWarehouseId: warehouseId,
           orderNumber,
           supplierId: validated.supplierId,
           status: "ordered",
@@ -615,12 +522,10 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
         }))
       );
 
-      return { order, orderNumber };
+      return order;
     });
 
     revalidatePath("/dashboard/orders");
-    // 발주 생성 시 발주 필요 품목 캐시 즉시 무효화 (새 PO가 active_po_products에 반영되어야 함)
-    revalidateTag(`reorder-items-${orgId}`);
 
     // 활동 로깅 (비동기 — 응답 지연 방지)
     if (user) {
@@ -628,12 +533,12 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
         user,
         action: "CREATE",
         entityType: "purchase_order",
-        entityId: newOrder.order.id,
-        description: `${newOrder.orderNumber} 발주서 생성`,
+        entityId: newOrder.id,
+        description: `${orderNumber} 발주서 생성`,
       }).catch(console.error);
     }
 
-    return { success: true, orderId: newOrder.order.id };
+    return { success: true, orderId: newOrder.id };
   } catch (error) {
     if (error instanceof z.ZodError) {
       return {
@@ -681,17 +586,11 @@ export async function updatePurchaseOrderStatus(
       return { success: false, error: "유효하지 않은 상태입니다" };
     }
 
-    const user = await getCurrentUser();
-    if (!user?.organizationId) {
-      return { success: false, error: "인증된 사용자를 찾을 수 없습니다" };
-    }
-    const orgId = user.organizationId;
-
     // 현재 발주서 조회
     const [order] = await db
       .select()
       .from(purchaseOrders)
-      .where(and(eq(purchaseOrders.id, orderId), eq(purchaseOrders.organizationId, orgId)))
+      .where(and(eq(purchaseOrders.id, orderId), eq(purchaseOrders.organizationId, TEMP_ORG_ID)))
       .limit(1);
 
     if (!order) {
@@ -710,28 +609,11 @@ export async function updatePurchaseOrderStatus(
     // 기존 상태 저장 (로깅용)
     const oldStatus = order.status;
 
-    // 승인(approved) 전환은 admin만 가능
-    if (newStatus === "approved" && user.role !== "admin") {
-      return { success: false, error: "발주서 승인은 관리자만 할 수 있습니다" };
-    }
-
     // 상태 업데이트
     const updateData: Record<string, unknown> = {
       status: newStatus,
       updatedAt: new Date(),
     };
-
-    // 승인 시 승인자/승인일 기록
-    if (newStatus === "approved") {
-      updateData.approvedById = user.id;
-      updateData.approvedAt = new Date();
-    }
-
-    // 승인 → 발주 확정 시에도 승인자 기록 (pending에서 바로 ordered로 전환하는 admin)
-    if (newStatus === "ordered" && oldStatus === "pending") {
-      updateData.approvedById = user.id;
-      updateData.approvedAt = new Date();
-    }
 
     // 입고완료/완료 시 실제입고일 기록
     if (newStatus === "received" || newStatus === "completed") {
@@ -744,16 +626,18 @@ export async function updatePurchaseOrderStatus(
       .where(eq(purchaseOrders.id, orderId));
 
     revalidatePath("/dashboard/orders");
-    revalidateTag(`sidebar-badges-${orgId}`);
 
     // 활동 로깅
-    await logActivity({
-      user,
-      action: "UPDATE",
-      entityType: "purchase_order",
-      entityId: orderId,
-      description: `발주서 상태 변경: ${oldStatus} → ${newStatus}`,
-    });
+    const user = await getCurrentUser();
+    if (user) {
+      await logActivity({
+        user,
+        action: "UPDATE",
+        entityType: "purchase_order",
+        entityId: orderId,
+        description: `발주서 상태 변경: ${oldStatus} → ${newStatus}`,
+      });
+    }
 
     return { success: true };
   } catch (error) {
@@ -767,7 +651,6 @@ export async function updatePurchaseOrderStatus(
  */
 export async function getPurchaseOrders(options?: {
   status?: string;
-  excludeStatus?: string;
   supplierId?: string;
   startDate?: string;
   endDate?: string;
@@ -780,24 +663,13 @@ export async function getPurchaseOrders(options?: {
   })[];
   total: number;
 }> {
-  const user = await getCurrentUser();
-  if (!user?.organizationId) {
-    return { orders: [], total: 0 };
-  }
-  const orgId = user.organizationId;
+  const { status, supplierId, startDate, endDate, limit = 50, offset = 0 } = options || {};
 
-  const { status, excludeStatus, supplierId, startDate, endDate, limit = 50, offset = 0 } = options || {};
-
-  const conditions = [eq(purchaseOrders.organizationId, orgId), isNull(purchaseOrders.deletedAt)];
+  const conditions = [eq(purchaseOrders.organizationId, TEMP_ORG_ID)];
 
   if (status) {
     conditions.push(
       eq(purchaseOrders.status, status as (typeof purchaseOrders.status.enumValues)[number])
-    );
-  }
-  if (excludeStatus) {
-    conditions.push(
-      ne(purchaseOrders.status, excludeStatus as (typeof purchaseOrders.status.enumValues)[number])
     );
   }
   if (supplierId) {
@@ -810,8 +682,7 @@ export async function getPurchaseOrders(options?: {
     conditions.push(lte(purchaseOrders.orderDate, endDate));
   }
 
-  // 성능 최적화: 상관 서브쿼리 제거 → 발주서 조회 후 항목 수를 배치로 가져옴
-  const [orderRows, countResult] = await Promise.all([
+  const [orders, countResult] = await Promise.all([
     db
       .select({
         order: purchaseOrders,
@@ -819,10 +690,13 @@ export async function getPurchaseOrders(options?: {
           id: suppliers.id,
           name: suppliers.name,
         },
+        itemsCount: sql<number>`count(${purchaseOrderItems.id})`,
       })
       .from(purchaseOrders)
       .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
+      .leftJoin(purchaseOrderItems, eq(purchaseOrderItems.purchaseOrderId, purchaseOrders.id))
       .where(and(...conditions))
+      .groupBy(purchaseOrders.id, suppliers.id, suppliers.name)
       .orderBy(desc(purchaseOrders.createdAt))
       .limit(limit)
       .offset(offset),
@@ -832,26 +706,11 @@ export async function getPurchaseOrders(options?: {
       .where(and(...conditions)),
   ]);
 
-  // 발주 항목 수를 한 번의 쿼리로 배치 조회 (N+1 → 1 쿼리)
-  const orderIds = orderRows.map((r) => r.order.id);
-  let itemsCountMap = new Map<string, number>();
-  if (orderIds.length > 0) {
-    const itemsCounts = await db
-      .select({
-        purchaseOrderId: purchaseOrderItems.purchaseOrderId,
-        count: sql<number>`count(*)`,
-      })
-      .from(purchaseOrderItems)
-      .where(inArray(purchaseOrderItems.purchaseOrderId, orderIds))
-      .groupBy(purchaseOrderItems.purchaseOrderId);
-    itemsCountMap = new Map(itemsCounts.map((r) => [r.purchaseOrderId, Number(r.count)]));
-  }
-
   return {
-    orders: orderRows.map((row) => ({
+    orders: orders.map((row) => ({
       ...row.order,
       supplier: row.supplier?.id ? row.supplier : null,
-      itemsCount: itemsCountMap.get(row.order.id) || 0,
+      itemsCount: Number(row.itemsCount),
     })),
     total: Number(countResult[0]?.count || 0),
   };
@@ -870,27 +729,24 @@ export async function getPurchaseOrderById(orderId: string): Promise<
     })
   | null
 > {
-  const user = await getCurrentUser();
-  if (!user?.organizationId) {
-    return null;
-  }
-  const orgId = user.organizationId;
+  const [orderData] = await db
+    .select({
+      order: purchaseOrders,
+      supplier: {
+        id: suppliers.id,
+        name: suppliers.name,
+        contactPhone: suppliers.contactPhone,
+      },
+    })
+    .from(purchaseOrders)
+    .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
+    .where(and(eq(purchaseOrders.id, orderId), eq(purchaseOrders.organizationId, TEMP_ORG_ID)))
+    .limit(1);
 
-  // 3개 쿼리를 완전 병렬 실행 (순차 2라운드트립 → 1라운드트립)
-  const [orderRows, items, shipments] = await Promise.all([
-    db
-      .select({
-        order: purchaseOrders,
-        supplier: {
-          id: suppliers.id,
-          name: suppliers.name,
-          contactPhone: suppliers.contactPhone,
-        },
-      })
-      .from(purchaseOrders)
-      .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
-      .where(and(eq(purchaseOrders.id, orderId), eq(purchaseOrders.organizationId, orgId)))
-      .limit(1),
+  if (!orderData) return null;
+
+  // 발주 항목 + 입항스케줄 최신 예상일 병렬 조회
+  const [items, shipments] = await Promise.all([
     db
       .select({
         item: purchaseOrderItems,
@@ -914,9 +770,6 @@ export async function getPurchaseOrderById(orderId: string): Promise<
       .orderBy(desc(importShipments.createdAt))
       .limit(1),
   ]);
-
-  const orderData = orderRows[0];
-  if (!orderData) return null;
 
   // 입항스케줄에서 예상입고일 추출 (warehouseEtaDate 우선, etaDate 폴백)
   const latestShipment = shipments[0];
@@ -934,133 +787,6 @@ export async function getPurchaseOrderById(orderId: string): Promise<
 }
 
 /**
- * 발주서 상세 + 입고 기록 + 변경 이력을 단일 요청으로 조회
- * (클라이언트에서 서버 액션 3개를 별도 호출하면 각각 HTTP 요청 + 인증 = 느림)
- */
-export async function getPurchaseOrderDetail(orderId: string): Promise<{
-  order: Awaited<ReturnType<typeof getPurchaseOrderById>>;
-  inboundRecords: Array<{
-    id: string;
-    date: string;
-    productName: string;
-    productSku: string;
-    receivedQuantity: number;
-    qualityResult: string | null;
-  }>;
-  activityLogs: Array<{
-    id: string;
-    description: string;
-    userName: string | null;
-    action: string;
-    createdAt: Date;
-  }>;
-} | null> {
-  const user = await getCurrentUser();
-  if (!user?.organizationId) return null;
-  const orgId = user.organizationId;
-
-  // 5개 쿼리를 단일 인증 + 완전 병렬로 실행
-  const [orderRows, items, shipments, inboundRows, logs] = await Promise.all([
-    // 1. 발주서 기본 정보
-    db
-      .select({
-        order: purchaseOrders,
-        supplier: {
-          id: suppliers.id,
-          name: suppliers.name,
-          contactPhone: suppliers.contactPhone,
-        },
-      })
-      .from(purchaseOrders)
-      .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
-      .where(and(eq(purchaseOrders.id, orderId), eq(purchaseOrders.organizationId, orgId)))
-      .limit(1),
-    // 2. 발주 항목
-    db
-      .select({
-        item: purchaseOrderItems,
-        product: {
-          sku: products.sku,
-          name: products.name,
-          unit: products.unit,
-        },
-      })
-      .from(purchaseOrderItems)
-      .innerJoin(products, eq(purchaseOrderItems.productId, products.id))
-      .where(eq(purchaseOrderItems.purchaseOrderId, orderId))
-      .orderBy(asc(purchaseOrderItems.createdAt)),
-    // 3. 입항스케줄
-    db
-      .select({
-        warehouseEtaDate: importShipments.warehouseEtaDate,
-        etaDate: importShipments.etaDate,
-      })
-      .from(importShipments)
-      .where(eq(importShipments.purchaseOrderId, orderId))
-      .orderBy(desc(importShipments.createdAt))
-      .limit(1),
-    // 4. 입고 기록 (인라인 — 별도 서버 액션 호출 제거)
-    db
-      .select({
-        id: inboundRecords.id,
-        date: inboundRecords.date,
-        receivedQuantity: inboundRecords.receivedQuantity,
-        qualityResult: inboundRecords.qualityResult,
-        productName: products.name,
-        productSku: products.sku,
-      })
-      .from(inboundRecords)
-      .innerJoin(products, eq(inboundRecords.productId, products.id))
-      .where(
-        and(
-          eq(inboundRecords.organizationId, orgId),
-          eq(inboundRecords.purchaseOrderId, orderId)
-        )
-      )
-      .orderBy(desc(inboundRecords.createdAt))
-      .limit(100),
-    // 5. 변경 이력 (인라인 — 별도 서버 액션 호출 제거)
-    db
-      .select({
-        id: activityLogs.id,
-        description: activityLogs.description,
-        userName: activityLogs.userName,
-        action: activityLogs.action,
-        createdAt: activityLogs.createdAt,
-      })
-      .from(activityLogs)
-      .where(
-        and(
-          eq(activityLogs.organizationId, orgId),
-          eq(activityLogs.entityId, orderId)
-        )
-      )
-      .orderBy(desc(activityLogs.createdAt))
-      .limit(30),
-  ]);
-
-  const orderData = orderRows[0];
-  if (!orderData) return null;
-
-  const latestShipment = shipments[0];
-  const shipmentEta = latestShipment?.warehouseEtaDate || latestShipment?.etaDate || null;
-
-  return {
-    order: {
-      ...orderData.order,
-      supplier: orderData.supplier?.id ? orderData.supplier : null,
-      items: items.map((row) => ({
-        ...row.item,
-        product: row.product,
-      })),
-      shipmentEta,
-    },
-    inboundRecords: inboundRows,
-    activityLogs: logs,
-  };
-}
-
-/**
  * 발주서 예상입고일 변경
  */
 export async function updatePurchaseOrderExpectedDate(
@@ -1073,8 +799,7 @@ export async function updatePurchaseOrderExpectedDate(
     }
 
     const user = await getCurrentUser();
-    if (!user?.organizationId) return { success: false, error: "인증이 필요합니다" };
-    const orgId = user.organizationId;
+    const orgId = user?.organizationId || TEMP_ORG_ID;
 
     const [order] = await db
       .select({ id: purchaseOrders.id })
@@ -1131,26 +856,19 @@ export async function cancelBulkPurchaseOrders(
       return { success: false, cancelledCount: 0, errors: [] };
     }
 
-    const user = await getCurrentUser();
-    if (!user?.organizationId) {
-      return { success: false, cancelledCount: 0, errors: [{ orderId: "", orderNumber: "", error: "인증이 필요합니다" }] };
-    }
-    const orgId = user.organizationId;
-
     // 선택된 발주서 조회
     const orders = await db
       .select({ id: purchaseOrders.id, orderNumber: purchaseOrders.orderNumber, status: purchaseOrders.status })
       .from(purchaseOrders)
       .where(
         and(
-          eq(purchaseOrders.organizationId, orgId),
-          inArray(purchaseOrders.id, orderIds)
+          eq(purchaseOrders.organizationId, TEMP_ORG_ID),
+          sql`${purchaseOrders.id} IN ${orderIds}`
         )
       );
 
     const cancellableStatuses = ["draft", "pending", "approved", "ordered", "confirmed"];
 
-    const cancellableIds: string[] = [];
     for (const order of orders) {
       if (!cancellableStatuses.includes(order.status)) {
         errors.push({
@@ -1158,27 +876,21 @@ export async function cancelBulkPurchaseOrders(
           orderNumber: order.orderNumber,
           error: `현재 상태(${order.status})에서는 취소할 수 없습니다`,
         });
-      } else {
-        cancellableIds.push(order.id);
+        continue;
       }
-    }
 
-    if (cancellableIds.length > 0) {
       await db
         .update(purchaseOrders)
         .set({ status: "cancelled", updatedAt: new Date() })
-        .where(
-          and(
-            eq(purchaseOrders.organizationId, orgId),
-            inArray(purchaseOrders.id, cancellableIds)
-          )
-        );
-      cancelledCount = cancellableIds.length;
+        .where(eq(purchaseOrders.id, order.id));
+
+      cancelledCount++;
     }
 
     revalidatePath("/dashboard/orders");
-    // 발주 취소 시 발주 필요 품목 캐시 무효화 (취소된 PO는 active_po_products에서 제외됨)
-    if (cancelledCount > 0) revalidateTag(`reorder-items-${orgId}`);
+
+    // 활동 로깅
+    const user = await getCurrentUser();
     if (user && cancelledCount > 0) {
       await logActivity({
         user,
@@ -1210,11 +922,9 @@ const createBulkPurchaseOrdersSchema = z.object({
         productId: z.string().uuid("유효한 제품 ID가 아닙니다"),
         quantity: z.number().min(1, "수량은 1 이상이어야 합니다"),
         supplierId: z.string().uuid("유효한 공급자 ID가 아닙니다"),
-        supplierNotes: z.string().optional(),
       })
     )
     .min(1, "최소 1개 이상의 품목이 필요합니다"),
-  warehouseId: z.string().uuid().optional(),
   notes: z.string().optional(),
 });
 
@@ -1274,19 +984,19 @@ export async function approveAutoReorders(
       notes: "자동 발주 추천에 의해 생성된 발주서",
     });
 
-    // 활동 로그 기록 (fire-and-forget — 응답 지연 방지)
+    // 활동 로그 기록
     const user = await getCurrentUser();
     if (user) {
-      logActivity({
+      await logActivity({
         user,
         action: "CREATE",
         entityType: "purchase_order",
         description: `자동 발주 추천 ${recommendationIds.length}건 승인 → 발주서 ${result.createdOrders.length}건 생성`,
         metadata: { recommendationIds, createdOrders: result.createdOrders },
-      }).catch((err: unknown) => console.error("활동 로그 기록 오류:", err));
+      });
     }
 
-    // revalidatePath는 createBulkPurchaseOrders 내부에서 이미 호출됨 — 중복 제거
+    revalidatePath("/dashboard/orders");
 
     return {
       success: result.success,
@@ -1369,14 +1079,10 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
     // 유효성 검사
     const validated = createBulkPurchaseOrdersSchema.parse(input);
 
-    // 사용자 정보 조회
+    // 사용자 정보 조회 (활동 로깅용)
     const user = await getCurrentUser();
-    if (!user?.organizationId) {
-      return { success: false, createdOrders: [], errors: [{ productId: "AUTH", error: "인증이 필요합니다" }] };
-    }
-    const orgId = user.organizationId;
 
-    // 1. 공급자별로 품목 그룹화 (메모리 작업, DB 쿼리 전에 먼저 수행)
+    // 1. 공급자별로 품목 그룹화
     const itemsBySupplier = new Map<string, typeof validated.items>();
     validated.items.forEach((item) => {
       const supplierItems = itemsBySupplier.get(item.supplierId) || [];
@@ -1384,44 +1090,11 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
       itemsBySupplier.set(item.supplierId, supplierItems);
     });
 
-    const allSupplierIds = [...itemsBySupplier.keys()];
-    const allProductIds = validated.items.map((i) => i.productId);
-
-    // 2. 모든 사전 데이터를 단일 Promise.all로 병렬 조회
-    //    (warehouseId, checkOrderLimit, suppliers, products, baseCount — 5개 쿼리 동시 실행)
+    // 발주 제한 확인 (생성할 발주서 수만큼 확인)
     const { checkOrderLimit } = await import("@/server/services/subscription/limits");
-    const warehousePromise = validated.warehouseId
-      ? Promise.resolve(validated.warehouseId)
-      : import("./warehouses").then(({ getDefaultWarehouseId }) => getDefaultWarehouseId(orgId));
-
-    const [resolvedWarehouseId, limit, allSuppliersData, allProductsData, baseCountRow] = await Promise.all([
-      warehousePromise,
-      checkOrderLimit(orgId),
-      db.select().from(suppliers).where(
-        and(eq(suppliers.organizationId, orgId), inArray(suppliers.id, allSupplierIds))
-      ),
-      db.select().from(products).where(
-        and(eq(products.organizationId, orgId), inArray(products.id, allProductIds))
-      ),
-      db.select({ count: sql<number>`count(*)` })
-        .from(purchaseOrders)
-        .where(
-          and(
-            eq(purchaseOrders.organizationId, orgId),
-            sql`DATE(${purchaseOrders.createdAt}) = CURRENT_DATE`
-          )
-        )
-        .then((r) => r[0]),
-    ]);
-
-    // warehouseId 검증
-    if (!resolvedWarehouseId) {
-      return { success: false, createdOrders: [], errors: [{ productId: "WAREHOUSE", error: "기본 창고를 찾을 수 없습니다" }] };
-    }
-    const warehouseId = resolvedWarehouseId;
-
-    // 발주 제한 확인
+    const limit = await checkOrderLimit(TEMP_ORG_ID);
     const ordersToCreate = itemsBySupplier.size;
+
     if (limit.limit !== Infinity && limit.current + ordersToCreate > limit.limit) {
       return {
         success: false,
@@ -1435,121 +1108,119 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
       };
     }
 
+    // 2. 사전 데이터 로드 (루프 밖에서 1회만 조회)
+    const allSupplierIds = [...itemsBySupplier.keys()];
+    const allProductIds = validated.items.map((i) => i.productId);
+
+    const [allSuppliersData, allProductsData, todayOrderCount] = await Promise.all([
+      // 전체 공급자 한번에 조회
+      db.select().from(suppliers).where(
+        and(eq(suppliers.organizationId, TEMP_ORG_ID), sql`${suppliers.id} IN ${allSupplierIds}`)
+      ),
+      // 전체 제품 한번에 조회
+      db.select().from(products).where(
+        and(eq(products.organizationId, TEMP_ORG_ID), sql`${products.id} IN ${allProductIds}`)
+      ),
+      // 오늘 발주 수 1회만 조회
+      db.select({ count: sql<number>`count(*)` }).from(purchaseOrders).where(
+        and(eq(purchaseOrders.organizationId, TEMP_ORG_ID), sql`DATE(${purchaseOrders.createdAt}) = CURRENT_DATE`)
+      ),
+    ]);
+
     const suppliersMap = new Map(allSuppliersData.map((s) => [s.id, s]));
     const productsMap = new Map(allProductsData.map((p) => [p.id, p]));
+    const baseOrderCount = Number(todayOrderCount[0]?.count || 0);
     const today = new Date();
     const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
-    const baseCount = Number(baseCountRow?.count || 0);
 
-    const supplierEntries = [...itemsBySupplier.entries()];
-
-    // 역할 기반 발주 상태 결정: admin → ordered (즉시 발주), manager → pending (결재 대기)
-    const initialStatus = user.role === "admin" ? "ordered" as const : "pending" as const;
-
-    // 성능 최적화: 공급자별 개별 트랜잭션 → 단일 트랜잭션 배치 INSERT
-    // 메모리에서 모든 발주 데이터를 준비한 후, 1개 트랜잭션으로 일괄 처리
-    const ordersToInsert: Array<{
-      orderValues: {
-        organizationId: string;
-        destinationWarehouseId: string;
-        orderNumber: string;
-        supplierId: string;
-        status: "ordered" | "pending";
-        totalAmount: number;
-        orderDate: string;
-        expectedDate: string;
-        notes?: string;
-        createdById?: string;
-      };
-      items: Array<{ productId: string; quantity: number; unitPrice: number; totalPrice: number }>;
-    }> = [];
-
-    for (const [supplierId, items] of supplierEntries) {
-      const supplier = suppliersMap.get(supplierId);
-      if (!supplier) {
-        items.forEach((item) => {
-          errors.push({ productId: item.productId, error: `공급자를 찾을 수 없습니다 (ID: ${supplierId})` });
-        });
-        continue;
-      }
-
-      const validItems = items.filter((item) => {
-        if (!productsMap.has(item.productId)) {
-          errors.push({ productId: item.productId, error: "제품을 찾을 수 없습니다" });
-          return false;
-        }
-        return true;
-      });
-      if (validItems.length === 0) continue;
-
-      let totalAmount = 0;
-      const orderItems = validItems.map((item) => {
-        const product = productsMap.get(item.productId)!;
-        const unitPrice = product.costPrice || 0;
-        const totalPrice = unitPrice * item.quantity;
-        totalAmount += totalPrice;
-        return { productId: item.productId, quantity: item.quantity, unitPrice, totalPrice };
-      });
-      if (orderItems.length === 0) continue;
-
-      const expectedDateObj = new Date();
-      expectedDateObj.setDate(expectedDateObj.getDate() + (supplier.avgLeadTime || 7));
-      const expectedDate = expectedDateObj.toISOString().split("T")[0];
-
-      const idx = ordersToInsert.length;
-      const sequence = (baseCount + idx + 1).toString().padStart(3, "0");
-      const orderNumber = `PO-${dateStr}-${sequence}`;
-
-      // 공급자 그룹 내 아이템의 supplierNotes가 있으면 우선 사용
-      const supplierNote = validItems.find((item) => item.supplierNotes)?.supplierNotes;
-
-      ordersToInsert.push({
-        orderValues: {
-          organizationId: orgId,
-          destinationWarehouseId: warehouseId,
-          orderNumber,
-          supplierId,
-          status: initialStatus,
-          totalAmount,
-          orderDate: today.toISOString().split("T")[0],
-          expectedDate,
-          notes: supplierNote || validated.notes,
-          createdById: user.id,
-        },
-        items: orderItems,
-      });
-    }
-
-    // 단일 트랜잭션: 모든 발주서 + 모든 발주 항목을 배치 INSERT
-    if (ordersToInsert.length > 0) {
+    // 3. 공급자별로 발주서 생성 (DB 조회 없이 메모리에서 처리)
+    for (const [supplierId, items] of itemsBySupplier.entries()) {
       try {
-        const insertedOrders = await db.transaction(async (tx) => {
-          // 발주서 배치 INSERT
-          const orders = await tx
+        const supplier = suppliersMap.get(supplierId);
+        if (!supplier) {
+          items.forEach((item) => {
+            errors.push({ productId: item.productId, error: `공급자를 찾을 수 없습니다 (ID: ${supplierId})` });
+          });
+          continue;
+        }
+
+        // 제품 유효성 검증 (메모리에서)
+        const validItems = items.filter((item) => {
+          if (!productsMap.has(item.productId)) {
+            errors.push({ productId: item.productId, error: "제품을 찾을 수 없습니다" });
+            return false;
+          }
+          return true;
+        });
+        if (validItems.length === 0) continue;
+
+        // 발주 항목 계산
+        let totalAmount = 0;
+        const orderItems = validItems.map((item) => {
+          const product = productsMap.get(item.productId)!;
+          const unitPrice = product.costPrice || 0;
+          const totalPrice = unitPrice * item.quantity;
+          totalAmount += totalPrice;
+          return { productId: item.productId, quantity: item.quantity, unitPrice, totalPrice };
+        });
+
+        if (orderItems.length === 0) continue;
+
+        // 발주번호 생성 (사전 조회된 카운트 사용)
+        const sequence = (baseOrderCount + createdOrders.length + 1).toString().padStart(3, "0");
+        const orderNumber = `PO-${dateStr}-${sequence}`;
+
+        // 예상입고일 계산 (리드타임 기반)
+        const expectedDateObj = new Date();
+        expectedDateObj.setDate(expectedDateObj.getDate() + (supplier.avgLeadTime || 7));
+        const expectedDate = expectedDateObj.toISOString().split("T")[0];
+
+        // 트랜잭션으로 발주서 및 발주 항목 생성
+        const newOrder = await db.transaction(async (tx) => {
+          // 발주서 생성
+          const [order] = await tx
             .insert(purchaseOrders)
-            .values(ordersToInsert.map((o) => o.orderValues))
+            .values({
+              organizationId: TEMP_ORG_ID,
+              orderNumber,
+              supplierId,
+              status: "ordered",
+              totalAmount,
+              orderDate: today.toISOString().split("T")[0],
+              expectedDate,
+              notes: validated.notes,
+            })
             .returning();
 
-          // 발주 항목 배치 INSERT (모든 항목을 한 번에)
-          const allOrderItems = orders.flatMap((order, index) =>
-            ordersToInsert[index].items.map((item) => ({
+          // 발주 항목 생성
+          await tx.insert(purchaseOrderItems).values(
+            orderItems.map((item) => ({
               purchaseOrderId: order.id,
               ...item,
             }))
           );
-          if (allOrderItems.length > 0) {
-            await tx.insert(purchaseOrderItems).values(allOrderItems);
-          }
 
-          return orders;
+          return order;
         });
 
-        createdOrders.push(...insertedOrders.map((o) => o.id));
+        createdOrders.push(newOrder.id);
+
+        // 활동 로깅
+        if (user) {
+          await logActivity({
+            user,
+            action: "CREATE",
+            entityType: "purchase_order",
+            entityId: newOrder.id,
+            description: `${orderNumber} 발주서 생성`,
+          });
+        }
       } catch (error) {
-        console.error("일괄 발주서 생성 트랜잭션 오류:", error);
-        ordersToInsert.forEach((o) => {
-          o.items.forEach((item) => {
-            errors.push({ productId: item.productId, error: "발주서 생성에 실패했습니다" });
+        console.error(`공급자 ${supplierId} 발주서 생성 오류:`, error);
+        items.forEach((item) => {
+          errors.push({
+            productId: item.productId,
+            error: "발주서 생성에 실패했습니다",
           });
         });
       }
@@ -1557,31 +1228,15 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
 
     revalidatePath("/dashboard/orders");
 
-    // fire-and-forget: 활동 로깅 + 결재대기 알림 (응답 지연 방지)
+    // 일괄 생성 전체에 대한 활동 로깅
     if (createdOrders.length > 0 && user) {
-      logActivity({
+      await logActivity({
         user,
         action: "CREATE",
         entityType: "purchase_order",
-        entityId: createdOrders[0],
+        entityId: createdOrders[0], // 첫 번째 발주서 ID 참조
         description: `발주서 ${createdOrders.length}건 일괄 생성`,
-      }).catch((err: unknown) => {
-        console.error("활동 로그 기록 오류:", err);
       });
-
-      // 매니저가 발주 상신(pending) 시 관리자에게 알림 생성
-      if (initialStatus === "pending") {
-        db.insert(alerts).values({
-          organizationId: orgId,
-          type: "order_pending",
-          severity: "warning",
-          title: "발주 결재 요청",
-          message: `${user.name || user.email}님이 발주서 ${createdOrders.length}건의 승인을 요청했습니다.`,
-          actionUrl: "/dashboard/orders?tab=orders",
-        }).catch((err: unknown) => {
-          console.error("결재 알림 생성 오류:", err);
-        });
-      }
     }
 
     return {
@@ -1624,22 +1279,18 @@ export async function uploadPurchaseOrderExcel(
 ): Promise<{ success: boolean; message: string; createdCount: number }> {
   try {
     const user = await getCurrentUser();
-    if (!user?.organizationId) return { success: false, message: "인증이 필요합니다", createdCount: 0 };
-    const orgId = user.organizationId;
+    const orgId = user?.organizationId || TEMP_ORG_ID;
 
     const file = formData.get("file") as File;
     if (!file) return { success: false, message: "파일이 없습니다", createdCount: 0 };
 
-    const buffer = await file.arrayBuffer();
-    const workbook = await parseExcelBuffer(buffer);
-    const rows = await sheetToJson<Record<string, unknown>>(workbook);
+    const { default: XLSX } = await import("xlsx");
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const workbook = XLSX.read(buffer, { type: "buffer" });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
 
     if (rows.length === 0) return { success: false, message: "데이터가 없습니다", createdCount: 0 };
-
-    const MAX_UPLOAD_ROWS = 500;
-    if (rows.length > MAX_UPLOAD_ROWS) {
-      return { success: false, message: `한 번에 최대 ${MAX_UPLOAD_ROWS}행까지 업로드 가능합니다. 현재 ${rows.length}행입니다. 파일을 나누어 업로드해 주세요.`, createdCount: 0 };
-    }
 
     // 헤더 파싱
     const headers = Object.keys(rows[0]);
@@ -1656,9 +1307,9 @@ export async function uploadPurchaseOrderExcel(
     const containerCol = headers.find((h) => ["컨테이너", "컨테이너번호", "CNTR", "container", "Container"].includes(h.trim()));
     const notesCol = headers.find((h) => ["메모", "비고", "notes", "Notes", "memo"].includes(h.trim()));
 
-    // SKU → productId + primarySupplierId 매핑
+    // SKU → productId 매핑
     const productList = await db
-      .select({ id: products.id, sku: products.sku, primarySupplierId: products.primarySupplierId })
+      .select({ id: products.id, sku: products.sku })
       .from(products)
       .where(eq(products.organizationId, orgId));
     const skuMap = new Map(productList.map((p) => [p.sku, p.id]));
@@ -1669,23 +1320,6 @@ export async function uploadPurchaseOrderExcel(
       .from(suppliers)
       .where(eq(suppliers.organizationId, orgId));
     const supplierNameMap = new Map(supplierList.map((s) => [s.name, s.id]));
-
-    // 엑셀에 있는 공급자명 중 DB에 없는 것은 자동 생성 (배치 INSERT)
-    if (supplierCol) {
-      const excelSupplierNames = new Set(
-        rows.map((row) => String(row[supplierCol] || "").trim()).filter(Boolean)
-      );
-      const newSupplierNames = [...excelSupplierNames].filter((name) => !supplierNameMap.has(name));
-      if (newSupplierNames.length > 0) {
-        const createdSuppliers = await db
-          .insert(suppliers)
-          .values(newSupplierNames.map((name) => ({ organizationId: orgId, name })))
-          .returning({ id: suppliers.id, name: suppliers.name });
-        for (const created of createdSuppliers) {
-          supplierNameMap.set(created.name, created.id);
-        }
-      }
-    }
 
     // 행 파싱 및 공급자별 그룹화
     type ParsedItem = {
@@ -1701,14 +1335,6 @@ export async function uploadPurchaseOrderExcel(
     const itemsBySupplier = new Map<string, ParsedItem[]>();
     const skipped: string[] = [];
 
-    // productId → primarySupplierId 매핑 (products 테이블에서 직접)
-    const productToSupplier = new Map<string, string>();
-    for (const p of productList) {
-      if (p.primarySupplierId) {
-        productToSupplier.set(p.id, p.primarySupplierId);
-      }
-    }
-
     for (const row of rows) {
       const sku = String(row[skuCol] || "").trim();
       if (!sku) continue;
@@ -1722,14 +1348,20 @@ export async function uploadPurchaseOrderExcel(
       const quantity = Number(row[qtyCol]) || 0;
       if (quantity <= 0) continue;
 
-      // 공급자: 엑셀에 있으면 매칭, 없으면 primarySupplierId에서 조회
+      // 공급자: 엑셀에 있으면 매칭, 없으면 첫 번째 공급자
       let supplierId = "";
       if (supplierCol && row[supplierCol]) {
         const supplierName = String(row[supplierCol]).trim();
         supplierId = supplierNameMap.get(supplierName) || "";
       }
       if (!supplierId) {
-        supplierId = productToSupplier.get(productId) || "";
+        // 제품의 공급자 매핑에서 조회
+        const [mapping] = await db
+          .select({ supplierId: sql<string>`supplier_id` })
+          .from(sql`supplier_products`)
+          .where(sql`product_id = ${productId}`)
+          .limit(1);
+        supplierId = mapping?.supplierId || "";
       }
       if (!supplierId) {
         skipped.push(`${sku} (공급자 미지정)`);
@@ -1760,14 +1392,16 @@ export async function uploadPurchaseOrderExcel(
       };
     }
 
-    // 모든 공급자의 items를 하나의 배열로 통합 (supplierNotes에 공급자별 메모 포함)
-    const allBulkItems: Array<{
-      productId: string;
-      quantity: number;
-      supplierId: string;
-      supplierNotes?: string;
-    }> = [];
+    // 공급자별 발주서 생성
+    const createdItems = [];
     for (const [supplierId, items] of itemsBySupplier.entries()) {
+      const bulkItems = items.map((item) => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        supplierId,
+      }));
+
+      // 메모에 B/L, 컨테이너 정보 포함
       const noteParts: string[] = [];
       const blNumbers = items.map((i) => i.blNumber).filter(Boolean);
       const containerNumbers = items.map((i) => i.containerNumber).filter(Boolean);
@@ -1775,23 +1409,16 @@ export async function uploadPurchaseOrderExcel(
       if (blNumbers.length > 0) noteParts.push(`B/L: ${[...new Set(blNumbers)].join(", ")}`);
       if (containerNumbers.length > 0) noteParts.push(`CNTR: ${[...new Set(containerNumbers)].join(", ")}`);
       if (itemNotes.length > 0) noteParts.push(itemNotes.join("; "));
-      const supplierNotes = noteParts.length > 0 ? `[엑셀 업로드] ${noteParts.join(" | ")}` : "[엑셀 업로드]";
 
-      for (const item of items) {
-        allBulkItems.push({
-          productId: item.productId,
-          quantity: item.quantity,
-          supplierId,
-          supplierNotes,
-        });
+      const result = await createBulkPurchaseOrders({
+        items: bulkItems,
+        notes: noteParts.length > 0 ? `[엑셀 업로드] ${noteParts.join(" | ")}` : "[엑셀 업로드]",
+      });
+
+      if (result.success) {
+        createdItems.push(...result.createdOrders);
       }
     }
-
-    const result = await createBulkPurchaseOrders({
-      items: allBulkItems,
-      notes: "[엑셀 업로드]",
-    });
-    const createdItems = result.success ? result.createdOrders : [];
 
     revalidatePath("/dashboard/orders");
 
@@ -1806,7 +1433,6 @@ export async function uploadPurchaseOrderExcel(
     };
   } catch (error) {
     console.error("발주 엑셀 업로드 실패:", error);
-    const detail = error instanceof Error ? error.message : "알 수 없는 오류";
-    return { success: false, message: `업로드 중 오류가 발생했습니다: ${detail}`, createdCount: 0 };
+    return { success: false, message: "업로드 중 오류가 발생했습니다", createdCount: 0 };
   }
 }
