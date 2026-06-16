@@ -690,13 +690,15 @@ export async function getPurchaseOrders(options?: {
           id: suppliers.id,
           name: suppliers.name,
         },
-        itemsCount: sql<number>`count(${purchaseOrderItems.id})`,
+        itemsCount: sql<number>`(
+          SELECT COUNT(*)
+          FROM ${purchaseOrderItems}
+          WHERE ${purchaseOrderItems.purchaseOrderId} = ${purchaseOrders.id}
+        )`,
       })
       .from(purchaseOrders)
       .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
-      .leftJoin(purchaseOrderItems, eq(purchaseOrderItems.purchaseOrderId, purchaseOrders.id))
       .where(and(...conditions))
-      .groupBy(purchaseOrders.id, suppliers.id, suppliers.name)
       .orderBy(desc(purchaseOrders.createdAt))
       .limit(limit)
       .offset(offset),

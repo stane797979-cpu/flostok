@@ -13,10 +13,10 @@ export default async function OrdersPage({
   const { tab } = await searchParams;
   const resolvedTab: OrderTab = tab && VALID_TABS.includes(tab as OrderTab) ? (tab as OrderTab) : "reorder";
 
+  // tab=orders는 클라이언트에서 직접 fetch (SSR 대기 없이 페이지 즉시 열림)
   const fetchPromises: [
     Promise<Awaited<ReturnType<typeof getReorderItems>> | null>,
     Promise<Awaited<ReturnType<typeof getDeliveryComplianceData>> | null>,
-    Promise<Awaited<ReturnType<typeof getPurchaseOrders>> | null>,
   ] = [
     resolvedTab === "reorder" || resolvedTab === "auto-reorder"
       ? getReorderItems()
@@ -24,12 +24,9 @@ export default async function OrdersPage({
     resolvedTab === "delivery"
       ? getDeliveryComplianceData()
       : Promise.resolve(null),
-    resolvedTab === "orders"
-      ? getPurchaseOrders({ limit: 100 })
-      : Promise.resolve(null),
   ];
 
-  const [reorderResult, complianceResult, ordersResult] = await Promise.allSettled(fetchPromises);
+  const [reorderResult, complianceResult] = await Promise.allSettled(fetchPromises);
 
   const serverReorderItems =
     reorderResult.status === "fulfilled" && reorderResult.value
@@ -37,10 +34,6 @@ export default async function OrdersPage({
       : [];
   const deliveryComplianceData =
     complianceResult.status === "fulfilled" ? complianceResult.value : null;
-  const serverPurchaseOrders =
-    ordersResult.status === "fulfilled" && ordersResult.value
-      ? ordersResult.value.orders
-      : undefined;
 
   return (
     <OrdersClient
@@ -48,7 +41,6 @@ export default async function OrdersPage({
       initialTab={resolvedTab}
       serverReorderItems={serverReorderItems}
       deliveryComplianceData={deliveryComplianceData}
-      serverPurchaseOrders={serverPurchaseOrders}
     />
   );
 }
