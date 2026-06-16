@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -144,6 +145,7 @@ interface OrdersClientProps {
 }
 
 export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], deliveryComplianceData = null, serverPurchaseOrders }: OrdersClientProps) {
+  const router = useRouter();
   // 발주 필요 품목 (발주 후 재조회 가능하도록 state로 관리)
   const [reorderItems, setReorderItems] = useState<ReorderItem[]>(
     () => serverReorderItems.map(mapServerToClientReorderItem)
@@ -632,11 +634,8 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
           title: "자동 발주 승인 완료",
           description: `${result.createdOrders.length}개의 발주서가 생성되었습니다`,
         });
-        // 승인된 항목 즉시 목록에서 제거
-        const approvedProductIds = selectedRecs.map((r) => r.productId);
-        setReorderItems((prev) => prev.filter((item) => !approvedProductIds.includes(item.productId)));
         setSelectedAutoReorderIds([]);
-        loadPurchaseOrders();
+        router.push("/dashboard/orders?tab=orders");
       } else if (result.success && result.errors.length > 0) {
         // 성공한 항목만 제거, 실패한 항목은 유지
         const failedProductIds = new Set(result.errors.map((e) => e.recommendationId));
