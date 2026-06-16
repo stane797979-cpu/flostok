@@ -139,7 +139,6 @@ export const MAIN_SECTIONS: NavSection[] = [
         menuKey: "inventory",
         children: [
           { title: "재고현황", href: "/dashboard/inventory?tab=inventory", menuKey: "inventory" },
-          { title: "결품관리", href: "/dashboard/inventory?tab=stockout", menuKey: "inventory" },
         ],
       },
     ],
