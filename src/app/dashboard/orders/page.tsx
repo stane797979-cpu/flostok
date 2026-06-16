@@ -13,23 +13,34 @@ export default async function OrdersPage({
   const { tab } = await searchParams;
   const resolvedTab: OrderTab = tab && VALID_TABS.includes(tab as OrderTab) ? (tab as OrderTab) : "reorder";
 
-  const fetchPromises: Promise<unknown>[] = [
-    getReorderItems(),
-    getDeliveryComplianceData(),
+  const fetchPromises: [
+    Promise<Awaited<ReturnType<typeof getReorderItems>> | null>,
+    Promise<Awaited<ReturnType<typeof getDeliveryComplianceData>> | null>,
+    Promise<Awaited<ReturnType<typeof getPurchaseOrders>> | null>,
+  ] = [
+    resolvedTab === "reorder" || resolvedTab === "auto-reorder"
+      ? getReorderItems()
+      : Promise.resolve(null),
+    resolvedTab === "delivery"
+      ? getDeliveryComplianceData()
+      : Promise.resolve(null),
+    resolvedTab === "orders"
+      ? getPurchaseOrders({ limit: 100 })
+      : Promise.resolve(null),
   ];
-  if (resolvedTab === "orders") {
-    fetchPromises.push(getPurchaseOrders({ limit: 100 }));
-  }
 
-  const results = await Promise.allSettled(fetchPromises);
-  const [reorderResult, complianceResult, ordersResult] = results;
+  const [reorderResult, complianceResult, ordersResult] = await Promise.allSettled(fetchPromises);
 
   const serverReorderItems =
-    reorderResult.status === "fulfilled" ? (reorderResult.value as Awaited<ReturnType<typeof getReorderItems>>).items : [];
+    reorderResult.status === "fulfilled" && reorderResult.value
+      ? reorderResult.value.items
+      : [];
   const deliveryComplianceData =
-    complianceResult.status === "fulfilled" ? (complianceResult.value as Awaited<ReturnType<typeof getDeliveryComplianceData>>) : null;
+    complianceResult.status === "fulfilled" ? complianceResult.value : null;
   const serverPurchaseOrders =
-    ordersResult?.status === "fulfilled" ? (ordersResult.value as Awaited<ReturnType<typeof getPurchaseOrders>>).orders : undefined;
+    ordersResult.status === "fulfilled" && ordersResult.value
+      ? ordersResult.value.orders
+      : undefined;
 
   return (
     <OrdersClient

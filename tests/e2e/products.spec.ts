@@ -89,10 +89,11 @@ test.describe("제품 관리", () => {
   });
 
   test("체크박스 선택 및 일괄 삭제", async ({ page }) => {
-    const checkboxes = page.locator('input[type="checkbox"]:visible');
+    // Radix UI 체크박스: aria-hidden input이 아닌 role="checkbox" div를 클릭
+    const checkboxes = page.locator('[role="checkbox"]');
     const count = await checkboxes.count();
     if (count > 0) {
-      await checkboxes.first().check({ force: true });
+      await checkboxes.first().click();
       await page.waitForTimeout(300);
     }
   });
