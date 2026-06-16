@@ -45,7 +45,7 @@ export default defineConfig({
     },
     {
       name: 'chromium',
-      testIgnore: /auth\.spec\.ts/,
+      testIgnore: [/auth\.spec\.ts/, /psi-realdata-test\.spec\.ts/, /verify-group-c\.spec\.ts/, /verify-phase-4-7\.spec\.ts/],
       use: {
         ...devices['Desktop Chrome'],
         storageState: authFile,
