@@ -10,7 +10,6 @@ import {
   Gauge,
   Bell,
   MessageSquare,
-  CreditCard,
   Settings,
   HelpCircle,
   FileSearch,
@@ -219,12 +218,6 @@ export const MAIN_NAV: NavItem[] = MAIN_SECTIONS.flatMap((s) => s.items);
  * 하단 고정 메뉴
  */
 export const BOTTOM_NAV: NavItem[] = [
-  {
-    title: "결제 및 구독",
-    href: "/dashboard/billing",
-    icon: CreditCard,
-    description: "플랜 관리 및 결제 내역",
-  },
   {
     title: "설정",
     href: "/dashboard/settings",
