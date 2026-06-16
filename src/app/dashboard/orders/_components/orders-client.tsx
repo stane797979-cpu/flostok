@@ -146,6 +146,13 @@ interface OrdersClientProps {
 
 export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], deliveryComplianceData = null, serverPurchaseOrders }: OrdersClientProps) {
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState(initialTab);
+
+  const switchTab = useCallback((tab: string) => {
+    setActiveTab(tab as typeof initialTab);
+    router.replace(`/dashboard/orders?tab=${tab}`, { scroll: false });
+  }, [router]);
+
   // 발주 필요 품목 (발주 후 재조회 가능하도록 state로 관리)
   const [reorderItems, setReorderItems] = useState<ReorderItem[]>(
     () => serverReorderItems.map(mapServerToClientReorderItem)
@@ -319,13 +326,13 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
 
   // 초기 로드 (탭에 따라 필요한 데이터만 로드)
   useEffect(() => {
-    if (initialTab === "orders" && !serverPurchaseOrders) {
+    if (activeTab === "orders" && !serverPurchaseOrders) {
       loadPurchaseOrders();
-    } else if (initialTab === "inbound") {
+    } else if (activeTab === "inbound") {
       loadInboundRecords(inboundMonth);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialTab]);
+  }, [activeTab]);
 
   // 긴급도별 카운트
   const urgentCount = reorderItems.filter((item) => item.urgencyLevel <= 1).length;
@@ -380,7 +387,8 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
         setReorderItems((prev) => prev.filter((item) => !orderedProductIds.includes(item.productId)));
         setSelectedIds([]);
         setBulkOrderDialogOpen(false);
-        router.push("/dashboard/orders?tab=orders");
+        loadPurchaseOrders();
+        switchTab("orders");
       } else if (result.errors.length > 0) {
         toast({
           title: "일괄 발주 실패",
@@ -426,7 +434,8 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
         setReorderItems((prev) => prev.filter((item) => item.productId !== data.productId));
         setSelectedProduct(null);
         setOrderDialogOpen(false);
-        router.push("/dashboard/orders?tab=orders");
+        loadPurchaseOrders();
+        switchTab("orders");
       } else {
         toast({
           title: "발주 실패",
@@ -638,7 +647,8 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
         const approvedProductIds = selectedRecs.map((r) => r.productId);
         setReorderItems((prev) => prev.filter((item) => !approvedProductIds.includes(item.productId)));
         setSelectedAutoReorderIds([]);
-        router.push("/dashboard/orders?tab=orders");
+        loadPurchaseOrders();
+        switchTab("orders");
       } else if (result.success && result.errors.length > 0) {
         const failedIds = new Set(result.errors.map((e) => e.recommendationId));
         const successProductIds = selectedRecs.filter((r) => !failedIds.has(r.id)).map((r) => r.productId);
@@ -649,7 +659,8 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
           variant: "destructive",
         });
         setSelectedAutoReorderIds([]);
-        router.push("/dashboard/orders?tab=orders");
+        loadPurchaseOrders();
+        switchTab("orders");
       } else {
         toast({
           title: "자동 발주 승인 실패",
@@ -705,7 +716,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
     "import-shipment": { title: "입항스케줄", description: "수입 화물 입항 일정을 관리하세요" },
   };
 
-  const currentPage = pageTitles[initialTab] || pageTitles.reorder;
+  const currentPage = pageTitles[activeTab] || pageTitles.reorder;
 
   return (
     <div className="space-y-6">
@@ -714,7 +725,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
         <p className="mt-2 text-slate-500">{currentPage.description}</p>
       </div>
 
-      {initialTab === "reorder" && (
+      {activeTab === "reorder" && (
         <div className="space-y-4">
           <ReorderSummary
             urgentCount={urgentCount}
@@ -785,7 +796,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
         </div>
       )}
 
-      {initialTab === "auto-reorder" && (
+      {activeTab === "auto-reorder" && (
         <div className="space-y-4">
           <Card>
             <CardHeader>
@@ -807,7 +818,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
         </div>
       )}
 
-      {initialTab === "orders" && (
+      {activeTab === "orders" && (
         <div className="space-y-4">
           <Card>
             <CardHeader>
@@ -878,7 +889,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
         </div>
       )}
 
-      {initialTab === "inbound" && (
+      {activeTab === "inbound" && (
         <div className="space-y-4">
           <Card>
             <CardHeader>
@@ -939,11 +950,11 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
         </div>
       )}
 
-      {initialTab === "delivery" && (
+      {activeTab === "delivery" && (
         <DeliveryComplianceTab data={deliveryComplianceData} />
       )}
 
-      {initialTab === "import-shipment" && (
+      {activeTab === "import-shipment" && (
         <ImportShipmentTab />
       )}
 
