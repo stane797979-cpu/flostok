@@ -3,6 +3,7 @@
 import { ReactNode, Suspense, useState } from "react";
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
+import { ThemeToggle } from "./theme-toggle";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 
 interface DashboardShellProps {
@@ -14,20 +15,19 @@ interface DashboardShellProps {
     isSuperadmin?: boolean;
     allowedMenus?: string[];
   };
-  sidebarBadges?: Record<string, number>;
 }
 
-export function DashboardShell({ children, userInfo, sidebarBadges }: DashboardShellProps) {
+export function DashboardShell({ children, userInfo }: DashboardShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleNavigation = () => setMobileOpen(false);
 
   return (
     <div className="flex h-screen overflow-hidden">
-      {/* 데스크탑 사이드바 */}
+      {/* 데스크톱 사이드바 */}
       <div className="hidden lg:flex">
         <Suspense>
-          <Sidebar userInfo={userInfo} badges={sidebarBadges} />
+          <Sidebar userInfo={userInfo} />
         </Suspense>
       </div>
 
@@ -38,7 +38,6 @@ export function DashboardShell({ children, userInfo, sidebarBadges }: DashboardS
           <Suspense>
             <Sidebar
               userInfo={userInfo}
-              badges={sidebarBadges}
               onNavigate={handleNavigation}
               className="border-r-0"
             />
@@ -48,8 +47,11 @@ export function DashboardShell({ children, userInfo, sidebarBadges }: DashboardS
 
       {/* 메인 콘텐츠 영역 */}
       <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex items-center justify-end border-b border-slate-200 bg-white px-4 py-1 dark:border-slate-800 dark:bg-slate-950 lg:flex">
+          <ThemeToggle />
+        </div>
         <Header onMenuClick={() => setMobileOpen(true)} />
-        <main className="flex-1 overflow-y-auto bg-slate-50 dark:bg-background p-4 md:p-6 lg:p-8">
+        <main className="flex-1 overflow-y-auto bg-slate-50 p-4 md:p-6 lg:p-8 dark:bg-slate-900">
           {children}
         </main>
       </div>

@@ -16,7 +16,7 @@ export default function RootLayout({
   return (
     <html lang="ko" suppressHydrationWarning>
       <body className="antialiased">
-        <ThemeProvider attribute="class" forcedTheme="light" disableTransitionOnChange>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
           <AnalyticsProvider />
           {children}
         </ThemeProvider>
