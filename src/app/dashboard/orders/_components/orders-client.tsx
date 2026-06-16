@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -138,18 +138,34 @@ function formatMonth(date: Date): string {
 type ServerPurchaseOrder = Awaited<ReturnType<typeof getPurchaseOrders>>["orders"][number];
 
 interface OrdersClientProps {
-  initialTab?: "reorder" | "auto-reorder" | "orders" | "inbound" | "delivery" | "import-shipment";
   serverReorderItems?: ServerReorderItem[];
   deliveryComplianceData?: DeliveryComplianceResult | null;
   serverPurchaseOrders?: ServerPurchaseOrder[];
 }
 
-export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], deliveryComplianceData = null, serverPurchaseOrders }: OrdersClientProps) {
+const VALID_TABS_SET = new Set(["reorder", "auto-reorder", "orders", "inbound", "delivery", "import-shipment"]);
+
+type TabType = "reorder" | "auto-reorder" | "orders" | "inbound" | "delivery" | "import-shipment";
+
+export function OrdersClient({ serverReorderItems = [], deliveryComplianceData = null, serverPurchaseOrders }: OrdersClientProps) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState(initialTab);
+  const searchParams = useSearchParams();
+
+  const getTabFromUrl = (): TabType => {
+    const tab = searchParams.get("tab") || "reorder";
+    return VALID_TABS_SET.has(tab) ? (tab as TabType) : "reorder";
+  };
+
+  const [activeTab, setActiveTab] = useState<TabType>(getTabFromUrl);
+
+  // URL ?tab= 변경 시 activeTab 동기화 (페이지 리마운트 없이)
+  useEffect(() => {
+    setActiveTab(getTabFromUrl());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const switchTab = useCallback((tab: string) => {
-    setActiveTab(tab as typeof initialTab);
+    setActiveTab(tab as TabType);
   }, []);
 
   // 발주 필요 품목 (발주 후 재조회 가능하도록 state로 관리)
@@ -195,7 +211,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
     }
     return [];
   });
-  const [isLoadingOrders, setIsLoadingOrders] = useState(initialTab === "orders" && !serverPurchaseOrders);
+  const [isLoadingOrders, setIsLoadingOrders] = useState(false);
 
   // 발주 현황 체크박스
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
@@ -323,15 +339,15 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
     }
   }, [inboundMonth, toast]);
 
-  // 초기 로드 (최초 1회)
+  // activeTab 변경 시 필요한 데이터 로드
   useEffect(() => {
-    if (initialTab === "orders" && !serverPurchaseOrders) {
+    if (activeTab === "orders") {
       loadPurchaseOrders();
-    } else if (initialTab === "inbound") {
+    } else if (activeTab === "inbound") {
       loadInboundRecords(inboundMonth);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [activeTab]);
 
   // 긴급도별 카운트
   const urgentCount = reorderItems.filter((item) => item.urgencyLevel <= 1).length;
