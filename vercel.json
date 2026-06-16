@@ -41,7 +41,7 @@
   "crons": [
     {
       "path": "/api/cron/ping",
-      "schedule": "0 0 */4 * *"
+      "schedule": "*/5 * * * *"
     }
   ],
   "cleanUrls": true,

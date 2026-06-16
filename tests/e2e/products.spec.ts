@@ -67,18 +67,14 @@ test.describe("제품 관리", () => {
     }
   });
 
-  test("엑셀 업로드 버튼", async ({ page }) => {
-    const uploadButton = page.getByRole("button", { name: /업로드/ });
-    if (await uploadButton.isVisible()) {
-      await expect(uploadButton).toBeVisible();
-    }
+  test("엑셀 양식 다운로드 버튼", async ({ page }) => {
+    const templateButton = page.getByRole("button", { name: "양식 다운로드" });
+    await expect(templateButton).toBeVisible({ timeout: 10000 });
   });
 
   test("엑셀 다운로드 버튼", async ({ page }) => {
-    const downloadButton = page.getByRole("button", { name: /다운로드/ });
-    if (await downloadButton.isVisible()) {
-      await expect(downloadButton).toBeVisible();
-    }
+    const downloadButton = page.getByRole("button", { name: "엑셀 다운로드" });
+    await expect(downloadButton).toBeVisible({ timeout: 10000 });
   });
 
   test("ABC/XYZ 등급 뱃지 렌더링", async ({ page }) => {
