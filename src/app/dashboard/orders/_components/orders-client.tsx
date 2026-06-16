@@ -376,10 +376,11 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
           title: "일괄 발주 완료",
           description: `${result.createdOrders.length}개의 발주서가 생성되었습니다`,
         });
+        const orderedProductIds = data.items.map((i) => i.productId);
+        setReorderItems((prev) => prev.filter((item) => !orderedProductIds.includes(item.productId)));
         setSelectedIds([]);
         setBulkOrderDialogOpen(false);
-        loadPurchaseOrders();
-        loadReorderItems();
+        router.push("/dashboard/orders?tab=orders");
       } else if (result.errors.length > 0) {
         toast({
           title: "일괄 발주 실패",
@@ -422,10 +423,10 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
           title: "발주 완료",
           description: `${selectedProduct?.productName} ${data.quantity}개 발주가 생성되었습니다`,
         });
+        setReorderItems((prev) => prev.filter((item) => item.productId !== data.productId));
         setSelectedProduct(null);
         setOrderDialogOpen(false);
-        loadPurchaseOrders();
-        loadReorderItems();
+        router.push("/dashboard/orders?tab=orders");
       } else {
         toast({
           title: "발주 실패",
@@ -634,13 +635,13 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
           title: "자동 발주 승인 완료",
           description: `${result.createdOrders.length}개의 발주서가 생성되었습니다`,
         });
+        const approvedProductIds = selectedRecs.map((r) => r.productId);
+        setReorderItems((prev) => prev.filter((item) => !approvedProductIds.includes(item.productId)));
         setSelectedAutoReorderIds([]);
         router.push("/dashboard/orders?tab=orders");
       } else if (result.success && result.errors.length > 0) {
-        // 성공한 항목만 제거, 실패한 항목은 유지
-        const failedProductIds = new Set(result.errors.map((e) => e.recommendationId));
-        const successRecs = selectedRecs.filter((r) => !failedProductIds.has(r.id));
-        const successProductIds = successRecs.map((r) => r.productId);
+        const failedIds = new Set(result.errors.map((e) => e.recommendationId));
+        const successProductIds = selectedRecs.filter((r) => !failedIds.has(r.id)).map((r) => r.productId);
         setReorderItems((prev) => prev.filter((item) => !successProductIds.includes(item.productId)));
         toast({
           title: "자동 발주 부분 완료",
@@ -648,7 +649,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
           variant: "destructive",
         });
         setSelectedAutoReorderIds([]);
-        loadPurchaseOrders();
+        router.push("/dashboard/orders?tab=orders");
       } else {
         toast({
           title: "자동 발주 승인 실패",
