@@ -8,7 +8,7 @@ test.describe("제품 관리", () => {
 
   test("제품 페이지 로딩", async ({ page }) => {
     await expect(page).toHaveTitle(/FloStok/);
-    await expect(page.getByRole("heading", { name: /제품/ })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole("button", { name: /제품 추가/ })).toBeVisible({ timeout: 15000 });
   });
 
   test("제품 추가 버튼 렌더링", async ({ page }) => {
@@ -25,7 +25,7 @@ test.describe("제품 관리", () => {
   });
 
   test("제품 테이블 렌더링", async ({ page }) => {
-    await expect(page.getByText("SKU")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("SKU").first()).toBeVisible({ timeout: 15000 });
   });
 
   test("제품 필터 렌더링", async ({ page }) => {

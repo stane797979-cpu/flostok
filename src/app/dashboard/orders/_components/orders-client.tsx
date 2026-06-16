@@ -134,13 +134,16 @@ function formatMonth(date: Date): string {
   return `${date.getFullYear()}년 ${date.getMonth() + 1}월`;
 }
 
+type ServerPurchaseOrder = Awaited<ReturnType<typeof getPurchaseOrders>>["orders"][number];
+
 interface OrdersClientProps {
   initialTab?: "reorder" | "auto-reorder" | "orders" | "inbound" | "delivery" | "import-shipment";
   serverReorderItems?: ServerReorderItem[];
   deliveryComplianceData?: DeliveryComplianceResult | null;
+  serverPurchaseOrders?: ServerPurchaseOrder[];
 }
 
-export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], deliveryComplianceData = null }: OrdersClientProps) {
+export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], deliveryComplianceData = null, serverPurchaseOrders }: OrdersClientProps) {
   // 발주 필요 품목 (발주 후 재조회 가능하도록 state로 관리)
   const [reorderItems, setReorderItems] = useState<ReorderItem[]>(
     () => serverReorderItems.map(mapServerToClientReorderItem)
@@ -169,8 +172,22 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
   const [orderDetailDialogOpen, setOrderDetailDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ReorderItem | null>(null);
   const [selectedOrderId, setSelectedOrderId] = useState<string>("");
-  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrderListItem[]>([]);
-  const [isLoadingOrders, setIsLoadingOrders] = useState(initialTab === "orders");
+  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrderListItem[]>(() => {
+    if (serverPurchaseOrders) {
+      return serverPurchaseOrders.map((order) => ({
+        id: order.id,
+        orderNumber: order.orderNumber,
+        supplierName: order.supplier?.name || "미지정",
+        itemsCount: order.itemsCount,
+        totalAmount: order.totalAmount || 0,
+        status: mapOrderStatus(order.status),
+        orderDate: order.orderDate || (order.createdAt ? new Date(order.createdAt).toISOString().split("T")[0] : ""),
+        expectedDate: order.expectedDate || null,
+      }));
+    }
+    return [];
+  });
+  const [isLoadingOrders, setIsLoadingOrders] = useState(initialTab === "orders" && !serverPurchaseOrders);
 
   // 발주 현황 체크박스
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
@@ -300,7 +317,7 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
 
   // 초기 로드 (탭에 따라 필요한 데이터만 로드)
   useEffect(() => {
-    if (initialTab === "orders") {
+    if (initialTab === "orders" && !serverPurchaseOrders) {
       loadPurchaseOrders();
     } else if (initialTab === "inbound") {
       loadInboundRecords(inboundMonth);

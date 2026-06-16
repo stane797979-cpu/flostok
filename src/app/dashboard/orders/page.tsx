@@ -1,105 +1,43 @@
 import { getReorderItems, getPurchaseOrders } from "@/server/actions/purchase-orders";
-import { getCurrentUser } from "@/server/actions/auth-helpers";
-import type { DeliveryComplianceResult } from "@/server/services/scm/delivery-compliance";
-import { getInboundRecords } from "@/server/actions/inbound";
-import { getWarehouses } from "@/server/actions/warehouses";
+import { getDeliveryComplianceData } from "@/server/actions/delivery-compliance";
 import { OrdersClient } from "./_components/orders-client";
 
-type ReorderResult = Awaited<ReturnType<typeof getReorderItems>>;
-// DeliveryComplianceResult는 서비스에서 직접 import (SSR 프리페치 제거됨)
-type PurchaseOrdersResult = Awaited<ReturnType<typeof getPurchaseOrders>>;
-type InboundRecordsResult = Awaited<ReturnType<typeof getInboundRecords>>;
-type WarehousesResult = Awaited<ReturnType<typeof getWarehouses>>;
-
-const VALID_TABS = ["reorder", "auto-reorder", "orders", "order-history", "inbound", "delivery", "import-shipment"] as const;
+const VALID_TABS = ["reorder", "auto-reorder", "orders", "inbound", "delivery", "import-shipment"] as const;
 type OrderTab = (typeof VALID_TABS)[number];
 
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; productIds?: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }) {
-  const { tab, productIds } = await searchParams;
+  const { tab } = await searchParams;
   const resolvedTab: OrderTab = tab && VALID_TABS.includes(tab as OrderTab) ? (tab as OrderTab) : "reorder";
-  const preselectedProductIds = productIds ? productIds.split(",").filter(Boolean) : undefined;
 
-  // 탭에 따라 필요한 데이터만 프리페치
-  const promises: Promise<unknown>[] = [];
-  const keys: string[] = [];
-
-  // reorder/auto-reorder 탭: 발주 필요 품목 (productIds가 있으면 reorder 탭도 로드)
-  if (resolvedTab === "reorder" || resolvedTab === "auto-reorder" || preselectedProductIds) {
-    keys.push("reorder");
-    promises.push(getReorderItems().catch(() => ({ items: [], total: 0 })));
-  }
-
-  // delivery 탭: 납기 분석 (필터 기반 조회로 변경 — SSR 프리페치 불필요)
-  // 클라이언트에서 조건 선택 후 조회
-
-  // orders 탭: 발주 현황 (취소 제외)
+  const fetchPromises: Promise<unknown>[] = [
+    getReorderItems(),
+    getDeliveryComplianceData(),
+  ];
   if (resolvedTab === "orders") {
-    keys.push("orders");
-    promises.push(getPurchaseOrders({ limit: 50, excludeStatus: "cancelled" }).catch(() => ({ orders: [], total: 0 })));
+    fetchPromises.push(getPurchaseOrders({ limit: 100 }));
   }
 
-  // order-history 탭: 발주 이력 (취소된 발주)
-  if (resolvedTab === "order-history") {
-    keys.push("orderHistory");
-    promises.push(getPurchaseOrders({ limit: 50, status: "cancelled" }).catch(() => ({ orders: [], total: 0 })));
-  }
+  const results = await Promise.allSettled(fetchPromises);
+  const [reorderResult, complianceResult, ordersResult] = results;
 
-  // inbound 탭: 입고 현황 (현재 월)
-  if (resolvedTab === "inbound") {
-    const now = new Date();
-    const startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
-    const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0];
-    keys.push("inbound");
-    promises.push(getInboundRecords({ startDate, endDate, limit: 50 }).catch(() => ({ records: [], total: 0 })));
-  }
-
-  // 창고 목록은 항상 로드 (발주 시 창고 선택 필요)
-  keys.push("warehouses");
-  promises.push(getWarehouses().catch(() => ({ warehouses: [] })));
-
-  // 사용자 역할 조회 (결재 권한 분기용) — 다른 데이터와 병렬 실행
-  keys.push("currentUser");
-  promises.push(getCurrentUser().catch(() => null));
-
-  // Promise.allSettled: 하나가 실패해도 나머지 데이터는 정상 표시
-  const settled = await Promise.allSettled(promises);
-  const results = settled.map((r) => (r.status === "fulfilled" ? r.value : null));
-  const dataMap = Object.fromEntries(keys.map((k, i) => [k, results[i]]));
-
-  const serverReorderItems = (dataMap.reorder as ReorderResult | undefined)?.items ?? [];
-  const serverReorderTotal = (dataMap.reorder as ReorderResult | undefined)?.total ?? 0;
-  const deliveryComplianceData: DeliveryComplianceResult | null = null; // 클라이언트에서 조건 선택 후 조회
-  const serverPurchaseOrders = (dataMap.orders as PurchaseOrdersResult | undefined)?.orders ?? undefined;
-  const serverPurchaseOrdersTotal = (dataMap.orders as PurchaseOrdersResult | undefined)?.total ?? 0;
-  const serverInboundRecords = (dataMap.inbound as InboundRecordsResult | undefined)?.records ?? undefined;
-  const serverInboundTotal = (dataMap.inbound as InboundRecordsResult | undefined)?.total ?? 0;
-  const serverOrderHistory = (dataMap.orderHistory as PurchaseOrdersResult | undefined)?.orders ?? undefined;
-  const serverOrderHistoryTotal = (dataMap.orderHistory as PurchaseOrdersResult | undefined)?.total ?? 0;
-  const warehousesList = (dataMap.warehouses as WarehousesResult | undefined)?.warehouses ?? [];
-
-  type CurrentUserResult = Awaited<ReturnType<typeof getCurrentUser>>;
-  const userRole = (dataMap.currentUser as CurrentUserResult | null)?.role ?? "viewer";
+  const serverReorderItems =
+    reorderResult.status === "fulfilled" ? (reorderResult.value as Awaited<ReturnType<typeof getReorderItems>>).items : [];
+  const deliveryComplianceData =
+    complianceResult.status === "fulfilled" ? (complianceResult.value as Awaited<ReturnType<typeof getDeliveryComplianceData>>) : null;
+  const serverPurchaseOrders =
+    ordersResult?.status === "fulfilled" ? (ordersResult.value as Awaited<ReturnType<typeof getPurchaseOrders>>).orders : undefined;
 
   return (
     <OrdersClient
       key={resolvedTab}
-      initialTab={preselectedProductIds ? "reorder" : resolvedTab}
+      initialTab={resolvedTab}
       serverReorderItems={serverReorderItems}
-      serverReorderTotal={serverReorderTotal}
       deliveryComplianceData={deliveryComplianceData}
       serverPurchaseOrders={serverPurchaseOrders}
-      serverPurchaseOrdersTotal={serverPurchaseOrdersTotal}
-      serverInboundRecords={serverInboundRecords}
-      serverInboundTotal={serverInboundTotal}
-      serverOrderHistory={serverOrderHistory}
-      serverOrderHistoryTotal={serverOrderHistoryTotal}
-      warehouses={warehousesList}
-      preselectedProductIds={preselectedProductIds}
-      userRole={userRole}
     />
   );
 }

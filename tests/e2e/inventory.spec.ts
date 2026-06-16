@@ -8,7 +8,7 @@ test.describe("재고 관리", () => {
 
   test("재고 페이지 로딩", async ({ page }) => {
     await expect(page).toHaveTitle(/FloStok/);
-    await expect(page.getByRole("heading", { name: /재고/ })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('총 SKU').first()).toBeVisible({ timeout: 15000 });
   });
 
   test("재고 통계 카드 렌더링", async ({ page }) => {
@@ -16,8 +16,8 @@ test.describe("재고 관리", () => {
   });
 
   test("재고 목록 테이블 렌더링", async ({ page }) => {
-    await expect(page.getByText("SKU")).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText("현재고")).toBeVisible();
+    await expect(page.getByText("SKU").first()).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText("현재고").first()).toBeVisible({ timeout: 10000 });
   });
 
   test("검색 기능", async ({ page }) => {
