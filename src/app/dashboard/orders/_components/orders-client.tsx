@@ -158,15 +158,19 @@ export function OrdersClient({ serverReorderItems = [], deliveryComplianceData =
 
   const [activeTab, setActiveTab] = useState<TabType>(getTabFromUrl);
 
-  // URL ?tab= 변경 시 activeTab 동기화 (페이지 리마운트 없이)
+  // 사이드바 링크 클릭 등 외부 URL 변경 시 activeTab 동기화
   useEffect(() => {
-    setActiveTab(getTabFromUrl());
+    const tab = searchParams.get("tab") || "reorder";
+    if (VALID_TABS_SET.has(tab)) {
+      setActiveTab(tab as TabType);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
   const switchTab = useCallback((tab: string) => {
     setActiveTab(tab as TabType);
-  }, []);
+    router.replace(`/dashboard/orders?tab=${tab}`, { scroll: false });
+  }, [router]);
 
   // 발주 필요 품목 (발주 후 재조회 가능하도록 state로 관리)
   const [reorderItems, setReorderItems] = useState<ReorderItem[]>(
