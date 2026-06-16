@@ -89,7 +89,7 @@ export const MAIN_SECTIONS: NavSection[] = [
         description: "발주 생성 및 현황 관리",
         menuKey: "orders",
         children: [
-          { title: "발주필요", href: "/dashboard/orders?tab=reorder", menuKey: "orders" },
+          { title: "일반발주", href: "/dashboard/orders?tab=reorder", menuKey: "orders" },
           { title: "자동발주", href: "/dashboard/orders?tab=auto-reorder", menuKey: "orders" },
           { title: "발주현황", href: "/dashboard/orders?tab=orders", menuKey: "orders" },
         ],
