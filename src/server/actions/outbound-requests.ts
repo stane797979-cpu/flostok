@@ -276,7 +276,7 @@ export async function getOutboundRequestById(requestId: string): Promise<{
       return { success: false, error: "출고 요청을 찾을 수 없습니다" };
     }
 
-    // 요청 항목 조회 (제품 정보 + 현재고 포함)
+    // 요청 항목 조회 (제품 정보 + 현재고 합산 — warehouse별 다중 row 방지)
     const items = await db
       .select({
         id: outboundRequestItems.id,
@@ -285,13 +285,22 @@ export async function getOutboundRequestById(requestId: string): Promise<{
         productName: products.name,
         requestedQuantity: outboundRequestItems.requestedQuantity,
         confirmedQuantity: outboundRequestItems.confirmedQuantity,
-        currentStock: inventory.currentStock,
+        currentStock: sql<number>`coalesce(sum(${inventory.currentStock}), 0)`,
         notes: outboundRequestItems.notes,
       })
       .from(outboundRequestItems)
       .innerJoin(products, eq(outboundRequestItems.productId, products.id))
       .leftJoin(inventory, eq(outboundRequestItems.productId, inventory.productId))
-      .where(eq(outboundRequestItems.outboundRequestId, requestId));
+      .where(eq(outboundRequestItems.outboundRequestId, requestId))
+      .groupBy(
+        outboundRequestItems.id,
+        outboundRequestItems.productId,
+        products.sku,
+        products.name,
+        outboundRequestItems.requestedQuantity,
+        outboundRequestItems.confirmedQuantity,
+        outboundRequestItems.notes,
+      );
 
     return {
       success: true,
