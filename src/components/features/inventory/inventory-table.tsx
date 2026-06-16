@@ -165,7 +165,7 @@ export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
       )}
 
       {/* 모바일 카드 뷰 */}
-      <div className="space-y-3 md:hidden">
+      <div className="space-y-3 lg:hidden">
         {sorted.length === 0 && (
           <div className="rounded-lg border bg-white p-8 text-center text-slate-500 dark:bg-slate-950">
             재고 데이터가 없습니다
@@ -203,10 +203,20 @@ export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
                   </DropdownMenu>
                 </div>
               </div>
-              <div className="flex items-center gap-4 text-sm">
+              <div className="flex flex-wrap items-center gap-3 text-sm">
                 <div>
                   <span className="text-slate-500">현재고</span>
                   <span className="ml-1 font-mono font-medium">{item.currentStock.toLocaleString()}</span>
+                </div>
+                {item.allocatedStock > 0 && (
+                  <div>
+                    <span className="text-slate-500">할당재고</span>
+                    <span className="ml-1 font-mono text-orange-600">{item.allocatedStock.toLocaleString()}</span>
+                  </div>
+                )}
+                <div>
+                  <span className="text-slate-500">가용재고</span>
+                  <span className="ml-1 font-mono font-medium text-blue-600">{(item.currentStock - item.allocatedStock).toLocaleString()}</span>
                 </div>
                 {inventoryDays !== null && (
                   <div>
@@ -233,7 +243,7 @@ export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
       </div>
 
       {/* 재고 테이블 (데스크톱) */}
-      <div className="hidden rounded-lg border bg-white md:block dark:bg-slate-950">
+      <div className="hidden rounded-lg border bg-white lg:block dark:bg-slate-950">
         <Table>
           <TableHeader>
             <TableRow>
