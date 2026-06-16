@@ -52,7 +52,7 @@ export function DashboardShell({ children, userInfo }: DashboardShellProps) {
           <ThemeToggle />
         </div>
         <Header onMenuClick={() => setMobileOpen(true)} />
-        <main className="flex-1 overflow-y-auto bg-white p-4 md:p-6 lg:p-8 dark:bg-slate-900">
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8" style={{ backgroundColor: 'white' }}>
           {children}
         </main>
       </div>
