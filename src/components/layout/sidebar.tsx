@@ -175,11 +175,7 @@ export function Sidebar({ className, onNavigate, userInfo }: SidebarProps) {
           </div>
           {!collapsed && (
             <div className="flex-1 overflow-hidden text-left">
-              {orgName && (
-                <p className="truncate text-xs font-medium text-primary-600">{orgName}</p>
-              )}
-              <p className="truncate text-sm font-medium text-slate-900 dark:text-white">{userName}</p>
-              <p className="truncate text-xs text-slate-500 dark:text-slate-400">{userRole}</p>
+              <p className="truncate text-sm font-medium text-slate-900 dark:text-white">관리자</p>
             </div>
           )}
         </button>
