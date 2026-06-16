@@ -165,6 +165,73 @@ async function parseSalesRow(
   };
 }
 
+/**
+ * 엑셀 파일에서 판매 행만 파싱 (DB 저장 없음)
+ */
+export async function parseSalesExcel(options: {
+  organizationId: string;
+  buffer: ArrayBuffer;
+  sheetName?: string;
+}): Promise<ExcelImportResult<SalesRecordExcelRow>> {
+  const { organizationId, buffer, sheetName } = options;
+  const allErrors: ExcelImportError[] = [];
+  const successData: SalesRecordExcelRow[] = [];
+
+  try {
+    const workbook = await parseExcelBuffer(buffer);
+    const rows = await sheetToJson<Record<string, unknown>>(workbook, sheetName);
+
+    if (rows.length === 0) {
+      return {
+        success: false,
+        data: [],
+        errors: [{ row: 0, message: "데이터가 없습니다" }],
+        totalRows: 0,
+        successCount: 0,
+        errorCount: 1,
+      };
+    }
+
+    const orgProducts = await db
+      .select({ id: products.id, sku: products.sku })
+      .from(products)
+      .where(eq(products.organizationId, organizationId));
+    const skuSet = new Set(orgProducts.map((p) => p.sku));
+
+    for (let i = 0; i < rows.length; i++) {
+      const { data, errors } = await parseSalesRow(rows[i], i);
+      if (errors.length > 0) {
+        allErrors.push(...errors);
+        continue;
+      }
+      if (!data) continue;
+      if (!skuSet.has(data.sku)) {
+        allErrors.push({ row: i + 2, column: "SKU", value: data.sku, message: `존재하지 않는 SKU: ${data.sku}` });
+        continue;
+      }
+      successData.push(data);
+    }
+
+    return {
+      success: allErrors.length === 0,
+      data: successData,
+      errors: allErrors,
+      totalRows: rows.length,
+      successCount: successData.length,
+      errorCount: allErrors.length,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      data: [],
+      errors: [{ row: 0, message: error instanceof Error ? error.message : "알 수 없는 오류" }],
+      totalRows: 0,
+      successCount: 0,
+      errorCount: 1,
+    };
+  }
+}
+
 export interface ImportSalesDataOptions {
   /** 조직 ID */
   organizationId: string;

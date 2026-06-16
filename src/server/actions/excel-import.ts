@@ -4,13 +4,13 @@
  * Excel 데이터 임포트 Server Actions
  */
 
-import { importSalesData, importProductData, createSalesTemplate, createProductTemplate } from "@/server/services/excel";
+import { parseSalesExcel, importProductData, createSalesTemplate, createProductTemplate } from "@/server/services/excel";
 import type { ExcelImportResult, SalesRecordExcelRow, ProductExcelRow } from "@/server/services/excel";
 import { requireAuth } from "./auth-helpers";
 import { logActivity } from "@/server/services/activity-log";
 import { db } from "@/server/db";
 import { outboundRequests, outboundRequestItems, products } from "@/server/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 function generateRequestNumber(): string {
@@ -60,16 +60,14 @@ export async function importExcelFile(input: ImportExcelInput): Promise<ImportEx
     const buffer = bytes.buffer;
 
     if (input.type === "sales") {
-      // 엑셀 파싱으로 SKU/수량 추출 후 outbound_requests 생성
-      const result = await importSalesData({
+      // 엑셀 파싱만 수행 (salesRecords insert X, 재고 차감 X)
+      const result = await parseSalesExcel({
         organizationId: user.organizationId,
         buffer,
         sheetName: input.sheetName,
-        duplicateHandling: input.duplicateHandling,
-        deductInventory: false, // 재고 차감은 창고 확정 시 처리
       });
 
-      if (result.success && result.successCount > 0) {
+      if (result.successCount > 0) {
         // SKU → productId 매핑
         const orgProducts = await db
           .select({ id: products.id, sku: products.sku })
@@ -77,7 +75,7 @@ export async function importExcelFile(input: ImportExcelInput): Promise<ImportEx
           .where(eq(products.organizationId, user.organizationId));
         const skuMap = new Map(orgProducts.map((p) => [p.sku, p.id]));
 
-        // 날짜별·SKU별로 집계된 data를 outbound_request로 묶기
+        // SKU별 수량 집계 → outbound_request 1건 생성
         const itemsMap = new Map<string, { productId: string; quantity: number }>();
         for (const row of result.data as SalesRecordExcelRow[]) {
           const productId = skuMap.get(row.sku);
@@ -120,14 +118,14 @@ export async function importExcelFile(input: ImportExcelInput): Promise<ImportEx
           user,
           action: "IMPORT",
           entityType: "excel_import",
-          description: `출고 업로드 (${result.successCount}건 → 출고요청 생성)`,
+          description: `출고 업로드 (${result.successCount}건 파싱 → 출고요청 생성)`,
         });
       }
 
       return {
-        success: result.success,
-        message: result.success
-          ? `출고 요청 ${result.successCount}건 등록 완료`
+        success: result.successCount > 0 || result.totalRows > 0,
+        message: result.successCount > 0
+          ? `출고 요청 생성 완료 (${result.successCount}건)`
           : `업로드 중 ${result.errorCount}건 오류 발생`,
         totalRows: result.totalRows,
         successCount: result.successCount,
