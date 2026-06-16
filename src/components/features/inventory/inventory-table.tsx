@@ -217,7 +217,7 @@ export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
                 )}
                 <div>
                   <span className="text-slate-500">가용재고</span>
-                  <span className="ml-1 font-mono font-medium text-blue-600">{(item.currentStock - item.allocatedStock).toLocaleString()}</span>
+                  <span className="ml-1 font-mono font-medium text-blue-600">{Math.max(0, item.currentStock - item.allocatedStock).toLocaleString()}</span>
                 </div>
                 {inventoryDays !== null && (
                   <div>
@@ -390,7 +390,7 @@ export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
                     )}
                   </TableCell>
                   <TableCell className="text-right font-mono text-blue-600 font-medium">
-                    {(item.currentStock - item.allocatedStock).toLocaleString()}
+                    {Math.max(0, item.currentStock - item.allocatedStock).toLocaleString()}
                   </TableCell>
                   <TableCell className="text-right font-mono text-slate-500">
                     {safetyStock.toLocaleString()}
