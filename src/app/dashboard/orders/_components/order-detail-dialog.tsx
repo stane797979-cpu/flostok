@@ -27,7 +27,6 @@ import { createImportShipment } from "@/server/actions/import-shipments";
 import { getInboundRecords } from "@/server/actions/inbound";
 import { getEntityActivityLogs } from "@/server/actions/activity-logs";
 import type { ActivityLog } from "@/server/actions/activity-logs";
-import { InboundDialog, type InboundDialogItem } from "./inbound-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { exportPurchaseOrderToExcel } from "@/server/actions/excel-export";
 
@@ -61,7 +60,6 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
   );
   const [isLoading, setIsLoading] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
-  const [inboundDialogOpen, setInboundDialogOpen] = useState(false);
   const [showShipmentForm, setShowShipmentForm] = useState(false);
   const [isCreatingShipment, setIsCreatingShipment] = useState(false);
   const [shipmentForm, setShipmentForm] = useState({
@@ -229,18 +227,6 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
     }
   };
 
-  const handleInboundClick = () => {
-    setInboundDialogOpen(true);
-  };
-
-  const handleInboundClose = (success?: boolean) => {
-    setInboundDialogOpen(false);
-    if (success) {
-      loadOrderData();
-      onStatusChange?.();
-    }
-  };
-
   const handleDownloadClick = async () => {
     try {
       const result = await exportPurchaseOrderToExcel(orderId);
@@ -326,16 +312,6 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
     ["ordered", "confirmed", "shipped", "partially_received"].includes(orderData.status);
 
   // 입고 다이얼로그용 데이터 변환
-  const inboundItems: InboundDialogItem[] =
-    orderData?.items.map((item) => ({
-      orderItemId: item.id,
-      productId: item.productId,
-      productSku: item.product.sku,
-      productName: item.product.name,
-      orderedQuantity: item.quantity,
-      receivedQuantity: item.receivedQuantity || 0,
-      unitPrice: item.unitPrice,
-    })) || [];
 
   return (
     <>
@@ -767,12 +743,6 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
                     <Download className="mr-2 h-4 w-4" />
                     Excel 다운로드
                   </Button>
-                  {canReceive && (
-                    <Button size="sm" onClick={handleInboundClick}>
-                      <Package className="mr-2 h-4 w-4" />
-                      입고 확인
-                    </Button>
-                  )}
                 </div>
               </div>
             </div>
@@ -780,16 +750,6 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
         </DialogContent>
       </Dialog>
 
-      {/* 입고 확인 다이얼로그 */}
-      {orderData && (
-        <InboundDialog
-          open={inboundDialogOpen}
-          onOpenChange={(open) => handleInboundClose(!open)}
-          orderId={orderId}
-          orderNumber={orderData.orderNumber}
-          items={inboundItems}
-        />
-      )}
     </>
   );
 }
