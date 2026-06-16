@@ -223,7 +223,7 @@ export async function confirmInbound(input: ConfirmInboundInput): Promise<{
     });
 
     // 입고된 제품들에 대해 진행 중인 결품 자동 정상화
-    const today = new Date().toISOString().split("T")[0];
+    const todayStr = new Date().toISOString().split("T")[0];
     const inboundProductIds = validated.items
       .filter((i) => i.receivedQuantity > 0)
       .map((i) => i.productId);
@@ -241,7 +241,7 @@ export async function confirmInbound(input: ConfirmInboundInput): Promise<{
 
       for (const record of activeStockouts) {
         await db.update(stockoutRecords)
-          .set({ stockoutEndDate: today, actionStatus: "normalized", updatedAt: new Date() })
+          .set({ stockoutEndDate: todayStr, actionStatus: "normalized", updatedAt: new Date() })
           .where(eq(stockoutRecords.id, record.id));
       }
     }
