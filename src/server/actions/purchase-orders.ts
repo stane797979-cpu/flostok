@@ -1082,8 +1082,6 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
     const user = await getCurrentUser();
     const orgId = user?.organizationId || TEMP_ORG_ID;
 
-    console.log("[createBulkPurchaseOrders] orgId:", orgId, "user:", user?.id);
-
     // 1. 공급자별로 품목 그룹화
     const itemsBySupplier = new Map<string, typeof validated.items>();
     validated.items.forEach((item) => {
@@ -1129,7 +1127,6 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
       ),
     ]);
 
-    console.log("[createBulkPurchaseOrders] allSupplierIds:", allSupplierIds, "found:", allSuppliersData.map(s => s.id));
     const suppliersMap = new Map(allSuppliersData.map((s) => [s.id, s]));
     const productsMap = new Map(allProductsData.map((p) => [p.id, p]));
     const baseOrderCount = Number(todayOrderCount[0]?.count || 0);

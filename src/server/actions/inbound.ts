@@ -241,15 +241,13 @@ export async function confirmInbound(input: ConfirmInboundInput): Promise<{
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      console.error("[confirmInbound] ZodError:", JSON.stringify(error.issues));
       return {
         success: false,
         error: `입력 데이터가 올바르지 않습니다: ${error.issues[0]?.message}`,
       };
     }
-    console.error("[confirmInbound] 오류:", error);
-    const msg = error instanceof Error ? error.message : String(error);
-    return { success: false, error: msg };
+    console.error("입고 확인 처리 오류:", error);
+    return { success: false, error: "입고 확인 처리에 실패했습니다" };
   }
 }
 
