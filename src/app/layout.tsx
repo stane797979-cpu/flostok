@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ThemeProvider } from "next-themes";
 import "./globals.css";
 import AnalyticsProvider from "@/components/analytics-provider";
 
@@ -13,10 +14,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko" style={{ colorScheme: "light" }}>
+    <html lang="ko" suppressHydrationWarning>
       <body className="antialiased">
-        <AnalyticsProvider />
-        {children}
+        <ThemeProvider attribute="class" forcedTheme="light" disableTransitionOnChange>
+          <AnalyticsProvider />
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );
