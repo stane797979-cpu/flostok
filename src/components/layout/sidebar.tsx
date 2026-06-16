@@ -27,7 +27,8 @@ export function Sidebar({ className, onNavigate, userInfo }: SidebarProps) {
   const router = useRouter();
 
   const userName = userInfo?.name || "관리자";
-  const userRole = userInfo?.role || "관리자";
+  const roleLabel: Record<string, string> = { CEO: "관리자", ADMIN: "관리자", MANAGER: "매니저", STAFF: "스태프", VIEWER: "뷰어" };
+  const userRole = roleLabel[userInfo?.role || ""] || userInfo?.role || "관리자";
   const orgName = userInfo?.orgName || "";
 
   const firstChar = userName ? userName.charAt(0).toUpperCase() : "?";
