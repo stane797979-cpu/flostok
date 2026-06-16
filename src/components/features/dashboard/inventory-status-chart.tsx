@@ -2,7 +2,6 @@ import { memo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { INVENTORY_STATUS } from "@/lib/constants/inventory-status";
 import { cn } from "@/lib/utils";
-import { PeriodBadge } from "./period-badge";
 
 // Tailwind JIT를 위한 정적 색상 매핑
 const strokeColorMap: Record<string, string> = {
@@ -110,13 +109,8 @@ export const InventoryStatusChart = memo<InventoryStatusChartProps>(function Inv
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center gap-2">
+      <CardHeader>
         <CardTitle>재고상태 분포</CardTitle>
-        <PeriodBadge
-          period="실시간"
-          description="현재 재고 수량 기준 7단계 분류"
-          formula="품절→위험→부족→주의→적정→과다→과잉"
-        />
       </CardHeader>
       <CardContent>
         <div className="flex flex-col items-center gap-4">
@@ -127,11 +121,11 @@ export const InventoryStatusChart = memo<InventoryStatusChartProps>(function Inv
           ) : (
             <>
               {/* 도넛 차트 + 라벨 */}
-              <div className="relative" style={{ width: size + 180, height: size + 180 }}>
+              <div className="relative" style={{ width: size + 180, height: size + 220 }}>
                 <svg
                   width={size + 180}
-                  height={size + 180}
-                  viewBox={`${-90} ${-90} ${size + 180} ${size + 180}`}
+                  height={size + 220}
+                  viewBox={`${-90} ${-130} ${size + 180} ${size + 220}`}
                 >
                   {/* 배경 원 */}
                   <circle
@@ -158,77 +152,47 @@ export const InventoryStatusChart = memo<InventoryStatusChartProps>(function Inv
                       className={cn(strokeColorMap[seg.color] || 'stroke-gray-500')}
                     />
                   ))}
-                  {/* 세그먼트 라벨 (도넛 바깥, 충돌 해소) */}
-                  {(() => {
-                    // 1단계: 원래 위치 계산
-                    const rawLabels = segments
-                      .filter((seg) => Math.round(seg.percentage * 100) > 0)
-                      .map((seg) => {
-                        const angle = (seg.midAngle * Math.PI) / 180;
-                        return {
-                          ...seg,
-                          pct: Math.round(seg.percentage * 100),
-                          angle,
-                          x: center + labelRadius * Math.cos(angle),
-                          y: center + labelRadius * Math.sin(angle),
-                        };
-                      });
-
-                    // 2단계: y 기준 정렬 후 겹침 해소 (최소 간격 40px)
-                    const MIN_GAP = 40;
-                    const sorted = [...rawLabels].sort((a, b) => a.y - b.y);
-                    for (let i = 1; i < sorted.length; i++) {
-                      const prev = sorted[i - 1];
-                      const curr = sorted[i];
-                      const gap = curr.y - prev.y;
-                      if (gap < MIN_GAP) {
-                        const shift = (MIN_GAP - gap) / 2;
-                        sorted[i - 1] = { ...prev, y: prev.y - shift };
-                        sorted[i] = { ...curr, y: curr.y + shift };
-                        // 연쇄 보정: 이전 것도 다시 체크
-                        for (let j = i - 1; j > 0; j--) {
-                          const g = sorted[j].y - sorted[j - 1].y;
-                          if (g < MIN_GAP) {
-                            sorted[j - 1] = { ...sorted[j - 1], y: sorted[j - 1].y - (MIN_GAP - g) };
-                          }
-                        }
-                      }
-                    }
-
-                    return sorted.map((lbl) => (
-                      <g key={`label-${lbl.key}`}>
+                  {/* 세그먼트 라벨 (도넛 바깥) */}
+                  {segments.map((seg) => {
+                    const pct = Math.round(seg.percentage * 100);
+                    if (pct === 0) return null;
+                    const angle = (seg.midAngle * Math.PI) / 180;
+                    const lx = center + labelRadius * Math.cos(angle);
+                    const ly = center + labelRadius * Math.sin(angle);
+                    return (
+                      <g key={`label-${seg.key}`}>
                         <text
-                          x={lbl.x}
-                          y={lbl.y - 10}
-                          textAnchor={lbl.x < center ? "end" : "start"}
-                          className={cn("text-[20px] font-bold", fillColorMap[lbl.color] || 'fill-gray-600')}
+                          x={lx}
+                          y={ly - 10}
+                          textAnchor="middle"
+                          className={cn("text-[22px] font-bold", fillColorMap[seg.color] || 'fill-gray-600')}
                         >
-                          {lbl.label}
+                          {seg.label}
                         </text>
                         <text
-                          x={lbl.x}
-                          y={lbl.y + 12}
-                          textAnchor={lbl.x < center ? "end" : "start"}
-                          className="fill-slate-500 text-[16px] font-semibold dark:fill-slate-400"
+                          x={lx}
+                          y={ly + 14}
+                          textAnchor="middle"
+                          className="fill-slate-500 text-[18px] font-semibold dark:fill-slate-400"
                         >
-                          {lbl.pct}% ({lbl.count})
+                          {pct}% ({seg.count})
                         </text>
                       </g>
-                    ));
-                  })()}
+                    );
+                  })}
                 </svg>
                 {/* 중앙 텍스트 */}
                 <div
                   className="absolute flex flex-col items-center justify-center"
                   style={{
-                    top: 90 + center - 30,
+                    top: 130 + center - 30,
                     left: 90 + center - 40,
                     width: 80,
                     height: 60,
                   }}
                 >
                   <div className="text-3xl font-bold">{totalSku}</div>
-                  <div className="text-sm text-slate-500 dark:text-slate-400">총 SKU</div>
+                  <div className="text-sm text-slate-500">총 SKU</div>
                 </div>
               </div>
 
