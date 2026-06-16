@@ -2,7 +2,7 @@
 
 import { unstable_cache } from "next/cache";
 import { db } from "@/server/db";
-import { inventoryLots, products, warehouses } from "@/server/db/schema";
+import { inventoryLots, products } from "@/server/db/schema";
 import { eq, and, sql, isNotNull, gt } from "drizzle-orm";
 import { getCurrentUser } from "./auth-helpers";
 
@@ -64,11 +64,9 @@ async function _getLotExpirySummaryInternal(orgId: string): Promise<LotExpirySum
       productName: products.name,
       unitPrice: products.unitPrice,
       costPrice: products.costPrice,
-      warehouseName: warehouses.name,
     })
     .from(inventoryLots)
     .innerJoin(products, eq(inventoryLots.productId, products.id))
-    .innerJoin(warehouses, eq(inventoryLots.warehouseId, warehouses.id))
     .where(
       and(
         eq(inventoryLots.organizationId, orgId),
@@ -119,7 +117,7 @@ async function _getLotExpirySummaryInternal(orgId: string): Promise<LotExpirySum
       productId: row.productId,
       sku: row.sku,
       productName: row.productName,
-      warehouseName: row.warehouseName,
+      warehouseName: "-",
       expiryDate: row.expiryDate,
       daysUntilExpiry,
       remainingQty,

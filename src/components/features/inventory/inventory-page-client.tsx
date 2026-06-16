@@ -117,7 +117,7 @@ export function InventoryPageClient({ items, stats, stockoutData }: InventoryPag
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">재고 현황 v2</h1>
+        <h1 className="text-3xl font-bold tracking-tight">재고 현황</h1>
         <p className="mt-2 text-slate-500">재고 상태 및 수량 관리, 결품 감지 및 조치 추적</p>
       </div>
 
