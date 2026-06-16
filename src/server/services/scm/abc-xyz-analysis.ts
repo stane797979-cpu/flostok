@@ -112,12 +112,12 @@ function calculateMean(values: number[]): number {
 }
 
 /**
- * 표준편차 계산 (모표준편차)
+ * 표준편차 계산 (표본표준편차, 분모 n-1)
  */
 function calculateStdDev(values: number[], mean: number): number {
-  if (values.length === 0) return 0;
+  if (values.length <= 1) return 0;
   const squaredDiffs = values.map((v) => Math.pow(v - mean, 2));
-  return Math.sqrt(squaredDiffs.reduce((sum, v) => sum + v, 0) / values.length);
+  return Math.sqrt(squaredDiffs.reduce((sum, v) => sum + v, 0) / (values.length - 1));
 }
 
 /**
