@@ -165,7 +165,7 @@ export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
       )}
 
       {/* 모바일 카드 뷰 */}
-      <div className="space-y-3 lg:hidden">
+      <div className="space-y-3 hidden">
         {sorted.length === 0 && (
           <div className="rounded-lg border bg-white p-8 text-center text-slate-500 dark:bg-slate-950">
             재고 데이터가 없습니다
@@ -242,8 +242,8 @@ export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
         })}
       </div>
 
-      {/* 재고 테이블 (데스크톱) */}
-      <div className="hidden rounded-lg border bg-white lg:block dark:bg-slate-950">
+      {/* 재고 테이블 */}
+      <div className="rounded-lg border bg-white dark:bg-slate-950 overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
