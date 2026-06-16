@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef } from "react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -61,6 +62,8 @@ export function PurchaseOrdersTable({ orders, onViewClick, onDownloadClick, sele
 
   const [sortKey, setSortKey] = useState<SortKey>("orderDate");
   const [sortDir, setSortDir] = useState<SortDirection>("desc");
+  const [pageSize, setPageSize] = useState(20);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -111,6 +114,12 @@ export function PurchaseOrdersTable({ orders, onViewClick, onDownloadClick, sele
       }
     });
   }, [orders, sortKey, sortDir]);
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const paged = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return sorted.slice(start, start + pageSize);
+  }, [sorted, currentPage, pageSize]);
 
   // Shift+클릭: 범위 선택 (sorted 배열 참조 필요하므로 sorted 이후 정의)
   const handleSelectOne = (orderId: string, checked: boolean, index: number, shiftKey: boolean) => {
@@ -182,7 +191,7 @@ export function PurchaseOrdersTable({ orders, onViewClick, onDownloadClick, sele
     <>
       {/* 모바일 카드 뷰 */}
       <div className={cn("space-y-3 md:hidden", className)}>
-        {sorted.map((order) => (
+        {paged.map((order) => (
           <div key={order.id} className="rounded-lg border bg-white p-4 space-y-2">
             <div className="flex items-center justify-between">
               <div className="min-w-0 flex-1">
@@ -246,7 +255,7 @@ export function PurchaseOrdersTable({ orders, onViewClick, onDownloadClick, sele
           </TableRow>
         </TableHeader>
         <TableBody>
-          {sorted.map((order, index) => {
+          {paged.map((order, index) => {
             const isCheckable = checkableStatuses.includes(order.status);
             return (
             <TableRow key={order.id}>
@@ -298,6 +307,28 @@ export function PurchaseOrdersTable({ orders, onViewClick, onDownloadClick, sele
           })}
         </TableBody>
       </Table>
+      </div>
+      {/* 페이지네이션 */}
+      <div className="flex items-center justify-between px-2 py-3 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <span>페이지당</span>
+          <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }}>
+            <SelectTrigger className="h-7 w-16 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="20">20</SelectItem>
+              <SelectItem value="50">50</SelectItem>
+              <SelectItem value="100">100</SelectItem>
+            </SelectContent>
+          </Select>
+          <span>개 · 총 {sorted.length}개</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)}>이전</Button>
+          <span className="px-2">{currentPage} / {totalPages}</span>
+          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={currentPage >= totalPages} onClick={() => setCurrentPage((p) => p + 1)}>다음</Button>
+        </div>
       </div>
     </>
   );
