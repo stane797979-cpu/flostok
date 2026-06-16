@@ -295,7 +295,7 @@ export function InboundRecordsTable({ records, className }: InboundRecordsTableP
               <TableCell className="whitespace-nowrap text-sm">{record.date}</TableCell>
               <TableCell className="whitespace-nowrap text-sm">
                 {record.scheduledDate ? (
-                  <span className="text-blue-600">{record.scheduledDate}</span>
+                  <span className="text-slate-600">{record.scheduledDate}</span>
                 ) : (
                   <span className="text-slate-400">-</span>
                 )}
