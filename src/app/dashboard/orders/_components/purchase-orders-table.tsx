@@ -25,6 +25,7 @@ export interface PurchaseOrderListItem {
   status: "draft" | "ordered" | "pending_receipt" | "received" | "cancelled";
   orderDate: string;
   expectedDate: string | null;
+  actualDate: string | null;
 }
 
 interface PurchaseOrdersTableProps {
@@ -251,6 +252,7 @@ export function PurchaseOrdersTable({ orders, onViewClick, onDownloadClick, sele
             <TableHead className={cn("whitespace-nowrap", sortableHeadClass)} onClick={() => handleSort("expectedDate")}>
               <div className="flex items-center gap-0.5">예상입고일 <SortIcon columnKey="expectedDate" /><span className="text-[10px] text-primary-600">{sortLabel("expectedDate")}</span></div>
             </TableHead>
+            <TableHead className="whitespace-nowrap text-green-600">입고완료일</TableHead>
             <TableHead className="whitespace-nowrap text-right">액션</TableHead>
           </TableRow>
         </TableHeader>
@@ -288,6 +290,13 @@ export function PurchaseOrdersTable({ orders, onViewClick, onDownloadClick, sele
               </TableCell>
               <TableCell className="whitespace-nowrap text-sm text-slate-600">
                 {order.expectedDate ? formatDate(order.expectedDate) : "-"}
+              </TableCell>
+              <TableCell className="whitespace-nowrap text-sm">
+                {order.status === "received" && order.actualDate ? (
+                  <span className="text-green-600 font-medium">{formatDate(order.actualDate)}</span>
+                ) : (
+                  <span className="text-slate-300">-</span>
+                )}
               </TableCell>
               <TableCell className="text-right">
                 <div className="flex justify-end gap-2">

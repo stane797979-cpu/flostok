@@ -211,6 +211,7 @@ export function OrdersClient({ serverReorderItems = [], deliveryComplianceData =
         status: mapOrderStatus(order.status),
         orderDate: order.orderDate || (order.createdAt ? new Date(order.createdAt).toISOString().split("T")[0] : ""),
         expectedDate: order.expectedDate || null,
+        actualDate: order.actualDate || null,
       }));
     }
     return [];
@@ -250,6 +251,7 @@ export function OrdersClient({ serverReorderItems = [], deliveryComplianceData =
         status: mapOrderStatus(order.status),
         orderDate: order.orderDate || (order.createdAt ? new Date(order.createdAt).toISOString().split("T")[0] : ""),
         expectedDate: order.expectedDate || null,
+        actualDate: order.actualDate || null,
       }));
       setPurchaseOrders(mapped);
     } catch (error) {
