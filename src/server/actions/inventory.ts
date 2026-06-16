@@ -4,11 +4,13 @@ import { db } from "@/server/db";
 import {
   inventory,
   inventoryHistory,
+  outboundRequests,
+  outboundRequestItems,
   products,
   type Inventory,
   type InventoryHistory,
 } from "@/server/db/schema";
-import { eq, and, desc, sql, gte } from "drizzle-orm";
+import { eq, and, desc, sql, gte, inArray } from "drizzle-orm";
 import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 import { z } from "zod";
 import { classifyInventoryStatus } from "@/server/services/scm/inventory-status";
@@ -55,6 +57,7 @@ type InventoryListItem = {
   organizationId: string;
   productId: string;
   currentStock: number;
+  allocatedStock: number;
   availableStock: number | null;
   reservedStock: number | null;
   incomingStock: number | null;
@@ -94,7 +97,7 @@ export async function getInventoryList(options?: {
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split("T")[0];
 
-  const [items, countResult, outboundData] = await Promise.all([
+  const [items, countResult, outboundData, allocatedData] = await Promise.all([
     db
       .select({
         id: inventory.id,
@@ -145,6 +148,22 @@ export async function getInventoryList(options?: {
         )
       )
       .groupBy(inventoryHistory.productId),
+    // 출고요청중/홀딩 상태의 제품별 할당수량
+    db
+      .select({
+        productId: outboundRequestItems.productId,
+        allocatedQty: sql<number>`coalesce(sum(${outboundRequestItems.requestedQuantity}), 0)`,
+      })
+      .from(outboundRequestItems)
+      .innerJoin(
+        outboundRequests,
+        and(
+          eq(outboundRequestItems.outboundRequestId, outboundRequests.id),
+          eq(outboundRequests.organizationId, user.organizationId),
+          inArray(outboundRequests.status, ["pending", "holding"])
+        )
+      )
+      .groupBy(outboundRequestItems.productId),
   ]);
 
   // 제품별 일평균출고량 매핑
@@ -153,9 +172,16 @@ export async function getInventoryList(options?: {
     avgDailyOutboundMap.set(row.productId, Math.round((Number(row.totalOutbound) / 30) * 100) / 100);
   }
 
+  // 제품별 할당재고 매핑
+  const allocatedMap = new Map<string, number>();
+  for (const row of allocatedData) {
+    allocatedMap.set(row.productId, Number(row.allocatedQty));
+  }
+
   return {
     items: items.map((row) => {
       const avgDailyOutbound = avgDailyOutboundMap.get(row.productId) ?? 0;
+      const allocatedStock = allocatedMap.get(row.productId) ?? 0;
       const calculatedDoi =
         avgDailyOutbound > 0
           ? Math.round((row.currentStock / avgDailyOutbound) * 100) / 100
@@ -166,7 +192,8 @@ export async function getInventoryList(options?: {
         organizationId: row.organizationId,
         productId: row.productId,
         currentStock: row.currentStock,
-        availableStock: row.availableStock,
+        allocatedStock,
+        availableStock: row.currentStock - allocatedStock,
         reservedStock: row.reservedStock,
         incomingStock: row.incomingStock,
         status: row.status,

@@ -27,6 +27,7 @@ export interface InventoryItem {
   id: string;
   productId: string;
   currentStock: number;
+  allocatedStock: number;
   availableStock: number | null;
   daysOfInventory: number | null;
   location: string | null;
@@ -259,6 +260,8 @@ export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
               <TableHead className={cn("text-right", sortableHeadClass)} onClick={() => handleSort("currentStock")}>
                 <div className="flex items-center justify-end gap-0.5">현재고 <span className="text-[10px] text-primary-600">{sortLabel("currentStock")}</span><SortIcon columnKey="currentStock" /></div>
               </TableHead>
+              <TableHead className="text-right text-orange-600">할당재고</TableHead>
+              <TableHead className="text-right text-blue-600">가용재고</TableHead>
               <TableHead className={cn("text-right", sortableHeadClass)} onClick={() => handleSort("safetyStock")}>
                 <div className="flex items-center justify-end gap-0.5">안전재고 <span className="text-[10px] text-primary-600">{sortLabel("safetyStock")}</span><SortIcon columnKey="safetyStock" /></div>
               </TableHead>
@@ -277,7 +280,7 @@ export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
           <TableBody>
             {sorted.length === 0 && (
               <TableRow>
-                <TableCell colSpan={11} className="h-24 text-center text-slate-500">
+                <TableCell colSpan={13} className="h-24 text-center text-slate-500">
                   재고 데이터가 없습니다
                 </TableCell>
               </TableRow>
@@ -330,6 +333,16 @@ export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
                   </TableCell>
                   <TableCell className="text-right font-mono">
                     {item.currentStock.toLocaleString()}
+                  </TableCell>
+                  <TableCell className="text-right font-mono">
+                    {item.allocatedStock > 0 ? (
+                      <span className="text-orange-600">{item.allocatedStock.toLocaleString()}</span>
+                    ) : (
+                      <span className="text-slate-300">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-blue-600 font-medium">
+                    {(item.currentStock - item.allocatedStock).toLocaleString()}
                   </TableCell>
                   <TableCell className="text-right font-mono text-slate-500">
                     {safetyStock.toLocaleString()}

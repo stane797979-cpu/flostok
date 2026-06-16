@@ -13,6 +13,7 @@ export default async function InventoryPage() {
       id: item.id,
       productId: item.productId,
       currentStock: item.currentStock,
+      allocatedStock: item.allocatedStock,
       availableStock: item.availableStock,
       daysOfInventory: item.daysOfInventory,
       location: item.location,
