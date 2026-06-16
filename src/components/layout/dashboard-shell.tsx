@@ -46,13 +46,13 @@ export function DashboardShell({ children, userInfo }: DashboardShellProps) {
       </Sheet>
 
       {/* 메인 콘텐츠 영역 */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden bg-white dark:bg-slate-950">
         {/* 데스크탑 상단바 - 테마 토글 */}
         <div className="hidden lg:flex h-12 items-center justify-end border-b border-slate-200 bg-white px-4 dark:border-slate-800 dark:bg-slate-950">
           <ThemeToggle />
         </div>
         <Header onMenuClick={() => setMobileOpen(true)} />
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8" style={{ backgroundColor: 'white' }}>
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 bg-white dark:bg-slate-950">
           {children}
         </main>
       </div>
