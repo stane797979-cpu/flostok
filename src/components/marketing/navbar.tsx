@@ -29,7 +29,7 @@ export function Navbar() {
         "sticky top-0 z-50 w-full transition-all duration-300",
         scrolled
           ? "border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80"
-          : "bg-slate-900/90 backdrop-blur"
+          : "bg-transparent"
       )}
     >
       <div className="mx-auto flex h-16 max-w-7xl items-center px-4 sm:h-20 md:h-28 sm:px-6 lg:px-8">
@@ -54,12 +54,7 @@ export function Navbar() {
             <Link
               key={item.href}
               href={item.href}
-              className={cn(
-                "text-xl font-bold transition-colors",
-                scrolled
-                  ? "text-gray-800 hover:text-primary-600"
-                  : "text-white hover:text-gray-300"
-              )}
+              className="text-xl font-bold text-gray-800 transition-colors hover:text-primary-600"
             >
               {item.name}
             </Link>
@@ -68,12 +63,7 @@ export function Navbar() {
 
         {/* CTA 버튼 - 우측 */}
         <div className="hidden flex-shrink-0 md:block">
-          <Button size="lg" className={cn(
-            "px-7 text-base font-bold shadow-lg",
-            scrolled
-              ? "bg-primary-600 hover:bg-primary-700"
-              : "bg-white text-gray-900 hover:bg-gray-100"
-          )} asChild>
+          <Button size="lg" className="bg-primary-600 px-7 text-base font-bold shadow-lg hover:bg-primary-700" asChild>
             <Link href="/contact">상담/무료진단 신청</Link>
           </Button>
         </div>

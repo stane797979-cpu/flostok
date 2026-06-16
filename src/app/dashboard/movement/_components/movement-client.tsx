@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Card,
@@ -61,9 +61,6 @@ export function MovementClient() {
   const defaultRange = getDefaultRange();
   const [startDate, setStartDate] = useState(defaultRange.startDate);
   const [endDate, setEndDate] = useState(defaultRange.endDate);
-  // 초기값을 ref로 보존 — 마운트 시 1회 실행용
-  const initialStartRef = useRef(defaultRange.startDate);
-  const initialEndRef = useRef(defaultRange.endDate);
   const [products, setProducts] = useState<ProductMovementSummary[]>([]);
   const [period, setPeriod] = useState<PeriodData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -100,10 +97,10 @@ export function MovementClient() {
     []
   );
 
-  // 초기 로드 — ref에 보존된 초기값으로 마운트 시 1회 실행
+  // 초기 로드
   useEffect(() => {
-    loadMovementData(initialStartRef.current, initialEndRef.current);
-  }, [loadMovementData]);
+    loadMovementData(startDate, endDate);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 조회 버튼
   const handleSearch = useCallback(() => {
@@ -209,7 +206,7 @@ export function MovementClient() {
         <CardContent className="pt-6">
           <div className="flex items-center gap-3">
             <CalendarDays className="h-5 w-5 text-slate-500" />
-            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">조회 기간</span>
+            <span className="text-sm font-medium text-slate-700">조회 기간</span>
             <Input
               type="date"
               value={startDate}
@@ -289,7 +286,7 @@ export function MovementClient() {
           <Card>
             <CardContent className="flex items-center gap-3 pt-6">
               <div className="rounded-lg bg-slate-100 p-2.5 dark:bg-slate-800">
-                <Package className="h-5 w-5 text-slate-600 dark:text-slate-300" />
+                <Package className="h-5 w-5 text-slate-600" />
               </div>
               <div>
                 <p className="text-sm text-slate-500">변동 제품</p>

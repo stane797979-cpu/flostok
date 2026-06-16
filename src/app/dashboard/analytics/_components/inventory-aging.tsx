@@ -388,7 +388,7 @@ export function InventoryAging({ data, className }: InventoryAgingProps) {
                               title="사장재고"
                             />
                           )}
-                          <span className="truncate max-w-[200px]">{product.name}</span>
+                          <span className="truncate max-w-[200px]" title={product.name}>{product.name}</span>
                         </div>
                       </TableCell>
                       <TableCell className="text-right">

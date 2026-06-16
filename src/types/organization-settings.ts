@@ -39,89 +39,12 @@ export interface OrderPolicySettings {
 }
 
 /**
- * 알림 임계값 설정
- */
-export interface AlertSettings {
-  /** 재고 위험 알림 (현재고 = 0 또는 안전재고의 50% 미만) */
-  stockCritical: boolean;
-  /** 재고 부족 알림 (안전재고 미만) */
-  stockShortage: boolean;
-  /** 재고 과다 알림 (안전재고 × 3 이상) */
-  stockExcess: boolean;
-  /** 발주 지연 알림 */
-  orderDelay: boolean;
-  /** 수요 급증 알림 */
-  demandSurge: boolean;
-  /** 수요 급감 알림 */
-  demandDrop: boolean;
-  /** 재고 알림 기준: 안전재고 대비 % (100 = 안전재고 이하 시 알림) */
-  stockThresholdPercent: number;
-  /** 납기 알림 기준: 납기 D-N일 전 알림 */
-  orderDelayDays: number;
-  /** 수요 변동 기준: 전월 대비 급증/급감 % */
-  demandChangePercent: number;
-}
-
-/**
- * 알림 설정 기본값
- */
-export const DEFAULT_ALERT_SETTINGS: AlertSettings = {
-  stockCritical: true,
-  stockShortage: true,
-  stockExcess: false,
-  orderDelay: true,
-  demandSurge: true,
-  demandDrop: false,
-  stockThresholdPercent: 100,
-  orderDelayDays: 3,
-  demandChangePercent: 30,
-};
-
-/**
- * 데이터 보관 정책 설정
- * 각 항목별 보관 기간(개월). 0 = 삭제 안 함(영구 보관)
- */
-export interface RetentionPolicySettings {
-  /** 취소/완료된 발주서 보관 기간 (개월) */
-  purchaseOrdersMonths: number;
-  /** 입고 기록 보관 기간 (개월) */
-  inboundRecordsMonths: number;
-  /** 출고(재고변동) 이력 보관 기간 (개월) */
-  inventoryHistoryMonths: number;
-  /** 판매 기록 보관 기간 (개월) */
-  salesRecordsMonths: number;
-  /** 읽은 알림 보관 기간 (개월) */
-  alertsMonths: number;
-  /** 활동 로그 보관 기간 (개월) */
-  activityLogMonths: number;
-  /** 수요 예측 데이터 보관 기간 (개월) */
-  demandForecastsMonths: number;
-}
-
-/**
- * 데이터 보관 정책 기본값
- */
-export const DEFAULT_RETENTION_POLICY: RetentionPolicySettings = {
-  purchaseOrdersMonths: 12,
-  inboundRecordsMonths: 12,
-  inventoryHistoryMonths: 6,
-  salesRecordsMonths: 24,
-  alertsMonths: 3,
-  activityLogMonths: 6,
-  demandForecastsMonths: 12,
-};
-
-/**
  * 조직 전체 설정
  */
 export interface OrganizationSettings {
   /** 발주 정책 */
   orderPolicy?: OrderPolicySettings;
-  /** 알림 임계값 설정 */
-  alertSettings?: AlertSettings;
-  /** 데이터 보관 정책 */
-  retentionPolicy?: RetentionPolicySettings;
-  /** 알림 채널 설정 */
+  /** 알림 설정 */
   notifications?: {
     email?: boolean;
     sms?: boolean;

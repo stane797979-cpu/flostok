@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, memo } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Table,
@@ -19,14 +19,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ShoppingCart, MoreHorizontal, Settings2, ArrowUpDown, ArrowUp, ArrowDown, Trash2 } from "lucide-react";
+import { ShoppingCart, MoreHorizontal, Settings2, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getInventoryStatus } from "@/lib/constants/inventory-status";
 
 export interface InventoryItem {
   id: string;
   productId: string;
-  warehouseId: string | null;
   currentStock: number;
   availableStock: number | null;
   daysOfInventory: number | null;
@@ -39,23 +38,14 @@ export interface InventoryItem {
     abcGrade: "A" | "B" | "C" | null;
     xyzGrade: "X" | "Y" | "Z" | null;
   };
-  warehouse: {
-    id: string;
-    name: string;
-    code: string;
-  } | null;
 }
 
 interface InventoryTableProps {
   items: InventoryItem[];
-  onAdjust?: (item: InventoryItem) => void;
-  onDelete?: (item: InventoryItem) => void;
-  onBulkDelete?: (ids: string[]) => void;
-  selectedIds?: string[];
-  onSelectionChange?: (ids: string[]) => void;
+  onAdjust: (item: InventoryItem) => void;
 }
 
-type SortKey = "sku" | "name" | "status" | "abcXyzGrade" | "currentStock" | "safetyStock" | "reorderPoint" | "daysOfInventory" | "warehouse" | "location";
+type SortKey = "sku" | "name" | "status" | "abcXyzGrade" | "currentStock" | "safetyStock" | "reorderPoint" | "daysOfInventory" | "location";
 
 const ABC_XYZ_ORDER: Record<string, number> = {
   AX: 1, AY: 2, AZ: 3, BX: 4, BY: 5, BZ: 6, CX: 7, CY: 8, CZ: 9,
@@ -72,10 +62,8 @@ const STATUS_ORDER = [
   "overstock",
 ];
 
-export const InventoryTable = memo(function InventoryTable({ items, onAdjust, onDelete, onBulkDelete, selectedIds: externalSelectedIds, onSelectionChange }: InventoryTableProps) {
-  const [internalSelectedIds, setInternalSelectedIds] = useState<string[]>([]);
-  const selectedIds = externalSelectedIds ?? internalSelectedIds;
-  const setSelectedIds = onSelectionChange ?? setInternalSelectedIds;
+export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [sortKey, setSortKey] = useState<SortKey>("status");
   const [sortDir, setSortDir] = useState<SortDirection>("asc");
   const router = useRouter();
@@ -131,8 +119,6 @@ export const InventoryTable = memo(function InventoryTable({ items, onAdjust, on
           return dir * ((a.product.reorderPoint ?? 0) - (b.product.reorderPoint ?? 0));
         case "daysOfInventory":
           return dir * ((a.daysOfInventory ?? 9999) - (b.daysOfInventory ?? 9999));
-        case "warehouse":
-          return dir * (a.warehouse?.name ?? "").localeCompare(b.warehouse?.name ?? "");
         case "location":
           return dir * (a.location ?? "").localeCompare(b.location ?? "");
         default:
@@ -169,19 +155,7 @@ export const InventoryTable = memo(function InventoryTable({ items, onAdjust, on
         <div className="flex items-center justify-between rounded-lg border bg-slate-50 p-4 dark:bg-slate-900">
           <span className="text-sm font-medium">{selectedIds.length}개 항목 선택됨</span>
           <div className="flex gap-2">
-            {onBulkDelete && (
-              <Button size="sm" variant="destructive" onClick={() => onBulkDelete(selectedIds)}>
-                <Trash2 className="mr-2 h-4 w-4" />
-                선택 삭제 ({selectedIds.length})
-              </Button>
-            )}
-            <Button size="sm" variant="default" onClick={() => {
-              const productIds = sorted
-                .filter((item) => selectedIds.includes(item.id))
-                .map((item) => item.productId);
-              const params = new URLSearchParams({ tab: "reorder", productIds: productIds.join(",") });
-              router.push(`/dashboard/orders?${params.toString()}`);
-            }}>
+            <Button size="sm" variant="default" onClick={() => router.push("/dashboard/orders")}>
               <ShoppingCart className="mr-2 h-4 w-4" />
               일괄 발주 생성
             </Button>
@@ -220,21 +194,10 @@ export const InventoryTable = memo(function InventoryTable({ items, onAdjust, on
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      {onAdjust && (
                       <DropdownMenuItem onClick={() => onAdjust(item)}>
                         <Settings2 className="mr-2 h-4 w-4" />
                         재고 조정
                       </DropdownMenuItem>
-                      )}
-                      {onDelete && (
-                        <DropdownMenuItem
-                          onClick={() => onDelete(item)}
-                          className="text-red-600 focus:text-red-600"
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          재고 삭제
-                        </DropdownMenuItem>
-                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
@@ -242,7 +205,7 @@ export const InventoryTable = memo(function InventoryTable({ items, onAdjust, on
               <div className="flex items-center gap-4 text-sm">
                 <div>
                   <span className="text-slate-500">현재고</span>
-                  <span className="ml-1 font-mono font-medium">{item.currentStock.toLocaleString("ko-KR")}</span>
+                  <span className="ml-1 font-mono font-medium">{item.currentStock.toLocaleString()}</span>
                 </div>
                 {inventoryDays !== null && (
                   <div>
@@ -251,7 +214,7 @@ export const InventoryTable = memo(function InventoryTable({ items, onAdjust, on
                       "ml-1 font-mono",
                       inventoryDays <= 7 && "font-medium text-red-600",
                       inventoryDays > 7 && inventoryDays <= 14 && "text-orange-600",
-                      inventoryDays > 14 && "text-slate-600 dark:text-slate-300"
+                      inventoryDays > 14 && "text-slate-600"
                     )}>
                       {inventoryDays > 365 ? "365+" : inventoryDays}일
                     </span>
@@ -305,9 +268,6 @@ export const InventoryTable = memo(function InventoryTable({ items, onAdjust, on
               <TableHead className={cn("text-right", sortableHeadClass)} onClick={() => handleSort("daysOfInventory")}>
                 <div className="flex items-center justify-end gap-0.5">재고일수 <span className="text-[10px] text-primary-600">{sortLabel("daysOfInventory")}</span><SortIcon columnKey="daysOfInventory" /></div>
               </TableHead>
-              <TableHead className={cn("text-center", sortableHeadClass)} onClick={() => handleSort("warehouse")}>
-                <div className="flex items-center justify-center gap-0.5">창고 <span className="text-[10px] text-primary-600">{sortLabel("warehouse")}</span><SortIcon columnKey="warehouse" /></div>
-              </TableHead>
               <TableHead className={cn("text-center", sortableHeadClass)} onClick={() => handleSort("location")}>
                 <div className="flex items-center justify-center gap-0.5">위치 <span className="text-[10px] text-primary-600">{sortLabel("location")}</span><SortIcon columnKey="location" /></div>
               </TableHead>
@@ -317,7 +277,7 @@ export const InventoryTable = memo(function InventoryTable({ items, onAdjust, on
           <TableBody>
             {sorted.length === 0 && (
               <TableRow>
-                <TableCell colSpan={12} className="h-24 text-center text-slate-500">
+                <TableCell colSpan={11} className="h-24 text-center text-slate-500">
                   재고 데이터가 없습니다
                 </TableCell>
               </TableRow>
@@ -369,13 +329,13 @@ export const InventoryTable = memo(function InventoryTable({ items, onAdjust, on
                     )}
                   </TableCell>
                   <TableCell className="text-right font-mono">
-                    {item.currentStock.toLocaleString("ko-KR")}
+                    {item.currentStock.toLocaleString()}
                   </TableCell>
                   <TableCell className="text-right font-mono text-slate-500">
-                    {safetyStock.toLocaleString("ko-KR")}
+                    {safetyStock.toLocaleString()}
                   </TableCell>
                   <TableCell className="text-right font-mono text-slate-500">
-                    {reorderPoint.toLocaleString("ko-KR")}
+                    {reorderPoint.toLocaleString()}
                   </TableCell>
                   <TableCell className="text-right font-mono">
                     {inventoryDays !== null ? (
@@ -389,13 +349,6 @@ export const InventoryTable = memo(function InventoryTable({ items, onAdjust, on
                       >
                         {inventoryDays > 365 ? "365+" : inventoryDays}일
                       </span>
-                    ) : (
-                      <span className="text-slate-400">-</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-center text-sm">
-                    {item.warehouse ? (
-                      <span className="font-medium">{item.warehouse.name}</span>
                     ) : (
                       <span className="text-slate-400">-</span>
                     )}
@@ -416,21 +369,9 @@ export const InventoryTable = memo(function InventoryTable({ items, onAdjust, on
                           재고 조정
                         </DropdownMenuItem>
                         {needsOrder && (
-                          <DropdownMenuItem onClick={() => {
-                            const params = new URLSearchParams({ tab: "reorder", productIds: item.productId });
-                            router.push(`/dashboard/orders?${params.toString()}`);
-                          }}>
+                          <DropdownMenuItem onClick={() => router.push("/dashboard/orders")}>
                             <ShoppingCart className="mr-2 h-4 w-4" />
                             발주 생성
-                          </DropdownMenuItem>
-                        )}
-                        {onDelete && (
-                          <DropdownMenuItem
-                            onClick={() => onDelete(item)}
-                            className="text-red-600 focus:text-red-600"
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            재고 삭제
                           </DropdownMenuItem>
                         )}
                       </DropdownMenuContent>
@@ -444,4 +385,4 @@ export const InventoryTable = memo(function InventoryTable({ items, onAdjust, on
       </div>
     </div>
   );
-});
+}

@@ -6,19 +6,6 @@ export async function updateSession(request: NextRequest) {
     request,
   });
 
-  const pathname = request.nextUrl.pathname;
-
-  // 인증이 필요한 라우트 판별 (getUser 호출 전에 먼저 확인)
-  const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/signup");
-  const isProtectedRoute =
-    pathname.startsWith("/dashboard") ||
-    pathname.startsWith("/admin");
-
-  // 공개 라우트는 인증 체크 없이 바로 통과 (50-200ms 절감)
-  if (!isAuthRoute && !isProtectedRoute) {
-    return supabaseResponse;
-  }
-
   // Supabase URL이 dummy이거나 미설정인 경우 인증 우회 (개발 모드)
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -52,16 +39,34 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  // IMPORTANT: 인증/보호 라우트에서만 호출 — 세션 갱신
+  // IMPORTANT: 이 부분이 반드시 있어야 세션이 갱신됩니다.
+  // getUser()를 호출하면 Supabase가 인증 토큰을 검증하고 필요시 갱신합니다.
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  // 보호된 라우트 설정
+  const isAuthRoute =
+    request.nextUrl.pathname.startsWith("/login") || request.nextUrl.pathname.startsWith("/signup");
+  const isProtectedRoute =
+    request.nextUrl.pathname.startsWith("/dashboard") ||
+    request.nextUrl.pathname.startsWith("/admin") ||
+    request.nextUrl.pathname.startsWith("/billing") ||
+    request.nextUrl.pathname.startsWith("/alerts") ||
+    request.nextUrl.pathname.startsWith("/procurement") ||
+    request.nextUrl.pathname.startsWith("/orders") ||
+    request.nextUrl.pathname.startsWith("/analysis") ||
+    request.nextUrl.pathname.startsWith("/kpi") ||
+    request.nextUrl.pathname.startsWith("/simulation") ||
+    request.nextUrl.pathname.startsWith("/auto-orders") ||
+    request.nextUrl.pathname.startsWith("/ai") ||
+    request.nextUrl.pathname.startsWith("/settings");
 
   // 미인증 사용자가 보호된 라우트 접근 시 로그인으로 리다이렉트
   if (!user && isProtectedRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    url.searchParams.set("redirect", pathname);
+    url.searchParams.set("redirect", request.nextUrl.pathname);
     return NextResponse.redirect(url);
   }
 
@@ -70,21 +75,6 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     return NextResponse.redirect(url);
-  }
-
-  // 인증된 사용자의 auth ID를 헤더로 전달 → 레이아웃에서 Supabase 재호출 생략
-  if (user && isProtectedRoute) {
-    // 기존 응답의 쿠키를 보존
-    const existingCookies = supabaseResponse.cookies.getAll();
-    const requestHeaders = new Headers(request.headers);
-    requestHeaders.set("x-auth-user-id", user.id);
-    supabaseResponse = NextResponse.next({
-      request: { headers: requestHeaders },
-    });
-    // 세션 갱신 쿠키 재적용
-    existingCookies.forEach(({ name, value, ...options }) =>
-      supabaseResponse.cookies.set(name, value, options)
-    );
   }
 
   return supabaseResponse;

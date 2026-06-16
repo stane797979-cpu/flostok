@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Flostok 시스템 플로우차트</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    body { margin: 0; background: #f8fafc; font-family: Arial, sans-serif; }
+    h1 { text-align: center; padding: 20px; color: #1e293b; font-size: 22px; }
+    .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+    .mermaid { background: white; border-radius: 12px; padding: 30px; box-shadow: 0 2px 12px #0001; }
+    .btn {
+      display: block; margin: 20px auto; padding: 12px 32px;
+      background: #1e293b; color: white; border: none;
+      border-radius: 8px; font-size: 15px; cursor: pointer;
+    }
+    .btn:hover { background: #334155; }
+  </style>
+</head>
+<body>
+  <h1>Flostok SCM Platform — 시스템 플로우차트</h1>
+  <div class="container">
+    <button class="btn" onclick="window.print()">PNG/PDF로 저장 (Ctrl+P)</button>
+    <div class="mermaid">
+flowchart TD
+    USER([방문자]) --> CLERK[Clerk Auth 인증]
+    CLERK --> ORG[조직 선택 멀티테넌트]
+    ORG --> DASH[대시보드 KPI 요약]
+
+    DASH --> PROD[제품관리]
+    DASH --> INV[재고관리]
+    DASH --> ANA[분석 예측]
+    DASH --> PSI[PSI 계획]
+    DASH --> SUP[공급자관리]
+    DASH --> ORD[발주관리]
+
+    subgraph PRODUCT [제품 마스터 관리]
+        PROD --> PROD_LIST[제품목록 SKU 카테고리 공급자]
+        PROD_LIST --> PROD_DETAIL[제품상세 원가 판가 리드타임]
+        PROD_LIST --> ABC_SET[ABC 등급 설정]
+        PROD_DETAIL --> SS_PARAM[안전재고 파라미터 서비스율Z 리드타임]
+        SS_PARAM --> SS_CALC[안전재고 산출 SS=Z x sd x sqrtLT sd=1.25 x MAD]
+    end
+
+    subgraph INVENTORY [재고 관리]
+        INV --> INV_DASH[재고현황 현재고 가용재고 예약]
+        INV_DASH --> STATUS{재고상태}
+        STATUS --> OUT[품절 out of stock]
+        STATUS --> CRIT[위험 critical]
+        STATUS --> CAUT[주의 caution]
+        STATUS --> OPT[적정 optimal]
+        STATUS --> EXC[과다 excess]
+        INV_DASH --> IN_PROC[입고 처리]
+        INV_DASH --> OUT_PROC[출고 처리]
+        IN_PROC --> INV_HIST[재고 이력 추적]
+        OUT_PROC --> INV_HIST
+    end
+
+    subgraph ANALYTICS [분석 수요예측]
+        ANA --> ABC[ABC 분류 파레토 매출]
+        ANA --> XYZ[XYZ 분류 CV 변동계수]
+        ANA --> FMR[FMR 분류 월출고빈도 F10이상 M4~9 R3이하]
+        ABC --> COMB[3중 조합 27가지 전략]
+        XYZ --> COMB
+        FMR --> COMB
+        COMB --> FORECAST[수요예측 엔진]
+        FORECAST --> SMA[SMA 3개월 이동평균]
+        FORECAST --> SES[SES CV기반 알파 자동선택 X0.6 Y0.4 Z0.2]
+        FORECAST --> HOLTS[Holts 이중지수평활 Level+Trend]
+        SMA --> MAPE[MAPE 평가 최적모델 자동선택]
+        SES --> MAPE
+        HOLTS --> MAPE
+        MAPE --> POLICY[재고전략 가이드 등급별 발주전략]
+    end
+
+    subgraph PSIPLAN [PSI 계획]
+        PSI --> PSI_IN[수요 입력 예측값 수동]
+        PSI_IN --> PSI_P[생산 계획 LOT 리드타임]
+        PSI_P --> PSI_I[재고 계획 기말=기초+생산-판매]
+        PSI_I --> PSI_T[PSI 월별 테이블 12개월 Excel내보내기]
+    end
+
+    subgraph SUPPLIER [공급자 관리]
+        SUP --> SUP_LIST[공급자 목록 업체명 리드타임]
+        SUP_LIST --> SUP_PERF[성과평가 납기율 불량률]
+        SUP_LIST --> SUP_PROD[연결제품 공급SKU]
+    end
+
+    subgraph ORDER [발주 관리]
+        ORD --> ROP[발주추천 트리거 재고 ROP이하]
+        ROP --> EOQ[발주량 계산 EOQ 안전재고보충]
+        EOQ --> APR{승인 결정}
+        APR --> |확정| CONF[발주 확정]
+        APR --> |보류| HOLD[발주 보류]
+        CONF --> RCV[입고 확정 재고 자동증가]
+    end
+
+    subgraph AI [AI 어시스턴트 Claude Sonnet]
+        AI_DIAG[재고 진단 위험제품 우선순위]
+        AI_FORE[수요예측 해석 근거 신뢰도]
+        AI_OPT[발주 최적화 EOQ 타이밍]
+        AI_SIM[PSI 시뮬레이션 시나리오]
+        AI_NL[자연어 질의 Tool Use]
+    end
+
+    MAPE -->|예측값 활용| PSI_IN
+    INV_DASH -->|ROP 도달| ROP
+    RCV -->|재고 증가| INV_DASH
+    SS_CALC -->|SS 반영| EOQ
+    SUP_LIST -->|리드타임 반영| SS_PARAM
+    DASH <--> AI_DIAG
+    DASH <--> AI_NL
+    ANALYTICS <--> AI_FORE
+    ORDER <--> AI_OPT
+    PSIPLAN <--> AI_SIM
+
+    classDef auth fill:#dbeafe,stroke:#3b82f6,color:#1e40af
+    classDef core fill:#1e293b,stroke:#334155,color:white
+    classDef algo fill:#fef9c3,stroke:#f59e0b,color:#713f12
+    classDef inv fill:#f3e8ff,stroke:#a855f7,color:#581c87
+    classDef ana fill:#ffedd5,stroke:#fb923c,color:#7c2d12
+    classDef psi fill:#d1fae5,stroke:#34d399,color:#064e3b
+    classDef sup fill:#e0f2fe,stroke:#38bdf8,color:#0c4a6e
+    classDef ord fill:#fee2e2,stroke:#f87171,color:#7f1d1d
+    classDef ai fill:#fdf4ff,stroke:#d946ef,color:#701a75
+
+    class USER,CLERK,ORG auth
+    class DASH core
+    class SS_CALC,SMA,SES,HOLTS,MAPE algo
+    class INV_DASH,IN_PROC,OUT_PROC,INV_HIST,STATUS,OUT,CRIT,CAUT,OPT,EXC inv
+    class ABC,XYZ,FMR,COMB,FORECAST,POLICY ana
+    class PSI_IN,PSI_P,PSI_I,PSI_T psi
+    class SUP_LIST,SUP_PERF,SUP_PROD sup
+    class ROP,EOQ,APR,CONF,HOLD,RCV ord
+    class AI_DIAG,AI_FORE,AI_OPT,AI_SIM,AI_NL ai
+    </div>
+  </div>
+  <script>
+    mermaid.initialize({ startOnLoad: true, theme: 'default', flowchart: { curve: 'basis' } });
+  </script>
+</body>
+</html>

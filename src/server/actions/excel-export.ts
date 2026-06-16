@@ -10,7 +10,7 @@ import {
   inventoryHistory,
   organizations,
 } from "@/server/db/schema";
-import { eq, and, sql, inArray, isNull, ne, desc } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import {
   generatePurchaseOrderExcel,
   generateMultiplePurchaseOrdersExcel,
@@ -18,14 +18,6 @@ import {
 } from "@/server/services/excel/order-export";
 import { generateInboundExcel, generateInventoryExcel } from "@/server/services/excel/data-export";
 import { generateInventoryMovementExcel } from "@/server/services/excel/inventory-movement-export";
-import {
-  generatePickingListExcel,
-  generateMultiplePickingListsExcel,
-} from "@/server/services/excel/picking-list-export";
-import {
-  getOutboundRequestForPickingList,
-  getOutboundRequestsForPickingList,
-} from "./outbound-requests";
 import { getInboundRecords } from "./inbound";
 import { getInventoryList } from "./inventory";
 import { requireAuth } from "./auth-helpers";
@@ -138,10 +130,10 @@ const exportMultipleOrdersSchema = z.object({
 
 /**
  * 복수 발주서 Excel 다운로드
- * organizationId는 클라이언트 입력을 받지 않고 인증된 사용자의 조직 ID만 사용
  */
 export async function exportPurchaseOrdersToExcel(
-  orderIds: string[]
+  orderIds: string[],
+  organizationId: string
 ): Promise<{
   success: boolean;
   data?: {
@@ -166,42 +158,37 @@ export async function exportPurchaseOrdersToExcel(
       })
       .from(purchaseOrders)
       .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
-      .where(and(inArray(purchaseOrders.id, orderIds), eq(purchaseOrders.organizationId, user.organizationId)));
+      .where(and(sql`${purchaseOrders.id} IN ${orderIds}`, eq(purchaseOrders.organizationId, organizationId)));
 
     if (ordersData.length === 0) {
       return { success: false, error: "발주서를 찾을 수 없습니다" };
     }
 
-    // 배치 아이템 조회: N개 개별 쿼리 → 1개 쿼리로 통합
-    const poIds = ordersData.map(o => o.order.id);
-    const allItems = await db
-      .select({
-        item: purchaseOrderItems,
-        product: {
-          sku: products.sku,
-          name: products.name,
-          unit: products.unit,
-        },
+    const orders: PurchaseOrderWithDetails[] = await Promise.all(
+      ordersData.map(async (orderData) => {
+        const items = await db
+          .select({
+            item: purchaseOrderItems,
+            product: {
+              sku: products.sku,
+              name: products.name,
+              unit: products.unit,
+            },
+          })
+          .from(purchaseOrderItems)
+          .innerJoin(products, eq(purchaseOrderItems.productId, products.id))
+          .where(eq(purchaseOrderItems.purchaseOrderId, orderData.order.id));
+
+        return {
+          ...orderData.order,
+          supplier: orderData.supplier?.id ? orderData.supplier : null,
+          items: items.map((row) => ({
+            ...row.item,
+            product: row.product,
+          })),
+        };
       })
-      .from(purchaseOrderItems)
-      .innerJoin(products, eq(purchaseOrderItems.productId, products.id))
-      .where(inArray(purchaseOrderItems.purchaseOrderId, poIds));
-
-    const itemsByOrderId = new Map<string, typeof allItems>();
-    for (const row of allItems) {
-      const poId = row.item.purchaseOrderId;
-      if (!itemsByOrderId.has(poId)) itemsByOrderId.set(poId, []);
-      itemsByOrderId.get(poId)!.push(row);
-    }
-
-    const orders: PurchaseOrderWithDetails[] = ordersData.map((orderData) => ({
-      ...orderData.order,
-      supplier: orderData.supplier?.id ? orderData.supplier : null,
-      items: (itemsByOrderId.get(orderData.order.id) || []).map((row) => ({
-        ...row.item,
-        product: row.product,
-      })),
-    }));
+    );
 
     const buffer = await generateMultiplePurchaseOrdersExcel(orders);
     const today = new Date().toISOString().split("T")[0].replace(/-/g, "");
@@ -452,169 +439,5 @@ export async function exportInventoryToExcel(): Promise<{
       success: false,
       error: "재고 현황 Excel 다운로드에 실패했습니다",
     };
-  }
-}
-
-/**
- * 발주 현황 전체 리스트 Excel 다운로드
- */
-export async function exportPurchaseOrdersListToExcel(options?: {
-  excludeStatus?: string;
-}): Promise<{
-  success: boolean;
-  data?: { buffer: string; filename: string };
-  error?: string;
-}> {
-  try {
-    const user = await requireAuth();
-
-    const conditions = [
-      eq(purchaseOrders.organizationId, user.organizationId),
-      isNull(purchaseOrders.deletedAt),
-    ];
-
-    if (options?.excludeStatus) {
-      conditions.push(
-        ne(
-          purchaseOrders.status,
-          options.excludeStatus as (typeof purchaseOrders.status.enumValues)[number]
-        )
-      );
-    }
-
-    const ordersData = await db
-      .select({
-        orderNumber: purchaseOrders.orderNumber,
-        supplierName: suppliers.name,
-        status: purchaseOrders.status,
-        totalAmount: purchaseOrders.totalAmount,
-        orderDate: purchaseOrders.orderDate,
-        expectedDate: purchaseOrders.expectedDate,
-        notes: purchaseOrders.notes,
-      })
-      .from(purchaseOrders)
-      .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
-      .where(and(...conditions))
-      .orderBy(desc(purchaseOrders.createdAt));
-
-    if (ordersData.length === 0) {
-      return { success: false, error: "발주 데이터가 없습니다" };
-    }
-
-    const statusLabel: Record<string, string> = {
-      draft: "초안", pending: "대기", approved: "승인",
-      ordered: "발주완료", confirmed: "확정", shipped: "배송중",
-      partially_received: "부분입고", received: "입고완료",
-      completed: "완료", cancelled: "취소",
-    };
-
-    const XLSX = await import("xlsx");
-
-    const rows = ordersData.map((o) => ({
-      발주번호: o.orderNumber,
-      공급자: o.supplierName || "미지정",
-      상태: statusLabel[o.status] || o.status,
-      총금액: o.totalAmount ? Number(o.totalAmount) : 0,
-      발주일: o.orderDate || "",
-      예상입고일: o.expectedDate || "",
-      비고: o.notes || "",
-    }));
-
-    const workbook = XLSX.utils.book_new();
-    const worksheet = XLSX.utils.json_to_sheet(rows);
-    worksheet["!cols"] = [
-      { wch: 18 }, { wch: 16 }, { wch: 10 },
-      { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 24 },
-    ];
-    XLSX.utils.book_append_sheet(workbook, worksheet, "발주현황");
-
-    const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
-    const today = new Date().toISOString().split("T")[0];
-    const filename = `발주현황_${today}.xlsx`;
-    const base64Buffer = Buffer.from(buffer).toString("base64");
-
-    await logActivity({
-      user,
-      action: "EXPORT",
-      entityType: "excel_export",
-      description: `발주현황 전체 Excel 다운로드 (${rows.length}건)`,
-    });
-
-    return { success: true, data: { buffer: base64Buffer, filename } };
-  } catch (error) {
-    console.error("발주 현황 Excel 다운로드 오류:", error);
-    return { success: false, error: "발주 현황 Excel 다운로드에 실패했습니다" };
-  }
-}
-
-/**
- * 단일 출고 요청 피킹지 Excel 다운로드
- */
-export async function exportPickingListToExcel(requestId: string): Promise<{
-  success: boolean;
-  data?: { buffer: string; filename: string };
-  error?: string;
-}> {
-  try {
-    const user = await requireAuth();
-
-    const result = await getOutboundRequestForPickingList(requestId);
-    if (!result.success || !result.data) {
-      return { success: false, error: result.error || "피킹지 데이터 조회에 실패했습니다" };
-    }
-
-    const buffer = await generatePickingListExcel(result.data);
-    const today = new Date().toISOString().split("T")[0];
-    const filename = `피킹지_${result.data.requestNumber}_${today}.xlsx`;
-    const base64Buffer = Buffer.from(buffer).toString("base64");
-
-    await logActivity({
-      user,
-      action: "EXPORT",
-      entityType: "excel_export",
-      description: `피킹지 다운로드: ${result.data.requestNumber}`,
-    });
-
-    return { success: true, data: { buffer: base64Buffer, filename } };
-  } catch (error) {
-    console.error("피킹지 Excel 다운로드 오류:", error);
-    return { success: false, error: "피킹지 다운로드에 실패했습니다" };
-  }
-}
-
-/**
- * 복수 출고 요청 피킹지 Excel 다운로드 (합산 시트 + 개별 시트)
- */
-export async function exportMultiplePickingListsToExcel(requestIds: string[]): Promise<{
-  success: boolean;
-  data?: { buffer: string; filename: string };
-  error?: string;
-}> {
-  try {
-    const user = await requireAuth();
-
-    const validated = z.array(z.string().uuid()).min(1).max(50).parse(requestIds);
-
-    const result = await getOutboundRequestsForPickingList(validated);
-    if (!result.success || !result.dataList) {
-      return { success: false, error: result.error || "피킹지 데이터 조회에 실패했습니다" };
-    }
-
-    const buffer = await generateMultiplePickingListsExcel(result.dataList);
-    const today = new Date().toISOString().split("T")[0];
-    const filename = `피킹지_일괄_${today}.xlsx`;
-    const base64Buffer = Buffer.from(buffer).toString("base64");
-
-    await logActivity({
-      user,
-      action: "EXPORT",
-      entityType: "excel_export",
-      description: `피킹지 일괄 다운로드: ${result.dataList.length}건`,
-    });
-
-    return { success: true, data: { buffer: base64Buffer, filename } };
-  } catch (error) {
-    console.error("피킹지 일괄 Excel 다운로드 오류:", error);
-    return { success: false, error: "피킹지 일괄 다운로드에 실패했습니다" };
   }
 }

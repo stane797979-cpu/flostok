@@ -2,13 +2,14 @@
 
 import { db } from "@/server/db";
 import { suppliers, type Supplier } from "@/server/db/schema";
-import { eq, and, asc, desc, sql, isNull } from "drizzle-orm";
+import { eq, and, asc, desc, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { getCurrentUser, requireManagerOrAbove } from "./auth-helpers";
+import { getCurrentUser } from "./auth-helpers";
 import { logActivity } from "@/server/services/activity-log";
-import { checkSupplierDependencies } from "@/server/services/deletion/dependency-checker";
-import { createDeletionRequest, immediateDeleteEntity } from "@/server/services/deletion/deletion-workflow";
+
+// TODO: 인증 구현 후 실제 organizationId로 교체
+const TEMP_ORG_ID = "00000000-0000-0000-0000-000000000001";
 
 /**
  * 공급자 입력 스키마
@@ -46,11 +47,8 @@ export async function getSuppliers(options?: {
 
   // WHERE 조건 구성
   const user = await getCurrentUser();
-  if (!user?.organizationId) {
-    return { suppliers: [], total: 0 };
-  }
-  const orgId = user.organizationId;
-  const conditions = [eq(suppliers.organizationId, orgId), isNull(suppliers.deletedAt)];
+  const orgId = user?.organizationId || TEMP_ORG_ID;
+  const conditions = [eq(suppliers.organizationId, orgId)];
 
   if (search) {
     conditions.push(
@@ -93,14 +91,11 @@ export async function getSuppliers(options?: {
  */
 export async function getSupplierById(id: string): Promise<Supplier | null> {
   const user = await getCurrentUser();
-  if (!user?.organizationId) {
-    return null;
-  }
-  const orgId = user.organizationId;
+  const orgId = user?.organizationId || TEMP_ORG_ID;
   const result = await db
     .select()
     .from(suppliers)
-    .where(and(eq(suppliers.id, id), eq(suppliers.organizationId, orgId), isNull(suppliers.deletedAt)))
+    .where(and(eq(suppliers.id, id), eq(suppliers.organizationId, orgId)))
     .limit(1);
 
   return result[0] || null;
@@ -108,34 +103,30 @@ export async function getSupplierById(id: string): Promise<Supplier | null> {
 
 /**
  * 공급자 생성
- * - superadmin: 즉시 등록
- * - admin/manager: 등록 요청 생성 → superadmin 승인 필요
  */
 export async function createSupplier(
   input: SupplierInput
-): Promise<{ success: boolean; supplier?: Supplier; error?: string; isRequest?: boolean }> {
+): Promise<{ success: boolean; supplier?: Supplier; error?: string }> {
   try {
     const user = await getCurrentUser();
-    if (!user?.organizationId) {
-      return { success: false, error: "인증이 필요합니다" };
-    }
-    const orgId = user.organizationId;
+    const orgId = user?.organizationId || TEMP_ORG_ID;
 
     // 유효성 검사
     const validated = supplierSchema.parse(input);
 
-    // superadmin: 즉시 등록
-    if (user.isSuperadmin) {
-      const [newSupplier] = await db
-        .insert(suppliers)
-        .values({
-          ...validated,
-          organizationId: orgId,
-          contactEmail: validated.contactEmail || null,
-          rating: String(validated.rating),
-        })
-        .returning();
+    // 생성
+    const [newSupplier] = await db
+      .insert(suppliers)
+      .values({
+        ...validated,
+        organizationId: orgId,
+        contactEmail: validated.contactEmail || null,
+        rating: String(validated.rating),
+      })
+      .returning();
 
+    // 활동 로깅
+    if (user) {
       await logActivity({
         user,
         action: "CREATE",
@@ -143,33 +134,10 @@ export async function createSupplier(
         entityId: newSupplier.id,
         description: `${validated.name} 공급업체 등록`,
       });
-
-      revalidatePath("/dashboard/suppliers");
-      return { success: true, supplier: newSupplier };
     }
 
-    // admin/manager: 등록 요청 생성
-    const result = await createDeletionRequest(
-      {
-        entityType: "supplier_create",
-        entityId: "new",
-        reason: `${validated.name} 공급업체 등록 요청`,
-        changeData: {
-          ...validated,
-          contactEmail: validated.contactEmail || null,
-          rating: String(validated.rating),
-        },
-      },
-      user
-    );
-    if (result.success) {
-      revalidatePath("/dashboard/suppliers");
-    }
-    return {
-      success: result.success,
-      error: result.error,
-      isRequest: result.success ? true : undefined,
-    };
+    revalidatePath("/dashboard/suppliers");
+    return { success: true, supplier: newSupplier };
   } catch (error) {
     if (error instanceof z.ZodError) {
       const zodError = error as z.ZodError;
@@ -185,13 +153,11 @@ export async function createSupplier(
 
 /**
  * 공급자 수정
- * - superadmin: 즉시 수정
- * - admin/manager: 수정 요청 생성 → superadmin 승인 필요
  */
 export async function updateSupplier(
   id: string,
   input: Partial<SupplierInput>
-): Promise<{ success: boolean; supplier?: Supplier; error?: string; isRequest?: boolean }> {
+): Promise<{ success: boolean; supplier?: Supplier; error?: string }> {
   try {
     const user = await getCurrentUser();
 
@@ -201,66 +167,36 @@ export async function updateSupplier(
       return { success: false, error: "공급자를 찾을 수 없습니다" };
     }
 
-    if (!user?.organizationId) {
-      return { success: false, error: "인증이 필요합니다" };
+    // 수정
+    const updateData: Record<string, unknown> = {
+      ...input,
+      contactEmail: input.contactEmail || null,
+      updatedAt: new Date(),
+    };
+    if (input.rating !== undefined) {
+      updateData.rating = String(input.rating);
     }
-    const orgId = user.organizationId;
 
-    // superadmin: 즉시 수정
-    if (user.isSuperadmin) {
-      const updateData: Record<string, unknown> = {
-        ...input,
-        contactEmail: input.contactEmail || null,
-        updatedAt: new Date(),
-      };
-      if (input.rating !== undefined) {
-        updateData.rating = String(input.rating);
-      }
+    const orgId = user?.organizationId || TEMP_ORG_ID;
+    const [updated] = await db
+      .update(suppliers)
+      .set(updateData)
+      .where(and(eq(suppliers.id, id), eq(suppliers.organizationId, orgId)))
+      .returning();
 
-      const [updated] = await db
-        .update(suppliers)
-        .set(updateData)
-        .where(and(eq(suppliers.id, id), eq(suppliers.organizationId, orgId), isNull(suppliers.deletedAt)))
-        .returning();
-
+    // 활동 로깅
+    if (user) {
       await logActivity({
         user,
         action: "UPDATE",
         entityType: "supplier",
         entityId: id,
-        description: `${updated.name} 공급업체 수정`,
+        description: `공급업체 수정`,
       });
-
-      revalidatePath("/dashboard/suppliers");
-      return { success: true, supplier: updated };
     }
 
-    // admin/manager: 수정 요청 생성
-    const changeData: Record<string, unknown> = { ...input };
-    if (input.contactEmail !== undefined) {
-      changeData.contactEmail = input.contactEmail || null;
-    }
-    if (input.rating !== undefined) {
-      changeData.rating = String(input.rating);
-    }
-
-    const result = await createDeletionRequest(
-      {
-        entityType: "supplier_update",
-        entityId: id,
-        reason: `${existing.name} 공급업체 수정 요청`,
-        changeData,
-      },
-      user
-    );
-    if (result.success) {
-      revalidatePath("/dashboard/suppliers");
-    }
-    return {
-      success: result.success,
-      error: result.error,
-      isRequest: result.success ? true : undefined,
-    };
+    revalidatePath("/dashboard/suppliers");
+    return { success: true, supplier: updated };
   } catch (error) {
     console.error("공급자 수정 오류:", error);
     return {
@@ -271,112 +207,75 @@ export async function updateSupplier(
 }
 
 /**
- * 공급자 삭제 (Soft Delete)
- * - superadmin: 즉시 소프트 삭제 (의존성 체크 포함)
- * - admin/manager: 삭제 요청 생성 → superadmin 승인 필요
+ * 공급자 삭제
  */
-export async function deleteSupplier(
-  id: string,
-  reason: string = "관리자 삭제"
-): Promise<{ success: boolean; error?: string; requestId?: string; isRequest?: boolean }> {
+export async function deleteSupplier(id: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const user = await requireManagerOrAbove();
-
-    // superadmin만 즉시 삭제
-    if (user.isSuperadmin) {
-      const result = await immediateDeleteEntity("supplier", id, reason, user);
-      if (result.success) {
-        revalidatePath("/dashboard/suppliers");
-      }
-      return result;
+    const user = await getCurrentUser();
+    const orgId = user?.organizationId || TEMP_ORG_ID;
+    const existing = await getSupplierById(id);
+    if (!existing) {
+      return { success: false, error: "공급자를 찾을 수 없습니다" };
     }
 
-    // admin/manager: 삭제 요청 생성
-    const result = await createDeletionRequest(
-      { entityType: "supplier", entityId: id, reason },
-      user
-    );
-    if (result.success) {
-      revalidatePath("/dashboard/suppliers");
+    await db
+      .delete(suppliers)
+      .where(and(eq(suppliers.id, id), eq(suppliers.organizationId, orgId)));
+
+    // 활동 로깅
+    if (user) {
+      await logActivity({
+        user,
+        action: "DELETE",
+        entityType: "supplier",
+        entityId: id,
+        description: `공급업체 삭제`,
+      });
     }
-    return {
-      success: result.success,
-      error: result.error,
-      requestId: result.requestId,
-      isRequest: result.success ? true : undefined,
-    };
+
+    revalidatePath("/dashboard/suppliers");
+    return { success: true };
   } catch (error) {
     console.error("공급자 삭제 오류:", error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "공급자 삭제에 실패했습니다",
-    };
+    return { success: false, error: "공급자 삭제에 실패했습니다" };
   }
 }
 
 /**
- * 공급자 일괄 삭제 (Soft Delete)
- * - superadmin: 즉시 삭제
- * - admin/manager: 각 공급자별 삭제 요청 생성
+ * 공급자 일괄 삭제
  */
 export async function deleteSuppliers(
-  ids: string[],
-  reason: string = "일괄 삭제"
-): Promise<{ success: boolean; deletedCount: number; requestedCount?: number; error?: string; isRequest?: boolean }> {
+  ids: string[]
+): Promise<{ success: boolean; deletedCount: number; error?: string }> {
   try {
     if (ids.length === 0) {
       return { success: false, deletedCount: 0, error: "삭제할 공급자가 없습니다" };
     }
 
-    const user = await requireManagerOrAbove();
-    let successCount = 0;
-    const errors: string[] = [];
+    const user = await getCurrentUser();
+    const orgId = user?.organizationId || TEMP_ORG_ID;
 
-    // 병렬 삭제 처리 (N+1 → Promise.all)
-    const results = await Promise.all(
-      ids.map(async (id) => {
-        try {
-          if (user.isSuperadmin) {
-            return await immediateDeleteEntity("supplier", id, reason, user);
-          } else {
-            return await createDeletionRequest(
-              { entityType: "supplier", entityId: id, reason },
-              user
-            );
-          }
-        } catch {
-          return { success: false, error: "삭제 처리 중 오류" };
-        }
-      })
-    );
-    for (const result of results) {
-      if (result.success) successCount++;
-      else errors.push(result.error || "알 수 없는 오류");
+    await db
+      .delete(suppliers)
+      .where(and(sql`${suppliers.id} IN ${ids}`, eq(suppliers.organizationId, orgId)));
+
+    // 활동 로깅
+    if (user) {
+      await logActivity({
+        user,
+        action: "DELETE",
+        entityType: "supplier",
+        entityId: ids.join(","),
+        description: `공급업체 ${ids.length}건 일괄 삭제`,
+      });
     }
 
     revalidatePath("/dashboard/suppliers");
-
-    if (successCount === 0) {
-      return { success: false, deletedCount: 0, error: errors.join(", ") };
-    }
-
-    if (user.isSuperadmin) {
-      return { success: true, deletedCount: successCount };
-    }
-    return { success: true, deletedCount: 0, requestedCount: successCount, isRequest: true };
+    return { success: true, deletedCount: ids.length };
   } catch (error) {
     console.error("공급자 일괄 삭제 오류:", error);
     return { success: false, deletedCount: 0, error: "공급자 삭제에 실패했습니다" };
   }
-}
-
-/**
- * 공급자 삭제 전 의존성 체크 (UI용)
- */
-export async function checkSupplierDeleteDependencies(supplierId: string) {
-  const user = await getCurrentUser();
-  if (!user?.organizationId) throw new Error("인증이 필요합니다");
-  return checkSupplierDependencies(supplierId, user.organizationId);
 }
 
 /**
@@ -388,10 +287,7 @@ export async function getSupplierStats(): Promise<{
   avgLeadTime: number;
 }> {
   const user = await getCurrentUser();
-  if (!user?.organizationId) {
-    return { total: 0, avgRating: 0, avgLeadTime: 7 };
-  }
-  const orgId = user.organizationId;
+  const orgId = user?.organizationId || TEMP_ORG_ID;
   const result = await db
     .select({
       count: sql<number>`count(*)`,
@@ -399,7 +295,7 @@ export async function getSupplierStats(): Promise<{
       avgLeadTime: sql<number>`avg(${suppliers.avgLeadTime})`,
     })
     .from(suppliers)
-    .where(and(eq(suppliers.organizationId, orgId), isNull(suppliers.deletedAt)));
+    .where(eq(suppliers.organizationId, orgId));
 
   return {
     total: Number(result[0]?.count || 0),
@@ -413,17 +309,14 @@ export async function getSupplierStats(): Promise<{
  */
 export async function getSupplierOptions(): Promise<{ id: string; name: string }[]> {
   const user = await getCurrentUser();
-  if (!user?.organizationId) {
-    return [];
-  }
-  const orgId = user.organizationId;
+  const orgId = user?.organizationId || TEMP_ORG_ID;
   const result = await db
     .select({
       id: suppliers.id,
       name: suppliers.name,
     })
     .from(suppliers)
-    .where(and(eq(suppliers.organizationId, orgId), isNull(suppliers.deletedAt)))
+    .where(eq(suppliers.organizationId, orgId))
     .orderBy(asc(suppliers.name));
 
   return result;

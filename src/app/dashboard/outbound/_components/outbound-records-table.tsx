@@ -26,7 +26,7 @@ interface OutboundRecordsTableProps {
   onDelete?: (record: OutboundRecord) => void;
 }
 
-type SortField = "date" | "referenceNumber" | "productSku" | "productName" | "changeTypeLabel" | "changeAmount" | "stockBefore" | "stockAfter";
+type SortField = "date" | "productSku" | "productName" | "changeTypeLabel" | "changeAmount" | "stockBefore" | "stockAfter";
 type SortDirection = "asc" | "desc" | null;
 
 function SortIcon({ field, sortField, sortDirection }: { field: SortField; sortField: SortField; sortDirection: SortDirection }) {
@@ -34,10 +34,10 @@ function SortIcon({ field, sortField, sortDirection }: { field: SortField; sortF
     return <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />;
   }
   if (sortDirection === "asc") {
-    return <ArrowUp className="h-3.5 w-3.5 text-slate-900 dark:text-slate-100" />;
+    return <ArrowUp className="h-3.5 w-3.5 text-slate-900" />;
   }
   if (sortDirection === "desc") {
-    return <ArrowDown className="h-3.5 w-3.5 text-slate-900 dark:text-slate-100" />;
+    return <ArrowDown className="h-3.5 w-3.5 text-slate-900" />;
   }
   return <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />;
 }
@@ -65,8 +65,8 @@ export function OutboundRecordsTable({ records, onEdit, onDelete }: OutboundReco
     if (!sortDirection) return records;
 
     return [...records].sort((a, b) => {
-      const aVal = a[sortField] ?? "";
-      const bVal = b[sortField] ?? "";
+      const aVal = a[sortField];
+      const bVal = b[sortField];
 
       if (typeof aVal === "string" && typeof bVal === "string") {
         return sortDirection === "asc"
@@ -94,49 +94,43 @@ export function OutboundRecordsTable({ records, onEdit, onDelete }: OutboundReco
         <TableHeader>
           <TableRow>
             <TableHead>
-              <button onClick={() => handleSort("date")} className="flex items-center gap-1 hover:text-slate-900 dark:text-slate-100">
+              <button onClick={() => handleSort("date")} className="flex items-center gap-1 hover:text-slate-900">
                 날짜
                 <SortIcon field="date" sortField={sortField} sortDirection={sortDirection} />
               </button>
             </TableHead>
-            <TableHead>
-              <button onClick={() => handleSort("referenceNumber")} className="flex items-center gap-1 hover:text-slate-900 dark:text-slate-100">
-                요청번호
-                <SortIcon field="referenceNumber" sortField={sortField} sortDirection={sortDirection} />
-              </button>
-            </TableHead>
             <TableHead className="w-[100px]">
-              <button onClick={() => handleSort("productSku")} className="flex items-center gap-1 hover:text-slate-900 dark:text-slate-100">
+              <button onClick={() => handleSort("productSku")} className="flex items-center gap-1 hover:text-slate-900">
                 SKU
                 <SortIcon field="productSku" sortField={sortField} sortDirection={sortDirection} />
               </button>
             </TableHead>
             <TableHead>
-              <button onClick={() => handleSort("productName")} className="flex items-center gap-1 hover:text-slate-900 dark:text-slate-100">
+              <button onClick={() => handleSort("productName")} className="flex items-center gap-1 hover:text-slate-900">
                 제품명
                 <SortIcon field="productName" sortField={sortField} sortDirection={sortDirection} />
               </button>
             </TableHead>
             <TableHead>
-              <button onClick={() => handleSort("changeTypeLabel")} className="flex items-center gap-1 hover:text-slate-900 dark:text-slate-100">
+              <button onClick={() => handleSort("changeTypeLabel")} className="flex items-center gap-1 hover:text-slate-900">
                 유형
                 <SortIcon field="changeTypeLabel" sortField={sortField} sortDirection={sortDirection} />
               </button>
             </TableHead>
             <TableHead className="text-right">
-              <button onClick={() => handleSort("changeAmount")} className="ml-auto flex items-center gap-1 hover:text-slate-900 dark:text-slate-100">
+              <button onClick={() => handleSort("changeAmount")} className="ml-auto flex items-center gap-1 hover:text-slate-900">
                 출고수량
                 <SortIcon field="changeAmount" sortField={sortField} sortDirection={sortDirection} />
               </button>
             </TableHead>
             <TableHead className="text-right">
-              <button onClick={() => handleSort("stockBefore")} className="ml-auto flex items-center gap-1 hover:text-slate-900 dark:text-slate-100">
+              <button onClick={() => handleSort("stockBefore")} className="ml-auto flex items-center gap-1 hover:text-slate-900">
                 변동 전
                 <SortIcon field="stockBefore" sortField={sortField} sortDirection={sortDirection} />
               </button>
             </TableHead>
             <TableHead className="text-right">
-              <button onClick={() => handleSort("stockAfter")} className="ml-auto flex items-center gap-1 hover:text-slate-900 dark:text-slate-100">
+              <button onClick={() => handleSort("stockAfter")} className="ml-auto flex items-center gap-1 hover:text-slate-900">
                 변동 후
                 <SortIcon field="stockAfter" sortField={sortField} sortDirection={sortDirection} />
               </button>
@@ -149,9 +143,6 @@ export function OutboundRecordsTable({ records, onEdit, onDelete }: OutboundReco
           {sortedRecords.map((record) => (
             <TableRow key={record.id}>
               <TableCell className="font-mono text-sm">{record.date}</TableCell>
-              <TableCell className="font-mono text-xs text-slate-500">
-                {record.referenceNumber || "-"}
-              </TableCell>
               <TableCell className="font-mono text-sm">{record.productSku}</TableCell>
               <TableCell className="font-medium">{record.productName}</TableCell>
               <TableCell>
@@ -174,7 +165,7 @@ export function OutboundRecordsTable({ records, onEdit, onDelete }: OutboundReco
               <TableCell>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="출고 옵션">
+                    <Button variant="ghost" size="icon" className="h-8 w-8">
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>

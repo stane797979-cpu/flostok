@@ -6,16 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Loader2, RotateCcw, Save, Info } from "lucide-react";
 import {
   getOrderPolicySettings,
@@ -27,7 +17,7 @@ import { DEFAULT_ORDER_POLICY, DEFAULT_SUPPLY_COEFFICIENTS } from "@/types/organ
 import { useToast } from "@/hooks/use-toast";
 
 interface OrderPolicySettingsProps {
-  organizationId?: string;
+  organizationId: string;
 }
 
 export function OrderPolicySettingsComponent({ organizationId }: OrderPolicySettingsProps) {
@@ -35,11 +25,10 @@ export function OrderPolicySettingsComponent({ organizationId }: OrderPolicySett
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
-  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [settings, setSettings] = useState<OrderPolicySettings>(DEFAULT_ORDER_POLICY);
   const [errors, setErrors] = useState<Partial<Record<keyof OrderPolicySettings, string>>>({});
 
-  // 설정 불러오기 — 서버 액션 내부에서 인증 기반으로 조직 결정
+  // 설정 불러오기
   useEffect(() => {
     async function loadSettings() {
       try {
@@ -117,7 +106,7 @@ export function OrderPolicySettingsComponent({ organizationId }: OrderPolicySett
 
     setIsSaving(true);
     try {
-      const result = await updateOrderPolicySettings(organizationId || "", settings);
+      const result = await updateOrderPolicySettings(organizationId, settings);
 
       if (result.success) {
         toast({
@@ -143,8 +132,12 @@ export function OrderPolicySettingsComponent({ organizationId }: OrderPolicySett
     }
   };
 
-  // 초기화 (AlertDialog 확인 후 실행)
-  const handleResetConfirmed = async () => {
+  // 초기화
+  const handleReset = async () => {
+    if (!confirm("발주 정책을 기본값으로 초기화하시겠습니까?")) {
+      return;
+    }
+
     setIsResetting(true);
     try {
       const result = await resetOrderPolicySettings(organizationId);
@@ -358,16 +351,16 @@ export function OrderPolicySettingsComponent({ organizationId }: OrderPolicySett
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr>
-                  <th className="border border-slate-200 bg-slate-50 px-3 py-2 text-left font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                  <th className="border border-slate-200 bg-slate-50 px-3 py-2 text-left font-medium text-slate-600">
                     ABC \ XYZ
                   </th>
-                  <th className="border border-slate-200 bg-green-50 px-3 py-2 text-center font-medium text-green-700 dark:border-slate-700 dark:bg-green-950 dark:text-green-300">
+                  <th className="border border-slate-200 bg-green-50 px-3 py-2 text-center font-medium text-green-700">
                     X (안정)
                   </th>
-                  <th className="border border-slate-200 bg-yellow-50 px-3 py-2 text-center font-medium text-yellow-700 dark:border-slate-700 dark:bg-yellow-950 dark:text-yellow-300">
+                  <th className="border border-slate-200 bg-yellow-50 px-3 py-2 text-center font-medium text-yellow-700">
                     Y (보통)
                   </th>
-                  <th className="border border-slate-200 bg-red-50 px-3 py-2 text-center font-medium text-red-700 dark:border-slate-700 dark:bg-red-950 dark:text-red-300">
+                  <th className="border border-slate-200 bg-red-50 px-3 py-2 text-center font-medium text-red-700">
                     Z (불안정)
                   </th>
                 </tr>
@@ -375,7 +368,7 @@ export function OrderPolicySettingsComponent({ organizationId }: OrderPolicySett
               <tbody>
                 {(["A", "B", "C"] as const).map((abc) => (
                   <tr key={abc}>
-                    <td className="border border-slate-200 bg-slate-50 px-3 py-2 font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                    <td className="border border-slate-200 bg-slate-50 px-3 py-2 font-medium text-slate-600">
                       {abc} ({abc === "A" ? "매출 高" : abc === "B" ? "매출 中" : "매출 低"})
                     </td>
                     {(["X", "Y", "Z"] as const).map((xyz) => {
@@ -433,7 +426,7 @@ export function OrderPolicySettingsComponent({ organizationId }: OrderPolicySett
       <div className="flex justify-end gap-3">
         <Button
           variant="outline"
-          onClick={() => setResetConfirmOpen(true)}
+          onClick={handleReset}
           disabled={isResetting || isSaving}
         >
           {isResetting ? (
@@ -462,24 +455,6 @@ export function OrderPolicySettingsComponent({ organizationId }: OrderPolicySett
           )}
         </Button>
       </div>
-
-      <AlertDialog open={resetConfirmOpen} onOpenChange={setResetConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>발주 정책 초기화</AlertDialogTitle>
-            <AlertDialogDescription>
-              발주 정책을 기본값으로 초기화하시겠습니까?
-              현재 설정된 값이 모두 기본값으로 변경됩니다.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>취소</AlertDialogCancel>
-            <AlertDialogAction onClick={handleResetConfirmed}>
-              초기화
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

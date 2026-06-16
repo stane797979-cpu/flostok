@@ -12,7 +12,7 @@ import {
   type PurchaseOrder,
   type PurchaseOrderItem,
 } from "@/server/db/schema";
-import { eq, and, desc, asc, sql, gte, lte, or } from "drizzle-orm";
+import { eq, and, desc, asc, sql, gte, lte, or, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { salesRecords, organizations } from "@/server/db/schema";
@@ -445,7 +445,7 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
       db
         .select()
         .from(products)
-        .where(and(sql`${products.id} IN ${productIds}`, eq(products.organizationId, orgId))),
+        .where(and(inArray(products.id, productIds), eq(products.organizationId, orgId))),
       db
         .select({ count: sql<number>`count(*)` })
         .from(purchaseOrders)
@@ -865,7 +865,7 @@ export async function cancelBulkPurchaseOrders(
       .where(
         and(
           eq(purchaseOrders.organizationId, TEMP_ORG_ID),
-          sql`${purchaseOrders.id} IN ${orderIds}`
+          inArray(purchaseOrders.id, orderIds)
         )
       );
 
@@ -1081,8 +1081,11 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
     // 유효성 검사
     const validated = createBulkPurchaseOrdersSchema.parse(input);
 
-    // 사용자 정보 조회 (활동 로깅용)
+    // 사용자 정보 조회
     const user = await getCurrentUser();
+    const orgId = user?.organizationId || TEMP_ORG_ID;
+
+    console.log("[createBulkPurchaseOrders] orgId:", orgId, "user:", user?.id);
 
     // 1. 공급자별로 품목 그룹화
     const itemsBySupplier = new Map<string, typeof validated.items>();
@@ -1094,7 +1097,7 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
 
     // 발주 제한 확인 (생성할 발주서 수만큼 확인)
     const { checkOrderLimit } = await import("@/server/services/subscription/limits");
-    const limit = await checkOrderLimit(TEMP_ORG_ID);
+    const limit = await checkOrderLimit(orgId);
     const ordersToCreate = itemsBySupplier.size;
 
     if (limit.limit !== Infinity && limit.current + ordersToCreate > limit.limit) {
@@ -1117,18 +1120,19 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
     const [allSuppliersData, allProductsData, todayOrderCount] = await Promise.all([
       // 전체 공급자 한번에 조회
       db.select().from(suppliers).where(
-        and(eq(suppliers.organizationId, TEMP_ORG_ID), sql`${suppliers.id} IN ${allSupplierIds}`)
+        and(eq(suppliers.organizationId, orgId), inArray(suppliers.id, allSupplierIds))
       ),
       // 전체 제품 한번에 조회
       db.select().from(products).where(
-        and(eq(products.organizationId, TEMP_ORG_ID), sql`${products.id} IN ${allProductIds}`)
+        and(eq(products.organizationId, orgId), inArray(products.id, allProductIds))
       ),
       // 오늘 발주 수 1회만 조회
       db.select({ count: sql<number>`count(*)` }).from(purchaseOrders).where(
-        and(eq(purchaseOrders.organizationId, TEMP_ORG_ID), sql`DATE(${purchaseOrders.createdAt}) = CURRENT_DATE`)
+        and(eq(purchaseOrders.organizationId, orgId), sql`DATE(${purchaseOrders.createdAt}) = CURRENT_DATE`)
       ),
     ]);
 
+    console.log("[createBulkPurchaseOrders] allSupplierIds:", allSupplierIds, "found:", allSuppliersData.map(s => s.id));
     const suppliersMap = new Map(allSuppliersData.map((s) => [s.id, s]));
     const productsMap = new Map(allProductsData.map((p) => [p.id, p]));
     const baseOrderCount = Number(todayOrderCount[0]?.count || 0);
@@ -1183,7 +1187,7 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
           const [order] = await tx
             .insert(purchaseOrders)
             .values({
-              organizationId: TEMP_ORG_ID,
+              organizationId: orgId,
               orderNumber,
               supplierId,
               status: "ordered",

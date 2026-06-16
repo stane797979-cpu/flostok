@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { requestInventoryAdjustment, getInventoryHistory } from "@/server/actions/inventory";
+import { processInventoryTransaction, getInventoryHistory } from "@/server/actions/inventory";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, History } from "lucide-react";
 import type { InventoryHistory } from "@/server/db/schema";
@@ -46,18 +46,10 @@ export interface AdjustmentTarget {
   currentStock: number;
 }
 
-interface WarehouseOption {
-  id: string;
-  code: string;
-  name: string;
-  isDefault?: boolean;
-}
-
 interface InventoryAdjustmentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   target: AdjustmentTarget | null;
-  warehouses?: WarehouseOption[];
   onSuccess: () => void;
 }
 
@@ -65,30 +57,24 @@ export function InventoryAdjustmentDialog({
   open,
   onOpenChange,
   target,
-  warehouses = [],
   onSuccess,
 }: InventoryAdjustmentDialogProps) {
   const [direction, setDirection] = useState<"increase" | "decrease">("increase");
   const [quantity, setQuantity] = useState("");
-  const [warehouseId, setWarehouseId] = useState("");
   const [location, setLocation] = useState("");
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [historyRecords, setHistoryRecords] = useState<InventoryHistory[]>([]);
   const { toast } = useToast();
 
-  // 다이얼로그 열릴 때 이력 로드 + 기본 창고 설정
+  // 다이얼로그 열릴 때 이력 로드
   useEffect(() => {
     if (open && target) {
       getInventoryHistory({ productId: target.productId, limit: 10 })
         .then((result) => setHistoryRecords(result.records))
         .catch(() => setHistoryRecords([]));
-      // 기본 창고 pre-select
-      const defaultWh = warehouses.find((w) => w.isDefault);
-      if (defaultWh) setWarehouseId(defaultWh.id);
-      else if (warehouses.length > 0) setWarehouseId(warehouses[0].id);
     }
-  }, [open, target, warehouses]);
+  }, [open, target]);
 
   const quantityNum = Number(quantity) || 0;
   const expectedStock =
@@ -101,29 +87,19 @@ export function InventoryAdjustmentDialog({
 
     setIsSubmitting(true);
     try {
-      const result = await requestInventoryAdjustment({
+      const result = await processInventoryTransaction({
         productId: target.productId,
         changeType: direction === "increase" ? "INBOUND_ADJUSTMENT" : "OUTBOUND_ADJUSTMENT",
         quantity: quantityNum,
-        warehouseId: warehouseId || undefined,
         notes: notes || undefined,
         location: location || undefined,
       });
 
       if (result.success) {
-        if (result.isRequest) {
-          // 승인 요청이 생성된 경우
-          toast({
-            title: "재고 조정 요청 제출됨",
-            description: `${target.name} 조정 요청이 제출되었습니다. 슈퍼관리자 승인 후 반영됩니다.`,
-          });
-        } else {
-          // 즉시 처리된 경우 (superadmin)
-          toast({
-            title: "재고 조정 완료",
-            description: `${target.name}: ${result.stockBefore} → ${result.stockAfter}`,
-          });
-        }
+        toast({
+          title: "재고 조정 완료",
+          description: `${target.name}: ${result.stockBefore} → ${result.stockAfter}`,
+        });
         handleClose();
         onSuccess();
       } else {
@@ -147,7 +123,6 @@ export function InventoryAdjustmentDialog({
   const handleClose = () => {
     setDirection("increase");
     setQuantity("");
-    setWarehouseId("");
     setLocation("");
     setNotes("");
     onOpenChange(false);
@@ -157,7 +132,7 @@ export function InventoryAdjustmentDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[520px]">
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>재고 조정</DialogTitle>
           <DialogDescription>
@@ -168,36 +143,21 @@ export function InventoryAdjustmentDialog({
         <div className="space-y-4 py-4">
           {/* 제품 정보 (읽기 전용) */}
           <div className="rounded-lg border bg-slate-50 p-3 dark:bg-slate-900">
-            <div className="grid grid-cols-[auto_1fr_auto] items-center gap-x-4 gap-y-1 text-sm">
-              <span className="text-slate-500">SKU</span>
-              <span className="font-mono font-medium">{target.sku}</span>
-              <div className="row-span-2 text-right">
-                <span className="block text-xs text-slate-500">현재고</span>
-                <span className="text-2xl font-bold leading-tight">{target.currentStock.toLocaleString()}</span>
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div>
+                <span className="text-slate-500">SKU</span>
+                <p className="font-mono font-medium">{target.sku}</p>
               </div>
-              <span className="text-slate-500">제품명</span>
-              <span className="font-medium truncate">{target.name}</span>
+              <div>
+                <span className="text-slate-500">제품명</span>
+                <p className="font-medium">{target.name}</p>
+              </div>
+              <div className="col-span-2">
+                <span className="text-slate-500">현재고</span>
+                <p className="text-lg font-bold">{target.currentStock.toLocaleString()}</p>
+              </div>
             </div>
           </div>
-
-          {/* 창고 선택 */}
-          {warehouses.length > 0 && (
-            <div className="space-y-2">
-              <Label>창고 <span className="text-red-500">*</span></Label>
-              <Select value={warehouseId} onValueChange={setWarehouseId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="창고를 선택하세요" />
-                </SelectTrigger>
-                <SelectContent>
-                  {warehouses.map((wh) => (
-                    <SelectItem key={wh.id} value={wh.id}>
-                      {wh.name} ({wh.code}){wh.isDefault ? " - 기본" : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
 
           {/* 조정 유형 */}
           <div className="space-y-2">
@@ -278,39 +238,35 @@ export function InventoryAdjustmentDialog({
                 <History className="h-3.5 w-3.5" />
                 최근 변경 이력
               </h4>
-              <div className="max-h-40 overflow-y-auto rounded-md border">
-                <table className="w-full text-xs">
-                  <tbody className="divide-y">
-                    {historyRecords.map((h) => (
-                      <tr key={h.id}>
-                        <td className="whitespace-nowrap px-2 py-1.5">
-                          <Badge
-                            variant="outline"
-                            className={
-                              h.changeAmount > 0
-                                ? "text-[10px] border-green-200 text-green-700 dark:border-green-800 dark:text-green-300"
-                                : "text-[10px] border-red-200 text-red-700 dark:border-red-800 dark:text-red-300"
-                            }
-                          >
-                            {h.changeAmount > 0 ? "+" : ""}{h.changeAmount}
-                          </Badge>
-                        </td>
-                        <td className="whitespace-nowrap px-2 py-1.5 text-slate-500">
-                          {h.stockBefore} → {h.stockAfter}
-                        </td>
-                        <td className="max-w-[180px] truncate px-2 py-1.5 text-slate-400">
-                          {h.notes || changeTypeLabel(h.changeType)}
-                        </td>
-                        <td className="whitespace-nowrap px-2 py-1.5 text-right text-slate-400">
-                          {new Date(h.createdAt).toLocaleDateString("ko-KR", {
-                            month: "short",
-                            day: "numeric",
-                          })}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="max-h-40 overflow-y-auto overflow-x-hidden rounded-md border">
+                <div className="divide-y text-xs">
+                  {historyRecords.map((h) => (
+                    <div key={h.id} className="flex items-center gap-2 px-3 py-2 min-w-0">
+                      <Badge
+                        variant="outline"
+                        className={
+                          h.changeAmount > 0
+                            ? "text-[10px] border-green-200 text-green-700 flex-shrink-0"
+                            : "text-[10px] border-red-200 text-red-700 flex-shrink-0"
+                        }
+                      >
+                        {h.changeAmount > 0 ? "+" : ""}{h.changeAmount}
+                      </Badge>
+                      <span className="flex-shrink-0 text-slate-500">
+                        {h.stockBefore} → {h.stockAfter}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-slate-400">
+                        {h.notes || changeTypeLabel(h.changeType)}
+                      </span>
+                      <span className="flex-shrink-0 text-slate-400">
+                        {new Date(h.createdAt).toLocaleDateString("ko-KR", {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </>

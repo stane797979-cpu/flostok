@@ -38,6 +38,8 @@ export async function exportProductsToExcel(): Promise<{
   error?: string;
 }> {
   try {
+    await requireAuth();
+
     if (isDevMode()) {
       return { success: false, error: "DB 미연결 상태입니다. 제품 데이터가 없습니다." };
     }
@@ -99,6 +101,8 @@ export async function exportSalesToExcel(): Promise<{
   error?: string;
 }> {
   try {
+    await requireAuth();
+
     if (isDevMode()) {
       return { success: false, error: "DB 미연결 상태입니다. 판매 데이터가 없습니다." };
     }

@@ -23,13 +23,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, AlertTriangle, CheckCircle2, FileSpreadsheet } from "lucide-react";
+import { Loader2, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   getOutboundRequestById,
   confirmOutboundRequest,
 } from "@/server/actions/outbound-requests";
-import { exportPickingListToExcel } from "@/server/actions/excel-export";
 
 interface OutboundConfirmDialogProps {
   open: boolean;
@@ -44,18 +43,9 @@ interface RequestDetail {
   status: string;
   outboundType: string;
   outboundTypeLabel: string;
-  customerType: string | null;
   requestedByName: string | null;
   confirmedByName: string | null;
   confirmedAt: Date | null;
-  sourceWarehouseName: string | null;
-  targetWarehouseName: string | null;
-  recipientCompany: string | null;
-  recipientName: string | null;
-  recipientAddress: string | null;
-  recipientPhone: string | null;
-  courierName: string | null;
-  trackingNumber: string | null;
   notes: string | null;
   createdAt: Date;
   items: Array<{
@@ -83,7 +73,6 @@ export function OutboundConfirmDialog({
     Record<string, number>
   >({});
   const [notes, setNotes] = useState("");
-  const [isDownloadingPickingList, setIsDownloadingPickingList] = useState(false);
 
   const { toast } = useToast();
 
@@ -199,50 +188,6 @@ export function OutboundConfirmDialog({
     }
   };
 
-  // 피킹지 다운로드
-  const handlePickingListDownload = async () => {
-    if (!request) return;
-    setIsDownloadingPickingList(true);
-    try {
-      const result = await exportPickingListToExcel(request.id);
-      if (result.success && result.data) {
-        const binaryString = atob(result.data.buffer);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        const blob = new Blob([bytes], {
-          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        });
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = result.data.filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-
-        toast({ title: "피킹지 다운로드 완료" });
-      } else {
-        toast({
-          title: "다운로드 실패",
-          description: result.error || "피킹지 다운로드에 실패했습니다",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      console.error("피킹지 다운로드 오류:", error);
-      toast({
-        title: "오류",
-        description: "피킹지 다운로드 중 오류가 발생했습니다",
-        variant: "destructive",
-      });
-    } finally {
-      setIsDownloadingPickingList(false);
-    }
-  };
-
   const handleClose = () => {
     setRequest(null);
     setConfirmedQuantities({});
@@ -275,63 +220,20 @@ export function OutboundConfirmDialog({
               </div>
               <div>
                 <p className="text-sm font-medium text-slate-500">출고유형</p>
-                <div className="mt-1 flex items-center gap-2">
-                  <Badge variant="outline">
-                    {request.outboundTypeLabel}
-                  </Badge>
-                  {request.customerType && (
-                    <Badge variant="outline" className={request.customerType === "B2B" ? "border-blue-300 text-blue-700" : "border-green-300 text-green-700"}>
-                      {request.customerType}
-                    </Badge>
-                  )}
-                </div>
+                <Badge variant="outline" className="mt-1">
+                  {request.outboundTypeLabel}
+                </Badge>
               </div>
               <div>
-                <p className="text-sm font-medium text-slate-500">출고 창고</p>
-                <p className="mt-1">
-                  {request.sourceWarehouseName || "-"}
-                  {request.targetWarehouseName && (
-                    <span className="text-xs text-slate-400"> → {request.targetWarehouseName}</span>
-                  )}
-                </p>
+                <p className="text-sm font-medium text-slate-500">요청자</p>
+                <p className="mt-1">{request.requestedByName || "알 수 없음"}</p>
               </div>
               <div>
-                <p className="text-sm font-medium text-slate-500">요청일</p>
+                <p className="text-sm font-medium text-slate-500">요청시간</p>
                 <p className="mt-1">
-                  {new Date(request.createdAt).toLocaleDateString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit" })}
+                  {new Date(request.createdAt).toLocaleString("ko-KR")}
                 </p>
               </div>
-              {(request.recipientName || request.recipientCompany) && (
-                <>
-                  <div>
-                    <p className="text-sm font-medium text-slate-500">수령인</p>
-                    <p className="mt-1">
-                      {request.recipientCompany && <span className="font-medium">{request.recipientCompany} </span>}
-                      {request.recipientName || "-"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-slate-500">연락처</p>
-                    <p className="mt-1">{request.recipientPhone || "-"}</p>
-                  </div>
-                  <div className="col-span-2">
-                    <p className="text-sm font-medium text-slate-500">주소</p>
-                    <p className="mt-1 text-sm">{request.recipientAddress || "-"}</p>
-                  </div>
-                </>
-              )}
-              {(request.courierName || request.trackingNumber) && (
-                <>
-                  <div>
-                    <p className="text-sm font-medium text-slate-500">택배사</p>
-                    <p className="mt-1">{request.courierName || "-"}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-slate-500">송장번호</p>
-                    <p className="mt-1">{request.trackingNumber || "-"}</p>
-                  </div>
-                </>
-              )}
               {request.notes && (
                 <div className="col-span-2">
                   <p className="text-sm font-medium text-slate-500">요청 메모</p>
@@ -440,21 +342,6 @@ export function OutboundConfirmDialog({
         ) : null}
 
         <DialogFooter>
-          <div className="flex-1">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handlePickingListDownload}
-              disabled={isDownloadingPickingList || !request}
-            >
-              {isDownloadingPickingList ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <FileSpreadsheet className="mr-2 h-4 w-4" />
-              )}
-              피킹지
-            </Button>
-          </div>
           <Button variant="outline" onClick={handleClose} disabled={isSubmitting}>
             취소
           </Button>

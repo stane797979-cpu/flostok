@@ -7,9 +7,7 @@ import {
   boolean,
   pgEnum,
   date,
-  index,
 } from "drizzle-orm/pg-core";
-import { sql } from "drizzle-orm";
 import { organizations } from "./organizations";
 import { products } from "./products";
 
@@ -53,11 +51,7 @@ export const stockoutRecords = pgTable("stockout_records", {
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => [
-  index("stockout_records_org_date_idx").on(table.organizationId, table.referenceDate),
-  index("stockout_records_org_product_idx").on(table.organizationId, table.productId),
-  index("stockout_records_org_active_idx").on(table.organizationId, table.isStockout).where(sql`stockout_end_date IS NULL`),
-]);
+});
 
 export type StockoutRecord = typeof stockoutRecords.$inferSelect;
 export type NewStockoutRecord = typeof stockoutRecords.$inferInsert;

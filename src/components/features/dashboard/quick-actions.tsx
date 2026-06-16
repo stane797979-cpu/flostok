@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ShoppingCart, Package, Bell, Warehouse, BarChart3, Settings } from "lucide-react";
+import { ShoppingCart, Package, Bell, FileText, BarChart3, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { getAlerts } from "@/server/actions/alerts";
@@ -32,7 +32,7 @@ export function QuickActions() {
       description: "발주서 생성",
       variant: "outline" as const,
       href: "/dashboard/orders",
-      className: undefined,
+      className: "border-primary/30 bg-primary/10 hover:bg-primary/20 text-primary",
     },
     {
       icon: Package,
@@ -49,9 +49,9 @@ export function QuickActions() {
       href: "/dashboard/alerts",
     },
     {
-      icon: Warehouse,
-      label: "재고 현황",
-      description: "재고 목록 조회",
+      icon: FileText,
+      label: "보고서",
+      description: "재고 현황",
       variant: "outline" as const,
       href: "/dashboard/inventory",
     },
@@ -90,7 +90,7 @@ export function QuickActions() {
                 <Icon className="h-5 w-5" />
                 <div className="text-center">
                   <div className="text-sm font-medium">{action.label}</div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400">{action.description}</div>
+                  <div className="text-xs text-slate-500">{action.description}</div>
                 </div>
               </Button>
             );

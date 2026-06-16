@@ -4,7 +4,7 @@
 
 import { db } from "@/server/db";
 import { products, salesRecords } from "@/server/db/schema";
-import { eq, and, inArray, sql } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import {
   parseExcelBuffer,
   sheetToJson,
@@ -13,6 +13,7 @@ import {
   parseNumber,
 } from "./parser";
 import type { ExcelImportResult, ExcelImportError, SalesRecordExcelRow } from "./types";
+import { processInventoryTransaction } from "@/server/actions/inventory";
 import type { InventoryChangeTypeKey } from "@/server/services/inventory/types";
 
 let _xlsx: typeof import("xlsx") | null = null;
@@ -108,10 +109,9 @@ async function parseSalesRow(
     });
   }
 
-  // 수량 필수 (integer 컬럼이므로 반올림)
+  // 수량 필수
   const quantityValue = getColumnValue(row, "quantity");
-  const quantityRaw = parseNumber(quantityValue);
-  const quantity = quantityRaw !== null ? Math.round(quantityRaw) : null;
+  const quantity = parseNumber(quantityValue);
   if (quantity === null || quantity < 0) {
     errors.push({
       row: rowNum,
@@ -126,10 +126,9 @@ async function parseSalesRow(
     return { data: null, errors };
   }
 
-  // 선택 필드 (integer 컬럼이므로 반올림)
+  // 선택 필드
   const unitPriceValue = getColumnValue(row, "unitPrice");
-  const unitPriceRaw = parseNumber(unitPriceValue);
-  const unitPrice = unitPriceRaw !== null ? Math.round(unitPriceRaw) : null;
+  const unitPrice = parseNumber(unitPriceValue);
 
   const channel = getColumnValue(row, "channel");
   const outboundTypeValue = getColumnValue(row, "outboundType");
@@ -214,8 +213,7 @@ export async function importSalesData(
 
     const skuToProduct = new Map(orgProducts.map((p) => [p.sku, p]));
 
-    // 3. 행 파싱
-    const parsedRows: Array<{ index: number; data: SalesRecordExcelRow; productId: string }> = [];
+    // 3. 각 행 파싱 및 저장
     for (let i = 0; i < rows.length; i++) {
       const { data, errors } = await parseSalesRow(rows[i], i);
 
@@ -226,6 +224,7 @@ export async function importSalesData(
 
       if (!data) continue;
 
+      // SKU로 제품 찾기
       const product = skuToProduct.get(data.sku);
       if (!product) {
         allErrors.push({
@@ -237,39 +236,20 @@ export async function importSalesData(
         continue;
       }
 
-      parsedRows.push({ index: i, data, productId: product.id });
-    }
-
-    // 4. 기존 판매 기록 배치 조회 (중복 체크용, N+1 제거)
-    const productIds = [...new Set(parsedRows.map((r) => r.productId))];
-    const existingRecordMap = new Map<string, string>(); // "productId:date" → recordId
-
-    if (productIds.length > 0) {
-      const existingRecords = await db
-        .select({ id: salesRecords.id, productId: salesRecords.productId, date: salesRecords.date })
+      // 중복 체크
+      const existing = await db
+        .select({ id: salesRecords.id })
         .from(salesRecords)
         .where(
           and(
             eq(salesRecords.organizationId, organizationId),
-            inArray(salesRecords.productId, productIds)
+            eq(salesRecords.productId, product.id),
+            eq(salesRecords.date, data.date)
           )
-        );
-      for (const rec of existingRecords) {
-        existingRecordMap.set(`${rec.productId}:${rec.date}`, rec.id);
-      }
-    }
+        )
+        .limit(1);
 
-    // 5. 분류 처리 (신규 INSERT 배치, UPDATE 배치, 재고차감 순차)
-    const newInsertValues: Array<typeof salesRecords.$inferInsert> = [];
-    const salesUpdateBatch: Array<{ id: string; quantity: number; unitPrice: number; totalAmount: number; channel: string | null; notes: string | null }> = [];
-    const inventoryOps: Array<{ productId: string; data: SalesRecordExcelRow }> = [];
-
-    for (const { index: i, data, productId } of parsedRows) {
-      const product = skuToProduct.get(data.sku)!;
-      const dupKey = `${productId}:${data.date}`;
-      const existingId = existingRecordMap.get(dupKey);
-
-      if (existingId) {
+      if (existing.length > 0) {
         if (duplicateHandling === "error") {
           allErrors.push({
             row: i + 2,
@@ -281,100 +261,81 @@ export async function importSalesData(
         }
 
         if (duplicateHandling === "skip") {
+          // 무시하고 다음 행으로
           continue;
         }
 
-        // update: 배치 수집 (루프 종료 후 일괄 UPDATE)
-        const unitPrice = Math.round(data.unitPrice ?? product.unitPrice ?? 0);
-        salesUpdateBatch.push({
-          id: existingId,
-          quantity: Math.round(data.quantity),
-          unitPrice,
-          totalAmount: Math.round(data.quantity * unitPrice),
-          channel: data.channel || null,
-          notes: data.notes || null,
-        });
+        // duplicateHandling === 'update': 기존 데이터 업데이트
+        const unitPrice = data.unitPrice ?? product.unitPrice ?? 0;
+        await db
+          .update(salesRecords)
+          .set({
+            quantity: data.quantity,
+            unitPrice,
+            totalAmount: data.quantity * unitPrice,
+            channel: data.channel,
+            notes: data.notes,
+          })
+          .where(eq(salesRecords.id, existing[0].id));
 
+        // 재고 차감 처리 (덮어쓰기 시에도)
         if (deductInventory) {
-          inventoryOps.push({ productId, data });
+          const changeType = (data.outboundType
+            ? OUTBOUND_TYPE_MAP[data.outboundType] || "OUTBOUND_SALE"
+            : "OUTBOUND_SALE") as InventoryChangeTypeKey;
+          try {
+            await processInventoryTransaction({
+              productId: product.id,
+              changeType,
+              quantity: data.quantity,
+              notes: `출고 임포트(덮어쓰기): ${data.sku} / ${data.date} [${data.outboundType || "판매"}]`,
+            });
+          } catch (error) {
+            console.warn(
+              `재고 차감 실패 (${data.sku}):`,
+              error instanceof Error ? error.message : error
+            );
+          }
         }
 
         successData.push(data);
         continue;
       }
 
-      // 신규 데이터 — 배치 INSERT용 배열에 추가
-      const unitPrice = Math.round(data.unitPrice ?? product.unitPrice ?? 0);
-      newInsertValues.push({
+      // 새 데이터 삽입
+      const unitPrice = data.unitPrice ?? product.unitPrice ?? 0;
+      await db.insert(salesRecords).values({
         organizationId,
-        productId,
+        productId: product.id,
         date: data.date,
-        quantity: Math.round(data.quantity),
+        quantity: data.quantity,
         unitPrice,
-        totalAmount: Math.round(data.quantity * unitPrice),
+        totalAmount: data.quantity * unitPrice,
         channel: data.channel,
         notes: data.notes,
       });
 
+      // 재고 차감 처리
       if (deductInventory) {
-        inventoryOps.push({ productId, data });
+        const changeType = (data.outboundType
+          ? OUTBOUND_TYPE_MAP[data.outboundType] || "OUTBOUND_SALE"
+          : "OUTBOUND_SALE") as InventoryChangeTypeKey;
+        try {
+          await processInventoryTransaction({
+            productId: product.id,
+            changeType,
+            quantity: data.quantity,
+            notes: `출고 임포트: ${data.sku} / ${data.date} [${data.outboundType || "판매"}]`,
+          });
+        } catch (error) {
+          console.warn(
+            `재고 차감 실패 (${data.sku}):`,
+            error instanceof Error ? error.message : error
+          );
+        }
       }
 
       successData.push(data);
-    }
-
-    // 6-1. 중복 판매기록 배치 UPDATE (N개 → 1개 쿼리)
-    if (salesUpdateBatch.length > 0) {
-      const BATCH_SIZE_UPDATE = 100;
-      for (let i = 0; i < salesUpdateBatch.length; i += BATCH_SIZE_UPDATE) {
-        const batch = salesUpdateBatch.slice(i, i + BATCH_SIZE_UPDATE);
-        await db.execute(sql`
-          UPDATE sales_records SET
-            quantity = v.quantity::int,
-            unit_price = v.unit_price::numeric,
-            total_amount = v.total_amount::numeric,
-            channel = v.channel,
-            notes = v.notes,
-            updated_at = NOW()
-          FROM (VALUES ${sql.join(
-            batch.map(u => sql`(${u.id}::uuid, ${u.quantity}::int, ${u.unitPrice}::numeric, ${u.totalAmount}::numeric, ${u.channel}, ${u.notes})`),
-            sql`, `
-          )}) AS v(id, quantity, unit_price, total_amount, channel, notes)
-          WHERE sales_records.id = v.id
-        `);
-      }
-    }
-
-    // 6-2. 배치 INSERT (신규 판매 기록) — 100건씩 분할하여 PG 파라미터 한도 방지
-    const BATCH_SIZE = 100;
-    for (let i = 0; i < newInsertValues.length; i += BATCH_SIZE) {
-      const batch = newInsertValues.slice(i, i + BATCH_SIZE);
-      await db.insert(salesRecords).values(batch);
-    }
-
-    // 7. 재고 차감 배치 처리 (순차 → 배치로 변경하여 타임아웃 방지)
-    if (inventoryOps.length > 0) {
-      const batchItems = inventoryOps.map(({ productId, data }) => ({
-        productId,
-        changeType: (data.outboundType
-          ? OUTBOUND_TYPE_MAP[data.outboundType] || "OUTBOUND_SALE"
-          : "OUTBOUND_SALE") as InventoryChangeTypeKey,
-        quantity: data.quantity,
-        notes: `출고 임포트: ${data.sku} / ${data.date} [${data.outboundType || "판매"}]`,
-      }));
-      try {
-        // 동적 import: "use server" 모듈 경계 문제 방지
-        const { processBatchInventoryTransactions } = await import("@/server/actions/inventory");
-        await processBatchInventoryTransactions(batchItems, { skipRevalidate: true, skipActivityLog: true });
-      } catch (error) {
-        // 재고 차감 실패는 판매 기록 저장 자체는 성공이므로 오류로 중단하지 않고 경고로 사용자에게 안내
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.warn("재고 차감 배치 처리 실패:", errorMessage);
-        allErrors.push({
-          row: 0,
-          message: `재고 차감 처리 중 일부 오류 발생: ${errorMessage}`,
-        });
-      }
     }
 
     return {

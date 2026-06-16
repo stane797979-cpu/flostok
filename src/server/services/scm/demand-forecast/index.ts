@@ -12,7 +12,6 @@ import { selectBestMethod } from "./selector";
 import { simpleMovingAverage } from "./methods/simple-moving-average";
 import { simpleExponentialSmoothing } from "./methods/exponential-smoothing";
 import { holtsMethod } from "./methods/holts-method";
-import { crostonForecast } from "./methods/croston";
 import { calculateAllMetrics } from "./accuracy/metrics";
 import type { XYZGrade } from "../abc-xyz-analysis";
 
@@ -51,9 +50,6 @@ export function forecastDemandWithMethod(
 
     case "Holts":
       return holtsMethod(history, periods, params?.alpha || undefined, params?.beta || undefined);
-
-    case "Croston":
-      return crostonForecast(history, periods, params?.alpha || undefined);
 
     default:
       // 기본: SMA
@@ -179,5 +175,4 @@ export {
   getDefaultAlpha,
 } from "./methods/exponential-smoothing";
 export { holtsMethod, optimizeHoltsParameters, detectTrend } from "./methods/holts-method";
-export { crostonForecast, crostonMethod } from "./methods/croston";
 export { selectBestMethod, selectMethodByRules } from "./selector";

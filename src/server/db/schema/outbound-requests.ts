@@ -9,7 +9,6 @@ import {
 } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 import { products } from "./products";
-import { warehouses } from "./warehouses";
 import { users } from "./users";
 
 // 출고요청 상태
@@ -27,12 +26,6 @@ export const outboundRequests = pgTable(
     organizationId: uuid("organization_id")
       .references(() => organizations.id, { onDelete: "cascade" })
       .notNull(),
-    sourceWarehouseId: uuid("source_warehouse_id")
-      .references(() => warehouses.id, { onDelete: "cascade" })
-      .notNull(),
-    targetWarehouseId: uuid("target_warehouse_id").references(() => warehouses.id, {
-      onDelete: "set null",
-    }),
     requestNumber: text("request_number").notNull(), // OR-YYYYMMDD-XXX
     status: outboundRequestStatusEnum("status").default("pending").notNull(),
     outboundType: text("outbound_type").notNull(), // OUTBOUND_SALE, OUTBOUND_TRANSFER 등
@@ -44,15 +37,6 @@ export const outboundRequests = pgTable(
     }),
     confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
     notes: text("notes"),
-    // 고객유형 (B2B/B2C)
-    customerType: text("customer_type"),
-    // 배송 정보
-    recipientCompany: text("recipient_company"), // 상호
-    recipientName: text("recipient_name"), // 수령인
-    recipientAddress: text("recipient_address"), // 주소
-    recipientPhone: text("recipient_phone"), // 연락처
-    courierName: text("courier_name"), // 택배사
-    trackingNumber: text("tracking_number"), // 송장번호
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -69,7 +53,6 @@ export const outboundRequests = pgTable(
       table.organizationId,
       table.createdAt
     ),
-    index("outbound_requests_source_warehouse_idx").on(table.sourceWarehouseId),
   ]
 );
 

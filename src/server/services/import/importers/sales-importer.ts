@@ -4,9 +4,12 @@
 
 import { db } from "@/server/db";
 import { products, salesRecords } from "@/server/db/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import type { SalesRowData } from "../validators/sales-validator";
-import { processBatchInventoryTransactions, type BatchInventoryItem } from "@/server/actions/inventory";
+import { processInventoryTransaction } from "@/server/actions/inventory";
+
+// TODO: 인증 구현 후 실제 organizationId로 교체
+const TEMP_ORG_ID = "00000000-0000-0000-0000-000000000001";
 
 export interface ImportResult {
   success: boolean;
@@ -22,11 +25,11 @@ export interface ImportResult {
 /**
  * SKU -> productId 매핑 캐시 생성
  */
-async function buildSkuToProductIdMap(organizationId: string): Promise<Map<string, string>> {
+async function buildSkuToProductIdMap(): Promise<Map<string, string>> {
   const allProducts = await db
     .select({ id: products.id, sku: products.sku })
     .from(products)
-    .where(eq(products.organizationId, organizationId));
+    .where(eq(products.organizationId, TEMP_ORG_ID));
 
   const map = new Map<string, string>();
   allProducts.forEach((product) => {
@@ -38,12 +41,10 @@ async function buildSkuToProductIdMap(organizationId: string): Promise<Map<strin
 
 /**
  * 판매 데이터 일괄 임포트
- * @param organizationId - 조직 ID
  * @param validatedData - 검증된 판매 데이터
- * @param options - 임포트 옵션
+ * @param options.deductInventory - true일 때 재고 자동 차감 (출고 처리)
  */
 export async function importSalesData(
-  organizationId: string,
   validatedData: SalesRowData[],
   options?: {
     skipInventory?: boolean; // deprecated, deductInventory 사용
@@ -59,7 +60,7 @@ export async function importSalesData(
 
   try {
     // SKU -> productId 매핑
-    const skuMap = await buildSkuToProductIdMap(organizationId);
+    const skuMap = await buildSkuToProductIdMap();
 
     // 배치 처리
     for (let i = 0; i < validatedData.length; i += batchSize) {
@@ -74,23 +75,6 @@ export async function importSalesData(
         channel: string | null;
         notes: string | null;
       }> = [];
-
-      // 배치 내 제품 단가를 한 번에 조회 (N+1 제거)
-      const batchProductIds = batch
-        .map((row) => skuMap.get(row.sku))
-        .filter((id): id is string => !!id);
-      const uniqueProductIds = [...new Set(batchProductIds)];
-
-      const productPriceMap = new Map<string, number>();
-      if (uniqueProductIds.length > 0) {
-        const priceRows = await db
-          .select({ id: products.id, unitPrice: products.unitPrice })
-          .from(products)
-          .where(inArray(products.id, uniqueProductIds));
-        for (const p of priceRows) {
-          productPriceMap.set(p.id, p.unitPrice ?? 0);
-        }
-      }
 
       for (let j = 0; j < batch.length; j++) {
         const row = batch[j];
@@ -108,15 +92,21 @@ export async function importSalesData(
           continue;
         }
 
-        const unitPrice = Math.round(row.unitPrice ?? productPriceMap.get(productId) ?? 0);
-        const qty = Math.round(row.quantity);
-        const totalAmount = Math.round(qty * unitPrice);
+        // 제품 정보 조회 (단가 기본값)
+        const [product] = await db
+          .select({ unitPrice: products.unitPrice })
+          .from(products)
+          .where(eq(products.id, productId))
+          .limit(1);
+
+        const unitPrice = row.unitPrice ?? product?.unitPrice ?? 0;
+        const totalAmount = unitPrice * row.quantity;
 
         batchRecords.push({
-          organizationId: organizationId,
+          organizationId: TEMP_ORG_ID,
           productId,
           date: row.date,
-          quantity: qty,
+          quantity: row.quantity,
           unitPrice,
           totalAmount,
           channel: row.channel || null,
@@ -129,18 +119,22 @@ export async function importSalesData(
         await db.insert(salesRecords).values(batchRecords);
         imported += batchRecords.length;
 
-        // 재고 차감 배치 처리 (N+1 → 배치)
-        if (deductInventory && batchRecords.length > 0) {
-          const batchItems: BatchInventoryItem[] = batchRecords.map(record => ({
-            productId: record.productId,
-            changeType: "OUTBOUND_SALE" as const,
-            quantity: record.quantity,
-            notes: `판매 임포트: ${record.date}`,
-          }));
-          try {
-            await processBatchInventoryTransactions(batchItems, { skipRevalidate: true, skipActivityLog: true });
-          } catch (error) {
-            console.warn("재고 차감 배치 처리 실패:", error instanceof Error ? error.message : error);
+        // 재고 차감 처리
+        if (deductInventory) {
+          for (const record of batchRecords) {
+            try {
+              await processInventoryTransaction({
+                productId: record.productId,
+                changeType: "OUTBOUND_SALE",
+                quantity: record.quantity,
+                notes: `판매 임포트: ${record.date}`,
+              });
+            } catch (error) {
+              console.warn(
+                `재고 차감 실패 (${record.productId}):`,
+                error instanceof Error ? error.message : error
+              );
+            }
           }
         }
       }
@@ -164,7 +158,6 @@ export async function importSalesData(
  * 중복 체크 (같은 날짜, 제품, 수량)
  */
 export async function checkDuplicateSales(
-  organizationId: string,
   productId: string,
   date: string,
   quantity: number
@@ -174,7 +167,7 @@ export async function checkDuplicateSales(
     .from(salesRecords)
     .where(
       and(
-        eq(salesRecords.organizationId, organizationId),
+        eq(salesRecords.organizationId, TEMP_ORG_ID),
         eq(salesRecords.productId, productId),
         eq(salesRecords.date, date),
         eq(salesRecords.quantity, quantity)

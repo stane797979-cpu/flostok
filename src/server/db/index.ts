@@ -9,13 +9,11 @@ if (!connectionString) {
 }
 
 // For queries
-const isPgBouncer = connectionString?.includes("pgbouncer=true") || connectionString?.includes(":6543");
 const queryClient = connectionString
   ? postgres(connectionString, {
-      max: 20,
+      max: 10,
       idle_timeout: 20,
       connect_timeout: 10,
-      ...(isPgBouncer ? { prepare: false } : {}),
     })
   : null;
 export const db = queryClient

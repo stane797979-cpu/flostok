@@ -7,36 +7,45 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CreditCard, Construction } from "lucide-react";
-import { getCurrentUser } from "@/server/actions/auth-helpers";
+import { createClient } from "@/lib/supabase/server";
 import { db } from "@/server/db";
 import { organizations } from "@/server/db/schema";
 import { eq } from "drizzle-orm";
 import { BillingClient } from "./_components/billing-client";
 
 const PLAN_INFO: Record<string, { label: string; description: string; color: string }> = {
-  free: { label: "Free", description: "무료 체험 중", color: "bg-slate-100 text-slate-700 dark:text-slate-200" },
-  starter: { label: "Starter", description: "스타터 플랜", color: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" },
+  free: { label: "Free", description: "무료 체험 중", color: "bg-slate-100 text-slate-700" },
+  starter: { label: "Starter", description: "스타터 플랜", color: "bg-blue-100 text-blue-700" },
   pro: { label: "Pro", description: "프로 플랜", color: "bg-purple-100 text-purple-700" },
-  enterprise: { label: "Enterprise", description: "무제한 이용 가능", color: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" },
+  enterprise: { label: "Enterprise", description: "무제한 이용 가능", color: "bg-green-100 text-green-700" },
 };
 
 export default async function BillingPage() {
-  // 기존 3단계 순차 호출(supabase.auth → users → organizations) → 2단계로 단축
-  const user = await getCurrentUser();
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
   let currentPlan = "free";
   let orgId = "";
 
-  if (user?.organizationId) {
-    orgId = user.organizationId;
-    const [org] = await db
-      .select({ plan: organizations.plan })
-      .from(organizations)
-      .where(eq(organizations.id, user.organizationId))
-      .limit(1);
+  if (user) {
+    // 사용자의 조직 정보 조회
+    const { data: profile } = await supabase
+      .from("users")
+      .select("organization_id, role")
+      .eq("id", user.id)
+      .single();
 
-    if (org) {
-      currentPlan = org.plan;
+    if (profile?.organization_id) {
+      orgId = profile.organization_id;
+      const [org] = await db
+        .select({ plan: organizations.plan })
+        .from(organizations)
+        .where(eq(organizations.id, profile.organization_id))
+        .limit(1);
+
+      if (org) {
+        currentPlan = org.plan;
+      }
     }
   }
 

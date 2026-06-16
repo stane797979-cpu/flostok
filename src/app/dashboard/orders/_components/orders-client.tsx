@@ -606,10 +606,23 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
       const selectedRecs = autoReorderRecommendations.filter((r) =>
         ids.includes(r.id)
       );
+
+      // 공급자 미지정 항목 사전 차단
+      const noSupplierItems = selectedRecs.filter((r) => !r.supplierId);
+      if (noSupplierItems.length > 0) {
+        const names = noSupplierItems.map((r) => r.productName).join(", ");
+        toast({
+          title: "공급자 미지정 품목 있음",
+          description: `공급자가 없는 품목은 발주할 수 없습니다. 제품 관리에서 공급자를 먼저 등록해주세요.\n미지정: ${names}`,
+          variant: "destructive",
+        });
+        return;
+      }
+
       const items = selectedRecs.map((r) => ({
         productId: r.productId,
         quantity: r.recommendedQty,
-        supplierId: r.supplierId || "",
+        supplierId: r.supplierId!,
       }));
 
       const result = await approveAutoReorders(ids, items);

@@ -14,7 +14,9 @@ import {
   type XYZAnalysisItem,
 } from "@/server/services/scm/abc-xyz-analysis";
 import { simpleForecast, backtestForecast } from "@/server/services/scm/demand-forecast";
-import { getCurrentUser } from "@/server/actions/auth-helpers";
+
+// TODO: 인증 구현 후 실제 organizationId로 교체
+const TEMP_ORG_ID = "00000000-0000-0000-0000-000000000001";
 
 /**
  * ABC-XYZ 분석 결과 조회 도구 정의
@@ -110,13 +112,6 @@ export async function executeGetABCXYZAnalysis(input: {
   error?: string;
 }> {
   try {
-    const user = await getCurrentUser();
-    const orgId = user?.organizationId;
-
-    if (!orgId) {
-      return { success: false, error: "인증이 필요합니다" };
-    }
-
     const { periodMonths = 6, abcGrade, xyzGrade, combinedGrade, limit = 20 } = input;
 
     // 분석 기간 계산
@@ -138,7 +133,7 @@ export async function executeGetABCXYZAnalysis(input: {
       .innerJoin(products, eq(salesRecords.productId, products.id))
       .where(
         and(
-          eq(salesRecords.organizationId, orgId),
+          eq(salesRecords.organizationId, TEMP_ORG_ID),
           gte(salesRecords.date, startDate.toISOString().split("T")[0]),
           lte(salesRecords.date, endDate.toISOString().split("T")[0])
         )
@@ -183,7 +178,7 @@ export async function executeGetABCXYZAnalysis(input: {
       })
       .from(products)
       .where(
-        and(eq(products.organizationId, orgId), sql`${products.isActive} IS NOT NULL`)
+        and(eq(products.organizationId, TEMP_ORG_ID), sql`${products.isActive} IS NOT NULL`)
       );
 
     allProducts.forEach((p) => {
@@ -404,13 +399,6 @@ export async function executeGetDemandForecast(input: {
   error?: string;
 }> {
   try {
-    const user = await getCurrentUser();
-    const orgId = user?.organizationId;
-
-    if (!orgId) {
-      return { success: false, error: "인증이 필요합니다" };
-    }
-
     const { productId: inputProductId, sku, periods = 3, historyMonths = 12 } = input;
 
     // 제품 ID 확인
@@ -419,7 +407,7 @@ export async function executeGetDemandForecast(input: {
       const [product] = await db
         .select({ id: products.id })
         .from(products)
-        .where(and(eq(products.sku, sku), eq(products.organizationId, orgId)))
+        .where(and(eq(products.sku, sku), eq(products.organizationId, TEMP_ORG_ID)))
         .limit(1);
       productId = product?.id;
     }
@@ -432,7 +420,7 @@ export async function executeGetDemandForecast(input: {
     const [product] = await db
       .select()
       .from(products)
-      .where(and(eq(products.id, productId), eq(products.organizationId, orgId)))
+      .where(and(eq(products.id, productId), eq(products.organizationId, TEMP_ORG_ID)))
       .limit(1);
 
     if (!product) {
@@ -452,7 +440,7 @@ export async function executeGetDemandForecast(input: {
       .from(salesRecords)
       .where(
         and(
-          eq(salesRecords.organizationId, orgId),
+          eq(salesRecords.organizationId, TEMP_ORG_ID),
           eq(salesRecords.productId, productId),
           gte(salesRecords.date, startDate.toISOString().split("T")[0]),
           lte(salesRecords.date, endDate.toISOString().split("T")[0])
@@ -557,7 +545,7 @@ export async function executeGetDemandForecast(input: {
         historicalData: {
           avgMonthlySales: Math.round(avgMonthlySales * 100) / 100,
           trend,
-          seasonality: false,
+          seasonality: false, // TODO: 계절성 분석 추가
         },
         recommendation,
       },

@@ -4,14 +4,17 @@
  */
 
 import { db } from "@/server/db";
-import { products, inventory, suppliers, purchaseOrders, purchaseOrderItems, salesRecords } from "@/server/db/schema";
-import { eq, and, sql, or, desc, gte, inArray } from "drizzle-orm";
+import { products, inventory, suppliers, purchaseOrders } from "@/server/db/schema";
+import { eq, and, sql, or, desc } from "drizzle-orm";
+import { getAverageDailySales } from "@/server/actions/sales";
 import {
   convertToReorderItem,
   calculateReorderPriority,
   type ProductReorderData,
 } from "@/server/services/scm/reorder-recommendation";
-import { getCurrentUser } from "@/server/actions/auth-helpers";
+
+// TODO: 인증 구현 후 실제 organizationId로 교체
+const TEMP_ORG_ID = "00000000-0000-0000-0000-000000000001";
 
 /**
  * 발주 추천 목록 조회 도구 정의
@@ -99,18 +102,11 @@ export async function executeGetReorderRecommendations(input: {
   error?: string;
 }> {
   try {
-    const user = await getCurrentUser();
-    const orgId = user?.organizationId;
-
-    if (!orgId) {
-      return { success: false, error: "인증이 필요합니다" };
-    }
-
     const { urgencyLevel = 0, abcGrade, supplierId, limit = 20 } = input;
 
     // 발주 필요 제품 조회 (현재고 <= 발주점)
     const conditions = [
-      eq(products.organizationId, orgId),
+      eq(products.organizationId, TEMP_ORG_ID),
       sql`${products.isActive} IS NOT NULL`,
     ];
 
@@ -146,38 +142,9 @@ export async function executeGetReorderRecommendations(input: {
         )
       );
 
-    // 전체 제품의 일평균 판매량을 GROUP BY 단일 쿼리로 조회 (N+1 제거)
-    const candidateProductIds = reorderCandidates.map((r) => r.product.id);
-    const avgDailySalesMap = new Map<string, number>();
-
-    if (candidateProductIds.length > 0) {
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      const startDateStr = thirtyDaysAgo.toISOString().split("T")[0];
-
-      const salesAgg = await db
-        .select({
-          productId: salesRecords.productId,
-          totalQuantity: sql<number>`coalesce(sum(${salesRecords.quantity}), 0)`,
-        })
-        .from(salesRecords)
-        .where(
-          and(
-            eq(salesRecords.organizationId, orgId),
-            inArray(salesRecords.productId, candidateProductIds),
-            gte(salesRecords.date, startDateStr)
-          )
-        )
-        .groupBy(salesRecords.productId);
-
-      for (const row of salesAgg) {
-        avgDailySalesMap.set(row.productId, Number(row.totalQuantity) / 30);
-      }
-    }
-
-    // 각 제품의 발주 추천 정보 생성 (동기적 — DB 호출 없음)
-    const results = reorderCandidates.map((row) => {
-      const avgDailySales = avgDailySalesMap.get(row.product.id) || 0;
+    // 각 제품의 발주 추천 정보 생성
+    const reorderItemsPromises = reorderCandidates.map(async (row) => {
+      const avgDailySales = await getAverageDailySales(row.product.id, 30);
 
       const data: ProductReorderData = {
         productId: row.product.id,
@@ -204,6 +171,8 @@ export async function executeGetReorderRecommendations(input: {
         avgDailySales,
       };
     });
+
+    const results = await Promise.all(reorderItemsPromises);
     const validResults = results.filter((r) => r.item !== null);
 
     // 긴급도 필터링
@@ -360,16 +329,9 @@ export async function executeGetPurchaseOrderStatus(input: {
   error?: string;
 }> {
   try {
-    const user = await getCurrentUser();
-    const orgId = user?.organizationId;
-
-    if (!orgId) {
-      return { success: false, error: "인증이 필요합니다" };
-    }
-
     const { status, supplierId, limit = 10 } = input;
 
-    const conditions = [eq(purchaseOrders.organizationId, orgId)];
+    const conditions = [eq(purchaseOrders.organizationId, TEMP_ORG_ID)];
 
     if (status) {
       conditions.push(
@@ -388,7 +350,7 @@ export async function executeGetPurchaseOrderStatus(input: {
         totalAmount: sql<number>`sum(${purchaseOrders.totalAmount})`,
       })
       .from(purchaseOrders)
-      .where(eq(purchaseOrders.organizationId, orgId))
+      .where(eq(purchaseOrders.organizationId, TEMP_ORG_ID))
       .groupBy(purchaseOrders.status);
 
     const byStatus: Record<string, { count: number; amount: number }> = {};
@@ -426,24 +388,6 @@ export async function executeGetPurchaseOrderStatus(input: {
       cancelled: "취소됨",
     };
 
-    // 발주 항목 수 집계
-    const orderIds = orders.map((row) => row.order.id);
-    const itemCountMap: Record<string, number> = {};
-    if (orderIds.length > 0) {
-      const itemCounts = await db
-        .select({
-          orderId: purchaseOrderItems.purchaseOrderId,
-          count: sql<number>`count(*)`,
-        })
-        .from(purchaseOrderItems)
-        .where(inArray(purchaseOrderItems.purchaseOrderId, orderIds))
-        .groupBy(purchaseOrderItems.purchaseOrderId);
-
-      itemCounts.forEach((row) => {
-        itemCountMap[row.orderId] = Number(row.count);
-      });
-    }
-
     return {
       success: true,
       data: {
@@ -461,7 +405,7 @@ export async function executeGetPurchaseOrderStatus(input: {
           totalAmount: row.order.totalAmount ?? 0,
           orderDate: row.order.orderDate,
           expectedDate: row.order.expectedDate,
-          itemCount: itemCountMap[row.order.id] ?? 0,
+          itemCount: 0, // TODO: join으로 실제 count 조회
         })),
       },
     };

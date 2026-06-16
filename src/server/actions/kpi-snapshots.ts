@@ -2,8 +2,8 @@
 
 import { db } from "@/server/db";
 import { kpiMonthlySnapshots } from "@/server/db/schema";
-import { eq, and, desc, inArray } from "drizzle-orm";
-import { getCurrentUser, requireAuth } from "./auth-helpers";
+import { eq, and, desc } from "drizzle-orm";
+import { getCurrentUser } from "./auth-helpers";
 import { revalidatePath } from "next/cache";
 import type { KPITrend } from "@/server/services/scm/kpi-measurement";
 
@@ -23,8 +23,7 @@ export interface KpiSnapshot {
  */
 export async function getKpiSnapshots(): Promise<KpiSnapshot[]> {
   const user = await getCurrentUser();
-  const orgId = user?.organizationId;
-  if (!orgId) return [];
+  const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
 
   const rows = await db
     .select()
@@ -61,13 +60,37 @@ export async function saveKpiSnapshot(
 ): Promise<{ success: boolean; message: string }> {
   try {
     const user = await getCurrentUser();
-    const orgId = user?.organizationId;
-    if (!orgId) return { success: false, message: "조직 정보를 찾을 수 없습니다" };
+    const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
 
-    // SELECT+UPDATE/INSERT → onConflictDoUpdate upsert 단일 쿼리로 처리
-    await db
-      .insert(kpiMonthlySnapshots)
-      .values({
+    // 기존 데이터 확인
+    const [existing] = await db
+      .select()
+      .from(kpiMonthlySnapshots)
+      .where(
+        and(
+          eq(kpiMonthlySnapshots.organizationId, orgId),
+          eq(kpiMonthlySnapshots.period, period)
+        )
+      )
+      .limit(1);
+
+    if (existing) {
+      // 업데이트
+      await db
+        .update(kpiMonthlySnapshots)
+        .set({
+          turnoverRate: data.turnoverRate?.toString() ?? existing.turnoverRate,
+          stockoutRate: data.stockoutRate?.toString() ?? existing.stockoutRate,
+          onTimeDeliveryRate: data.onTimeDeliveryRate?.toString() ?? existing.onTimeDeliveryRate,
+          fulfillmentRate: data.fulfillmentRate?.toString() ?? existing.fulfillmentRate,
+          actualShipmentRate: data.actualShipmentRate?.toString() ?? existing.actualShipmentRate,
+          comment: data.comment !== undefined ? data.comment : existing.comment,
+          updatedAt: new Date(),
+        })
+        .where(eq(kpiMonthlySnapshots.id, existing.id));
+    } else {
+      // 신규
+      await db.insert(kpiMonthlySnapshots).values({
         organizationId: orgId,
         period,
         turnoverRate: data.turnoverRate?.toString(),
@@ -76,19 +99,8 @@ export async function saveKpiSnapshot(
         fulfillmentRate: data.fulfillmentRate?.toString(),
         actualShipmentRate: data.actualShipmentRate?.toString(),
         comment: data.comment,
-      })
-      .onConflictDoUpdate({
-        target: [kpiMonthlySnapshots.organizationId, kpiMonthlySnapshots.period],
-        set: {
-          ...(data.turnoverRate !== undefined && { turnoverRate: data.turnoverRate.toString() }),
-          ...(data.stockoutRate !== undefined && { stockoutRate: data.stockoutRate.toString() }),
-          ...(data.onTimeDeliveryRate !== undefined && { onTimeDeliveryRate: data.onTimeDeliveryRate.toString() }),
-          ...(data.fulfillmentRate !== undefined && { fulfillmentRate: data.fulfillmentRate.toString() }),
-          ...(data.actualShipmentRate !== undefined && { actualShipmentRate: data.actualShipmentRate.toString() }),
-          ...(data.comment !== undefined && { comment: data.comment }),
-          updatedAt: new Date(),
-        },
       });
+    }
 
     revalidatePath("/dashboard/kpi");
     return { success: true, message: "KPI 스냅샷이 저장되었습니다" };
@@ -106,29 +118,6 @@ export async function updateKpiComment(
   comment: string
 ): Promise<{ success: boolean; message: string }> {
   try {
-    // 인증 확인
-    let user;
-    try {
-      user = await requireAuth();
-    } catch {
-      return { success: false, message: "인증이 필요합니다" };
-    }
-
-    // 해당 스냅샷이 인증된 사용자의 조직 소속인지 검증
-    const [snapshot] = await db
-      .select({ organizationId: kpiMonthlySnapshots.organizationId })
-      .from(kpiMonthlySnapshots)
-      .where(eq(kpiMonthlySnapshots.id, snapshotId))
-      .limit(1);
-
-    if (!snapshot) {
-      return { success: false, message: "KPI 스냅샷을 찾을 수 없습니다" };
-    }
-
-    if (snapshot.organizationId !== user.organizationId) {
-      return { success: false, message: "권한이 없습니다" };
-    }
-
     await db
       .update(kpiMonthlySnapshots)
       .set({ comment, updatedAt: new Date() })
@@ -149,25 +138,23 @@ export async function updateKpiComment(
 export async function ensureKpiSnapshots(trends: KPITrend[]): Promise<void> {
   try {
     const user = await getCurrentUser();
-    const orgId = user?.organizationId;
-    if (!orgId) return;
+    const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
 
-    // 배치 처리: 순차 SELECT+INSERT 루프 → 1회 조회 + 1회 배치 INSERT (24→2 쿼리)
-    const periods = trends.map(t => t.month);
-    const existingSnapshots = await db
-      .select({ period: kpiMonthlySnapshots.period })
-      .from(kpiMonthlySnapshots)
-      .where(
-        and(
-          eq(kpiMonthlySnapshots.organizationId, orgId),
-          inArray(kpiMonthlySnapshots.period, periods)
+    for (const trend of trends) {
+      const [existing] = await db
+        .select({ id: kpiMonthlySnapshots.id })
+        .from(kpiMonthlySnapshots)
+        .where(
+          and(
+            eq(kpiMonthlySnapshots.organizationId, orgId),
+            eq(kpiMonthlySnapshots.period, trend.month)
+          )
         )
-      );
-    const existingPeriods = new Set(existingSnapshots.map(s => s.period));
+        .limit(1);
 
-    const newValues = trends
-      .filter(trend => !existingPeriods.has(trend.month))
-      .map(trend => ({
+      if (existing) continue;
+
+      await db.insert(kpiMonthlySnapshots).values({
         organizationId: orgId,
         period: trend.month,
         turnoverRate: trend.inventoryTurnoverRate.toFixed(1),
@@ -175,10 +162,7 @@ export async function ensureKpiSnapshots(trends: KPITrend[]): Promise<void> {
         onTimeDeliveryRate: trend.onTimeOrderRate.toFixed(1),
         fulfillmentRate: trend.orderFulfillmentRate.toFixed(1),
         actualShipmentRate: null,
-      }));
-
-    if (newValues.length > 0) {
-      await db.insert(kpiMonthlySnapshots).values(newValues);
+      });
     }
   } catch (error) {
     console.error("KPI 스냅샷 자동 생성 실패:", error);

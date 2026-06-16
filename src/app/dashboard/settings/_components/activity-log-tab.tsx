@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Card,
   CardContent,
@@ -26,7 +26,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { getActivityLogs } from "@/server/actions/activity-logs";
 import type { ActivityLog } from "@/server/actions/activity-logs";
 
@@ -53,23 +53,15 @@ const ENTITY_TYPE_LABELS: Record<string, string> = {
 
 function formatDateTime(date: Date | string): string {
   const d = new Date(date);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  const h = String(d.getHours()).padStart(2, "0");
-  const min = String(d.getMinutes()).padStart(2, "0");
-  const s = String(d.getSeconds()).padStart(2, "0");
-  return `${y}-${m}-${day} ${h}:${min}:${s}`;
-}
-
-type SortKey = "createdAt" | "userName" | "action" | "entityType" | "description";
-type SortDir = "asc" | "desc";
-
-function SortIcon({ column, sortKey, sortDir }: { column: string; sortKey: SortKey | null; sortDir: SortDir }) {
-  if (sortKey !== column) return <ArrowUpDown className="ml-1 inline h-3 w-3 text-muted-foreground/50" />;
-  return sortDir === "asc"
-    ? <ArrowUp className="ml-1 inline h-3 w-3" />
-    : <ArrowDown className="ml-1 inline h-3 w-3" />;
+  return d.toLocaleString("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
 }
 
 const PAGE_SIZE = 50;
@@ -85,19 +77,6 @@ export function ActivityLogTab() {
   const [entityTypeFilter, setEntityTypeFilter] = useState<string>("all");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-
-  // 정렬
-  const [sortKey, setSortKey] = useState<SortKey | null>(null);
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
-
-  const handleSort = useCallback((key: SortKey) => {
-    if (sortKey === key) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
-      setSortKey(key);
-      setSortDir("desc");
-    }
-  }, [sortKey]);
 
   const loadLogs = useCallback(async (pageNum: number) => {
     setIsLoading(true);
@@ -138,39 +117,6 @@ export function ActivityLogTab() {
   };
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
-
-  const sortedLogs = useMemo(() => {
-    if (!sortKey) return logs;
-    return [...logs].sort((a, b) => {
-      let aVal: string | number = "";
-      let bVal: string | number = "";
-      switch (sortKey) {
-        case "createdAt":
-          aVal = new Date(a.createdAt).getTime();
-          bVal = new Date(b.createdAt).getTime();
-          break;
-        case "userName":
-          aVal = (a.userName || "").toLowerCase();
-          bVal = (b.userName || "").toLowerCase();
-          break;
-        case "action":
-          aVal = a.action.toLowerCase();
-          bVal = b.action.toLowerCase();
-          break;
-        case "entityType":
-          aVal = (ENTITY_TYPE_LABELS[a.entityType] || a.entityType).toLowerCase();
-          bVal = (ENTITY_TYPE_LABELS[b.entityType] || b.entityType).toLowerCase();
-          break;
-        case "description":
-          aVal = (a.description || "").toLowerCase();
-          bVal = (b.description || "").toLowerCase();
-          break;
-      }
-      if (aVal < bVal) return sortDir === "asc" ? -1 : 1;
-      if (aVal > bVal) return sortDir === "asc" ? 1 : -1;
-      return 0;
-    });
-  }, [logs, sortKey, sortDir]);
 
   return (
     <Card>
@@ -244,25 +190,15 @@ export function ActivityLogTab() {
         </div>
 
         {/* 테이블 */}
-        <div className="overflow-x-auto rounded-md border">
+        <div className="rounded-md border">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[170px] cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("createdAt")}>
-                  날짜/시간<SortIcon column="createdAt" sortKey={sortKey} sortDir={sortDir} />
-                </TableHead>
-                <TableHead className="w-[140px] cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("userName")}>
-                  사용자<SortIcon column="userName" sortKey={sortKey} sortDir={sortDir} />
-                </TableHead>
-                <TableHead className="w-[90px] cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("action")}>
-                  작업<SortIcon column="action" sortKey={sortKey} sortDir={sortDir} />
-                </TableHead>
-                <TableHead className="w-[130px] cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("entityType")}>
-                  대상<SortIcon column="entityType" sortKey={sortKey} sortDir={sortDir} />
-                </TableHead>
-                <TableHead className="cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("description")}>
-                  설명<SortIcon column="description" sortKey={sortKey} sortDir={sortDir} />
-                </TableHead>
+                <TableHead className="w-[170px]">날짜/시간</TableHead>
+                <TableHead className="w-[100px]">사용자</TableHead>
+                <TableHead className="w-[80px]">작업</TableHead>
+                <TableHead className="w-[100px]">대상</TableHead>
+                <TableHead>설명</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -279,28 +215,28 @@ export function ActivityLogTab() {
                   </TableCell>
                 </TableRow>
               ) : (
-                sortedLogs.map((log) => {
+                logs.map((log) => {
                   const actionInfo = ACTION_LABELS[log.action] || {
                     label: log.action,
                     variant: "outline" as const,
                   };
                   return (
                     <TableRow key={log.id}>
-                      <TableCell className="whitespace-nowrap font-mono text-xs">
+                      <TableCell className="font-mono text-xs">
                         {formatDateTime(log.createdAt)}
                       </TableCell>
-                      <TableCell className="whitespace-nowrap text-sm">
+                      <TableCell className="text-sm">
                         {log.userName || "-"}
                       </TableCell>
-                      <TableCell className="whitespace-nowrap">
+                      <TableCell>
                         <Badge variant={actionInfo.variant}>
                           {actionInfo.label}
                         </Badge>
                       </TableCell>
-                      <TableCell className="whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
+                      <TableCell className="text-sm text-slate-600">
                         {ENTITY_TYPE_LABELS[log.entityType] || log.entityType}
                       </TableCell>
-                      <TableCell className="whitespace-nowrap text-sm">
+                      <TableCell className="text-sm">
                         {log.description}
                       </TableCell>
                     </TableRow>

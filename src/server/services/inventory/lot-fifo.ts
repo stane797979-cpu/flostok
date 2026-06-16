@@ -18,7 +18,6 @@ export interface FIFODeduction {
 export interface DeductByFIFOParams {
   organizationId: string;
   productId: string;
-  warehouseId: string;
   quantity: number;
 }
 
@@ -39,13 +38,13 @@ export interface DeductByFIFOResult {
 export async function deductByFIFO(
   params: DeductByFIFOParams
 ): Promise<DeductByFIFOResult> {
-  const { organizationId, productId, warehouseId, quantity } = params;
+  const { organizationId, productId, quantity } = params;
 
   if (quantity <= 0) {
     return { success: false, deductions: [], error: "차감 수량은 1 이상이어야 합니다" };
   }
 
-  // 해당 제품의 active Lot 조회 (창고별 FIFO 순서)
+  // 해당 제품의 active Lot 조회 (FIFO 순서)
   const activeLots = await db
     .select()
     .from(inventoryLots)
@@ -53,7 +52,6 @@ export async function deductByFIFO(
       and(
         eq(inventoryLots.organizationId, organizationId),
         eq(inventoryLots.productId, productId),
-        eq(inventoryLots.warehouseId, warehouseId),
         eq(inventoryLots.status, "active"),
         gt(inventoryLots.remainingQuantity, 0)
       )
@@ -74,10 +72,9 @@ export async function deductByFIFO(
     };
   }
 
-  // 차감 계산 (메모리)
+  // 순차 차감
   let remaining = quantity;
   const deductions: FIFODeduction[] = [];
-  const lotUpdates: Array<{ id: string; newRemaining: number; newStatus: string }> = [];
 
   for (const lot of activeLots) {
     if (remaining <= 0) break;
@@ -86,7 +83,14 @@ export async function deductByFIFO(
     const newRemaining = lot.remainingQuantity - deductQty;
     const newStatus = newRemaining === 0 ? "depleted" : "active";
 
-    lotUpdates.push({ id: lot.id, newRemaining, newStatus });
+    await db
+      .update(inventoryLots)
+      .set({
+        remainingQuantity: newRemaining,
+        status: newStatus as "active" | "depleted" | "expired",
+        updatedAt: new Date(),
+      })
+      .where(eq(inventoryLots.id, lot.id));
 
     deductions.push({
       lotId: lot.id,
@@ -96,21 +100,6 @@ export async function deductByFIFO(
     });
 
     remaining -= deductQty;
-  }
-
-  // 단일 쿼리 배치 UPDATE (N개 → 1개 쿼리)
-  if (lotUpdates.length > 0) {
-    await db.execute(sql`
-      UPDATE inventory_lots SET
-        remaining_quantity = v.new_remaining::int,
-        status = v.new_status,
-        updated_at = NOW()
-      FROM (VALUES ${sql.join(
-        lotUpdates.map(u => sql`(${u.id}::uuid, ${u.newRemaining}::int, ${u.newStatus})`),
-        sql`, `
-      )}) AS v(id, new_remaining, new_status)
-      WHERE inventory_lots.id = v.id
-    `);
   }
 
   return { success: true, deductions };

@@ -4,8 +4,6 @@
  * - layout.tsx에서 직접 호출
  */
 
-import { headers } from 'next/headers'
-import { unstable_cache } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { db } from '@/server/db'
 import { users, organizations } from '@/server/db/schema'
@@ -26,61 +24,52 @@ export async function getUserInfoForLayout() {
   }
 
   try {
-    // 미들웨어에서 전달된 auth ID 우선 확인 (Supabase HTTP 호출 생략)
-    const headerStore = await headers()
-    const middlewareAuthId = headerStore.get('x-auth-user-id')
+    const supabase = await createClient()
+    const {
+      data: { user: authUser },
+      error,
+    } = await supabase.auth.getUser()
 
-    let authUserId: string | null = null
-
-    if (middlewareAuthId) {
-      // 미들웨어가 이미 인증 완료 → Supabase 재호출 불필요 (100-200ms 절감)
-      authUserId = middlewareAuthId
-    } else {
-      // 폴백: 미들웨어 경유하지 않은 경우 직접 인증
-      const supabase = await createClient()
-      const { data: { user: authUser }, error } = await supabase.auth.getUser()
-      if (error || !authUser) return DEFAULT_USER_INFO
-      authUserId = authUser.id
+    if (error || !authUser) {
+      return DEFAULT_USER_INFO
     }
 
-    // DB 쿼리를 unstable_cache로 감싸 30초 캐싱 (매 네비게이션마다 쿼리 방지)
-    return unstable_cache(
-      async () => {
-        try {
-          const [dbUser] = await db
-            .select()
-            .from(users)
-            .where(eq(users.authId, authUserId!))
-            .limit(1)
+    const [dbUser] = await db
+      .select()
+      .from(users)
+      .where(eq(users.authId, authUser.id))
+      .limit(1)
 
-          if (!dbUser) {
-            return DEFAULT_USER_INFO
-          }
+    if (!dbUser) {
+      return DEFAULT_USER_INFO
+    }
 
-          const roleMap: Record<string, string> = { admin: '관리자', manager: '매니저', viewer: '뷰어', warehouse: '창고' }
+    const roleMap: Record<string, string> = { admin: '관리자', manager: '매니저', viewer: '뷰어', warehouse: '창고' }
+    let orgName = ''
+    try {
+      const org = await db.query.organizations.findFirst({
+        where: eq(organizations.id, dbUser.organizationId),
+      })
+      orgName = org?.name || ''
+    } catch {
+      /* 조직 조회 실패 무시 */
+    }
 
-          const [orgName, allowedMenus] = await Promise.all([
-            db.query.organizations.findFirst({
-              where: eq(organizations.id, dbUser.organizationId),
-            }).then(org => org?.name || '').catch(() => ''),
-            getMenuPermissionsForRole(dbUser.organizationId, dbUser.role).catch(() => ['*'] as string[]),
-          ])
+    // 권한 조회
+    let allowedMenus: string[] = ['*']
+    try {
+      allowedMenus = await getMenuPermissionsForRole(dbUser.organizationId, dbUser.role)
+    } catch {
+      /* 권한 조회 실패 시 기본값 유지 */
+    }
 
-          return {
-            name: dbUser.name || dbUser.email.split('@')[0],
-            role: roleMap[dbUser.role] || dbUser.role,
-            orgName,
-            isSuperadmin: dbUser.isSuperadmin ?? false,
-            allowedMenus,
-          }
-        } catch (err) {
-          console.error('[getUserInfoForLayout] DB 쿼리 실패:', err)
-          return DEFAULT_USER_INFO
-        }
-      },
-      [`layout-user-${authUserId}`],
-      { revalidate: 30, tags: [`user-${authUserId}`] }
-    )()
+    return {
+      name: dbUser.name || dbUser.email.split('@')[0],
+      role: roleMap[dbUser.role] || dbUser.role,
+      orgName,
+      isSuperadmin: dbUser.isSuperadmin ?? false,
+      allowedMenus,
+    }
   } catch {
     return DEFAULT_USER_INFO
   }

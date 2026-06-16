@@ -22,24 +22,18 @@ import {
 import { Package, Calendar, Building2, FileText, Download, ChevronRight, XCircle, Ship, Plus, Pencil, Check, X, History, Clock } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getPurchaseOrderById, getPurchaseOrderDetail, updatePurchaseOrderStatus, updatePurchaseOrderExpectedDate } from "@/server/actions/purchase-orders";
+import { getPurchaseOrderById, updatePurchaseOrderStatus, updatePurchaseOrderExpectedDate } from "@/server/actions/purchase-orders";
 import { createImportShipment } from "@/server/actions/import-shipments";
+import { getInboundRecords } from "@/server/actions/inbound";
+import { getEntityActivityLogs } from "@/server/actions/activity-logs";
+import type { ActivityLog } from "@/server/actions/activity-logs";
+import { InboundDialog, type InboundDialogItem } from "./inbound-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { formatKRW } from "@/lib/utils";
 import { exportPurchaseOrderToExcel } from "@/server/actions/excel-export";
 
-// 상태별 다음 단계 정의 (발주확정 / 취소 / 완료만 — 입고는 입고관리에서 처리)
-// pending 상태: admin만 승인/반려/발주확정 가능 (getNextStatusActions에서 역할 기반 필터링)
-const nextStatusActionsMap: Record<string, { label: string; status: string; variant?: "default" | "outline"; adminOnly?: boolean }[]> = {
+// 상태별 다음 단계 정의 (단순화: 발주확정 → 입고 → 완료)
+const nextStatusActions: Record<string, { label: string; status: string; variant?: "default" | "outline" }[]> = {
   draft: [
-    { label: "발주 확정", status: "ordered" },
-    { label: "취소", status: "cancelled", variant: "outline" },
-  ],
-  pending: [
-    { label: "승인 및 발주 확정", status: "ordered", adminOnly: true },
-    { label: "반려", status: "cancelled", variant: "outline", adminOnly: true },
-  ],
-  approved: [
     { label: "발주 확정", status: "ordered" },
     { label: "취소", status: "cancelled", variant: "outline" },
   ],
@@ -59,15 +53,15 @@ interface OrderDetailDialogProps {
   onOpenChange: (open: boolean) => void;
   orderId: string;
   onStatusChange?: () => void;
-  userRole?: "admin" | "manager" | "viewer" | "warehouse";
 }
 
-export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange, userRole = "viewer" }: OrderDetailDialogProps) {
+export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange }: OrderDetailDialogProps) {
   const [orderData, setOrderData] = useState<Awaited<ReturnType<typeof getPurchaseOrderById>>>(
     null
   );
   const [isLoading, setIsLoading] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [inboundDialogOpen, setInboundDialogOpen] = useState(false);
   const [showShipmentForm, setShowShipmentForm] = useState(false);
   const [isCreatingShipment, setIsCreatingShipment] = useState(false);
   const [shipmentForm, setShipmentForm] = useState({
@@ -92,13 +86,7 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange,
     receivedQuantity: number;
     qualityResult: string | null;
   }>>([]);
-  const [activityLogsList, setActivityLogsList] = useState<Array<{
-    id: string;
-    description: string;
-    userName: string | null;
-    action: string;
-    createdAt: Date;
-  }>>([]);
+  const [activityLogsList, setActivityLogsList] = useState<ActivityLog[]>([]);
   const { toast } = useToast();
 
   // 발주서 데이터 로드
@@ -112,16 +100,23 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange,
   const loadOrderData = async () => {
     setIsLoading(true);
     try {
-      // 단일 서버 액션으로 발주서 + 입고기록 + 변경이력 통합 조회
-      // (3개 별도 호출 → 1회 HTTP + 인증 1회 + DB 5개 병렬)
-      const result = await getPurchaseOrderDetail(orderId);
-      if (result) {
-        setOrderData(result.order);
-        setInboundRecordsList(result.inboundRecords);
-        setActivityLogsList(result.activityLogs);
-      } else {
-        setOrderData(null);
-      }
+      const [data, inboundResult, logs] = await Promise.all([
+        getPurchaseOrderById(orderId),
+        getInboundRecords({ orderId, limit: 100 }),
+        getEntityActivityLogs(orderId, 30),
+      ]);
+      setOrderData(data);
+      setInboundRecordsList(
+        inboundResult.records.map((r) => ({
+          id: r.id,
+          date: r.date,
+          productName: r.productName,
+          productSku: r.productSku,
+          receivedQuantity: r.receivedQuantity,
+          qualityResult: r.qualityResult,
+        }))
+      );
+      setActivityLogsList(logs);
     } catch (error) {
       console.error("발주서 조회 오류:", error);
       toast({
@@ -134,26 +129,13 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange,
     }
   };
 
-  // 취소/반려 확인 상태
-  const [cancelConfirmStatus, setCancelConfirmStatus] = useState<string | null>(null);
-
-  const handleStatusChangeRequest = (newStatus: string) => {
-    // 취소/반려는 확인 다이얼로그를 먼저 표시
-    if (newStatus === "cancelled") {
-      setCancelConfirmStatus(newStatus);
-      return;
-    }
-    handleStatusChange(newStatus);
-  };
-
   const handleStatusChange = async (newStatus: string) => {
-    setCancelConfirmStatus(null);
     setIsUpdatingStatus(true);
     try {
       const result = await updatePurchaseOrderStatus(orderId, newStatus);
       if (result.success) {
         const statusLabels: Record<string, string> = {
-          approved: "승인", ordered: "발주 확정", confirmed: "공급자 확인",
+          ordered: "발주 확정", confirmed: "공급자 확인",
           shipped: "출하 처리", received: "입고 완료",
           completed: "완료", cancelled: "취소",
         };
@@ -247,6 +229,18 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange,
     }
   };
 
+  const handleInboundClick = () => {
+    setInboundDialogOpen(true);
+  };
+
+  const handleInboundClose = (success?: boolean) => {
+    setInboundDialogOpen(false);
+    if (success) {
+      loadOrderData();
+      onStatusChange?.();
+    }
+  };
+
   const handleDownloadClick = async () => {
     try {
       const result = await exportPurchaseOrderToExcel(orderId);
@@ -319,10 +313,29 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange,
     });
   };
 
-  // 발주 진행 중 여부 (입항스케줄, 예상입고일 편집 등에 사용)
-  const isInProgress =
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("ko-KR", {
+      style: "currency",
+      currency: "KRW",
+    }).format(amount);
+  };
+
+  // 입고 가능 여부 확인
+  const canReceive =
     orderData &&
     ["ordered", "confirmed", "shipped", "partially_received"].includes(orderData.status);
+
+  // 입고 다이얼로그용 데이터 변환
+  const inboundItems: InboundDialogItem[] =
+    orderData?.items.map((item) => ({
+      orderItemId: item.id,
+      productId: item.productId,
+      productSku: item.product.sku,
+      productName: item.product.name,
+      orderedQuantity: item.quantity,
+      receivedQuantity: item.receivedQuantity || 0,
+      unitPrice: item.unitPrice,
+    })) || [];
 
   return (
     <>
@@ -335,44 +348,38 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange,
 
           {isLoading ? (
             <div className="flex h-96 items-center justify-center">
-              <div className="text-slate-500 dark:text-slate-400">로딩 중...</div>
+              <div className="text-slate-500">로딩 중...</div>
             </div>
           ) : !orderData ? (
             <div className="flex h-96 items-center justify-center">
-              <div className="text-slate-500 dark:text-slate-400">발주서를 찾을 수 없습니다</div>
+              <div className="text-slate-500">발주서를 찾을 수 없습니다</div>
             </div>
           ) : (
             <div className="space-y-6">
               {/* 발주서 헤더 */}
-              <div className="rounded-lg border bg-slate-50 dark:bg-slate-800 p-6">
+              <div className="rounded-lg border bg-slate-50 p-6">
                 <div className="mb-4 flex items-start justify-between">
                   <div>
                     <h3 className="text-2xl font-bold">{orderData.orderNumber}</h3>
-                    <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                    <p className="mt-1 text-sm text-slate-600">
                       {orderData.orderDate && formatDate(orderData.orderDate)}
                     </p>
                   </div>
                   {getStatusBadge(orderData.status)}
                 </div>
 
-                {orderData.status === "pending" && userRole !== "admin" && (
-                  <div className="mt-3 rounded-md bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 px-4 py-3 text-sm text-yellow-800 dark:text-yellow-200">
-                    관리자 승인 대기 중입니다
-                  </div>
-                )}
-
                 <Separator className="my-4" />
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="flex items-start gap-3">
-                    <Building2 className="mt-1 h-5 w-5 text-slate-400 dark:text-slate-500" />
+                    <Building2 className="mt-1 h-5 w-5 text-slate-400" />
                     <div>
-                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">공급자</p>
+                      <p className="text-sm font-medium text-slate-500">공급자</p>
                       <p className="mt-1 font-semibold">
                         {orderData.supplier?.name || "미지정"}
                       </p>
                       {orderData.supplier?.contactPhone && (
-                        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                        <p className="mt-1 text-sm text-slate-600">
                           {orderData.supplier.contactPhone}
                         </p>
                       )}
@@ -380,9 +387,9 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange,
                   </div>
 
                   <div className="flex items-start gap-3">
-                    <Calendar className="mt-1 h-5 w-5 text-slate-400 dark:text-slate-500" />
+                    <Calendar className="mt-1 h-5 w-5 text-slate-400" />
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">예상입고일</p>
+                      <p className="text-sm font-medium text-slate-500">예상입고일</p>
                       {isEditingExpectedDate ? (
                         <div className="mt-1 flex items-center gap-1.5">
                           <Input
@@ -397,7 +404,6 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange,
                             className="h-7 w-7"
                             onClick={handleSaveExpectedDate}
                             disabled={isSavingExpectedDate}
-                            aria-label="날짜 저장"
                           >
                             <Check className="h-3.5 w-3.5 text-green-600" />
                           </Button>
@@ -406,9 +412,8 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange,
                             size="icon"
                             className="h-7 w-7"
                             onClick={() => setIsEditingExpectedDate(false)}
-                            aria-label="날짜 취소"
                           >
-                            <X className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
+                            <X className="h-3.5 w-3.5 text-slate-400" />
                           </Button>
                         </div>
                       ) : (
@@ -421,25 +426,24 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange,
                                 : "미정"}
                           </p>
                           {orderData.shipmentEta && orderData.expectedDate && orderData.shipmentEta !== orderData.expectedDate && (
-                            <Badge variant="outline" className="text-[10px] text-blue-600 dark:text-blue-300 border-blue-200 dark:border-blue-700">
+                            <Badge variant="outline" className="text-[10px] text-blue-600 border-blue-200">
                               입항스케줄
                             </Badge>
                           )}
-                          {isInProgress && (
+                          {canReceive && (
                             <Button
                               variant="ghost"
                               size="icon"
                               className="h-6 w-6"
                               onClick={handleEditExpectedDate}
-                              aria-label="예상입고일 수정"
                             >
-                              <Pencil className="h-3 w-3 text-slate-400 dark:text-slate-500" />
+                              <Pencil className="h-3 w-3 text-slate-400" />
                             </Button>
                           )}
                         </div>
                       )}
                       {orderData.actualDate && (
-                        <p className="mt-1 text-sm text-green-600 dark:text-green-300">
+                        <p className="mt-1 text-sm text-green-600">
                           실제: {formatDate(orderData.actualDate)}
                         </p>
                       )}
@@ -451,10 +455,10 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange,
                   <>
                     <Separator className="my-4" />
                     <div className="flex items-start gap-3">
-                      <FileText className="mt-1 h-5 w-5 text-slate-400 dark:text-slate-500" />
+                      <FileText className="mt-1 h-5 w-5 text-slate-400" />
                       <div>
-                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">메모</p>
-                        <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">{orderData.notes}</p>
+                        <p className="text-sm font-medium text-slate-500">메모</p>
+                        <p className="mt-1 text-sm text-slate-700">{orderData.notes}</p>
                       </div>
                     </div>
                   </>
@@ -489,7 +493,7 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange,
                               {item.product.sku}
                             </TableCell>
                             <TableCell className="font-medium">{item.product.name}</TableCell>
-                            <TableCell className="text-center text-sm text-slate-600 dark:text-slate-400">
+                            <TableCell className="text-center text-sm text-slate-600">
                               {item.product.unit || "-"}
                             </TableCell>
                             <TableCell className="text-right">{item.quantity}</TableCell>
@@ -500,17 +504,17 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange,
                                     ? "text-green-600 font-semibold"
                                     : isPartiallyReceived
                                       ? "text-yellow-600 font-semibold"
-                                      : "text-slate-600 dark:text-slate-400"
+                                      : "text-slate-600"
                                 }
                               >
                                 {receivedQty}
                               </span>
                             </TableCell>
                             <TableCell className="text-right">
-                              {formatKRW(item.unitPrice)}
+                              {formatCurrency(item.unitPrice)}
                             </TableCell>
                             <TableCell className="text-right font-semibold">
-                              {formatKRW(item.totalPrice)}
+                              {formatCurrency(item.totalPrice)}
                             </TableCell>
                           </TableRow>
                         );
@@ -521,22 +525,22 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange,
 
                 {/* 합계 */}
                 <div className="mt-4 flex justify-end">
-                  <div className="w-64 rounded-lg border bg-slate-50 dark:bg-slate-800 p-4">
+                  <div className="w-64 rounded-lg border bg-slate-50 p-4">
                     <div className="flex justify-between text-sm">
-                      <span className="text-slate-600 dark:text-slate-400">품목 수</span>
+                      <span className="text-slate-600">품목 수</span>
                       <span className="font-medium">{orderData.items.length}개</span>
                     </div>
                     <Separator className="my-2" />
                     <div className="flex justify-between text-lg font-bold">
                       <span>총 금액</span>
-                      <span>{formatKRW(orderData.totalAmount || 0)}</span>
+                      <span>{formatCurrency(orderData.totalAmount || 0)}</span>
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* 입항스케줄 등록 */}
-              {isInProgress && (
+              {canReceive && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <h4 className="font-semibold flex items-center gap-2">
@@ -553,7 +557,7 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange,
                     </Button>
                   </div>
                   {showShipmentForm && (
-                    <div className="rounded-lg border p-4 space-y-3 bg-slate-50/50 dark:bg-slate-800/50">
+                    <div className="rounded-lg border p-4 space-y-3 bg-slate-50/50">
                       <div className="grid gap-3 sm:grid-cols-3">
                         <div>
                           <Label className="text-xs">B/L 번호</Label>
@@ -708,10 +712,10 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange,
                     <div className="divide-y">
                       {activityLogsList.map((log) => (
                         <div key={log.id} className="flex items-start gap-3 px-4 py-2.5">
-                          <Clock className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-slate-400 dark:text-slate-500" />
+                          <Clock className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-slate-400" />
                           <div className="min-w-0 flex-1">
-                            <p className="text-sm text-slate-700 dark:text-slate-300">{log.description}</p>
-                            <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
+                            <p className="text-sm text-slate-700">{log.description}</p>
+                            <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-400">
                               <span>{log.userName || "시스템"}</span>
                               <span>·</span>
                               <span>
@@ -737,16 +741,14 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange,
 
               {/* 상태 변경 + 액션 버튼 */}
               <div className="flex flex-wrap items-center justify-between gap-2">
-                {/* 상태 변경 버튼 (역할 기반 필터링) */}
+                {/* 상태 변경 버튼 */}
                 <div className="flex gap-2">
-                  {(nextStatusActionsMap[orderData.status] || [])
-                    .filter((action) => !action.adminOnly || userRole === "admin")
-                    .map((action) => (
+                  {(nextStatusActions[orderData.status] || []).map((action) => (
                     <Button
                       key={action.status}
                       variant={action.variant || "default"}
                       size="sm"
-                      onClick={() => handleStatusChangeRequest(action.status)}
+                      onClick={() => handleStatusChange(action.status)}
                       disabled={isUpdatingStatus}
                     >
                       {action.status === "cancelled" ? (
@@ -765,42 +767,29 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange,
                     <Download className="mr-2 h-4 w-4" />
                     Excel 다운로드
                   </Button>
+                  {canReceive && (
+                    <Button size="sm" onClick={handleInboundClick}>
+                      <Package className="mr-2 h-4 w-4" />
+                      입고 확인
+                    </Button>
+                  )}
                 </div>
               </div>
-
-              {/* 취소/반려 확인 다이얼로그 */}
-              {cancelConfirmStatus && (
-                <div className="mt-3 rounded-lg border-2 border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950">
-                  <p className="text-sm font-semibold text-red-800 dark:text-red-200">
-                    {orderData.status === "pending" ? "정말 반려하시겠습니까?" : "정말 취소하시겠습니까?"}
-                  </p>
-                  <p className="mt-1 text-xs text-red-600 dark:text-red-400">
-                    이 작업은 되돌릴 수 없습니다.
-                  </p>
-                  <div className="mt-3 flex gap-2">
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => handleStatusChange(cancelConfirmStatus)}
-                      disabled={isUpdatingStatus}
-                    >
-                      {orderData.status === "pending" ? "반려 확인" : "취소 확인"}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCancelConfirmStatus(null)}
-                      disabled={isUpdatingStatus}
-                    >
-                      돌아가기
-                    </Button>
-                  </div>
-                </div>
-              )}
             </div>
           )}
         </DialogContent>
       </Dialog>
+
+      {/* 입고 확인 다이얼로그 */}
+      {orderData && (
+        <InboundDialog
+          open={inboundDialogOpen}
+          onOpenChange={(open) => handleInboundClose(!open)}
+          orderId={orderId}
+          orderNumber={orderData.orderNumber}
+          items={inboundItems}
+        />
+      )}
     </>
   );
 }

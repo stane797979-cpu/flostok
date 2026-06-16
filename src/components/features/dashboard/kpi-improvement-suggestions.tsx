@@ -15,12 +15,11 @@ import {
   generateKPIImprovementProposals,
   sortProposalsByPriority,
   filterProposalsByCategory,
-  hasKPIData,
   type KPIMetrics,
   type KPITarget,
 } from '@/server/services/scm/kpi-improvement';
 import { KPIImprovementCard } from './kpi-improvement-card';
-import { AlertCircle, Lightbulb, BarChart3, ClipboardList, TrendingUp, Clock, CheckCircle2, CircleDot, Database } from 'lucide-react';
+import { AlertCircle, Lightbulb, BarChart3, ClipboardList, TrendingUp, Clock, CheckCircle2, CircleDot } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -64,33 +63,6 @@ export function KPIImprovementSuggestions({
   const mediumPriorityCount = proposals.filter((p) => p.priority === 'medium').length;
   const lowPriorityCount = proposals.filter((p) => p.priority === 'low').length;
 
-  const noData = !hasKPIData(metrics);
-
-  if (noData) {
-    return (
-      <Card className={className}>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Lightbulb className="h-5 w-5 text-yellow-500" />
-            KPI 개선 제안
-          </CardTitle>
-          <CardDescription>현재 KPI 현황에 기반한 맞춤형 개선 제안</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 py-12 dark:border-slate-700">
-            <Database className="h-8 w-8 text-slate-400" />
-            <p className="mt-2 text-center text-sm text-slate-500 dark:text-slate-400">
-              분석할 데이터가 없습니다
-            </p>
-            <p className="mt-1 text-center text-xs text-slate-400">
-              제품, 재고, 판매, 발주 데이터를 등록하면 KPI 기반 개선 제안이 생성됩니다.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
   if (proposals.length === 0) {
     return (
       <Card className={className}>
@@ -104,7 +76,7 @@ export function KPIImprovementSuggestions({
         <CardContent>
           <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 py-12 dark:border-slate-700">
             <AlertCircle className="h-8 w-8 text-slate-400" />
-            <p className="mt-2 text-center text-sm text-slate-500 dark:text-slate-400">
+            <p className="mt-2 text-center text-sm text-slate-500">
               모든 KPI가 목표를 달성했습니다!
             </p>
             <p className="mt-1 text-center text-xs text-slate-400">
@@ -184,7 +156,7 @@ export function KPIImprovementSuggestions({
           {/* 전체 제안 */}
           <TabsContent value="all" className="space-y-3">
             {proposals.length === 0 ? (
-              <div className="text-center py-6 text-sm text-slate-500 dark:text-slate-400">
+              <div className="text-center py-6 text-sm text-slate-500">
                 현재 실행할 개선 제안이 없습니다.
               </div>
             ) : (
@@ -197,7 +169,7 @@ export function KPIImprovementSuggestions({
           {/* 재고 관리 제안 */}
           <TabsContent value="inventory" className="space-y-3">
             {inventoryProposals.length === 0 ? (
-              <div className="text-center py-6 text-sm text-slate-500 dark:text-slate-400">
+              <div className="text-center py-6 text-sm text-slate-500">
                 현재 실행할 재고 관리 개선 제안이 없습니다.
               </div>
             ) : (
@@ -210,7 +182,7 @@ export function KPIImprovementSuggestions({
           {/* 발주 관리 제안 */}
           <TabsContent value="order" className="space-y-3">
             {orderProposals.length === 0 ? (
-              <div className="text-center py-6 text-sm text-slate-500 dark:text-slate-400">
+              <div className="text-center py-6 text-sm text-slate-500">
                 현재 실행할 발주 관리 개선 제안이 없습니다.
               </div>
             ) : (
@@ -223,7 +195,7 @@ export function KPIImprovementSuggestions({
           {/* 비용 최적화 제안 */}
           <TabsContent value="cost" className="space-y-3">
             {costProposals.length === 0 ? (
-              <div className="text-center py-6 text-sm text-slate-500 dark:text-slate-400">
+              <div className="text-center py-6 text-sm text-slate-500">
                 현재 실행할 비용 최적화 개선 제안이 없습니다.
               </div>
             ) : (
@@ -275,15 +247,15 @@ export function KPIImprovementSuggestions({
             <div className="grid grid-cols-3 gap-3">
               <div className="rounded-lg border p-3 text-center">
                 <p className="text-2xl font-bold text-red-600">{highPriorityCount}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">긴급 과제</p>
+                <p className="text-xs text-slate-500">긴급 과제</p>
               </div>
               <div className="rounded-lg border p-3 text-center">
                 <p className="text-2xl font-bold text-yellow-600">{mediumPriorityCount}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">중간 과제</p>
+                <p className="text-xs text-slate-500">중간 과제</p>
               </div>
               <div className="rounded-lg border p-3 text-center">
                 <p className="text-2xl font-bold text-blue-600">{lowPriorityCount}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">개선 과제</p>
+                <p className="text-xs text-slate-500">개선 과제</p>
               </div>
             </div>
 
@@ -295,7 +267,7 @@ export function KPIImprovementSuggestions({
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
                     <span className="font-medium">전체 진행률</span>
-                    <span className="text-slate-500 dark:text-slate-400">
+                    <span className="text-slate-500">
                       {completedCount}/{allStepsCount}단계 완료
                     </span>
                   </div>
@@ -327,7 +299,7 @@ export function KPIImprovementSuggestions({
                     <div>
                       <h4 className="text-sm font-semibold">{proposal.title}</h4>
                       <div className="flex items-center gap-3 mt-1">
-                        <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                        <span className="text-xs text-slate-500 flex items-center gap-1">
                           <Clock className="h-3 w-3" />
                           {proposal.timeToImplement}
                         </span>
@@ -418,7 +390,7 @@ export function KPIImprovementSuggestions({
               {[
                 { label: '재고회전율', current: metrics.inventoryTurnoverRate, target: targets.inventoryTurnoverRate, unit: '회/년', higher: true },
                 { label: '평균 재고일수', current: metrics.averageInventoryDays, target: targets.averageInventoryDays, unit: '일', higher: false },
-                { label: '재고 정확도', current: metrics.inventoryAccuracy ?? 0, target: targets.inventoryAccuracy, unit: '%', higher: true },
+                { label: '재고 정확도', current: metrics.inventoryAccuracy, target: targets.inventoryAccuracy, unit: '%', higher: true },
                 { label: '품절률', current: metrics.stockoutRate, target: targets.stockoutRate, unit: '%', higher: false },
                 { label: '적시 발주율', current: metrics.onTimeOrderRate, target: targets.onTimeOrderRate, unit: '%', higher: true },
                 { label: '평균 리드타임', current: metrics.averageLeadTime, target: targets.averageLeadTime, unit: '일', higher: false },
@@ -447,15 +419,15 @@ export function KPIImprovementSuggestions({
                     </div>
                     <div className="flex items-center gap-4 mb-2">
                       <div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">현재</p>
+                        <p className="text-xs text-slate-500">현재</p>
                         <p className={cn('text-lg font-bold', isGood ? 'text-green-600' : 'text-red-600')}>
                           {kpi.current.toFixed(1)}{kpi.unit}
                         </p>
                       </div>
                       <div className="text-slate-300">→</div>
                       <div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">목표</p>
-                        <p className="text-lg font-bold text-slate-700 dark:text-slate-200">
+                        <p className="text-xs text-slate-500">목표</p>
+                        <p className="text-lg font-bold text-slate-700">
                           {kpi.target.toFixed(1)}{kpi.unit}
                         </p>
                       </div>

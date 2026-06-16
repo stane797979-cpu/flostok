@@ -209,7 +209,7 @@ export function InventoryTurnover({ data, className }: InventoryTurnoverProps) {
                 <div key={item.id} className="flex items-center justify-between text-sm">
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground w-4">{idx + 1}</span>
-                    <span className="font-medium truncate max-w-[140px]">{item.name}</span>
+                    <span className="font-medium truncate max-w-[140px]" title={item.name}>{item.name}</span>
                     <span className="text-muted-foreground text-xs">{item.sku}</span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -238,7 +238,7 @@ export function InventoryTurnover({ data, className }: InventoryTurnoverProps) {
                 <div key={item.id} className="flex items-center justify-between text-sm">
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground w-4">{idx + 1}</span>
-                    <span className="font-medium truncate max-w-[140px]">{item.name}</span>
+                    <span className="font-medium truncate max-w-[140px]" title={item.name}>{item.name}</span>
                     <span className="text-muted-foreground text-xs">{item.sku}</span>
                   </div>
                   <div className="flex items-center gap-2">

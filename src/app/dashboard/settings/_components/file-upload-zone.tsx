@@ -4,7 +4,6 @@ import { Upload, FileSpreadsheet, X } from 'lucide-react'
 import { useState, useCallback, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { useToast } from '@/hooks/use-toast'
 
 interface FileUploadZoneProps {
   onFileSelect: (file: File) => void
@@ -21,7 +20,6 @@ export function FileUploadZone({
 }: FileUploadZoneProps) {
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const { toast } = useToast()
 
   const validateFile = (file: File): string | null => {
     // 파일 형식 검증
@@ -44,11 +42,11 @@ export function FileUploadZone({
   const handleFile = useCallback((file: File) => {
     const error = validateFile(file)
     if (error) {
-      toast({ title: "파일 오류", description: error, variant: "destructive" })
+      alert(error)
       return
     }
     onFileSelect(file)
-  }, [onFileSelect, toast])
+  }, [onFileSelect])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -99,7 +97,7 @@ export function FileUploadZone({
             'border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors',
             isDragging
               ? 'border-primary bg-primary/5'
-              : 'border-slate-300 hover:border-primary hover:bg-slate-50 dark:hover:bg-slate-800/30'
+              : 'border-slate-300 hover:border-primary hover:bg-slate-50'
           )}
         >
           <Upload className="mx-auto h-12 w-12 text-slate-400 mb-4" />
@@ -118,12 +116,12 @@ export function FileUploadZone({
           />
         </div>
       ) : (
-        <div className="border rounded-lg p-6 bg-slate-50 dark:bg-slate-800/50">
+        <div className="border rounded-lg p-6 bg-slate-50">
           <div className="flex items-start justify-between">
             <div className="flex items-start gap-4">
               <FileSpreadsheet className="h-10 w-10 text-green-600 mt-1" />
               <div>
-                <p className="font-medium text-slate-900 dark:text-slate-100">{selectedFile.name}</p>
+                <p className="font-medium text-slate-900">{selectedFile.name}</p>
                 <p className="text-sm text-slate-500 mt-1">
                   {formatFileSize(selectedFile.size)}
                 </p>
@@ -133,7 +131,7 @@ export function FileUploadZone({
               variant="ghost"
               size="icon"
               onClick={onClearFile}
-              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              className="text-slate-400 hover:text-slate-600"
             >
               <X className="h-5 w-5" />
             </Button>

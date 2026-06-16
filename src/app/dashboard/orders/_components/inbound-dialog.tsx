@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -22,27 +22,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { AlertCircle, CheckCircle2, Package, Warehouse } from "lucide-react";
+import { AlertCircle, CheckCircle2, Package } from "lucide-react";
 import { confirmInbound, closeOrderWithPartialInbound, type ConfirmInboundInput } from "@/server/actions/inbound";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 
 export interface InboundDialogItem {
   orderItemId: string;
@@ -54,21 +37,12 @@ export interface InboundDialogItem {
   unitPrice: number;
 }
 
-interface WarehouseOption {
-  id: string;
-  code: string;
-  name: string;
-  isDefault?: boolean;
-}
-
 interface InboundDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   orderId: string;
   orderNumber: string;
   items: InboundDialogItem[];
-  warehouses?: WarehouseOption[];
-  defaultWarehouseId?: string; // 발주서에 설정된 입고 창고
 }
 
 export function InboundDialog({
@@ -77,32 +51,15 @@ export function InboundDialog({
   orderId,
   orderNumber,
   items,
-  warehouses = [],
-  defaultWarehouseId,
 }: InboundDialogProps) {
   const [inboundQuantities, setInboundQuantities] = useState<Record<string, number>>({});
   const [locations, setLocations] = useState<Record<string, string>>({});
   const [lotNumbers, setLotNumbers] = useState<Record<string, string>>({});
   const [expiryDates, setExpiryDates] = useState<Record<string, string>>({});
-  const [warehouseId, setWarehouseId] = useState(defaultWarehouseId || "");
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
-  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
   const { toast } = useToast();
-
-  // 발주서 창고 또는 기본 창고 pre-select
-  useEffect(() => {
-    if (open) {
-      if (defaultWarehouseId) {
-        setWarehouseId(defaultWarehouseId);
-      } else {
-        const defaultWh = warehouses.find((w) => w.isDefault);
-        if (defaultWh) setWarehouseId(defaultWh.id);
-        else if (warehouses.length > 0) setWarehouseId(warehouses[0].id);
-      }
-    }
-  }, [open, defaultWarehouseId, warehouses]);
 
   // 입고 가능한 항목만 필터링 (아직 전량 입고되지 않은 항목)
   const availableItems = items.filter(
@@ -178,39 +135,31 @@ export function InboundDialog({
     setIsSubmitting(true);
 
     try {
-      const confirmInput: ConfirmInboundInput = {
+      const input: ConfirmInboundInput = {
         orderId,
         items: inboundItems,
-        warehouseId: warehouseId || undefined,
         notes: notes || undefined,
       };
 
-      // 낙관적 업데이트: 즉시 다이얼로그 닫기 + 토스트 표시
-      const totalReceived = inboundItems.reduce(
-        (sum, item) => sum + item.receivedQuantity,
-        0
-      );
-      setInboundQuantities({});
-      setLocations({});
-      setLotNumbers({});
-      setExpiryDates({});
-      setWarehouseId(defaultWarehouseId || "");
-      setNotes("");
-      setIsSubmitting(false);
-      onOpenChange(false);
-
-      toast({
-        title: "입고 처리 중...",
-        description: `${inboundItems.length}개 품목, 총 ${totalReceived}개 처리 중`,
-      });
-
-      const result = await confirmInbound(confirmInput);
+      const result = await confirmInbound(input);
 
       if (result.success) {
+        const totalReceived = inboundItems.reduce(
+          (sum, item) => sum + item.receivedQuantity,
+          0
+        );
         toast({
           title: "입고 처리 완료",
           description: `${inboundItems.length}개 품목, 총 ${totalReceived}개 입고되었습니다`,
         });
+
+        // 초기화
+        setInboundQuantities({});
+        setLocations({});
+        setLotNumbers({});
+        setExpiryDates({});
+        setNotes("");
+        onOpenChange(false);
       } else {
         toast({
           title: "입고 처리 실패",
@@ -220,17 +169,20 @@ export function InboundDialog({
       }
     } catch (error) {
       console.error("입고 처리 오류:", error);
-      setIsSubmitting(false);
       toast({
         title: "입고 처리 실패",
         description: "서버 오류가 발생했습니다",
         variant: "destructive",
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  // 잔여 포기 및 완료 처리 (AlertDialog 확인 후 실행)
-  const handleCloseOrderConfirmed = async () => {
+  // 잔여 포기 및 완료 처리
+  const handleCloseOrder = async () => {
+    if (!confirm("잔여수량을 포기하고 발주를 완료 처리하시겠습니까?")) return;
+
     setIsClosing(true);
     try {
       const result = await closeOrderWithPartialInbound(orderId, notes || "잔여수량 포기 처리");
@@ -298,7 +250,6 @@ export function InboundDialog({
   }
 
   return (
-    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -307,40 +258,8 @@ export function InboundDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* 입고 창고 선택 */}
-          {warehouses.length > 0 && (
-            <div className="rounded-lg border bg-slate-50 dark:bg-slate-800 p-4 space-y-2">
-              <div className="flex items-center gap-2">
-                <Warehouse className="h-4 w-4 text-slate-500" />
-                <Label className="font-medium">입고 창고</Label>
-                {warehouseId && defaultWarehouseId && warehouseId !== defaultWarehouseId && (
-                  <Badge variant="outline" className="text-[10px] border-orange-200 text-orange-600">
-                    변경됨
-                  </Badge>
-                )}
-              </div>
-              <Select value={warehouseId} onValueChange={setWarehouseId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="입고 창고를 선택하세요" />
-                </SelectTrigger>
-                <SelectContent>
-                  {warehouses.map((wh) => (
-                    <SelectItem key={wh.id} value={wh.id}>
-                      {wh.name} ({wh.code}){wh.isDefault ? " - 기본" : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {warehouseId && defaultWarehouseId && warehouseId !== defaultWarehouseId && (
-                <p className="text-xs text-orange-600">
-                  발주서 지정 창고와 다른 창고로 입고됩니다. 변경 이력이 기록됩니다.
-                </p>
-              )}
-            </div>
-          )}
-
           {/* 전체 입고 버튼 */}
-          <div className="flex items-center justify-between rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 p-4">
+          <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 p-4">
             <div className="flex items-center gap-2 text-sm text-blue-900">
               <Package className="h-5 w-5" />
               <span>전체 입고 처리를 원하시면 아래 버튼을 클릭하세요</span>
@@ -351,7 +270,7 @@ export function InboundDialog({
           </div>
 
           {/* 입고 항목 테이블 */}
-          <div className="overflow-x-auto rounded-md border">
+          <div className="rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -419,7 +338,7 @@ export function InboundDialog({
                       <TableCell className="text-center font-medium">
                         {item.orderedQuantity}
                       </TableCell>
-                      <TableCell className="text-center text-slate-600 dark:text-slate-300">
+                      <TableCell className="text-center text-slate-600">
                         {item.receivedQuantity}
                       </TableCell>
                       <TableCell className="text-center">
@@ -469,7 +388,7 @@ export function InboundDialog({
 
           {/* 입고 요약 */}
           {Object.keys(inboundQuantities).length > 0 && (
-            <div className="rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950 p-4">
+            <div className="rounded-lg border border-green-200 bg-green-50 p-4">
               <h4 className="mb-2 font-semibold text-green-900">입고 요약</h4>
               <div className="space-y-1 text-sm text-green-800">
                 <p>
@@ -485,12 +404,6 @@ export function InboundDialog({
                   • 총 입고 수량:{" "}
                   {Object.values(inboundQuantities).reduce((sum, qty) => sum + qty, 0)}개
                 </p>
-                {warehouseId && warehouses.length > 0 && (
-                  <p>
-                    • 입고 창고: {warehouses.find(w => w.id === warehouseId)?.name || "-"}
-                    {warehouseId !== defaultWarehouseId && defaultWarehouseId && " (변경됨)"}
-                  </p>
-                )}
               </div>
             </div>
           )}
@@ -507,7 +420,7 @@ export function InboundDialog({
           {hasAnyReceived && (
             <Button
               variant="destructive"
-              onClick={() => setCloseConfirmOpen(true)}
+              onClick={handleCloseOrder}
               disabled={isSubmitting || isClosing}
             >
               {isClosing ? "처리중..." : "잔여 포기 및 완료"}
@@ -519,27 +432,5 @@ export function InboundDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-
-    <AlertDialog open={closeConfirmOpen} onOpenChange={setCloseConfirmOpen}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>잔여 수량 포기 및 완료 처리</AlertDialogTitle>
-          <AlertDialogDescription>
-            잔여수량을 포기하고 발주를 완료 처리하시겠습니까?
-            이 작업은 되돌릴 수 없습니다.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>취소</AlertDialogCancel>
-          <AlertDialogAction
-            onClick={handleCloseOrderConfirmed}
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-          >
-            완료 처리
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-    </>
   );
 }

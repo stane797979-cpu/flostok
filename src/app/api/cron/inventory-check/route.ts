@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/server/db'
 import { organizations, inventory, products, alerts } from '@/server/db/schema'
-import { eq, and, sql, gte } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -15,10 +15,10 @@ function getInventoryStatus(
 
   if (currentStock === 0) return { status: 'out_of_stock' }
   if (currentStock < safe * 0.5) return { status: 'critical' }
-  if (currentStock < safe) return { status: 'shortage' }
+  if (currentStock < safe) return { status: 'low' }
   if (currentStock >= safe * 5.0) return { status: 'overstock' }
   if (currentStock >= safe * 3.0) return { status: 'excess' }
-  if ((reorderPoint || 0) > 0 && currentStock < (reorderPoint || 0)) return { status: 'caution' }
+  if ((reorderPoint || 0) > 0 && currentStock < (reorderPoint || 0)) return { status: 'warning' }
   return { status: 'optimal' }
 }
 
@@ -53,44 +53,36 @@ export async function GET(request: NextRequest) {
       breakdown: {
         outOfStock: number
         critical: number
-        shortage: number
-        caution: number
+        low: number
         excess: number
         overstock: number
       }
       error?: string
     }> = []
 
-    const settled = await Promise.allSettled(
-      allOrganizations.map(async (org) => {
+    for (const org of allOrganizations) {
+      try {
         const inventoryItems = await db
           .select({
-            inventory: {
-              currentStock: inventory.currentStock,
-            },
-            product: {
-              id: products.id,
-              name: products.name,
-              sku: products.sku,
-              safetyStock: products.safetyStock,
-              reorderPoint: products.reorderPoint,
-            },
+            inventory,
+            product: products,
           })
           .from(inventory)
           .innerJoin(products, eq(products.id, inventory.productId))
           .where(eq(inventory.organizationId, org.id))
 
         if (inventoryItems.length === 0) {
-          return {
+          results.push({
             organizationId: org.id,
             organizationName: org.name,
             productsChecked: 0,
             alertsCreated: 0,
-            breakdown: { outOfStock: 0, critical: 0, shortage: 0, caution: 0, excess: 0, overstock: 0 },
-          }
+            breakdown: { outOfStock: 0, critical: 0, low: 0, excess: 0, overstock: 0 },
+          })
+          continue
         }
 
-        const breakdown = { outOfStock: 0, critical: 0, shortage: 0, caution: 0, excess: 0, overstock: 0 }
+        const breakdown = { outOfStock: 0, critical: 0, low: 0, excess: 0, overstock: 0 }
 
         const alertsToCreate: Array<{
           organizationId: string
@@ -105,6 +97,8 @@ export async function GET(request: NextRequest) {
           const inv = item.inventory
           const product = item.product
           const status = getInventoryStatus(inv.currentStock, product.safetyStock, product.reorderPoint)
+
+          totalChecked++
 
           if (status.status === 'out_of_stock') {
             breakdown.outOfStock++
@@ -126,8 +120,8 @@ export async function GET(request: NextRequest) {
               title: `위험: ${product.name}`,
               message: `[${product.sku}] ${product.name}의 재고가 위험 수준입니다.`,
             })
-          } else if (status.status === 'shortage') {
-            breakdown.shortage++
+          } else if (status.status === 'low') {
+            breakdown.low++
             alertsToCreate.push({
               organizationId: org.id,
               productId: product.id,
@@ -135,16 +129,6 @@ export async function GET(request: NextRequest) {
               severity: 'warning',
               title: `부족: ${product.name}`,
               message: `[${product.sku}] ${product.name}의 재고가 부족합니다.`,
-            })
-          } else if (status.status === 'caution') {
-            breakdown.caution++
-            alertsToCreate.push({
-              organizationId: org.id,
-              productId: product.id,
-              type: 'stock_shortage',
-              severity: 'info',
-              title: `주의: ${product.name}`,
-              message: `[${product.sku}] ${product.name}의 재고가 발주점 이하입니다.`,
             })
           } else if (status.status === 'excess') {
             breakdown.excess++
@@ -173,72 +157,59 @@ export async function GET(request: NextRequest) {
         if (alertsToCreate.length > 0) {
           const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000)
 
-          // 배치로 최근 알림 조회 (조직 전체, 6시간 이내)
-          const recentAlerts = await db
-            .select({
-              type: alerts.type,
-              productId: alerts.productId,
-            })
-            .from(alerts)
-            .where(
-              and(
-                eq(alerts.organizationId, org.id),
-                gte(alerts.createdAt, sixHoursAgo)
+          for (const alert of alertsToCreate) {
+            const existingAlerts = await db
+              .select()
+              .from(alerts)
+              .where(
+                and(
+                  eq(alerts.organizationId, org.id),
+                  eq(alerts.type, alert.type),
+                  eq(alerts.productId, alert.productId)
+                )
               )
-            )
+              .limit(1)
 
-          // Set으로 중복 체크용 키 생성
-          const recentAlertKeys = new Set(
-            recentAlerts.map((a) => `${a.type}:${a.productId}`)
-          )
+            if (
+              existingAlerts.length > 0 &&
+              existingAlerts[0].createdAt &&
+              existingAlerts[0].createdAt > sixHoursAgo
+            ) {
+              continue
+            }
 
-          // 중복 제외한 알림만 필터링
-          const newAlerts = alertsToCreate.filter(
-            (alert) => !recentAlertKeys.has(`${alert.type}:${alert.productId}`)
-          )
+            await db.insert(alerts).values({
+              organizationId: alert.organizationId,
+              productId: alert.productId,
+              type: alert.type,
+              severity: alert.severity,
+              title: alert.title,
+              message: alert.message,
+              isRead: false,
+            })
 
-          // 배치 INSERT
-          if (newAlerts.length > 0) {
-            await db.insert(alerts).values(
-              newAlerts.map((alert) => ({
-                organizationId: alert.organizationId,
-                productId: alert.productId,
-                type: alert.type,
-                severity: alert.severity,
-                title: alert.title,
-                message: alert.message,
-                isRead: false,
-              }))
-            )
-            newAlertsCreated = newAlerts.length
+            newAlertsCreated++
           }
         }
 
-        return {
+        totalAlertsCreated += newAlertsCreated
+
+        results.push({
           organizationId: org.id,
           organizationName: org.name,
           productsChecked: inventoryItems.length,
           alertsCreated: newAlertsCreated,
           breakdown,
-        }
-      })
-    )
-
-    for (const [i, result] of settled.entries()) {
-      if (result.status === 'fulfilled') {
-        results.push(result.value)
-        totalChecked += result.value.productsChecked
-        totalAlertsCreated += result.value.alertsCreated
-      } else {
-        const org = allOrganizations[i]
-        console.error(`[Inventory Check Cron] 조직 ${org.name} 처리 실패:`, result.reason)
+        })
+      } catch (error) {
+        console.error(`[Inventory Check Cron] 조직 ${org.name} 처리 실패:`, error)
         results.push({
           organizationId: org.id,
           organizationName: org.name,
           productsChecked: 0,
           alertsCreated: 0,
-          breakdown: { outOfStock: 0, critical: 0, shortage: 0, caution: 0, excess: 0, overstock: 0 },
-          error: result.reason instanceof Error ? result.reason.message : '알 수 없는 오류',
+          breakdown: { outOfStock: 0, critical: 0, low: 0, excess: 0, overstock: 0 },
+          error: error instanceof Error ? error.message : '알 수 없는 오류',
         })
       }
     }

@@ -2,8 +2,8 @@
 
 import { unstable_cache } from "next/cache";
 import { db } from "@/server/db";
-import { products, inventory, salesRecords, inventoryHistory } from "@/server/db/schema";
-import { eq, and, sql, isNotNull, lt } from "drizzle-orm";
+import { products, inventory, salesRecords } from "@/server/db/schema";
+import { eq, and, sql, isNotNull } from "drizzle-orm";
 import { getCurrentUser } from "./auth-helpers";
 
 export interface TurnoverData {
@@ -25,7 +25,6 @@ export interface TurnoverSummary {
   lowTurnoverCount: number;
   top5Fastest: TurnoverData[];
   top5Slowest: TurnoverData[];
-  periodLabel: string;
 }
 
 function classifyTurnoverStatus(rate: number): TurnoverData["status"] {
@@ -42,18 +41,7 @@ function classifyTurnoverStatus(rate: number): TurnoverData["status"] {
  */
 export async function getInventoryTurnoverData(): Promise<TurnoverSummary> {
   const user = await getCurrentUser();
-  const orgId = user?.organizationId;
-  if (!orgId) {
-    return {
-      items: [],
-      avgTurnoverRate: 0,
-      avgDaysOfInventory: 0,
-      lowTurnoverCount: 0,
-      top5Fastest: [],
-      top5Slowest: [],
-      periodLabel: "",
-    };
-  }
+  const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
 
   return unstable_cache(
     async () => {
@@ -63,90 +51,49 @@ export async function getInventoryTurnoverData(): Promise<TurnoverSummary> {
       const oneYearAgoStr = oneYearAgo.toISOString().split("T")[0];
       const todayStr = now.toISOString().split("T")[0];
 
-      // ── 쿼리 1: 전체 제품별 판매/재고 데이터 (전체 items 목록용) ──
-      // 판매 집계 서브쿼리 (상관 서브쿼리 제거 → JOIN으로 처리)
-      const salesAgg = db
+      // 1) 활성 제품 + 현재 재고 + 연간 판매 합계를 단일 쿼리로 조회
+      const rows = await db
         .select({
-          productId: salesRecords.productId,
-          totalQty: sql<number>`coalesce(sum(${salesRecords.quantity}), 0)`.as('total_qty'),
-          totalAmount: sql<number>`coalesce(sum(${salesRecords.totalAmount}), 0)`.as('total_amount'),
+          productId: products.id,
+          sku: products.sku,
+          name: products.name,
+          costPrice: products.costPrice,
+          unitPrice: products.unitPrice,
+          currentStock: inventory.currentStock,
+          // 연간 판매 수량 합계
+          annualSalesQty: sql<number>`coalesce(
+            (SELECT sum(${salesRecords.quantity}) FROM ${salesRecords}
+             WHERE ${salesRecords.productId} = ${products.id}
+               AND ${salesRecords.organizationId} = ${orgId}
+               AND ${salesRecords.date} >= ${oneYearAgoStr}
+               AND ${salesRecords.date} <= ${todayStr}
+            ), 0)`,
+          // 연간 판매 금액 합계
+          annualSalesAmount: sql<number>`coalesce(
+            (SELECT sum(${salesRecords.totalAmount}) FROM ${salesRecords}
+             WHERE ${salesRecords.productId} = ${products.id}
+               AND ${salesRecords.organizationId} = ${orgId}
+               AND ${salesRecords.date} >= ${oneYearAgoStr}
+               AND ${salesRecords.date} <= ${todayStr}
+            ), 0)`,
         })
-        .from(salesRecords)
+        .from(products)
+        .leftJoin(inventory, eq(products.id, inventory.productId))
         .where(
           and(
-            eq(salesRecords.organizationId, orgId),
-            sql`${salesRecords.date} >= ${oneYearAgoStr}`,
-            sql`${salesRecords.date} <= ${todayStr}`
+            eq(products.organizationId, orgId),
+            isNotNull(products.isActive)
           )
-        )
-        .groupBy(salesRecords.productId)
-        .as('sales_agg');
+        );
 
-      // ── 쿼리 2 (병렬): inventoryHistory 출고 집계 (salesRecords 보충용)
-      //   - change_amount < 0 partial index 활용 (inventory_history_org_product_outbound_idx)
-      //   - Drizzle lt() 연산자 사용
-      const [rows, outboundHistoryRows] = await Promise.all([
-        db
-          .select({
-            productId: products.id,
-            sku: products.sku,
-            name: products.name,
-            costPrice: products.costPrice,
-            unitPrice: products.unitPrice,
-            currentStock: inventory.currentStock,
-            annualSalesQty: sql<number>`coalesce(${salesAgg.totalQty}, 0)`,
-            annualSalesAmount: sql<number>`coalesce(${salesAgg.totalAmount}, 0)`,
-          })
-          .from(products)
-          .leftJoin(inventory, eq(products.id, inventory.productId))
-          .leftJoin(salesAgg, eq(products.id, salesAgg.productId))
-          .where(
-            and(
-              eq(products.organizationId, orgId),
-              isNotNull(products.isActive)
-            )
-          ),
-        db
-          .select({
-            productId: inventoryHistory.productId,
-            totalQty: sql<number>`coalesce(sum(abs(${inventoryHistory.changeAmount})), 0)`.as('total_qty'),
-          })
-          .from(inventoryHistory)
-          .where(
-            and(
-              eq(inventoryHistory.organizationId, orgId),
-              sql`${inventoryHistory.date} >= ${oneYearAgoStr}`,
-              sql`${inventoryHistory.date} <= ${todayStr}`,
-              lt(inventoryHistory.changeAmount, 0) // partial index 활용
-            )
-          )
-          .groupBy(inventoryHistory.productId),
-      ]);
-
-      // inventoryHistory 출고 집계 맵 (productId → totalQty)
-      const outboundMap = new Map<string, number>();
-      for (const row of outboundHistoryRows) {
-        outboundMap.set(row.productId, Number(row.totalQty));
-      }
-
-      // 전체 items 목록 구성 + 통계 1회 순회 계산
       const items: TurnoverData[] = [];
-      let sumTurnover = 0;
-      let sumDOI = 0;
-      let validCount = 0;
-      let lowTurnoverCount = 0;
 
       for (const row of rows) {
         const costPrice = row.costPrice || 0;
         const unitPrice = row.unitPrice || 0;
         const currentStock = row.currentStock || 0;
-        const salesQtyRaw = Number(row.annualSalesQty) || 0;
+        const annualSalesQty = Number(row.annualSalesQty) || 0;
         const annualSalesAmount = Number(row.annualSalesAmount) || 0;
-
-        // salesRecords에 데이터가 없는 제품은 inventoryHistory 출고 수량으로 보충
-        const annualSalesQty = salesQtyRaw > 0
-          ? salesQtyRaw
-          : (outboundMap.get(row.productId) ?? 0);
 
         // COGS = 판매수량 × 원가 (원가가 없으면 판매액의 70% 추정)
         const cogs = costPrice > 0
@@ -170,18 +117,6 @@ export async function getInventoryTurnoverData(): Promise<TurnoverSummary> {
           daysOfInventory = 0;
         }
 
-        const status = classifyTurnoverStatus(turnoverRate);
-
-        // 통계 누산 (999 제외, 양수만)
-        if (turnoverRate > 0 && turnoverRate < 999) {
-          sumTurnover += turnoverRate;
-          sumDOI += daysOfInventory;
-          validCount++;
-        }
-        if (status === "low" || status === "critical") {
-          lowTurnoverCount++;
-        }
-
         items.push({
           id: row.productId,
           sku: row.sku,
@@ -191,141 +126,26 @@ export async function getInventoryTurnoverData(): Promise<TurnoverSummary> {
           avgInventoryValue: Math.round(avgInventoryValue),
           turnoverRate: Math.round(turnoverRate * 10) / 10,
           daysOfInventory: Math.round(daysOfInventory),
-          status,
+          status: classifyTurnoverStatus(turnoverRate),
         });
       }
 
-      const avgTurnoverRate = validCount > 0 ? sumTurnover / validCount : 0;
-      const avgDOI = validCount > 0 ? sumDOI / validCount : 0;
+      // 통계 계산 (회전율 999인 항목 제외)
+      const validItems = items.filter((i) => i.turnoverRate < 999 && i.turnoverRate > 0);
+      const avgTurnoverRate = validItems.length > 0
+        ? validItems.reduce((s, i) => s + i.turnoverRate, 0) / validItems.length
+        : 0;
+      const avgDOI = validItems.length > 0
+        ? validItems.reduce((s, i) => s + i.daysOfInventory, 0) / validItems.length
+        : 0;
+      const lowTurnoverCount = items.filter(
+        (i) => i.status === "low" || i.status === "critical"
+      ).length;
 
-      // ── TOP5 빠름/느림: DB 레벨에서 회전율 계산 후 LIMIT 5 ──
-      // 회전율 공식: COGS / 평균재고금액
-      //   - salesRecords 우선, 없으면 inventoryHistory 출고량 fallback
-      //   - 유효 조건: 평균재고금액 > 0 AND COGS > 0 AND 회전율 < 999
-      const top5Sql = sql<{
-        id: string; sku: string; name: string;
-        annual_revenue: number; cogs: number;
-        avg_inventory_value: number; turnover_rate: number;
-        days_of_inventory: number;
-      }>`
-        WITH sales_agg AS (
-          SELECT
-            product_id,
-            COALESCE(SUM(quantity), 0)      AS total_qty,
-            COALESCE(SUM(total_amount), 0)  AS total_amount
-          FROM sales_records
-          WHERE organization_id = ${orgId}
-            AND date >= ${oneYearAgoStr}
-            AND date <= ${todayStr}
-          GROUP BY product_id
-        ),
-        outbound_agg AS (
-          SELECT
-            product_id,
-            COALESCE(SUM(ABS(change_amount)), 0) AS total_qty
-          FROM inventory_history
-          WHERE organization_id = ${orgId}
-            AND date >= ${oneYearAgoStr}
-            AND date <= ${todayStr}
-            AND change_amount < 0
-          GROUP BY product_id
-        ),
-        turnover_calc AS (
-          SELECT
-            p.id,
-            p.sku,
-            p.name,
-            COALESCE(p.cost_price, 0)                                               AS cost_price,
-            COALESCE(p.unit_price, 0)                                               AS unit_price,
-            COALESCE(inv.current_stock, 0)                                          AS current_stock,
-            COALESCE(sa.total_qty, 0)                                               AS sales_qty,
-            COALESCE(sa.total_amount, 0)                                            AS sales_amount,
-            COALESCE(ob.total_qty, 0)                                               AS outbound_qty,
-            -- 유효 원가 (원가 없으면 판매단가 × 0.7)
-            CASE WHEN COALESCE(p.cost_price, 0) > 0
-                 THEN p.cost_price::numeric
-                 ELSE p.unit_price::numeric * 0.7
-            END                                                                     AS effective_cost,
-            -- 연간 판매수량 (salesRecords 우선, fallback: inventoryHistory 출고)
-            CASE WHEN COALESCE(sa.total_qty, 0) > 0
-                 THEN COALESCE(sa.total_qty, 0)
-                 ELSE COALESCE(ob.total_qty, 0)
-            END                                                                     AS annual_sales_qty
-          FROM products p
-          LEFT JOIN inventory inv ON p.id = inv.product_id
-          LEFT JOIN sales_agg   sa ON p.id = sa.product_id
-          LEFT JOIN outbound_agg ob ON p.id = ob.product_id
-          WHERE p.organization_id = ${orgId}
-            AND p.is_active IS NOT NULL
-        ),
-        with_turnover AS (
-          SELECT
-            id,
-            sku,
-            name,
-            COALESCE(sales_amount, 0)                                               AS annual_revenue,
-            -- COGS: 판매수량 × 원가, 원가 없으면 판매액 × 0.7
-            CASE WHEN cost_price > 0
-                 THEN annual_sales_qty * cost_price::numeric
-                 ELSE sales_amount * 0.7
-            END                                                                     AS cogs,
-            -- 평균재고금액
-            current_stock * effective_cost                                          AS avg_inventory_value,
-            -- 회전율
-            CASE
-              WHEN current_stock * effective_cost > 0
-               AND (CASE WHEN cost_price > 0
-                         THEN annual_sales_qty * cost_price::numeric
-                         ELSE sales_amount * 0.7 END) > 0
-              THEN (CASE WHEN cost_price > 0
-                         THEN annual_sales_qty * cost_price::numeric
-                         ELSE sales_amount * 0.7 END)
-                   / (current_stock * effective_cost)
-              ELSE 0
-            END                                                                     AS turnover_rate
-          FROM turnover_calc
-        )
-        SELECT
-          id,
-          sku,
-          name,
-          ROUND(annual_revenue)                                          AS annual_revenue,
-          ROUND(cogs)                                                    AS cogs,
-          ROUND(avg_inventory_value)                                     AS avg_inventory_value,
-          ROUND((turnover_rate * 10)::numeric) / 10                     AS turnover_rate,
-          CASE WHEN turnover_rate > 0
-               THEN ROUND(365 / turnover_rate)
-               ELSE 999
-          END                                                            AS days_of_inventory
-        FROM with_turnover
-        WHERE turnover_rate > 0
-      `;
-
-      function rowToTurnoverData(r: Record<string, unknown>): TurnoverData {
-        const rate = Number(r.turnover_rate) || 0;
-        const doi = Number(r.days_of_inventory) || 999;
-        return {
-          id: String(r.id),
-          sku: String(r.sku),
-          name: String(r.name),
-          annualRevenue: Number(r.annual_revenue) || 0,
-          cogs: Number(r.cogs) || 0,
-          avgInventoryValue: Number(r.avg_inventory_value) || 0,
-          turnoverRate: rate,
-          daysOfInventory: doi,
-          status: classifyTurnoverStatus(rate),
-        };
-      }
-
-      // TOP5 빠름/느림: DB에서 회전율 계산 후 LIMIT 5 — 전체 정렬 비용 제거
-      // postgres-js RowList는 배열 자체이므로 Array.from()으로 변환
-      const [top5FastestRaw, top5SlowestRaw] = await Promise.all([
-        db.execute(sql`${top5Sql} ORDER BY turnover_rate DESC LIMIT 5`),
-        db.execute(sql`${top5Sql} ORDER BY turnover_rate ASC  LIMIT 5`),
-      ]);
-
-      const top5Fastest = Array.from(top5FastestRaw as unknown as Record<string, unknown>[]).map(rowToTurnoverData);
-      const top5Slowest = Array.from(top5SlowestRaw as unknown as Record<string, unknown>[]).map(rowToTurnoverData);
+      // TOP5 빠름/느림 (유효 데이터만)
+      const sorted = [...validItems].sort((a, b) => b.turnoverRate - a.turnoverRate);
+      const top5Fastest = sorted.slice(0, 5);
+      const top5Slowest = sorted.slice(-5).reverse();
 
       return {
         items,
@@ -334,7 +154,6 @@ export async function getInventoryTurnoverData(): Promise<TurnoverSummary> {
         lowTurnoverCount,
         top5Fastest,
         top5Slowest,
-        periodLabel: `${oneYearAgoStr} ~ ${todayStr} (최근 1년)`,
       };
     },
     [`turnover-data-${orgId}`],

@@ -18,9 +18,6 @@ import {
   CalendarRange,
   PackageCheck,
   PackageX,
-  Compass,
-  Warehouse,
-  Stethoscope,
   type LucideIcon,
 } from "lucide-react";
 
@@ -81,13 +78,6 @@ export const MAIN_SECTIONS: NavSection[] = [
         description: "ABC-XYZ·수요예측·회전율 분석",
         menuKey: "analytics",
       },
-      {
-        title: "수요예측 가이드",
-        href: "/dashboard/forecast-guide",
-        icon: Compass,
-        description: "질문에 답하면 최적 예측 방법 추천",
-        menuKey: "forecast_guide",
-      },
     ],
   },
   {
@@ -101,10 +91,9 @@ export const MAIN_SECTIONS: NavSection[] = [
         description: "발주 생성 및 현황 관리",
         menuKey: "orders",
         children: [
-          { title: "수동발주", href: "/dashboard/orders?tab=reorder", menuKey: "orders" },
-          { title: "자동발주추천", href: "/dashboard/orders?tab=auto-reorder", menuKey: "orders" },
+          { title: "발주필요", href: "/dashboard/orders?tab=reorder", menuKey: "orders" },
+          { title: "자동발주", href: "/dashboard/orders?tab=auto-reorder", menuKey: "orders" },
           { title: "발주현황", href: "/dashboard/orders?tab=orders", menuKey: "orders" },
-          { title: "발주이력(취소)", href: "/dashboard/orders?tab=order-history", menuKey: "orders" },
         ],
       },
       {
@@ -133,9 +122,9 @@ export const MAIN_SECTIONS: NavSection[] = [
         description: "출고 등록 및 현황 관리",
         menuKey: "outbound",
         children: [
-          { title: "출고요청", href: "/dashboard/outbound?tab=upload", menuKey: "outbound" },
-          { title: "출고확정(창고)", href: "/dashboard/warehouse/outbound", menuKey: "warehouse_outbound" },
+          { title: "출고업로드", href: "/dashboard/outbound?tab=upload", menuKey: "outbound" },
           { title: "출고현황", href: "/dashboard/outbound?tab=records", menuKey: "outbound" },
+          { title: "출고확정(창고)", href: "/dashboard/warehouse/outbound", menuKey: "warehouse_outbound" },
         ],
       },
     ],
@@ -186,13 +175,6 @@ export const MAIN_SECTIONS: NavSection[] = [
         menuKey: "suppliers",
       },
       {
-        title: "창고 관리",
-        href: "/dashboard/warehouses",
-        icon: Warehouse,
-        description: "창고 추가, 수정, 삭제 및 재고 이동",
-        menuKey: "warehouses",
-      },
-      {
         title: "KPI",
         href: "/dashboard/kpi",
         icon: Gauge,
@@ -205,13 +187,6 @@ export const MAIN_SECTIONS: NavSection[] = [
     title: "도구",
     color: "text-slate-300",
     items: [
-      {
-        title: "SCM 진단키트",
-        href: "/dashboard/scm-diagnostic",
-        icon: Stethoscope,
-        description: "설문으로 SCM 현황 진단 및 전략 추천",
-        menuKey: "scm_diagnostic",
-      },
       {
         title: "AI 채팅",
         href: "/dashboard/chat",

@@ -32,8 +32,8 @@ export const COMPANY = {
     "22년 현장 경력의 SCM 전문가가 직접 설계한 컨설팅, 교육, 그리고 AI 솔루션",
   ceoName: "이동욱",
   solutionName: "FloStok",
-  email: "logisglobalceo@gmail.com",
-  phone: "", // 공개 전화번호 미설정 (필요 시 실제 번호 입력)
+  email: "contact@stockandlogis.com",
+  phone: "02-XXX-XXXX", // TODO: 실제 번호로 교체
 } as const;
 
 // ─── 네비게이션 ───────────────────────────────────
@@ -43,7 +43,6 @@ export interface MarketingNavItem {
 }
 
 export const MARKETING_NAV: MarketingNavItem[] = [
-  { name: "홈", href: "/" },
   { name: "회사 소개", href: "/about" },
   { name: "대표 소개", href: "/ceo" },
   { name: "커리큘럼", href: "/curriculum" },
@@ -137,7 +136,6 @@ export const CEO_SKILLS = [
   "수출입",
   "ITT 통번역사",
   "국제무역사",
-  "CPIM",
 ] as const;
 
 export const CEO_INDUSTRIES = [

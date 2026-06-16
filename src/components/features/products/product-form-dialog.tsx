@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Dialog,
@@ -23,64 +23,50 @@ import {
 import { createProduct, updateProduct, type ProductInput } from "@/server/actions/products";
 import { type Product } from "@/server/db/schema";
 import { Loader2 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
 
 interface ProductFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   product?: Product | null;
   categories?: string[];
+  suppliers?: { id: string; name: string }[];
 }
 
 const UNITS = ["EA", "BOX", "SET", "KG", "L", "M", "롤", "켤레"];
 const ABC_GRADES = ["A", "B", "C"] as const;
 const XYZ_GRADES = ["X", "Y", "Z"] as const;
-const FMR_GRADES = ["F", "M", "R"] as const;
-const FMR_LABELS: Record<string, string> = {
-  F: "F (고빈도)",
-  M: "M (중빈도)",
-  R: "R (저빈도)",
-};
 
 export function ProductFormDialog({
   open,
   onOpenChange,
   product,
   categories = [],
+  suppliers = [],
 }: ProductFormDialogProps) {
   const router = useRouter();
-  const { toast } = useToast();
   const isEditing = !!product;
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const buildFormData = (p?: Product | null): ProductInput => ({
-    sku: p?.sku || "",
-    name: p?.name || "",
-    category: p?.category || "",
-    description: p?.description || "",
-    unit: p?.unit || "EA",
-    unitPrice: p?.unitPrice || 0,
-    costPrice: p?.costPrice || 0,
-    abcGrade: p?.abcGrade || undefined,
-    xyzGrade: p?.xyzGrade || undefined,
-    fmrGrade: p?.fmrGrade || undefined,
-    moq: p?.moq || 1,
-    leadTime: p?.leadTime || 7,
-    safetyStock: p?.safetyStock || 0,
-    reorderPoint: p?.reorderPoint || 0,
-    targetStock: p?.targetStock || undefined,
-    barcode: p?.barcode || "",
+  const [formData, setFormData] = useState<ProductInput>({
+    sku: product?.sku || "",
+    name: product?.name || "",
+    category: product?.category || "",
+    description: product?.description || "",
+    unit: product?.unit || "EA",
+    unitPrice: product?.unitPrice || 0,
+    costPrice: product?.costPrice || 0,
+    abcGrade: product?.abcGrade || undefined,
+    xyzGrade: product?.xyzGrade || undefined,
+    moq: product?.moq || 1,
+    leadTime: product?.leadTime || 7,
+    safetyStock: product?.safetyStock || 0,
+    reorderPoint: product?.reorderPoint || 0,
+    targetStock: product?.targetStock || undefined,
+    barcode: product?.barcode || "",
+    primarySupplierId: product?.primarySupplierId || undefined,
   });
-
-  const [formData, setFormData] = useState<ProductInput>(buildFormData(product));
-
-  // product prop이 바뀌면(다른 제품 상세 클릭) formData를 해당 제품으로 동기화
-  useEffect(() => {
-    setFormData(buildFormData(product));
-    setError(null);
-  }, [product?.id, open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,21 +79,6 @@ export function ProductFormDialog({
         : await createProduct(formData);
 
       if (result.success) {
-        if (result.isRequest) {
-          toast({
-            title: isEditing ? "수정 요청 제출됨" : "등록 요청 제출됨",
-            description: isEditing
-              ? "제품 수정 요청이 제출되었습니다. 슈퍼관리자 승인 후 반영됩니다."
-              : "제품 등록 요청이 제출되었습니다. 슈퍼관리자 승인 후 등록됩니다.",
-          });
-        } else {
-          toast({
-            title: isEditing ? "제품 수정 완료" : "제품 등록 완료",
-            description: isEditing
-              ? "제품 정보가 성공적으로 수정되었습니다."
-              : "새로운 제품이 성공적으로 등록되었습니다.",
-          });
-        }
         onOpenChange(false);
         router.refresh();
       } else {
@@ -230,7 +201,7 @@ export function ProductFormDialog({
             </div>
 
             {/* 등급 */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>ABC 등급</Label>
                 <Select
@@ -271,26 +242,34 @@ export function ProductFormDialog({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label>FMR 등급</Label>
-                <Select
-                  value={formData.fmrGrade || ""}
-                  onValueChange={(value) =>
-                    handleChange("fmrGrade", value as "F" | "M" | "R" | undefined)
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="미지정" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {FMR_GRADES.map((grade) => (
-                      <SelectItem key={grade} value={grade}>
-                        {FMR_LABELS[grade]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            </div>
+
+            {/* 공급자 */}
+            <div className="space-y-2">
+              <Label htmlFor="primarySupplierId">기본 공급자 *</Label>
+              <Select
+                value={formData.primarySupplierId || ""}
+                onValueChange={(value) =>
+                  handleChange("primarySupplierId", value || undefined)
+                }
+                required
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="공급자를 선택하세요" />
+                </SelectTrigger>
+                <SelectContent>
+                  {suppliers.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                  {suppliers.length === 0 && (
+                    <SelectItem value="_none" disabled>
+                      등록된 공급자가 없습니다 (공급자 메뉴에서 먼저 등록)
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* 발주 관련 */}

@@ -10,7 +10,7 @@ import type {
   OrganizationSettings,
 } from "@/types/organization-settings";
 import { DEFAULT_ORDER_POLICY } from "@/types/organization-settings";
-import { getCurrentUser } from "./auth-helpers";
+import { requireAuth } from "./auth-helpers";
 import { logActivity } from "@/server/services/activity-log";
 
 /**
@@ -40,51 +40,54 @@ const orderPolicySchema = z.object({
 });
 
 /**
- * 발주 정책 설정 조회 — 인증 기반
- * organizationId 파라미터는 폴백용 (getCurrentUser 우선)
+ * 발주 정책 설정 조회
  */
 export async function getOrderPolicySettings(
-  organizationId?: string
+  organizationId: string
 ): Promise<OrderPolicySettings> {
   try {
-    const user = await getCurrentUser();
-    const orgId = user?.organizationId || organizationId;
+    const user = await requireAuth();
 
-    if (!orgId) {
-      return DEFAULT_ORDER_POLICY;
+    // 권한 확인: 사용자의 조직만 조회 가능
+    if (user.organizationId !== organizationId) {
+      throw new Error("권한이 없습니다");
     }
 
     const [org] = await db
       .select()
       .from(organizations)
-      .where(eq(organizations.id, orgId))
+      .where(eq(organizations.id, organizationId))
       .limit(1);
 
     if (!org) {
-      return DEFAULT_ORDER_POLICY;
+      throw new Error("조직을 찾을 수 없습니다");
     }
 
     const settings = org.settings as OrganizationSettings | null;
     return settings?.orderPolicy || DEFAULT_ORDER_POLICY;
   } catch (error) {
     console.error("발주 정책 설정 조회 실패:", error);
+    // 에러 시 기본값 반환
     return DEFAULT_ORDER_POLICY;
   }
 }
 
 /**
- * 발주 정책 설정 저장 — 인증 기반
+ * 발주 정책 설정 저장
  */
 export async function updateOrderPolicySettings(
-  _organizationId: string,
+  organizationId: string,
   orderPolicy: OrderPolicySettings
 ): Promise<{ success: boolean; message: string }> {
   try {
-    const user = await getCurrentUser();
-    const orgId = user?.organizationId || _organizationId;
+    const user = await requireAuth();
 
-    if (!user || !orgId) {
-      return { success: false, message: "인증이 필요합니다" };
+    // 권한 확인: 사용자의 조직만 수정 가능
+    if (user.organizationId !== organizationId) {
+      return {
+        success: false,
+        message: "권한이 없습니다",
+      };
     }
 
     // 입력 검증
@@ -94,7 +97,7 @@ export async function updateOrderPolicySettings(
     const [org] = await db
       .select()
       .from(organizations)
-      .where(eq(organizations.id, orgId))
+      .where(eq(organizations.id, organizationId))
       .limit(1);
 
     if (!org) {
@@ -118,7 +121,7 @@ export async function updateOrderPolicySettings(
         settings: updatedSettings,
         updatedAt: new Date(),
       })
-      .where(eq(organizations.id, orgId));
+      .where(eq(organizations.id, organizationId));
 
     // 캐시 무효화
     revalidatePath("/settings");
@@ -156,23 +159,26 @@ export async function updateOrderPolicySettings(
 }
 
 /**
- * 발주 정책 초기화 (기본값으로 리셋) — 인증 기반
+ * 발주 정책 초기화 (기본값으로 리셋)
  */
 export async function resetOrderPolicySettings(
-  _organizationId?: string
+  organizationId: string
 ): Promise<{ success: boolean; message: string }> {
   try {
-    const user = await getCurrentUser();
-    const orgId = user?.organizationId || _organizationId;
+    const user = await requireAuth();
 
-    if (!user || !orgId) {
-      return { success: false, message: "인증이 필요합니다" };
+    // 권한 확인
+    if (user.organizationId !== organizationId) {
+      return {
+        success: false,
+        message: "권한이 없습니다",
+      };
     }
 
     const [org] = await db
       .select()
       .from(organizations)
-      .where(eq(organizations.id, orgId))
+      .where(eq(organizations.id, organizationId))
       .limit(1);
 
     if (!org) {
@@ -194,7 +200,7 @@ export async function resetOrderPolicySettings(
         settings: updatedSettings,
         updatedAt: new Date(),
       })
-      .where(eq(organizations.id, orgId));
+      .where(eq(organizations.id, organizationId));
 
     revalidatePath("/settings");
     revalidatePath("/orders");

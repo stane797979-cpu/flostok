@@ -3,44 +3,10 @@
  */
 
 import { db } from "@/server/db";
-import { products, inventory, warehouses } from "@/server/db/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { products, inventory } from "@/server/db/schema";
+import { eq, and } from "drizzle-orm";
 import { parseExcelBuffer, sheetToJson, parseNumber } from "./parser";
 import type { ExcelImportResult, ExcelImportError, ProductExcelRow } from "./types";
-
-/**
- * 조직의 기본 창고 ID 조회 (없으면 자동 생성)
- */
-async function getOrCreateDefaultWarehouseId(organizationId: string): Promise<string> {
-  const [existing] = await db
-    .select({ id: warehouses.id })
-    .from(warehouses)
-    .where(
-      and(
-        eq(warehouses.organizationId, organizationId),
-        eq(warehouses.isDefault, true),
-        eq(warehouses.isActive, true)
-      )
-    )
-    .limit(1);
-
-  if (existing) return existing.id;
-
-  // 기본 창고가 없으면 생성
-  const [created] = await db
-    .insert(warehouses)
-    .values({
-      organizationId,
-      code: "MAIN",
-      name: "본사 창고",
-      type: "MAIN",
-      isDefault: true,
-      isActive: true,
-    })
-    .returning({ id: warehouses.id });
-
-  return created.id;
-}
 
 let _xlsx: typeof import("xlsx") | null = null;
 async function getXLSX() {
@@ -176,9 +142,6 @@ export async function importProductData(
       };
     }
 
-    // 기본 창고 ID 조회 (재고 생성 시 필요)
-    const defaultWarehouseId = await getOrCreateDefaultWarehouseId(organizationId);
-
     // 기존 제품 조회
     const existingProducts = await db
       .select({ id: products.id, sku: products.sku })
@@ -186,21 +149,6 @@ export async function importProductData(
       .where(eq(products.organizationId, organizationId));
 
     const skuToId = new Map(existingProducts.map((p) => [p.sku, p.id]));
-
-    // 기존 재고 배치 조회 (N+1 제거) — reservedStock 포함하여 availableStock 계산에 활용
-    const existingInventory = await db
-      .select({ id: inventory.id, productId: inventory.productId, reservedStock: inventory.reservedStock })
-      .from(inventory)
-      .where(eq(inventory.organizationId, organizationId));
-    const inventoryByProductId = new Map(
-      existingInventory.map((inv) => [inv.productId, { id: inv.id, reservedStock: inv.reservedStock ?? 0 }])
-    );
-
-    // 배치 수집용
-    const productUpdates: Array<{ id: string; name: string; category: string | null; unit: string; unitPrice: number; costPrice: number; safetyStock: number; leadTime: number; moq: number }> = [];
-    const newProductInserts: Array<{ sku: string; name: string; category: string | null; unit: string; unitPrice: number; costPrice: number; safetyStock: number; leadTime: number; moq: number; currentStock?: number }> = [];
-    const inventoryUpdates: Array<{ invId: string; currentStock: number; reservedStock: number }> = [];
-    const inventoryInserts: Array<{ productId: string; currentStock: number }> = [];
 
     for (let i = 0; i < rows.length; i++) {
       const { data, errors } = parseProductRow(rows[i], i);
@@ -229,40 +177,34 @@ export async function importProductData(
           continue;
         }
 
-        // update: 배치 수집 (루프 종료 후 일괄 UPDATE)
-        productUpdates.push({
-          id: existingId,
-          name: data.name,
-          category: data.category,
-          unit: data.unit ?? "EA",
-          unitPrice: data.unitPrice ?? 0,
-          costPrice: data.costPrice ?? 0,
-          safetyStock: data.safetyStock ?? 0,
-          leadTime: data.leadTime ?? 7,
-          moq: data.moq ?? 1,
-        });
+        // update: 기존 제품 업데이트
+        await db
+          .update(products)
+          .set({
+            name: data.name,
+            category: data.category,
+            unit: data.unit ?? "EA",
+            unitPrice: data.unitPrice ?? 0,
+            costPrice: data.costPrice ?? 0,
+            safetyStock: data.safetyStock ?? 0,
+            leadTime: data.leadTime ?? 7,
+            moq: data.moq ?? 1,
+            updatedAt: new Date(),
+          })
+          .where(eq(products.id, existingId));
 
-        // 재고수량이 있으면 배치 수집
+        // 재고수량이 있으면 inventory 업데이트
         if (data.currentStock !== undefined) {
-          const invEntry = inventoryByProductId.get(existingId);
-          if (invEntry) {
-            // availableStock = currentStock - reservedStock (예약재고 유지)
-            inventoryUpdates.push({
-              invId: invEntry.id,
-              currentStock: data.currentStock,
-              reservedStock: invEntry.reservedStock,
-            });
-          } else {
-            inventoryInserts.push({ productId: existingId, currentStock: data.currentStock });
-          }
+          await upsertInventory(organizationId, existingId, data.currentStock);
         }
 
         successData.push(data);
         continue;
       }
 
-      // 새 제품: 배치 수집 (루프 종료 후 일괄 INSERT)
-      newProductInserts.push({
+      // 새 제품 삽입
+      const [newProduct] = await db.insert(products).values({
+        organizationId,
         sku: data.sku,
         name: data.name,
         category: data.category,
@@ -272,89 +214,14 @@ export async function importProductData(
         safetyStock: data.safetyStock ?? 0,
         leadTime: data.leadTime ?? 7,
         moq: data.moq ?? 1,
-        currentStock: data.currentStock,
-      });
+      }).returning({ id: products.id });
+
+      // 재고수량이 있으면 inventory 생성
+      if (newProduct && data.currentStock !== undefined) {
+        await upsertInventory(organizationId, newProduct.id, data.currentStock);
+      }
 
       successData.push(data);
-    }
-
-    // 재고 배치 INSERT (신규) — warehouseId 필수
-    // 기존 제품 배치 UPDATE (N개 → 1개 쿼리)
-    if (productUpdates.length > 0) {
-      await db.execute(sql`
-        UPDATE products SET
-          name = v.name,
-          category = v.category,
-          unit = v.unit,
-          unit_price = v.unit_price::numeric,
-          cost_price = v.cost_price::numeric,
-          safety_stock = v.safety_stock::int,
-          lead_time = v.lead_time::int,
-          moq = v.moq::int,
-          updated_at = NOW()
-        FROM (VALUES ${sql.join(
-          productUpdates.map(u => sql`(${u.id}::uuid, ${u.name}, ${u.category}, ${u.unit}, ${u.unitPrice}::numeric, ${u.costPrice}::numeric, ${u.safetyStock}::int, ${u.leadTime}::int, ${u.moq}::int)`),
-          sql`, `
-        )}) AS v(id, name, category, unit, unit_price, cost_price, safety_stock, lead_time, moq)
-        WHERE products.id = v.id
-      `);
-    }
-
-    // 신규 제품 배치 INSERT + RETURNING (N개 → 1개 쿼리)
-    if (newProductInserts.length > 0) {
-      const insertedProducts = await db.insert(products).values(
-        newProductInserts.map(p => ({
-          organizationId,
-          sku: p.sku,
-          name: p.name,
-          category: p.category,
-          unit: p.unit,
-          unitPrice: p.unitPrice,
-          costPrice: p.costPrice,
-          safetyStock: p.safetyStock,
-          leadTime: p.leadTime,
-          moq: p.moq,
-        }))
-      ).returning({ id: products.id, sku: products.sku });
-
-      // 신규 제품의 재고 기록도 배치 수집
-      const insertedMap = new Map(insertedProducts.map(p => [p.sku, p.id]));
-      for (const p of newProductInserts) {
-        const productId = insertedMap.get(p.sku);
-        if (productId && p.currentStock !== undefined) {
-          inventoryInserts.push({ productId, currentStock: p.currentStock });
-        }
-      }
-    }
-
-    // 재고 배치 INSERT (신규) — warehouseId 필수
-    if (inventoryInserts.length > 0) {
-      await db.insert(inventory).values(
-        inventoryInserts.map((item) => ({
-          organizationId,
-          warehouseId: defaultWarehouseId,
-          productId: item.productId,
-          currentStock: item.currentStock,
-          availableStock: item.currentStock,
-          reservedStock: 0,
-          incomingStock: 0,
-        }))
-      );
-    }
-
-    // 재고 배치 UPDATE (기존) — 단일 쿼리 (N개 → 1개)
-    if (inventoryUpdates.length > 0) {
-      await db.execute(sql`
-        UPDATE inventory SET
-          current_stock = v.current_stock::numeric,
-          available_stock = v.available_stock::numeric,
-          updated_at = NOW()
-        FROM (VALUES ${sql.join(
-          inventoryUpdates.map(item => sql`(${item.invId}::uuid, ${item.currentStock}::numeric, ${Math.max(0, item.currentStock - item.reservedStock)}::numeric)`),
-          sql`, `
-        )}) AS v(id, current_stock, available_stock)
-        WHERE inventory.id = v.id
-      `);
     }
 
     return {
@@ -382,6 +249,45 @@ export async function importProductData(
   }
 }
 
+/**
+ * inventory 테이블 upsert (있으면 업데이트, 없으면 생성)
+ */
+async function upsertInventory(
+  organizationId: string,
+  productId: string,
+  currentStock: number
+) {
+  const [existing] = await db
+    .select({ id: inventory.id })
+    .from(inventory)
+    .where(
+      and(
+        eq(inventory.organizationId, organizationId),
+        eq(inventory.productId, productId)
+      )
+    )
+    .limit(1);
+
+  if (existing) {
+    await db
+      .update(inventory)
+      .set({
+        currentStock,
+        availableStock: currentStock,
+        updatedAt: new Date(),
+      })
+      .where(eq(inventory.id, existing.id));
+  } else {
+    await db.insert(inventory).values({
+      organizationId,
+      productId,
+      currentStock,
+      availableStock: currentStock,
+      reservedStock: 0,
+      incomingStock: 0,
+    });
+  }
+}
 
 /**
  * 제품 데이터 Excel 템플릿 생성

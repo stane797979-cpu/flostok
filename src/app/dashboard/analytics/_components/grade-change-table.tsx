@@ -314,7 +314,7 @@ export function GradeChangeTable({ data }: GradeChangeTableProps) {
               {sortedChanges.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((item) => (
                 <TableRow key={item.productId}>
                   <TableCell className="font-medium text-xs">{item.sku}</TableCell>
-                  <TableCell className="max-w-[120px] truncate">{item.name}</TableCell>
+                  <TableCell className="max-w-[120px] truncate" title={item.name}>{item.name}</TableCell>
                   <TableCell className="text-center">
                     {item.prevGrade ? (
                       <Badge variant="outline" className="font-mono">
@@ -340,7 +340,7 @@ export function GradeChangeTable({ data }: GradeChangeTableProps) {
                     <RiskBadge level={item.riskLevel} />
                   </TableCell>
                   <TableCell className="text-xs">{item.signal}</TableCell>
-                  <TableCell className="text-xs max-w-[160px]">{item.action}</TableCell>
+                  <TableCell className="text-xs max-w-[160px]" title={item.action}>{item.action}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

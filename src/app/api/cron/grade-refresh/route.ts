@@ -56,14 +56,13 @@ export async function GET(request: NextRequest) {
       organizationName: string;
       totalProducts: number;
       updatedCount: number;
-      unchangedCount: number;
       newProductCount: number;
       error?: string;
     }> = [];
 
-    // 3. 각 조직별로 등급 갱신 (병렬 처리)
-    const settled = await Promise.allSettled(
-      allOrganizations.map(async (org) => {
+    // 3. 각 조직별로 등급 갱신
+    for (const org of allOrganizations) {
+      try {
         console.log(
           `[Grade-Refresh Cron] 조직 처리 시작: ${org.name} (${org.id})`
         );
@@ -71,7 +70,7 @@ export async function GET(request: NextRequest) {
         const refreshResult = await refreshGradesForOrganization(org.id);
 
         console.log(
-          `[Grade-Refresh Cron] 조직 ${org.name}: 전체 ${refreshResult.totalProducts}개, 갱신 ${refreshResult.updatedCount}개, 미변경 ${refreshResult.unchangedCount}개, 신제품 ${refreshResult.newProductCount}개`
+          `[Grade-Refresh Cron] 조직 ${org.name}: 전체 ${refreshResult.totalProducts}개, 갱신 ${refreshResult.updatedCount}개, 신제품 ${refreshResult.newProductCount}개`
         );
 
         if (refreshResult.errors.length > 0) {
@@ -81,38 +80,29 @@ export async function GET(request: NextRequest) {
           );
         }
 
-        return {
+        results.push({
           organizationId: org.id,
           organizationName: org.name,
           totalProducts: refreshResult.totalProducts,
           updatedCount: refreshResult.updatedCount,
-          unchangedCount: refreshResult.unchangedCount,
           newProductCount: refreshResult.newProductCount,
           error:
             refreshResult.errors.length > 0
               ? `${refreshResult.errors.length}건 오류`
               : undefined,
-        };
-      })
-    );
-
-    for (const [i, result] of settled.entries()) {
-      if (result.status === 'fulfilled') {
-        results.push(result.value);
-      } else {
-        const org = allOrganizations[i];
+        });
+      } catch (error) {
         console.error(
           `[Grade-Refresh Cron] 조직 ${org.name} 처리 실패:`,
-          result.reason
+          error
         );
         results.push({
           organizationId: org.id,
           organizationName: org.name,
           totalProducts: 0,
           updatedCount: 0,
-          unchangedCount: 0,
           newProductCount: 0,
-          error: result.reason instanceof Error ? result.reason.message : "알 수 없는 오류",
+          error: error instanceof Error ? error.message : "알 수 없는 오류",
         });
       }
     }

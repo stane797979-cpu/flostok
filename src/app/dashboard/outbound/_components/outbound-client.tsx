@@ -13,26 +13,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { ChevronLeft, ChevronRight, Download, Loader2, PackageMinus, Upload, ArrowRightLeft } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Loader2, PackageMinus, Upload } from "lucide-react";
 import { OutboundRecordsTable } from "./outbound-records-table";
 import { OutboundEditDialog } from "./outbound-edit-dialog";
 import { OutboundRequestDialog } from "./outbound-request-dialog";
 import { ExcelImportDialog } from "@/components/features/excel/excel-import-dialog";
-import { WarehouseTransferDialog } from "@/app/dashboard/warehouses/_components/warehouse-transfer-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { getOutboundRecords, deleteOutboundRecord, type OutboundRecord } from "@/server/actions/outbound";
 import { exportInventoryMovementToExcel } from "@/server/actions/excel-export";
-import { getWarehouses } from "@/server/actions/warehouses";
-
-const VALID_PAGE_SIZES = [50, 100, 200];
-const DEFAULT_PAGE_SIZE = 50;
 
 /**
  * 월의 시작일/종료일 계산
@@ -54,7 +42,6 @@ interface OutboundClientProps {
 }
 
 export function OutboundClient({ initialTab = "records" }: OutboundClientProps) {
-  const [activeTab, setActiveTab] = useState(initialTab);
 
   // 출고 현황 상태
   const [outboundMonth, setOutboundMonth] = useState<Date>(() => new Date());
@@ -62,19 +49,9 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
   const [isLoadingRecords, setIsLoadingRecords] = useState(false);
   const [isDownloadingMovement, setIsDownloadingMovement] = useState(false);
 
-  // 페이지네이션 상태
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
-  const [totalItems, setTotalItems] = useState(0);
-  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
-
   // 출고 업로드/요청 상태
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
-
-  // 재고 이동 상태
-  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
-  const [warehouseList, setWarehouseList] = useState<Array<{ id: string; code: string; name: string }>>([]);
 
   // 수정/삭제 상태
   const [editRecord, setEditRecord] = useState<OutboundRecord | null>(null);
@@ -86,32 +63,29 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
   const { toast } = useToast();
 
   // 출고 기록 조회
-  const loadOutboundRecords = useCallback(async (month: Date, page = 1, size = pageSize) => {
+  const loadOutboundRecords = useCallback(async (month: Date) => {
     setIsLoadingRecords(true);
     try {
       const { startDate, endDate } = getMonthRange(month);
-      const offset = (page - 1) * size;
-      const result = await getOutboundRecords({ startDate, endDate, limit: size, offset });
+      const result = await getOutboundRecords({ startDate, endDate, limit: 500 });
       setOutboundRecords(
         result.records.map((r) => ({
           ...r,
           createdAt: new Date(r.createdAt),
         }))
       );
-      setTotalItems(result.total);
     } catch (error) {
       console.error("출고 기록 조회 오류:", error);
     } finally {
       setIsLoadingRecords(false);
     }
-  }, [pageSize]);
+  }, []);
 
   // 월 이동
   const handlePrevMonth = useCallback(() => {
     setOutboundMonth((prev) => {
       const next = new Date(prev.getFullYear(), prev.getMonth() - 1, 1);
-      setCurrentPage(1);
-      loadOutboundRecords(next, 1);
+      loadOutboundRecords(next);
       return next;
     });
   }, [loadOutboundRecords]);
@@ -119,25 +93,10 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
   const handleNextMonth = useCallback(() => {
     setOutboundMonth((prev) => {
       const next = new Date(prev.getFullYear(), prev.getMonth() + 1, 1);
-      setCurrentPage(1);
-      loadOutboundRecords(next, 1);
+      loadOutboundRecords(next);
       return next;
     });
   }, [loadOutboundRecords]);
-
-  // 페이지 이동
-  const handlePageChange = useCallback((page: number) => {
-    setCurrentPage(page);
-    loadOutboundRecords(outboundMonth, page);
-  }, [loadOutboundRecords, outboundMonth]);
-
-  // 페이지 사이즈 변경
-  const handlePageSizeChange = useCallback((size: string) => {
-    const newSize = Number(size);
-    setPageSize(newSize);
-    setCurrentPage(1);
-    loadOutboundRecords(outboundMonth, 1, newSize);
-  }, [loadOutboundRecords, outboundMonth]);
 
   // 재고 수불부 다운로드
   const handleDownloadMovement = useCallback(async () => {
@@ -210,7 +169,7 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
           title: "삭제 완료",
           description: `${deleteTarget.productSku} 출고 기록이 삭제되었습니다. 재고가 복원됩니다.`,
         });
-        loadOutboundRecords(outboundMonth, currentPage);
+        loadOutboundRecords(outboundMonth);
       } else {
         toast({
           title: "삭제 실패",
@@ -240,20 +199,9 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 재고 이동 다이얼로그 열기
-  const handleOpenTransfer = useCallback(async () => {
-    try {
-      const result = await getWarehouses();
-      setWarehouseList(result.warehouses.map((w) => ({ id: w.id, code: w.code, name: w.name })));
-      setTransferDialogOpen(true);
-    } catch {
-      toast({ title: "오류", description: "창고 목록을 불러오지 못했습니다", variant: "destructive" });
-    }
-  }, [toast]);
-
-  const pageTitle = initialTab === "upload" ? "출고요청" : "출고현황";
+  const pageTitle = initialTab === "upload" ? "출고 업로드" : "출고 현황";
   const pageDescription = initialTab === "upload"
-    ? "출고 데이터를 엑셀로 업로드하거나 직접 출고 요청을 생성합니다"
+    ? "판매(출고) 데이터를 엑셀로 업로드하세요"
     : "월별 출고 기록을 확인하고 재고 수불부를 다운로드하세요";
 
   return (
@@ -264,12 +212,11 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
       </div>
 
       {initialTab === "upload" && (
-        <div className="grid gap-6 md:grid-cols-2">
-          <Card>
+        <Card>
             <CardHeader>
-              <CardTitle>출고 데이터 업로드</CardTitle>
+              <CardTitle>판매/출고 데이터 업로드</CardTitle>
               <CardDescription>
-                엑셀로 출고 요청을 일괄 생성합니다. 창고에서 확정 후 재고가 차감됩니다.
+                판매(출고) 데이터를 엑셀로 업로드하세요. 업로드된 데이터는 판매 기록에 저장됩니다.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -278,9 +225,9 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
                   <Upload className="h-10 w-10 text-slate-400" />
                 </div>
                 <div className="text-center">
-                  <p className="font-medium">엑셀 파일로 출고 데이터를 업로드합니다</p>
+                  <p className="font-medium">엑셀 파일로 판매 데이터를 업로드합니다</p>
                   <p className="mt-1 text-sm text-slate-500">
-                    필수: SKU, 날짜, 수량 / 선택: 출고유형, B2B/B2C, 배송정보
+                    필수 컬럼: SKU, 날짜, 판매수량
                   </p>
                 </div>
                 <Button onClick={() => setImportDialogOpen(true)}>
@@ -289,34 +236,7 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
                 </Button>
               </div>
             </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>재고 이동</CardTitle>
-              <CardDescription>
-                창고 간 재고를 이동합니다. 출발 창고에서 차감, 도착 창고에서 증가합니다.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col items-center gap-4 py-8">
-                <div className="rounded-full bg-slate-100 p-6 dark:bg-slate-800">
-                  <ArrowRightLeft className="h-10 w-10 text-slate-400" />
-                </div>
-                <div className="text-center">
-                  <p className="font-medium">창고 간 재고 이동</p>
-                  <p className="mt-1 text-sm text-slate-500">
-                    제품을 선택하고 출발/도착 창고와 수량을 지정합니다
-                  </p>
-                </div>
-                <Button onClick={handleOpenTransfer}>
-                  <ArrowRightLeft className="mr-2 h-4 w-4" />
-                  재고 이동
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        </Card>
       )}
 
       {initialTab === "records" && (
@@ -330,13 +250,13 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button variant="outline" size="icon" onClick={handlePrevMonth} aria-label="이전 월">
+                  <Button variant="outline" size="icon" onClick={handlePrevMonth}>
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
                   <span className="min-w-[120px] text-center font-medium">
                     {formatMonth(outboundMonth)}
                   </span>
-                  <Button variant="outline" size="icon" onClick={handleNextMonth} aria-label="다음 월">
+                  <Button variant="outline" size="icon" onClick={handleNextMonth}>
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                   <Button
@@ -370,55 +290,14 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
                 </div>
               ) : (
                 <>
+                  <div className="mb-3 text-sm text-slate-500">
+                    총 {outboundRecords.length}건
+                  </div>
                   <OutboundRecordsTable
                     records={outboundRecords}
                     onEdit={handleEdit}
                     onDelete={handleDeleteRequest}
                   />
-                  {totalItems > 0 && (
-                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex items-center gap-2 text-sm text-slate-500">
-                        <span>전체 {totalItems.toLocaleString()}건</span>
-                        <span>·</span>
-                        <div className="flex items-center gap-1">
-                          <span>표시</span>
-                          <Select value={String(pageSize)} onValueChange={handlePageSizeChange}>
-                            <SelectTrigger className="h-8 w-[80px]">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="50">50개</SelectItem>
-                              <SelectItem value="100">100개</SelectItem>
-                              <SelectItem value="200">200개</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={currentPage <= 1}
-                          onClick={() => handlePageChange(currentPage - 1)}
-                          aria-label="이전 페이지"
-                        >
-                          <ChevronLeft className="h-4 w-4" />
-                        </Button>
-                        <span className="text-sm font-medium">
-                          {currentPage} / {totalPages}
-                        </span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={currentPage >= totalPages}
-                          onClick={() => handlePageChange(currentPage + 1)}
-                          aria-label="다음 페이지"
-                        >
-                          <ChevronRight className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  )}
                 </>
               )}
             </CardContent>
@@ -429,27 +308,15 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
       <ExcelImportDialog
         open={importDialogOpen}
         onOpenChange={setImportDialogOpen}
-        importType="outbound"
-        title="출고 데이터 업로드"
-        description="출고 데이터를 엑셀로 업로드하면 출고 요청이 생성됩니다. 창고에서 확정 후 재고가 차감됩니다."
+        importType="sales"
+        title="판매/출고 데이터 업로드"
+        description="판매(출고) 데이터를 엑셀 파일로 업로드하세요"
         onSuccess={() => {
           toast({
-            title: "출고 요청 생성 완료",
-            description: "출고 요청이 생성되었습니다. 창고에서 확정해주세요.",
+            title: "업로드 완료",
+            description: "판매 데이터가 성공적으로 업로드되었습니다",
           });
-        }}
-      />
-
-      {/* 재고 이동 다이얼로그 */}
-      <WarehouseTransferDialog
-        open={transferDialogOpen}
-        onOpenChange={setTransferDialogOpen}
-        warehouses={warehouseList}
-        onSuccess={() => {
-          toast({
-            title: "재고 이동 완료",
-            description: "창고 간 재고 이동이 완료되었습니다.",
-          });
+          loadOutboundRecords(outboundMonth);
         }}
       />
 

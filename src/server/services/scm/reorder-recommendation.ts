@@ -6,7 +6,6 @@
 import { classifyInventoryStatus } from "./inventory-status";
 import { calculateEOQ, calculateHoldingCost } from "./eoq";
 import { calculateOrderQuantity } from "./reorder-point";
-import { calculateOrderScore } from "./order-scoring";
 import type { SupplyAdjustmentCoefficients } from "@/types/organization-settings";
 import { getSupplyCoefficient } from "@/types/organization-settings";
 
@@ -56,29 +55,6 @@ export interface ProductReorderData {
   /** 예측 방법 */
   forecastMethod?: string;
 }
-
-/** 발주 추천 설정 (optional, 미지정 시 기본값 사용) */
-export interface ReorderConfig {
-  /** 1회 발주 비용 (원, 기본값 50000) */
-  orderingCost?: number;
-  /** 연간 재고유지비율 (0-1, 기본값 0.25 = 25%) */
-  holdingRate?: number;
-  /** 목표 재고일수 (기본값: ABC등급별 차등 - A:15, B:30, C:45) */
-  targetDaysOfInventory?: number;
-}
-
-/** ABC 등급별 기본 목표 재고일수 */
-const DEFAULT_TARGET_DAYS_BY_ABC: Record<string, number> = {
-  A: 15, // 고회전: 15일
-  B: 30, // 중회전: 30일
-  C: 45, // 저회전: 45일
-};
-
-/** 기본 발주 비용 (원) */
-const DEFAULT_ORDERING_COST = 50000;
-
-/** 기본 재고유지비율 */
-const DEFAULT_HOLDING_RATE = 0.25;
 
 /**
  * 발주 필요 여부 판단
@@ -170,7 +146,7 @@ export function convertToReorderItem(data: ProductReorderData): ReorderItem | nu
  * 보정계수는 ABC-XYZ 등급 조합에 따라 0.65~1.0 범위
  * (AX=1.0 → 핵심+안정 품목은 그대로, CZ=0.65 → 저가+불안정 품목은 35% 축소)
  */
-export function calculateRecommendedQuantity(data: ProductReorderData, config?: ReorderConfig): number {
+export function calculateRecommendedQuantity(data: ProductReorderData): number {
   const { currentStock, safetyStock, avgDailySales, moq, costPrice } = data;
 
   // 수요예측값이 있으면 우선 사용, 없으면 실적 기반
@@ -190,10 +166,10 @@ export function calculateRecommendedQuantity(data: ProductReorderData, config?: 
   // EOQ 계산 (연간 수요가 충분한 경우)
   let eoqQty = 0;
   if (annualDemand > 0 && costPrice > 0) {
-    const orderingCost = config?.orderingCost ?? DEFAULT_ORDERING_COST;
+    const orderingCost = 50000; // 1회 발주 비용 (기본값 5만원)
     const holdingCost = calculateHoldingCost({
       unitPrice: costPrice,
-      holdingRate: config?.holdingRate ?? DEFAULT_HOLDING_RATE,
+      holdingRate: 0.25, // 25% 유지비율
     });
 
     const eoqResult = calculateEOQ({
@@ -211,10 +187,7 @@ export function calculateRecommendedQuantity(data: ProductReorderData, config?: 
     reorderPoint: data.reorderPoint,
     safetyStock,
     averageDailyDemand: adjustedDailySales,
-    targetDaysOfInventory:
-      config?.targetDaysOfInventory ??
-      DEFAULT_TARGET_DAYS_BY_ABC[data.abcGrade ?? "B"] ??
-      30,
+    targetDaysOfInventory: 30, // 목표 30일 재고
     eoq: eoqQty > 0 ? eoqQty : undefined,
     minOrderQuantity: moq,
     orderMultiple: 1,
@@ -226,26 +199,43 @@ export function calculateRecommendedQuantity(data: ProductReorderData, config?: 
 /**
  * 발주 필요 품목 우선순위 스코어링
  *
- * @deprecated 직접 호출 대신 `order-scoring.ts`의 `calculateOrderScore()`를 사용하세요.
- * 이 함수는 하위 호환성 유지를 위해 내부적으로 `calculateOrderScore()`를 래핑합니다.
- *
- * calculateOrderScore() 배점 기준:
- * - 재고 긴급도: 40점
- * - ABC 등급: 25점
- * - 판매 추세: 20점 (데이터 미제공 시 기본값 0 적용)
- * - 리드타임 리스크: 15점 (supplier.leadTime 사용, 없으면 7일 가정)
+ * 스코어링 기준:
+ * 1. 재고상태 (50점): 품절(50) > 위험(40) > 부족(30) > 주의(20)
+ * 2. ABC등급 (30점): A(30) > B(20) > C(10)
+ * 3. 재고일수 (20점): 음수/0일(20) > 1-3일(15) > 4-7일(10) > 7일+(5)
  */
 export function calculateReorderPriority(item: ReorderItem, abcGrade?: "A" | "B" | "C"): number {
-  const result = calculateOrderScore({
-    currentStock: item.currentStock,
-    safetyStock: item.safetyStock,
-    reorderPoint: item.reorderPoint,
-    abcGrade: abcGrade ?? "B", // 등급 미지정 시 중간값(B) 사용
-    leadTimeDays: item.supplier?.leadTime ?? 7, // 공급자 리드타임 사용, 없으면 7일
-    // recentSales, previousSales: 데이터 미보유 → calculateOrderScore 기본값(0) 적용
-  });
+  let score = 0;
 
-  return result.totalScore;
+  // 1. 재고상태 스코어 (50점)
+  const statusScores = {
+    out_of_stock: 50,
+    critical: 40,
+    shortage: 30,
+    caution: 20,
+  };
+  score += statusScores[item.status];
+
+  // 2. ABC등급 스코어 (30점)
+  if (abcGrade) {
+    const abcScores = { A: 30, B: 20, C: 10 };
+    score += abcScores[abcGrade];
+  } else {
+    score += 15; // 등급 미지정 시 중간값
+  }
+
+  // 3. 재고일수 스코어 (20점)
+  if (item.daysOfStock === null || item.daysOfStock <= 0) {
+    score += 20; // 재고일수 계산 불가 또는 0일
+  } else if (item.daysOfStock <= 3) {
+    score += 15; // 1-3일
+  } else if (item.daysOfStock <= 7) {
+    score += 10; // 4-7일
+  } else {
+    score += 5; // 7일 이상
+  }
+
+  return score;
 }
 
 /**

@@ -9,6 +9,9 @@ import { processInventoryTransaction } from "./inventory";
 import { requireAuth } from "./auth-helpers";
 import { logActivity } from "@/server/services/activity-log";
 
+// TODO: 인증 구현 후 실제 organizationId로 교체
+const TEMP_ORG_ID = "00000000-0000-0000-0000-000000000001";
+
 /**
  * 판매 기록 입력 스키마
  */
@@ -130,16 +133,13 @@ export async function createSalesRecord(
 
     // 트랜잭션으로 재고 차감 및 판매 기록 생성
     const newRecord = await db.transaction(async (tx) => {
-      // 재고 차감 (판매 출고) — tx를 전달해 같은 트랜잭션 내에서 실행
-      const inventoryResult = await processInventoryTransaction(
-        {
-          productId: validated.productId,
-          changeType: "OUTBOUND_SALE",
-          quantity: validated.quantity,
-          notes: `판매: ${validated.date}`,
-        },
-        { user, product, tx, skipRevalidate: true, skipActivityLog: true }
-      );
+      // 재고 차감 (판매 출고)
+      const inventoryResult = await processInventoryTransaction({
+        productId: validated.productId,
+        changeType: "OUTBOUND_SALE",
+        quantity: validated.quantity,
+        notes: `판매: ${validated.date}`,
+      });
 
       if (!inventoryResult.success) {
         throw new Error(inventoryResult.error || "재고 차감 실패");
@@ -171,12 +171,8 @@ export async function createSalesRecord(
       description: `판매 기록 생성`,
     });
 
-    // 재고 차감(processInventoryTransaction)에서 skipRevalidate: true로 생략했으므로 여기서 통합 처리
     revalidatePath("/analytics");
-    revalidatePath("/dashboard/inventory");
     revalidateTag(`analytics-${user.organizationId}`);
-    revalidateTag(`inventory-${user.organizationId}`);
-    revalidateTag(`kpi-${user.organizationId}`);
     return { success: true, record: newRecord };
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -190,7 +186,7 @@ export async function createSalesRecord(
 /**
  * 판매 기록 삭제 (재고 복구 없음 - 조정으로 처리)
  */
-export async function deleteSalesRecord(id: string): Promise<{ success: boolean; message?: string; error?: string }> {
+export async function deleteSalesRecord(id: string): Promise<{ success: boolean; error?: string }> {
   try {
     const user = await requireAuth();
 
@@ -216,11 +212,7 @@ export async function deleteSalesRecord(id: string): Promise<{ success: boolean;
 
     revalidatePath("/analytics");
     revalidateTag(`analytics-${user.organizationId}`);
-    return {
-      success: true,
-      message:
-        "판매 기록이 삭제되었습니다. 재고는 자동 원복되지 않으므로 재고 조정을 통해 수동으로 처리해주세요.",
-    };
+    return { success: true };
   } catch (error) {
     console.error("판매 기록 삭제 오류:", error);
     return { success: false, error: "판매 기록 삭제에 실패했습니다" };
@@ -340,13 +332,11 @@ export async function getProductSalesStats(options?: {
  * 판매 채널 목록 조회
  */
 export async function getSalesChannels(): Promise<string[]> {
-  const user = await requireAuth();
-
   const result = await db
     .selectDistinct({ channel: salesRecords.channel })
     .from(salesRecords)
     .where(
-      and(eq(salesRecords.organizationId, user.organizationId), sql`${salesRecords.channel} IS NOT NULL`)
+      and(eq(salesRecords.organizationId, TEMP_ORG_ID), sql`${salesRecords.channel} IS NOT NULL`)
     )
     .orderBy(asc(salesRecords.channel));
 
@@ -360,7 +350,6 @@ export async function getAverageDailySales(
   productId: string,
   periodDays: number = 30
 ): Promise<number> {
-  const user = await requireAuth();
   const endDate = new Date().toISOString().split("T")[0];
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - periodDays);
@@ -373,7 +362,7 @@ export async function getAverageDailySales(
     .from(salesRecords)
     .where(
       and(
-        eq(salesRecords.organizationId, user.organizationId),
+        eq(salesRecords.organizationId, TEMP_ORG_ID),
         eq(salesRecords.productId, productId),
         gte(salesRecords.date, startDateStr),
         lte(salesRecords.date, endDate)

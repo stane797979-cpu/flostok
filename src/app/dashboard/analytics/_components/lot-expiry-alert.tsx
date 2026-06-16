@@ -311,10 +311,10 @@ export function LotExpiryAlert({ data, className }: LotExpiryAlertProps) {
                       <TableCell className="font-mono text-sm">{lot.lotNumber}</TableCell>
                       <TableCell className="font-medium">{lot.sku}</TableCell>
                       <TableCell>
-                        <span className="truncate block max-w-[200px]">{lot.productName}</span>
+                        <span className="truncate block max-w-[200px]" title={lot.productName}>{lot.productName}</span>
                       </TableCell>
                       <TableCell>
-                        <span className="truncate block max-w-[140px]">{lot.warehouseName}</span>
+                        <span className="truncate block max-w-[140px]" title={lot.warehouseName}>{lot.warehouseName}</span>
                       </TableCell>
                       <TableCell>{lot.expiryDate}</TableCell>
                       <TableCell className="text-right">

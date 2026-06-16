@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -20,15 +19,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { RefreshCw, PackageX, Clock, CheckCircle2, Loader2, FileSpreadsheet, Info } from "lucide-react";
-import { getOutboundRequests, bulkConfirmOutboundRequests } from "@/server/actions/outbound-requests";
-import { exportMultiplePickingListsToExcel } from "@/server/actions/excel-export";
+import { RefreshCw, PackageX, Clock } from "lucide-react";
+import { getOutboundRequests } from "@/server/actions/outbound-requests";
 import { OutboundConfirmDialog } from "./outbound-confirm-dialog";
 import { useToast } from "@/hooks/use-toast";
 
@@ -38,20 +30,9 @@ interface OutboundRequest {
   status: string;
   outboundType: string;
   outboundTypeLabel: string;
-  customerType: string | null;
   requestedByName: string | null;
-  sourceWarehouseName: string | null;
-  targetWarehouseName: string | null;
-  recipientCompany: string | null;
-  recipientName: string | null;
-  recipientAddress: string | null;
-  recipientPhone: string | null;
-  courierName: string | null;
-  trackingNumber: string | null;
   itemsCount: number;
   totalQuantity: number;
-  totalCurrentStock: number;
-  totalBacklog: number;
   createdAt: Date;
 }
 
@@ -60,11 +41,6 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   confirmed: { label: "출고완료", className: "bg-green-600" },
   cancelled: { label: "취소됨", className: "bg-slate-500" },
 };
-
-function formatDate(date: Date): string {
-  const d = new Date(date);
-  return d.toLocaleDateString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit" });
-}
 
 function formatTimeAgo(date: Date): string {
   const now = new Date();
@@ -87,21 +63,10 @@ export function WarehouseOutboundClient() {
   const [statusFilter, setStatusFilter] = useState<string>("pending");
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
-
-  // 체크박스 선택 상태
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [isBulkConfirming, setIsBulkConfirming] = useState(false);
-  const [isDownloadingPickingList, setIsDownloadingPickingList] = useState(false);
-
   const { toast } = useToast();
-
-  const pendingRequests = requests.filter((r) => r.status === "pending");
-  const allPendingSelected = pendingRequests.length > 0 && pendingRequests.every((r) => selectedIds.has(r.id));
-  const somePendingSelected = pendingRequests.some((r) => selectedIds.has(r.id));
 
   const loadRequests = useCallback(async () => {
     setIsLoading(true);
-    setSelectedIds(new Set());
     try {
       const result = await getOutboundRequests({
         status: statusFilter === "all" ? undefined : statusFilter,
@@ -123,29 +88,6 @@ export function WarehouseOutboundClient() {
     loadRequests();
   }, [loadRequests]);
 
-  // 전체 선택/해제
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      setSelectedIds(new Set(pendingRequests.map((r) => r.id)));
-    } else {
-      setSelectedIds(new Set());
-    }
-  };
-
-  // 개별 선택/해제
-  const handleSelectOne = (id: string, checked: boolean) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (checked) {
-        next.add(id);
-      } else {
-        next.delete(id);
-      }
-      return next;
-    });
-  };
-
-  // 개별 확정 다이얼로그 (요청번호 클릭 시)
   const handleConfirmClick = (requestId: string) => {
     setSelectedRequestId(requestId);
     setDialogOpen(true);
@@ -161,94 +103,11 @@ export function WarehouseOutboundClient() {
     handleDialogClose();
   };
 
-  // 선택 일괄 확정
-  const handleBulkConfirm = async () => {
-    const ids = Array.from(selectedIds);
-    if (ids.length === 0) return;
-
-    setIsBulkConfirming(true);
-    try {
-      const result = await bulkConfirmOutboundRequests(ids);
-      if (result.confirmedCount > 0) {
-        toast({
-          title: "일괄 출고 확정 완료",
-          description: `${result.confirmedCount}건 출고 확정됨${result.errors.length > 0 ? `, ${result.errors.length}건 오류` : ""}`,
-        });
-      }
-      if (result.errors.length > 0) {
-        toast({
-          title: "일부 오류 발생",
-          description: result.errors.slice(0, 3).join("\n"),
-          variant: "destructive",
-        });
-      }
-      loadRequests();
-    } catch (error) {
-      console.error("일괄 확정 오류:", error);
-      toast({
-        title: "오류",
-        description: "일괄 출고 확정 중 오류가 발생했습니다",
-        variant: "destructive",
-      });
-    } finally {
-      setIsBulkConfirming(false);
-    }
-  };
-
-  // 피킹지 일괄 다운로드
-  const handleBulkPickingListDownload = async () => {
-    const ids = Array.from(selectedIds);
-    if (ids.length === 0) return;
-
-    setIsDownloadingPickingList(true);
-    try {
-      const result = await exportMultiplePickingListsToExcel(ids);
-      if (result.success && result.data) {
-        const binaryString = atob(result.data.buffer);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        const blob = new Blob([bytes], {
-          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        });
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = result.data.filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-
-        toast({
-          title: "피킹지 다운로드 완료",
-          description: `${ids.length}건의 피킹지가 다운로드되었습니다`,
-        });
-      } else {
-        toast({
-          title: "다운로드 실패",
-          description: result.error || "피킹지 다운로드에 실패했습니다",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      console.error("피킹지 다운로드 오류:", error);
-      toast({
-        title: "오류",
-        description: "피킹지 다운로드 중 오류가 발생했습니다",
-        variant: "destructive",
-      });
-    } finally {
-      setIsDownloadingPickingList(false);
-    }
-  };
-
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">출고확정(창고)</h1>
-        <p className="mt-2 text-slate-500">출고 요청을 선택하고 일괄 확정하세요</p>
+        <h1 className="text-3xl font-bold tracking-tight">출고예정</h1>
+        <p className="mt-2 text-slate-500">출고 요청 목록을 확인하고 출고를 확정하세요</p>
       </div>
 
       <Card>
@@ -257,7 +116,7 @@ export function WarehouseOutboundClient() {
             <div>
               <CardTitle>출고 요청 목록</CardTitle>
               <CardDescription>
-                체크박스로 선택 후 일괄 확정하거나, 요청번호를 클릭하여 개별 확정할 수 있습니다
+                백오피스에서 등록된 출고 요청을 확인하고 출고 처리합니다
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
@@ -301,42 +160,6 @@ export function WarehouseOutboundClient() {
             </div>
           ) : (
             <>
-              {/* 선택 상태 바 */}
-              {selectedIds.size > 0 && (
-                <div className="mb-3 flex items-center justify-between rounded-lg border border-primary/30 bg-primary/5 px-4 py-2">
-                  <span className="text-sm font-medium">
-                    {selectedIds.size}건 선택됨
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleBulkPickingListDownload}
-                      disabled={isDownloadingPickingList}
-                    >
-                      {isDownloadingPickingList ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <FileSpreadsheet className="mr-2 h-4 w-4" />
-                      )}
-                      피킹지 다운로드
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={handleBulkConfirm}
-                      disabled={isBulkConfirming}
-                    >
-                      {isBulkConfirming ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <CheckCircle2 className="mr-2 h-4 w-4" />
-                      )}
-                      선택 일괄 확정
-                    </Button>
-                  </div>
-                </div>
-              )}
-
               <div className="mb-3 text-sm text-slate-500">
                 총 {requests.length}건
               </div>
@@ -348,70 +171,33 @@ export function WarehouseOutboundClient() {
                     label: req.status,
                     className: "bg-slate-600",
                   };
-                  const isSelected = selectedIds.has(req.id);
                   return (
-                    <div
-                      key={req.id}
-                      className={`rounded-lg border p-4 space-y-3 transition-colors ${
-                        isSelected ? "border-primary bg-primary/5" : "bg-white dark:bg-slate-800"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        {req.status === "pending" && (
-                          <Checkbox
-                            checked={isSelected}
-                            onCheckedChange={(checked) => handleSelectOne(req.id, !!checked)}
-                          />
-                        )}
-                        <div className="flex-1">
-                          <button
-                            type="button"
-                            className="font-medium text-primary hover:underline"
-                            onClick={() => req.status === "pending" && handleConfirmClick(req.id)}
-                          >
-                            {req.requestNumber}
-                          </button>
+                    <div key={req.id} className="rounded-lg border bg-white p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium">{req.requestNumber}</p>
                           <p className="text-sm text-slate-500">{req.requestedByName || "-"}</p>
                         </div>
                         <div className="flex items-center gap-2">
                           <Badge variant="outline">{req.outboundTypeLabel}</Badge>
-                          {req.customerType && (
-                            <Badge variant="outline" className={req.customerType === "B2B" ? "border-blue-300 text-blue-700" : "border-green-300 text-green-700"}>
-                              {req.customerType}
-                            </Badge>
-                          )}
                           <Badge className={config.className}>{config.label}</Badge>
                         </div>
                       </div>
-                      <div className="flex items-center justify-between text-sm pl-7">
+                      <div className="flex items-center justify-between text-sm">
                         <div className="space-y-1">
-                          {req.sourceWarehouseName && (
-                            <p className="text-slate-600 dark:text-slate-300 font-medium">
-                              {req.sourceWarehouseName}
-                              {req.targetWarehouseName && ` → ${req.targetWarehouseName}`}
-                            </p>
-                          )}
-                          {(req.recipientName || req.recipientCompany) && (
-                            <p className="text-slate-600 dark:text-slate-300">
-                              {req.recipientCompany && <span className="font-medium">{req.recipientCompany} </span>}
-                              {req.recipientName}
-                            </p>
-                          )}
-                          <p className="text-slate-500">
-                            {req.itemsCount}품목 · {req.totalQuantity.toLocaleString()}개
-                            {" · "}
-                            <span className={(req.totalCurrentStock - req.totalBacklog) < req.totalQuantity ? "font-medium text-red-600" : "text-green-600"}>
-                              가용 {(req.totalCurrentStock - req.totalBacklog).toLocaleString()}
-                            </span>
-                            {req.totalBacklog > 0 && (
-                              <span className="text-orange-600"> · 대기 {req.totalBacklog.toLocaleString()}</span>
-                            )}
-                          </p>
+                          <p className="text-slate-500">{req.itemsCount}품목 · {req.totalQuantity.toLocaleString()}개</p>
                           <div className="flex items-center gap-1 text-slate-400">
                             <Clock className="h-3.5 w-3.5" />
-                            {formatDate(req.createdAt)}
+                            {formatTimeAgo(req.createdAt)}
                           </div>
                         </div>
+                        {req.status === "pending" ? (
+                          <Button size="sm" onClick={() => handleConfirmClick(req.id)}>
+                            출고 확정
+                          </Button>
+                        ) : (
+                          <span className="text-sm text-slate-400">{config.label}</span>
+                        )}
                       </div>
                     </div>
                   );
@@ -423,55 +209,14 @@ export function WarehouseOutboundClient() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-12">
-                        {pendingRequests.length > 0 && (
-                          <Checkbox
-                            checked={allPendingSelected ? true : somePendingSelected ? "indeterminate" : false}
-                            onCheckedChange={(checked) => handleSelectAll(checked === true)}
-                          />
-                        )}
-                      </TableHead>
                       <TableHead>요청번호</TableHead>
                       <TableHead>출고유형</TableHead>
-                      <TableHead>B2B/B2C</TableHead>
                       <TableHead>상태</TableHead>
-                      <TableHead>출고 창고</TableHead>
-                      <TableHead>수령인</TableHead>
+                      <TableHead>요청자</TableHead>
                       <TableHead className="text-center">품목수</TableHead>
                       <TableHead className="text-center">총수량</TableHead>
-                      <TableHead className="text-center">
-                        <TooltipProvider delayDuration={200}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="inline-flex cursor-help items-center gap-1">
-                                가용재고
-                                <Info className="h-3.5 w-3.5 text-slate-400" />
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent side="top" className="max-w-[260px] text-xs leading-relaxed">
-                              <p className="font-medium">가용재고 = 현재고 - 대기수량</p>
-                              <p className="mt-1">현재고에서 다른 출고 대기건의 수량을 뺀, 실제 출고 가능한 수량입니다.</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </TableHead>
-                      <TableHead className="text-center">
-                        <TooltipProvider delayDuration={200}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="inline-flex cursor-help items-center gap-1">
-                                대기수량
-                                <Info className="h-3.5 w-3.5 text-slate-400" />
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent side="top" className="max-w-[260px] text-xs leading-relaxed">
-                              <p>이 요청을 제외한, 같은 제품에 대한 다른 출고 대기중인 수량의 합계입니다.</p>
-                              <p className="mt-1 text-white/80">현재고에서 이미 차감된 값이 아니며, 가용재고 계산에 사용됩니다.</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </TableHead>
-                      <TableHead>요청일</TableHead>
+                      <TableHead>요청시간</TableHead>
+                      <TableHead className="text-right">작업</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -480,37 +225,11 @@ export function WarehouseOutboundClient() {
                         label: req.status,
                         className: "bg-slate-600",
                       };
-                      const isSelected = selectedIds.has(req.id);
 
                       return (
-                        <TableRow
-                          key={req.id}
-                          className={`${isSelected ? "bg-primary/5" : ""} ${req.status === "pending" ? "cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50" : ""}`}
-                        >
-                          <TableCell>
-                            {req.status === "pending" ? (
-                              <Checkbox
-                                checked={isSelected}
-                                onCheckedChange={(checked) => handleSelectOne(req.id, !!checked)}
-                              />
-                            ) : (
-                              <span className="block w-4" />
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {req.status === "pending" ? (
-                              <button
-                                type="button"
-                                className="font-medium text-primary hover:underline"
-                                onClick={() => handleConfirmClick(req.id)}
-                              >
-                                {req.requestNumber}
-                              </button>
-                            ) : (
-                              <span className="font-medium text-slate-500">
-                                {req.requestNumber}
-                              </span>
-                            )}
+                        <TableRow key={req.id}>
+                          <TableCell className="font-medium">
+                            {req.requestNumber}
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline">
@@ -518,34 +237,12 @@ export function WarehouseOutboundClient() {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            {req.customerType ? (
-                              <Badge variant="outline" className={req.customerType === "B2B" ? "border-blue-300 text-blue-700" : "border-green-300 text-green-700"}>
-                                {req.customerType}
-                              </Badge>
-                            ) : (
-                              <span className="text-slate-400">-</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
                             <Badge className={config.className}>
                               {config.label}
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            {req.sourceWarehouseName || "-"}
-                            {req.targetWarehouseName && (
-                              <span className="text-xs text-slate-400"> → {req.targetWarehouseName}</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {req.recipientName || req.recipientCompany ? (
-                              <div className="text-sm">
-                                {req.recipientCompany && <p className="font-medium">{req.recipientCompany}</p>}
-                                {req.recipientName && <p className="text-slate-500">{req.recipientName}</p>}
-                              </div>
-                            ) : (
-                              <span className="text-slate-400">-</span>
-                            )}
+                            {req.requestedByName || "-"}
                           </TableCell>
                           <TableCell className="text-center">
                             {req.itemsCount}개
@@ -553,29 +250,25 @@ export function WarehouseOutboundClient() {
                           <TableCell className="text-center">
                             {req.totalQuantity.toLocaleString()}개
                           </TableCell>
-                          <TableCell className="text-center">
-                            {(() => {
-                              const available = req.totalCurrentStock - req.totalBacklog;
-                              return (
-                                <span className={`font-medium ${available < req.totalQuantity ? "text-red-600" : "text-green-600"}`}>
-                                  {available.toLocaleString()}
-                                </span>
-                              );
-                            })()}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {req.totalBacklog > 0 ? (
-                              <span className="font-medium text-orange-600">
-                                {req.totalBacklog.toLocaleString()}
-                              </span>
-                            ) : (
-                              <span className="text-slate-400">-</span>
-                            )}
-                          </TableCell>
                           <TableCell>
-                            <span className="text-sm text-slate-600 dark:text-slate-300">
-                              {formatDate(req.createdAt)}
-                            </span>
+                            <div className="flex items-center gap-1 text-sm text-slate-500">
+                              <Clock className="h-3.5 w-3.5" />
+                              {formatTimeAgo(req.createdAt)}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {req.status === "pending" ? (
+                              <Button
+                                size="sm"
+                                onClick={() => handleConfirmClick(req.id)}
+                              >
+                                출고 확정
+                              </Button>
+                            ) : (
+                              <span className="text-sm text-slate-400">
+                                {config.label}
+                              </span>
+                            )}
                           </TableCell>
                         </TableRow>
                       );

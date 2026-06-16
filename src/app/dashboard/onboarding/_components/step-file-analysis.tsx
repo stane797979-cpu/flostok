@@ -32,10 +32,10 @@ interface StepFileAnalysisProps {
 }
 
 const TYPE_BADGE_COLORS: Record<string, string> = {
-  text: "bg-slate-100 text-slate-700 dark:text-slate-200",
-  number: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
-  date: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
-  unknown: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300",
+  text: "bg-slate-100 text-slate-700",
+  number: "bg-blue-100 text-blue-700",
+  date: "bg-green-100 text-green-700",
+  unknown: "bg-yellow-100 text-yellow-700",
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -206,7 +206,7 @@ export function StepFileAnalysis({
                     {activeFile.analyzedHeaders?.map((header) => (
                       <div
                         key={header.name}
-                        className="flex items-center gap-1.5 px-3 py-1.5 border rounded-lg bg-white dark:bg-slate-800"
+                        className="flex items-center gap-1.5 px-3 py-1.5 border rounded-lg bg-white"
                       >
                         <span className="text-sm font-medium">
                           {header.name}
@@ -266,21 +266,21 @@ export function StepFileAnalysis({
                 )}
 
                 {/* 통계 요약 */}
-                <div className="grid grid-cols-3 gap-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+                <div className="grid grid-cols-3 gap-4 p-4 bg-slate-50 rounded-lg">
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                    <div className="text-2xl font-bold text-slate-900">
                       {activeFile.rowCount?.toLocaleString() || 0}
                     </div>
                     <div className="text-xs text-slate-500">데이터 행</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                    <div className="text-2xl font-bold text-slate-900">
                       {activeFile.analyzedHeaders?.length || 0}
                     </div>
                     <div className="text-xs text-slate-500">컬럼 수</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                    <div className="text-2xl font-bold text-slate-900">
                       {activeFile.sheetNames?.length || 0}
                     </div>
                     <div className="text-xs text-slate-500">시트 수</div>

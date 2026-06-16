@@ -112,13 +112,13 @@ export function AutoReorderRecommendationsTable({
     );
   };
 
-  const sortSubLabel = (columnKey: SortKey) => {
-    if (sortKey !== columnKey) return null;
+  const sortLabel = (columnKey: SortKey) => {
+    if (sortKey !== columnKey) return "";
     if (columnKey === "urgency")
-      return sortDir === "asc" ? "품절→주의" : "주의→품절";
+      return sortDir === "asc" ? "(품절→주의)" : "(주의→품절)";
     if (columnKey === "status")
-      return sortDir === "asc" ? "대기→거부" : "거부→대기";
-    return null;
+      return sortDir === "asc" ? "(대기→거부)" : "(거부→대기)";
+    return sortDir === "asc" ? "↑" : "↓";
   };
 
   const sortableHeadClass =
@@ -204,21 +204,21 @@ export function AutoReorderRecommendationsTable({
     switch (status) {
       case "pending":
         return (
-          <Badge variant="outline" className="whitespace-nowrap border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950 dark:text-blue-300">
+          <Badge variant="outline" className="whitespace-nowrap border-blue-300 bg-blue-50 text-blue-700">
             <AlertCircle className="mr-1 h-3 w-3" />
             대기중
           </Badge>
         );
       case "approved":
         return (
-          <Badge variant="outline" className="whitespace-nowrap border-green-300 bg-green-50 text-green-700 dark:border-green-700 dark:bg-green-950 dark:text-green-300">
+          <Badge variant="outline" className="whitespace-nowrap border-green-300 bg-green-50 text-green-700">
             <CheckCircle2 className="mr-1 h-3 w-3" />
             승인됨
           </Badge>
         );
       case "rejected":
         return (
-          <Badge variant="outline" className="whitespace-nowrap border-red-300 bg-red-50 text-red-700 dark:border-red-700 dark:bg-red-950 dark:text-red-300">
+          <Badge variant="outline" className="whitespace-nowrap border-red-300 bg-red-50 text-red-700">
             <XCircle className="mr-1 h-3 w-3" />
             거부됨
           </Badge>
@@ -301,7 +301,7 @@ export function AutoReorderRecommendationsTable({
             <CardTitle className="text-3xl">{pendingCount}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-xs text-slate-500 dark:text-slate-400">승인 대기중인 자동 발주 추천</p>
+            <p className="text-xs text-slate-500">승인 대기중인 자동 발주 추천</p>
           </CardContent>
         </Card>
         <Card>
@@ -310,7 +310,7 @@ export function AutoReorderRecommendationsTable({
             <CardTitle className="text-3xl text-green-600">{approvedCount}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-xs text-slate-500 dark:text-slate-400">발주서로 전환된 추천</p>
+            <p className="text-xs text-slate-500">발주서로 전환된 추천</p>
           </CardContent>
         </Card>
         <Card>
@@ -319,14 +319,14 @@ export function AutoReorderRecommendationsTable({
             <CardTitle className="text-3xl text-red-600">{rejectedCount}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-xs text-slate-500 dark:text-slate-400">거부된 추천</p>
+            <p className="text-xs text-slate-500">거부된 추천</p>
           </CardContent>
         </Card>
       </div>
 
       {/* 일괄 승인/거부 액션 바 */}
       {selectedIds.length > 0 && (
-        <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950">
+        <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 p-4">
           <div className="flex items-center gap-2">
             <Checkbox checked disabled />
             <span className="text-sm font-medium">{selectedIds.length}개 추천 선택됨</span>
@@ -340,7 +340,7 @@ export function AutoReorderRecommendationsTable({
               disabled={actionInProgress}
               variant="outline"
               size="sm"
-              className="border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-300 dark:hover:bg-red-950"
+              className="border-red-300 text-red-700 hover:bg-red-50"
             >
               <XCircle className="mr-2 h-4 w-4" />
               거부
@@ -369,86 +369,120 @@ export function AutoReorderRecommendationsTable({
                 />
               </TableHead>
               <TableHead
-                className={cn("whitespace-nowrap", sortableHeadClass)}
+                className={cn("w-[90px] whitespace-nowrap", sortableHeadClass)}
                 onClick={() => handleSort("status")}
               >
                 <div className="flex items-center">
-                  상태 <SortIcon columnKey="status" />
+                  상태
+                  <SortIcon columnKey="status" />
+                  <span className="ml-1 text-[10px] text-slate-500">
+                    {sortLabel("status")}
+                  </span>
                 </div>
-                {sortSubLabel("status") && (
-                  <div className="text-[10px] font-normal text-slate-400">{sortSubLabel("status")}</div>
-                )}
               </TableHead>
               <TableHead
-                className={cn("whitespace-nowrap", sortableHeadClass)}
+                className={cn("w-[90px] whitespace-nowrap", sortableHeadClass)}
                 onClick={() => handleSort("urgency")}
               >
                 <div className="flex items-center">
-                  긴급도 <SortIcon columnKey="urgency" />
+                  긴급도
+                  <SortIcon columnKey="urgency" />
+                  <span className="ml-1 text-[10px] text-slate-500">
+                    {sortLabel("urgency")}
+                  </span>
                 </div>
-                {sortSubLabel("urgency") && (
-                  <div className="text-[10px] font-normal text-slate-400">{sortSubLabel("urgency")}</div>
-                )}
               </TableHead>
               <TableHead
-                className={cn("whitespace-nowrap", sortableHeadClass)}
+                className={cn("w-[110px]", sortableHeadClass)}
                 onClick={() => handleSort("sku")}
               >
                 <div className="flex items-center">
-                  SKU <SortIcon columnKey="sku" />
+                  SKU
+                  <SortIcon columnKey="sku" />
+                  <span className="ml-1 text-[10px] text-slate-500">
+                    {sortLabel("sku")}
+                  </span>
                 </div>
               </TableHead>
-              <TableHead className={cn("whitespace-nowrap", sortableHeadClass)} onClick={() => handleSort("name")}>
+              <TableHead className={sortableHeadClass} onClick={() => handleSort("name")}>
                 <div className="flex items-center">
-                  제품명 <SortIcon columnKey="name" />
+                  제품명
+                  <SortIcon columnKey="name" />
+                  <span className="ml-1 text-[10px] text-slate-500">
+                    {sortLabel("name")}
+                  </span>
                 </div>
               </TableHead>
               <TableHead
-                className={cn("whitespace-nowrap text-right", sortableHeadClass)}
+                className={cn("text-right", sortableHeadClass)}
                 onClick={() => handleSort("currentStock")}
               >
                 <div className="flex items-center justify-end">
-                  현재고 <SortIcon columnKey="currentStock" />
+                  현재고
+                  <SortIcon columnKey="currentStock" />
+                  <span className="ml-1 text-[10px] text-slate-500">
+                    {sortLabel("currentStock")}
+                  </span>
                 </div>
               </TableHead>
               <TableHead
-                className={cn("whitespace-nowrap text-right", sortableHeadClass)}
+                className={cn("text-right", sortableHeadClass)}
                 onClick={() => handleSort("safetyStock")}
               >
                 <div className="flex items-center justify-end">
-                  안전재고 <SortIcon columnKey="safetyStock" />
+                  안전재고
+                  <SortIcon columnKey="safetyStock" />
+                  <span className="ml-1 text-[10px] text-slate-500">
+                    {sortLabel("safetyStock")}
+                  </span>
                 </div>
               </TableHead>
               <TableHead
-                className={cn("whitespace-nowrap text-right", sortableHeadClass)}
+                className={cn("text-right", sortableHeadClass)}
                 onClick={() => handleSort("reorderPoint")}
               >
                 <div className="flex items-center justify-end">
-                  발주점 <SortIcon columnKey="reorderPoint" />
+                  발주점
+                  <SortIcon columnKey="reorderPoint" />
+                  <span className="ml-1 text-[10px] text-slate-500">
+                    {sortLabel("reorderPoint")}
+                  </span>
                 </div>
               </TableHead>
               <TableHead
-                className={cn("whitespace-nowrap text-right", sortableHeadClass)}
+                className={cn("text-right", sortableHeadClass)}
                 onClick={() => handleSort("recommendedQty")}
               >
                 <div className="flex items-center justify-end">
-                  추천수량 <SortIcon columnKey="recommendedQty" />
+                  추천수량
+                  <SortIcon columnKey="recommendedQty" />
+                  <span className="ml-1 text-[10px] text-slate-500">
+                    {sortLabel("recommendedQty")}
+                  </span>
                 </div>
               </TableHead>
               <TableHead
-                className={cn("whitespace-nowrap text-right", sortableHeadClass)}
+                className={cn("text-right", sortableHeadClass)}
                 onClick={() => handleSort("estimatedCost")}
               >
                 <div className="flex items-center justify-end">
-                  예상비용 <SortIcon columnKey="estimatedCost" />
+                  예상비용
+                  <SortIcon columnKey="estimatedCost" />
+                  <span className="ml-1 text-[10px] text-slate-500">
+                    {sortLabel("estimatedCost")}
+                  </span>
                 </div>
               </TableHead>
-              <TableHead className={cn("whitespace-nowrap", sortableHeadClass)} onClick={() => handleSort("supplier")}>
+              <TableHead className={sortableHeadClass} onClick={() => handleSort("supplier")}>
                 <div className="flex items-center">
-                  공급자 <SortIcon columnKey="supplier" />
+                  공급자
+                  <SortIcon columnKey="supplier" />
+                  <span className="ml-1 text-[10px] text-slate-500">
+                    {sortLabel("supplier")}
+                  </span>
                 </div>
               </TableHead>
-              <TableHead className="whitespace-nowrap">예상입고일</TableHead>
+              <TableHead>예상입고일</TableHead>
               <TableHead className="min-w-[150px]">발주 사유</TableHead>
             </TableRow>
           </TableHeader>
@@ -460,7 +494,7 @@ export function AutoReorderRecommendationsTable({
               return (
                 <TableRow
                   key={recommendation.id}
-                  className={cn(!isPending && "bg-slate-50 opacity-60 dark:bg-slate-800/50")}
+                  className={cn(!isPending && "bg-slate-50 opacity-60")}
                 >
                   <TableCell>
                     <Checkbox
@@ -489,19 +523,19 @@ export function AutoReorderRecommendationsTable({
                   <TableCell className="text-right font-medium">
                     ₩{recommendation.estimatedCost.toLocaleString()}
                   </TableCell>
-                  <TableCell className="whitespace-nowrap">
-                    <div className="flex items-center gap-1 text-sm text-slate-600 dark:text-slate-300">
-                      <TruckIcon className="h-3 w-3 shrink-0" />
+                  <TableCell>
+                    <div className="flex items-center gap-2 text-sm text-slate-600">
+                      <TruckIcon className="h-3 w-3" />
                       {recommendation.supplierName || "-"}
                     </div>
                   </TableCell>
-                  <TableCell className="whitespace-nowrap">
-                    <div className="flex items-center gap-1 text-sm text-slate-600 dark:text-slate-300">
-                      <CalendarIcon className="h-3 w-3 shrink-0" />
+                  <TableCell>
+                    <div className="flex items-center gap-2 text-sm text-slate-600">
+                      <CalendarIcon className="h-3 w-3" />
                       {recommendation.expectedDate}
                     </div>
                   </TableCell>
-                  <TableCell className="text-xs text-slate-600 dark:text-slate-300">
+                  <TableCell className="text-xs text-slate-600">
                     {recommendation.reason}
                   </TableCell>
                 </TableRow>
@@ -515,9 +549,10 @@ export function AutoReorderRecommendationsTable({
       {pendingCount > 0 && (
         <Alert>
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>자동발주승인안내</AlertTitle>
+          <AlertTitle>자동 발주 승인 안내</AlertTitle>
           <AlertDescription>
-            추천된 발주를 승인하기 전에 수량과 공급자를 다시 한번 확인해주세요.
+            추천된 발주를 승인하면 자동으로 발주서가 생성되어 공급자에게 전송됩니다. 승인 전에
+            수량과 공급자를 다시 한번 확인해주세요.
           </AlertDescription>
         </Alert>
       )}

@@ -17,6 +17,8 @@ import {
   InventoryAdjustmentDialog,
   type AdjustmentTarget,
 } from "@/components/features/inventory/inventory-adjustment-dialog";
+import { INVENTORY_STATUS } from "@/lib/constants/inventory-status";
+import { cn } from "@/lib/utils";
 
 interface InventoryStats {
   totalProducts: number;
@@ -216,6 +218,17 @@ export function InventoryPageClient({ items, stats }: InventoryPageClientProps) 
           <span className="px-2">{currentPage} / {totalPages}</span>
           <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={currentPage >= totalPages} onClick={() => setCurrentPage((p) => p + 1)}>다음</Button>
         </div>
+      </div>
+
+      {/* 상태 기준 범례 */}
+      <div className="flex flex-wrap gap-x-5 gap-y-1.5 rounded-lg border bg-slate-50 px-4 py-3 text-xs text-slate-500 dark:bg-slate-900">
+        {Object.values(INVENTORY_STATUS).map((s) => (
+          <span key={s.key} className="flex items-center gap-1.5 whitespace-nowrap">
+            <span className={cn("inline-block h-2 w-2 rounded-full", s.dotClass)} />
+            <span className={cn("font-medium", s.textClass)}>{s.label}</span>
+            <span>{s.description}</span>
+          </span>
+        ))}
       </div>
 
       {/* 재고 조정 다이얼로그 */}

@@ -1,9 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // standalone 모드: Railway 배포 시만 사용 (Vercel은 자체 빌드)
-  output: process.env.RAILWAY_ENVIRONMENT ? "standalone" : undefined,
-
   // 스트릭트 모드: 개발 환경에서 추가 검사
   reactStrictMode: true,
 
@@ -23,8 +20,8 @@ const nextConfig: NextConfig = {
 
   // 컴파일러 최적화
   compiler: {
-    // 프로덕션에서 console.log만 제거 (console.error는 유지하여 디버깅 가능)
-    removeConsole: process.env.NODE_ENV === "production" ? { exclude: ["error", "warn"] } : false,
+    // 프로덕션에서 console 제거
+    removeConsole: process.env.NODE_ENV === "production",
   },
 
   // CI/CD에서 lint/type-check를 별도 실행하므로 빌드 시 생략 (메모리 절약)
@@ -57,24 +54,13 @@ const nextConfig: NextConfig = {
       "recharts",
       "date-fns",
       "sonner",
-      "xlsx",
-      "zod",
-      "drizzle-orm",
-      "@radix-ui/react-alert-dialog",
-      "@radix-ui/react-checkbox",
       "@radix-ui/react-dialog",
       "@radix-ui/react-dropdown-menu",
-      "@radix-ui/react-label",
-      "@radix-ui/react-popover",
-      "@radix-ui/react-progress",
-      "@radix-ui/react-scroll-area",
       "@radix-ui/react-select",
-      "@radix-ui/react-separator",
-      "@radix-ui/react-slider",
-      "@radix-ui/react-slot",
       "@radix-ui/react-tabs",
       "@radix-ui/react-toast",
-      "@radix-ui/react-tooltip",
+      "@radix-ui/react-popover",
+      "@radix-ui/react-checkbox",
     ],
   },
 
@@ -123,16 +109,6 @@ const nextConfig: NextConfig = {
           {
             key: "Cache-Control",
             value: "public, max-age=31536000, immutable",
-          },
-        ],
-      },
-      {
-        // public 폴더 이미지/폰트 캐싱
-        source: "/:path*\\.(png|jpg|jpeg|gif|webp|svg|ico|woff|woff2)",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "public, max-age=86400, stale-while-revalidate=604800",
           },
         ],
       },

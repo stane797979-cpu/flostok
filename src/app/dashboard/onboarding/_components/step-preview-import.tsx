@@ -294,7 +294,7 @@ export function StepPreviewImport({
             ) : activePreview ? (
               <>
                 {/* 검증 요약 */}
-                <div className="grid grid-cols-3 gap-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+                <div className="grid grid-cols-3 gap-4 p-4 bg-slate-50 rounded-lg">
                   <div className="text-center">
                     <div className="text-2xl font-bold text-green-600">
                       {activePreview.successCount}
@@ -310,7 +310,7 @@ export function StepPreviewImport({
                     <div className="text-xs text-slate-500">변환 오류</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                    <div className="text-2xl font-bold text-slate-900">
                       {activePreview.totalRows}
                     </div>
                     <div className="text-xs text-slate-500">전체 행</div>
@@ -320,14 +320,14 @@ export function StepPreviewImport({
                 {/* 오류 목록 */}
                 {activePreview.errors.length > 0 && (
                   <div className="space-y-2">
-                    <h4 className="text-sm font-semibold text-red-700 dark:text-red-300">
+                    <h4 className="text-sm font-semibold text-red-700">
                       변환 오류 ({activePreview.errors.length}건)
                     </h4>
                     <div className="max-h-[150px] overflow-auto space-y-1">
                       {activePreview.errors.slice(0, 10).map((err, i) => (
                         <div
                           key={i}
-                          className="flex items-start gap-2 text-sm p-2 bg-red-50 dark:bg-red-950 rounded"
+                          className="flex items-start gap-2 text-sm p-2 bg-red-50 rounded"
                         >
                           <XCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
                           <span>

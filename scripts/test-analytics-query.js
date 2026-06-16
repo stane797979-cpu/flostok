@@ -1,5 +1,5 @@
 const { Pool } = require('pg');
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pool = new Pool({ connectionString: 'postgresql://postgres.hcduybfzxobkqqjqaltm:SmartProcure2026Secure@aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true' });
 
 (async () => {
   const orgId = '00000000-0000-0000-0000-000000000001';

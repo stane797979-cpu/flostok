@@ -12,8 +12,7 @@ export type { ABCGrade };
 export type ForecastMethodType =
   | "SMA" // Simple Moving Average (단순이동평균)
   | "SES" // Simple Exponential Smoothing (단순지수평활)
-  | "Holts" // Holt's Double Exponential Smoothing (이중지수평활)
-  | "Croston"; // Croston's Method (크로스턴법 — 간헐적 수요 전용)
+  | "Holts"; // Holt's Double Exponential Smoothing (이중지수평활)
 
 /**
  * 시계열 데이터 포인트
@@ -99,6 +98,4 @@ export interface ForecastMetadata {
   hasSeasonality?: boolean;
   /** 월별 계절지수 (12개) */
   seasonalIndices?: number[];
-  /** 0값 비율 (0~1, 간헐적 수요 판단용) */
-  zeroProportion?: number;
 }

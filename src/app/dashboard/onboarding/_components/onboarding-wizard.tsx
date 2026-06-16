@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type {
   WizardState,
@@ -58,29 +58,34 @@ export function OnboardingWizard({
     mappings: {},
   });
 
-  // 단계별 진행 가능 여부 — 파생값이므로 useMemo로 직접 계산
-  const canGoNext = useMemo(() => {
+  const [canGoNext, setCanGoNext] = useState(false);
+
+  // 단계별 진행 가능 여부 체크
+  useEffect(() => {
     switch (state.currentStep) {
       case 1:
-        return !!state.sessionId;
+        setCanGoNext(!!state.sessionId);
+        break;
       case 2:
-        return state.files.length > 0;
+        setCanGoNext(state.files.length > 0);
+        break;
       case 3:
-        return (
+        setCanGoNext(
           state.files.length > 0 &&
-          state.files.every(
-            (f) => f.status === "analyzed" || f.status === "mapped" || f.status === "imported"
-          )
+            state.files.every((f) => f.status === "analyzed" || f.status === "mapped" || f.status === "imported")
         );
+        break;
       case 4:
-        return (
+        setCanGoNext(
           state.files.length > 0 &&
-          state.files.every((f) => f.status === "mapped" || f.status === "imported")
+            state.files.every((f) => f.status === "mapped" || f.status === "imported")
         );
+        break;
       case 5:
-        return true;
+        setCanGoNext(true);
+        break;
       default:
-        return false;
+        setCanGoNext(false);
     }
   }, [state.currentStep, state.sessionId, state.files]);
 

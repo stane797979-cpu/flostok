@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { PeriodBadge } from "./period-badge";
 
 interface ABCXYZMiniMatrixProps {
   matrixData: { grade: string; count: number }[];
@@ -19,8 +18,8 @@ function getCellColor(count: number, maxCount: number): string {
   const ratio = count / Math.max(maxCount, 1);
   if (ratio >= 0.6) return "bg-green-500 text-white";
   if (ratio >= 0.3) return "bg-green-300 text-green-900";
-  if (ratio >= 0.1) return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
-  return "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300";
+  if (ratio >= 0.1) return "bg-green-100 text-green-800";
+  return "bg-green-50 text-green-700";
 }
 
 export function ABCXYZMiniMatrix({ matrixData }: ABCXYZMiniMatrixProps) {
@@ -32,14 +31,7 @@ export function ABCXYZMiniMatrix({ matrixData }: ABCXYZMiniMatrixProps) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-3">
-        <div className="flex items-center gap-2">
-          <CardTitle className="text-base">ABC-XYZ 분포</CardTitle>
-          <PeriodBadge
-            period="최근 6개월"
-            description="판매 데이터 기반 ABC-XYZ 등급 분류"
-            formula="ABC: 매출액 순위 | XYZ: 변동계수(CV)"
-          />
-        </div>
+        <CardTitle className="text-base">ABC-XYZ 분포</CardTitle>
         <Button variant="outline" size="sm" asChild>
           <Link href="/dashboard/analytics">상세 분석</Link>
         </Button>
@@ -58,10 +50,10 @@ export function ABCXYZMiniMatrix({ matrixData }: ABCXYZMiniMatrixProps) {
                   className={cn(
                     "text-center text-xs font-bold py-1 rounded",
                     xyz === "X"
-                      ? "text-green-700 dark:text-green-300"
+                      ? "text-green-700"
                       : xyz === "Y"
-                        ? "text-yellow-700 dark:text-yellow-300"
-                        : "text-red-700 dark:text-red-300"
+                        ? "text-yellow-700"
+                        : "text-red-700"
                   )}
                 >
                   {xyz}
@@ -72,7 +64,7 @@ export function ABCXYZMiniMatrix({ matrixData }: ABCXYZMiniMatrixProps) {
             {/* 매트릭스 행 */}
             {ABC_LABELS.map((abc) => (
               <div key={abc} className="grid grid-cols-4 gap-1">
-                <div className="flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300">
+                <div className="flex items-center justify-center text-xs font-bold text-slate-600">
                   {abc}
                 </div>
                 {XYZ_LABELS.map((xyz) => {

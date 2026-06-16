@@ -14,7 +14,6 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Upload, FileSpreadsheet, AlertCircle, CheckCircle, Download, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useToast } from "@/hooks/use-toast";
 import { importExcelFile, getExcelTemplateBase64, type ImportType, type ImportExcelResult } from "@/server/actions/excel-import";
 
 interface ExcelImportDialogProps {
@@ -39,9 +38,8 @@ export function ExcelImportDialog({
   const [duplicateHandling, setDuplicateHandling] = useState<"skip" | "update" | "error">("skip");
   const [result, setResult] = useState<ImportExcelResult | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
-  const { toast } = useToast();
 
-  const typeLabel = importType === "transfer" ? "재고이동" : importType === "outbound" ? "출고 데이터" : importType === "sales" ? "판매 데이터" : importType === "suppliers" ? "공급자 데이터" : "제품 데이터";
+  const typeLabel = importType === "sales" ? "판매 데이터" : "제품 데이터";
   const displayTitle = title || `${typeLabel} 임포트`;
   const displayDescription = description || `Excel 파일(.xlsx)을 업로드하여 ${typeLabel}를 일괄 등록합니다.`;
 
@@ -131,15 +129,14 @@ export function ExcelImportDialog({
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      const fileNames: Record<string, string> = { sales: "판매데이터", products: "제품마스터", suppliers: "공급자", outbound: "출고데이터", transfer: "재고이동" };
-      link.download = `${fileNames[importType] || "데이터"}_템플릿.xlsx`;
+      link.download = `${importType === "sales" ? "판매데이터" : "제품마스터"}_템플릿.xlsx`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error("Template download error:", error);
-      toast({ title: "다운로드 실패", description: "양식 다운로드에 실패했습니다. 다시 시도해주세요.", variant: "destructive" });
+      alert("양식 다운로드에 실패했습니다. 다시 시도해주세요.");
     } finally {
       setTemplateDownloading(false);
     }
@@ -164,9 +161,9 @@ export function ExcelImportDialog({
 
         <div className="space-y-4 py-4">
           {/* 템플릿 다운로드 */}
-          <div className="flex items-center justify-between rounded-lg border border-dashed border-slate-300 bg-slate-50 dark:bg-slate-800/50 dark:border-slate-600 p-3">
+          <div className="flex items-center justify-between rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3">
             <div className="text-sm">
-              <p className="font-medium text-slate-700 dark:text-slate-200">템플릿 다운로드</p>
+              <p className="font-medium text-slate-700">템플릿 다운로드</p>
               <p className="text-slate-500">올바른 형식으로 데이터를 준비하세요</p>
             </div>
             <Button variant="outline" size="sm" onClick={handleDownloadTemplate} disabled={templateDownloading}>
@@ -180,7 +177,7 @@ export function ExcelImportDialog({
             className={cn(
               "relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 transition-colors",
               isDragOver ? "border-primary bg-primary/5" : "border-slate-300 hover:border-primary/50",
-              file && "border-green-500 bg-green-50 dark:bg-green-950"
+              file && "border-green-500 bg-green-50"
             )}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
@@ -201,7 +198,6 @@ export function ExcelImportDialog({
                     setFile(null);
                     setResult(null);
                   }}
-                  aria-label="파일 삭제"
                 >
                   <X className="h-4 w-4" />
                 </Button>
@@ -209,7 +205,7 @@ export function ExcelImportDialog({
             ) : (
               <>
                 <Upload className="mb-2 h-10 w-10 text-slate-400" />
-                <p className="text-sm text-slate-600 dark:text-slate-300">파일을 드래그하거나 클릭하여 업로드</p>
+                <p className="text-sm text-slate-600">파일을 드래그하거나 클릭하여 업로드</p>
                 <p className="text-xs text-slate-400">.xlsx 파일만 지원</p>
                 <input
                   type="file"
@@ -241,7 +237,7 @@ export function ExcelImportDialog({
             <div
               className={cn(
                 "rounded-lg border p-4",
-                result.success ? "border-green-200 bg-green-50 dark:bg-green-950" : "border-red-200 bg-red-50 dark:bg-red-950"
+                result.success ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"
               )}
             >
               <div className="mb-2 flex items-center gap-2">
@@ -250,18 +246,18 @@ export function ExcelImportDialog({
                 ) : (
                   <AlertCircle className="h-5 w-5 text-red-600" />
                 )}
-                <p className={cn("font-medium", result.success ? "text-green-700 dark:text-green-300" : "text-red-700 dark:text-red-300")}>
+                <p className={cn("font-medium", result.success ? "text-green-700" : "text-red-700")}>
                   {result.message}
                 </p>
               </div>
 
               <div className="flex gap-4 text-sm">
                 <Badge variant="outline">전체: {result.totalRows}건</Badge>
-                <Badge variant="outline" className="border-green-300 text-green-700 dark:border-green-700 dark:text-green-300">
+                <Badge variant="outline" className="border-green-300 text-green-700">
                   성공: {result.successCount}건
                 </Badge>
                 {result.errorCount > 0 && (
-                  <Badge variant="outline" className="border-red-300 text-red-700 dark:border-red-700 dark:text-red-300">
+                  <Badge variant="outline" className="border-red-300 text-red-700">
                     오류: {result.errorCount}건
                   </Badge>
                 )}

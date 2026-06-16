@@ -21,13 +21,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-interface WarehouseOption {
-  id: string;
-  code: string;
-  name: string;
-  isDefault?: boolean;
-}
-
 interface OrderDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -42,21 +35,18 @@ interface OrderDialogProps {
     supplierName?: string;
     leadTime: number;
   } | null;
-  warehouses?: WarehouseOption[];
   onSubmit: (data: {
     productId: string;
     quantity: number;
     supplierId: string;
     expectedDate: string;
-    warehouseId?: string;
     notes: string;
   }) => void;
 }
 
-export function OrderDialog({ open, onOpenChange, product, warehouses = [], onSubmit }: OrderDialogProps) {
+export function OrderDialog({ open, onOpenChange, product, onSubmit }: OrderDialogProps) {
   const [quantity, setQuantity] = useState(0);
   const [supplierId, setSupplierId] = useState("");
-  const [warehouseId, setWarehouseId] = useState("");
   const [notes, setNotes] = useState("");
 
   // product 변경 시 state 동기화
@@ -65,12 +55,8 @@ export function OrderDialog({ open, onOpenChange, product, warehouses = [], onSu
       setQuantity(product.recommendedQty || 0);
       setSupplierId(product.supplierId || "");
       setNotes("");
-      // 기본 창고 pre-select
-      const defaultWh = warehouses.find((w) => w.isDefault);
-      if (defaultWh) setWarehouseId(defaultWh.id);
-      else if (warehouses.length > 0) setWarehouseId(warehouses[0].id);
     }
-  }, [product, warehouses]);
+  }, [product]);
 
   // 예상 입고일 계산 (오늘 + 리드타임)
   const getExpectedDate = () => {
@@ -87,7 +73,6 @@ export function OrderDialog({ open, onOpenChange, product, warehouses = [], onSu
       quantity,
       supplierId,
       expectedDate: getExpectedDate(),
-      warehouseId: warehouseId || undefined,
       notes,
     });
     onOpenChange(false);
@@ -161,25 +146,6 @@ export function OrderDialog({ open, onOpenChange, product, warehouses = [], onSu
                   </span>
                 </div>
               </div>
-
-              {/* 입고 예정 창고 */}
-              {warehouses.length > 0 && (
-                <div className="space-y-2">
-                  <Label>입고 예정 창고</Label>
-                  <Select value={warehouseId} onValueChange={setWarehouseId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="창고를 선택하세요" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {warehouses.map((wh) => (
-                        <SelectItem key={wh.id} value={wh.id}>
-                          {wh.name} ({wh.code}){wh.isDefault ? " - 기본" : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
 
               {/* 비고 */}
               <div className="space-y-2">

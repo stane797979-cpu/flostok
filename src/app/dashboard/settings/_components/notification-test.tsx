@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Mail, MessageSquare, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
-import { useToast } from '@/hooks/use-toast'
+import { toast } from 'sonner'
 
 // ============================================
 // 타입 정의
@@ -38,8 +38,6 @@ type NotificationTemplate =
 // ============================================
 
 export function NotificationTest() {
-  const { toast } = useToast()
-
   // 이메일 상태
   const [emailTo, setEmailTo] = useState('')
   const [emailTemplate, setEmailTemplate] = useState<NotificationTemplate>('inventory-alert')
@@ -189,7 +187,7 @@ export function NotificationTest() {
 
   const handleSendEmail = async () => {
     if (!emailTo) {
-      toast({ title: '수신자 이메일을 입력해주세요', variant: 'destructive' })
+      toast.error('수신자 이메일을 입력해주세요')
       return
     }
 
@@ -226,20 +224,20 @@ export function NotificationTest() {
           message: data.mock ? 'Mock 모드로 전송되었습니다 (로그 확인)' : '이메일이 전송되었습니다',
           mock: data.mock,
         })
-        toast({ title: data.mock ? 'Mock 이메일 전송 완료 (로그 확인)' : '이메일이 전송되었습니다' })
+        toast.success(data.mock ? 'Mock 이메일 전송 완료 (로그 확인)' : '이메일이 전송되었습니다')
       } else {
         setEmailResult({
           success: false,
           message: data.error || '전송에 실패했습니다',
         })
-        toast({ title: data.error || '전송에 실패했습니다', variant: 'destructive' })
+        toast.error(data.error || '전송에 실패했습니다')
       }
     } catch {
       setEmailResult({
         success: false,
         message: '네트워크 오류가 발생했습니다',
       })
-      toast({ title: '네트워크 오류가 발생했습니다', variant: 'destructive' })
+      toast.error('네트워크 오류가 발생했습니다')
     } finally {
       setEmailLoading(false)
     }
@@ -251,7 +249,7 @@ export function NotificationTest() {
 
   const handleSendSMS = async () => {
     if (!smsTo) {
-      toast({ title: '수신자 전화번호를 입력해주세요', variant: 'destructive' })
+      toast.error('수신자 전화번호를 입력해주세요')
       return
     }
 
@@ -279,20 +277,20 @@ export function NotificationTest() {
           message: data.mock ? 'Mock 모드로 전송되었습니다 (로그 확인)' : 'SMS가 전송되었습니다',
           mock: data.mock,
         })
-        toast({ title: data.mock ? 'Mock SMS 전송 완료 (로그 확인)' : 'SMS가 전송되었습니다' })
+        toast.success(data.mock ? 'Mock SMS 전송 완료 (로그 확인)' : 'SMS가 전송되었습니다')
       } else {
         setSmsResult({
           success: false,
           message: data.error || '전송에 실패했습니다',
         })
-        toast({ title: data.error || '전송에 실패했습니다', variant: 'destructive' })
+        toast.error(data.error || '전송에 실패했습니다')
       }
     } catch {
       setSmsResult({
         success: false,
         message: '네트워크 오류가 발생했습니다',
       })
-      toast({ title: '네트워크 오류가 발생했습니다', variant: 'destructive' })
+      toast.error('네트워크 오류가 발생했습니다')
     } finally {
       setSmsLoading(false)
     }

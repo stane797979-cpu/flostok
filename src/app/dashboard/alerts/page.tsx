@@ -91,17 +91,12 @@ export default function AlertsPage() {
       setAlertItems(result.alerts);
       setUnreadCount(result.unreadCount);
       setTotal(result.total);
-    } catch (err) {
-      console.error("알림 조회 실패:", err);
-      toast({
-        title: "알림 조회 실패",
-        description: "알림 목록을 불러오는 데 실패했습니다. 잠시 후 다시 시도해 주세요.",
-        variant: "destructive",
-      });
+    } catch {
+      console.error("알림 조회 실패");
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     loadAlerts(activeTab === "unread");
@@ -165,14 +160,14 @@ export default function AlertsPage() {
             <div className="text-2xl font-bold">{total}</div>
           </CardContent>
         </Card>
-        <Card className={unreadCount > 0 ? "border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950" : ""}>
+        <Card className={unreadCount > 0 ? "border-blue-200 bg-blue-50" : ""}>
           <CardHeader className="pb-2">
-            <CardDescription className={unreadCount > 0 ? "text-blue-700 dark:text-blue-300" : ""}>
+            <CardDescription className={unreadCount > 0 ? "text-blue-700" : ""}>
               읽지 않은 알림
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className={cn("text-2xl font-bold", unreadCount > 0 && "text-blue-700 dark:text-blue-300")}>
+            <div className={cn("text-2xl font-bold", unreadCount > 0 && "text-blue-700")}>
               {unreadCount}
             </div>
           </CardContent>
@@ -247,7 +242,7 @@ export default function AlertsPage() {
                         <span
                           className={cn(
                             "text-sm font-semibold",
-                            !alert.isRead && "text-slate-900 dark:text-slate-100"
+                            !alert.isRead && "text-slate-900"
                           )}
                         >
                           {alert.title}
@@ -259,7 +254,7 @@ export default function AlertsPage() {
                           <span className={cn("h-2 w-2 rounded-full", severity.dot)} />
                         )}
                       </div>
-                      <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">{alert.message}</p>
+                      <p className="mt-0.5 text-sm text-slate-600">{alert.message}</p>
                       <div className="mt-1 flex items-center gap-3 text-xs text-slate-400">
                         <span>{formatRelativeTime(alert.createdAt)}</span>
                         {alert.productSku && (

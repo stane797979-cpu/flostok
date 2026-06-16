@@ -6,7 +6,7 @@
 export interface KPIMetrics {
   inventoryTurnoverRate: number; // 재고회전율 (회/년)
   averageInventoryDays: number; // 평균 재고일수 (일)
-  inventoryAccuracy: number | null; // 재고 정확도 (%) — 실사 미실시 시 null
+  inventoryAccuracy: number; // 재고 정확도 (%)
   stockoutRate: number; // 품절률 (%)
   onTimeOrderRate: number; // 적시 발주율 (%)
   averageLeadTime: number; // 평균 리드타임 (일)
@@ -23,16 +23,6 @@ export interface KPITarget {
   orderFulfillmentRate: number;
 }
 
-export const DEFAULT_KPI_TARGETS: KPITarget = {
-  inventoryTurnoverRate: 10,
-  averageInventoryDays: 40,
-  inventoryAccuracy: 98,
-  stockoutRate: 2,
-  onTimeOrderRate: 90,
-  averageLeadTime: 5,
-  orderFulfillmentRate: 95,
-};
-
 export interface ImprovementProposal {
   id: string;
   title: string;
@@ -46,35 +36,15 @@ export interface ImprovementProposal {
 }
 
 /**
- * KPI 데이터가 실제로 존재하는지 확인
- * metrics가 전부 0/기본값이면 데이터가 없는 것
- */
-export function hasKPIData(metrics: KPIMetrics): boolean {
-  return (
-    metrics.inventoryTurnoverRate > 0 ||
-    metrics.stockoutRate > 0 ||
-    metrics.onTimeOrderRate > 0 ||
-    metrics.averageLeadTime > 0 ||
-    metrics.orderFulfillmentRate > 0 ||
-    metrics.averageInventoryDays < 999
-  );
-}
-
-/**
  * KPI 기반 개선 제안 생성
  * @param metrics 현재 KPI 지표
  * @param targets 목표 KPI 지표
- * @returns 개선 제안 목록 (데이터 없으면 빈 배열)
+ * @returns 개선 제안 목록
  */
 export function generateKPIImprovementProposals(
   metrics: KPIMetrics,
   targets: KPITarget
 ): ImprovementProposal[] {
-  // 데이터가 없으면 빈 배열 반환 — 컴포넌트에서 "데이터 없음" 안내 표시
-  if (!hasKPIData(metrics)) {
-    return [];
-  }
-
   const proposals: ImprovementProposal[] = [];
 
   // 재고회전율 개선 제안
@@ -214,7 +184,7 @@ export function generateKPIImprovementProposals(
   }
 
   // 재고 정확도 개선 제안
-  if (metrics.inventoryAccuracy !== null && metrics.inventoryAccuracy < targets.inventoryAccuracy) {
+  if (metrics.inventoryAccuracy < targets.inventoryAccuracy) {
     const gap = targets.inventoryAccuracy - metrics.inventoryAccuracy;
 
     if (gap > 2) {
@@ -271,7 +241,7 @@ export function generateKPIImprovementProposals(
   if (
     metrics.inventoryTurnoverRate >= targets.inventoryTurnoverRate &&
     metrics.averageInventoryDays <= targets.averageInventoryDays &&
-    (metrics.inventoryAccuracy === null || metrics.inventoryAccuracy >= targets.inventoryAccuracy) &&
+    metrics.inventoryAccuracy >= targets.inventoryAccuracy &&
     metrics.stockoutRate <= targets.stockoutRate &&
     metrics.onTimeOrderRate >= targets.onTimeOrderRate &&
     metrics.orderFulfillmentRate >= targets.orderFulfillmentRate

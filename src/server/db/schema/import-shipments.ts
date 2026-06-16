@@ -6,7 +6,6 @@ import {
   integer,
   numeric,
   date,
-  index,
 } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 import { products } from "./products";
@@ -44,12 +43,7 @@ export const importShipments = pgTable("import_shipments", {
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => [
-  index("import_shipments_org_idx").on(table.organizationId),
-  index("import_shipments_org_product_idx").on(table.organizationId, table.productId),
-  index("import_shipments_po_idx").on(table.purchaseOrderId),
-  index("import_shipments_org_eta_idx").on(table.organizationId, table.etaDate),
-]);
+});
 
 export type ImportShipment = typeof importShipments.$inferSelect;
 export type NewImportShipment = typeof importShipments.$inferInsert;

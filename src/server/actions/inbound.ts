@@ -8,12 +8,11 @@ import {
   inventoryLots,
   products,
   suppliers,
-  warehouses,
 } from "@/server/db/schema";
-import { eq, and, sql, inArray, isNull } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
-import { processInventoryTransaction, processBatchInventoryTransactions } from "./inventory";
+import { processInventoryTransaction } from "./inventory";
 import { requireAuth } from "./auth-helpers";
 import { logActivity } from "@/server/services/activity-log";
 
@@ -37,22 +36,10 @@ const inboundItemSchema = z.object({
 const confirmInboundSchema = z.object({
   orderId: z.string().uuid("유효한 발주서 ID가 아닙니다"),
   items: z.array(inboundItemSchema).min(1, "최소 1개 이상의 입고 항목이 필요합니다"),
-  warehouseId: z.string().uuid("유효한 창고 ID가 아닙니다").optional(),
   notes: z.string().optional(),
 });
 
 export type ConfirmInboundInput = z.infer<typeof confirmInboundSchema>;
-
-/**
- * 일괄 입고확인 시 사전 조회 데이터를 주입하기 위한 컨텍스트
- * bulkConfirmInbound에서 배치 조회한 데이터를 재사용하여 N+1 쿼리 제거
- */
-interface ConfirmInboundContext {
-  user?: { organizationId: string; id: string; role: string };
-  purchaseOrder?: typeof purchaseOrders.$inferSelect;
-  orderItems?: (typeof purchaseOrderItems.$inferSelect)[];
-  productsData?: (typeof products.$inferSelect)[];
-}
 
 /**
  * 입고 확인 처리
@@ -61,78 +48,30 @@ interface ConfirmInboundContext {
  * 부분 입고도 지원합니다.
  *
  * @param input - 입고 확인 데이터
- * @param context - 선택적 컨텍스트 (일괄 처리 시 사전 조회 데이터 주입)
  * @returns 성공 여부 및 생성된 입고 기록 ID 배열
  */
-export async function confirmInbound(input: ConfirmInboundInput, context?: ConfirmInboundContext): Promise<{
+export async function confirmInbound(input: ConfirmInboundInput): Promise<{
   success: boolean;
   recordIds?: string[];
   error?: string;
 }> {
   try {
-    const user = context?.user ?? await requireAuth();
+    const user = await requireAuth();
 
     // 유효성 검사
     const validated = confirmInboundSchema.parse(input);
 
-    // [최적화] 발주서 + 발주 항목 + 제품 정보를 병렬 조회 (순차 4쿼리 → 병렬 3쿼리)
-    // bulkConfirmInbound에서 context로 사전 조회 데이터가 주입된 경우 DB 조회 생략
-    const productIds = validated.items.map(item => item.productId);
+    // 발주서 조회
+    const [purchaseOrder] = await db
+      .select()
+      .from(purchaseOrders)
+      .where(
+        and(eq(purchaseOrders.id, validated.orderId), eq(purchaseOrders.organizationId, user.organizationId))
+      )
+      .limit(1);
 
-    const [purchaseOrderResult, orderItems, productsData] = await Promise.all([
-      context?.purchaseOrder
-        ? Promise.resolve([context.purchaseOrder])
-        : db
-            .select()
-            .from(purchaseOrders)
-            .where(
-              and(eq(purchaseOrders.id, validated.orderId), eq(purchaseOrders.organizationId, user.organizationId))
-            )
-            .limit(1),
-      context?.orderItems
-        ? Promise.resolve(context.orderItems)
-        : db
-            .select()
-            .from(purchaseOrderItems)
-            .where(eq(purchaseOrderItems.purchaseOrderId, validated.orderId)),
-      context?.productsData
-        ? Promise.resolve(context.productsData)
-        : productIds.length > 0
-          ? db.select().from(products).where(
-              and(inArray(products.id, productIds), eq(products.organizationId, user.organizationId))
-            )
-          : Promise.resolve([]),
-    ]);
-
-    const purchaseOrder = purchaseOrderResult[0];
     if (!purchaseOrder) {
       return { success: false, error: "발주서를 찾을 수 없습니다" };
-    }
-
-    // 입고 대상 창고 ID 결정 (사용자가 override한 경우 우선 적용)
-    const originalWarehouseId = purchaseOrder.destinationWarehouseId;
-    let destinationWarehouseId = validated.warehouseId || originalWarehouseId;
-    if (!destinationWarehouseId) {
-      const { getDefaultWarehouse } = await import("./warehouses");
-      const dw = await getDefaultWarehouse();
-      if (!dw) return { success: false, error: "입고 대상 창고를 찾을 수 없습니다" };
-      destinationWarehouseId = dw.id;
-    }
-
-    // 창고가 변경된 경우 이름 조회 (이력 기록용, 드문 케이스라 별도 조회 유지)
-    const warehouseChanged = validated.warehouseId && validated.warehouseId !== originalWarehouseId;
-    let warehouseChangeDescription = "";
-    if (warehouseChanged) {
-      const warehouseRows = await db
-        .select({ id: warehouses.id, name: warehouses.name })
-        .from(warehouses)
-        .where(
-          inArray(warehouses.id, [originalWarehouseId, validated.warehouseId!].filter(Boolean) as string[])
-        );
-      const whMap = new Map(warehouseRows.map(w => [w.id, w.name]));
-      const fromName = originalWarehouseId ? whMap.get(originalWarehouseId) || "미지정" : "미지정";
-      const toName = whMap.get(validated.warehouseId!) || "알 수 없음";
-      warehouseChangeDescription = `입고 창고 변경: ${fromName} → ${toName}`;
     }
 
     // 발주서가 입고 가능한 상태인지 확인
@@ -142,6 +81,12 @@ export async function confirmInbound(input: ConfirmInboundInput, context?: Confi
         error: `입고 처리할 수 없는 발주서 상태입니다: ${purchaseOrder.status}`,
       };
     }
+
+    // 발주 항목 조회
+    const orderItems = await db
+      .select()
+      .from(purchaseOrderItems)
+      .where(eq(purchaseOrderItems.purchaseOrderId, validated.orderId));
 
     const orderItemsMap = new Map(orderItems.map((item) => [item.id, item]));
 
@@ -167,89 +112,101 @@ export async function confirmInbound(input: ConfirmInboundInput, context?: Confi
     }
 
     const today = new Date().toISOString().split("T")[0];
-    const productsMap = new Map(productsData.map(p => [p.id, p]));
 
-    // 유효 항목 필터링
-    const validItems = validated.items.filter(item => item.receivedQuantity > 0);
-
-    // 트랜잭션으로 전체 입고 처리 (배치 INSERT로 N+1 제거)
+    // 트랜잭션으로 전체 입고 처리
     const result = await db.transaction(async (tx) => {
-      // 1. 입고 기록 배치 INSERT
-      const inboundValues = validItems.map((item) => {
-        const lotNum = item.lotNumber || `AUTO-${today.replace(/-/g, "")}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-        return {
+      const recordIds: string[] = [];
+
+      // 각 항목별 입고 처리
+      for (const item of validated.items) {
+        if (item.receivedQuantity === 0) continue; // 입고 수량이 0이면 스킵
+
+        // Lot 번호: 입력값 또는 자동 생성
+        const lotNum = item.lotNumber || `AUTO-${today.replace(/-/g, "")}-${Date.now().toString(36)}`;
+
+        // 1. 입고 기록 생성
+        const [inboundRecord] = await tx
+          .insert(inboundRecords)
+          .values({
+            organizationId: user.organizationId,
+            purchaseOrderId: validated.orderId,
+            productId: item.productId,
+            date: today,
+            expectedQuantity: item.expectedQuantity,
+            receivedQuantity: item.receivedQuantity,
+            acceptedQuantity: item.receivedQuantity, // 품질 검수 미구현 시 전량 합격 처리
+            rejectedQuantity: 0,
+            qualityResult: "pass",
+            location: item.location,
+            lotNumber: lotNum,
+            expiryDate: item.expiryDate,
+            notes: item.notes || validated.notes,
+          })
+          .returning();
+
+        recordIds.push(inboundRecord.id);
+
+        // 1-1. Lot 재고 생성
+        await tx.insert(inventoryLots).values({
           organizationId: user.organizationId,
-          warehouseId: destinationWarehouseId,
-          purchaseOrderId: validated.orderId,
           productId: item.productId,
-          date: today,
-          expectedQuantity: item.expectedQuantity,
-          receivedQuantity: item.receivedQuantity,
-          acceptedQuantity: item.receivedQuantity,
-          rejectedQuantity: 0,
-          qualityResult: "pass" as const,
-          location: item.location,
           lotNumber: lotNum,
           expiryDate: item.expiryDate,
-          notes: item.notes || validated.notes,
-        };
-      });
-      const insertedRecords = await tx.insert(inboundRecords).values(inboundValues).returning();
-      const recordIds = insertedRecords.map(r => r.id);
+          initialQuantity: item.receivedQuantity,
+          remainingQuantity: item.receivedQuantity,
+          inboundRecordId: inboundRecord.id,
+          receivedDate: today,
+          status: "active",
+        });
 
-      // 2. Lot 재고 배치 INSERT
-      const lotValues = insertedRecords.map((record, idx) => ({
-        organizationId: user.organizationId,
-        warehouseId: destinationWarehouseId,
-        productId: validItems[idx].productId,
-        lotNumber: inboundValues[idx].lotNumber,
-        expiryDate: validItems[idx].expiryDate,
-        initialQuantity: validItems[idx].receivedQuantity,
-        remainingQuantity: validItems[idx].receivedQuantity,
-        inboundRecordId: record.id,
-        receivedDate: today,
-        status: "active" as const,
-      }));
-      await tx.insert(inventoryLots).values(lotValues);
+        // 2. 재고 증가 처리 (트랜잭션 내에서 직접 처리)
+        const inventoryResult = await processInventoryTransaction({
+          productId: item.productId,
+          changeType: "INBOUND_PURCHASE",
+          quantity: item.receivedQuantity,
+          referenceId: validated.orderId,
+          notes: `발주서 ${purchaseOrder.orderNumber} 입고`,
+          location: item.location,
+        });
 
-      // 3. 발주 항목 수량 업데이트 (배치 SQL CASE WHEN)
-      const itemUpdates = validItems.map((item) => {
+        if (!inventoryResult.success) {
+          throw new Error(`재고 증가 처리 실패 (제품 ID: ${item.productId}): ${inventoryResult.error}`);
+        }
+
+        // 3. 발주 항목의 입고 수량 업데이트
         const orderItem = orderItemsMap.get(item.orderItemId)!;
-        return {
-          id: item.orderItemId,
-          newReceivedQuantity: (orderItem.receivedQuantity || 0) + item.receivedQuantity,
-        };
-      });
-      if (itemUpdates.length > 0) {
-        const caseWhen = itemUpdates
-          .map(u => `WHEN '${u.id}' THEN ${u.newReceivedQuantity}`)
-          .join(" ");
-        const itemIds = itemUpdates.map(u => u.id);
-        await tx.execute(
-          sql`UPDATE purchase_order_items SET received_quantity = CASE id ${sql.raw(caseWhen)} END WHERE id IN (${sql.join(itemIds.map(id => sql`${id}`), sql`, `)})`
-        );
+        const newReceivedQuantity = (orderItem.receivedQuantity || 0) + item.receivedQuantity;
+
+        await tx
+          .update(purchaseOrderItems)
+          .set({
+            receivedQuantity: newReceivedQuantity,
+          })
+          .where(eq(purchaseOrderItems.id, item.orderItemId));
       }
 
-      // 4. 발주서 상태 업데이트 (재조회 없이 메모리에서 계산)
-      // itemUpdates에 반영된 수량 + 변경 없는 항목의 기존 수량으로 판단
-      const updatedReceivedMap = new Map(itemUpdates.map(u => [u.id, u.newReceivedQuantity]));
-      const allItemsFullyReceived = orderItems.every((item) => {
-        const received = updatedReceivedMap.get(item.id) ?? (item.receivedQuantity ?? 0);
-        return received >= item.quantity;
-      });
+      // 4. 발주서 상태 업데이트
+      // 모든 항목이 전량 입고되었는지 확인
+      const updatedOrderItems = await tx
+        .select()
+        .from(purchaseOrderItems)
+        .where(eq(purchaseOrderItems.purchaseOrderId, validated.orderId));
 
-      const hasPartiallyReceived = orderItems.some((item) => {
-        const received = updatedReceivedMap.get(item.id) ?? (item.receivedQuantity ?? 0);
-        return received > 0;
-      });
+      const allItemsFullyReceived = updatedOrderItems.every(
+        (item) => (item.receivedQuantity ?? 0) >= item.quantity
+      );
+
+      const hasPartiallyReceived = updatedOrderItems.some(
+        (item) => item.receivedQuantity && item.receivedQuantity > 0
+      );
 
       let newStatus: (typeof purchaseOrders.status.enumValues)[number];
       if (allItemsFullyReceived) {
-        newStatus = "received";
+        newStatus = "received"; // 전체 입고 완료
       } else if (hasPartiallyReceived) {
-        newStatus = "partially_received";
+        newStatus = "partially_received"; // 부분 입고
       } else {
-        newStatus = purchaseOrder.status;
+        newStatus = purchaseOrder.status; // 상태 유지
       }
 
       await tx
@@ -261,54 +218,15 @@ export async function confirmInbound(input: ConfirmInboundInput, context?: Confi
         })
         .where(eq(purchaseOrders.id, validated.orderId));
 
-      // 5. 재고 증가 배치 처리 — 트랜잭션 내부로 이동하여 원자성 보장
-      // (입고=양수이므로 FIFO 불필요, 배치 최적화 적용)
-      const batchResult = await processBatchInventoryTransactions(
-        validItems.map(item => ({
-          productId: item.productId,
-          changeType: "INBOUND_PURCHASE" as const,
-          quantity: item.receivedQuantity,
-          referenceId: validated.orderId,
-          notes: `발주서 ${purchaseOrder.orderNumber} 입고`,
-          warehouseId: destinationWarehouseId,
-        })),
-        { user, productsMap, warehouseId: destinationWarehouseId, tx, skipRevalidate: true, skipActivityLog: true }
-      );
-
-      if (!batchResult.success) {
-        const failedItems = batchResult.results.filter(r => !r.success);
-        console.error("입고 재고 처리 일부 실패:", failedItems);
-        throw new Error(`재고 증가 처리 실패: ${failedItems.map(f => f.error).join(", ")}`);
-      }
-
       return recordIds;
     });
 
-    // 활동 로깅 (fire-and-forget — 입고 응답 속도에 영향 없도록)
-    const logPromises: Promise<unknown>[] = [
-      logActivity({
-        user,
-        action: "CREATE",
-        entityType: "inbound_record",
-        entityId: validated.orderId,
-        description: warehouseChangeDescription
-          ? `입고 확인 처리 (${warehouseChangeDescription})`
-          : `입고 확인 처리`,
-      }).catch(console.error),
-    ];
-    if (warehouseChanged && warehouseChangeDescription) {
-      logPromises.push(
-        logActivity({
-          user,
-          action: "UPDATE",
-          entityType: "purchase_order",
-          entityId: validated.orderId,
-          description: warehouseChangeDescription,
-        }).catch(console.error)
-      );
-    }
-    // 로깅은 백그라운드로 처리
-    Promise.all(logPromises).catch(console.error);
+    await logActivity({
+      user,
+      action: "CREATE",
+      entityType: "inbound_record",
+      description: `입고 확인 처리`,
+    });
 
     revalidatePath("/dashboard/orders");
     revalidatePath("/dashboard/inventory");
@@ -433,20 +351,14 @@ export async function createOtherInbound(input: OtherInboundInput): Promise<{
     const user = await requireAuth();
     const validated = otherInboundSchema.parse(input);
 
-    // 기본 창고 조회
-    const { getDefaultWarehouse } = await import("./warehouses");
-    const warehouse = await getDefaultWarehouse();
-    if (!warehouse) return { success: false, error: "기본 창고를 찾을 수 없습니다" };
-
     const today = new Date().toISOString().split("T")[0];
     const lotNum = validated.lotNumber || `AUTO-${today.replace(/-/g, "")}-${Date.now().toString(36)}`;
 
-    // 1. 입고 기록 생성 (purchaseOrderId = null, 기본 창고)
+    // 1. 입고 기록 생성 (purchaseOrderId = null)
     const [record] = await db
       .insert(inboundRecords)
       .values({
         organizationId: user.organizationId,
-        warehouseId: warehouse.id,
         purchaseOrderId: null,
         productId: validated.productId,
         date: today,
@@ -462,10 +374,9 @@ export async function createOtherInbound(input: OtherInboundInput): Promise<{
       })
       .returning();
 
-    // 1-1. Lot 재고 생성 (창고 포함)
+    // 1-1. Lot 재고 생성
     await db.insert(inventoryLots).values({
       organizationId: user.organizationId,
-      warehouseId: warehouse.id,
       productId: validated.productId,
       lotNumber: lotNum,
       expiryDate: validated.expiryDate,
@@ -476,14 +387,13 @@ export async function createOtherInbound(input: OtherInboundInput): Promise<{
       status: "active",
     });
 
-    // 2. 재고 증가 처리 (창고 지정)
+    // 2. 재고 증가 처리
     const inventoryResult = await processInventoryTransaction({
       productId: validated.productId,
       changeType: validated.inboundType,
       quantity: validated.quantity,
       notes: validated.notes,
       location: validated.location,
-      warehouseId: warehouse.id,
     });
 
     if (!inventoryResult.success) {
@@ -686,8 +596,11 @@ export async function getInboundRecords(options?: GetInboundRecordsOptions): Pro
       total: Number(countResult[0]?.count || 0),
     };
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      throw new Error(`입력 데이터가 올바르지 않습니다: ${error.issues[0]?.message}`);
+    }
     console.error("입고 기록 조회 오류:", error);
-    return { records: [], total: 0 };
+    throw new Error("입고 기록 조회에 실패했습니다");
   }
 }
 
@@ -726,121 +639,65 @@ export async function bulkConfirmInbound(
 
     const inboundCapableStatuses = ["ordered", "confirmed", "shipped", "partially_received"];
 
-    // 모든 발주서의 항목을 한 번에 배치 조회 (N+1 제거)
-    const allItems = await db
-      .select()
-      .from(purchaseOrderItems)
-      .where(inArray(purchaseOrderItems.purchaseOrderId, orderIds));
-
-    const itemsByOrderId = new Map<string, typeof allItems>();
-    for (const item of allItems) {
-      const existing = itemsByOrderId.get(item.purchaseOrderId) || [];
-      existing.push(item);
-      itemsByOrderId.set(item.purchaseOrderId, existing);
-    }
-
-    // 모든 제품을 한 번에 배치 조회 (confirmInbound 내부 N번 조회 제거)
-    const allProductIds = [...new Set(allItems.map(item => item.productId))];
-    const allProducts = allProductIds.length > 0
-      ? await db.select().from(products).where(
-          and(eq(products.organizationId, user.organizationId), inArray(products.id, allProductIds))
-        )
-      : [];
-
-    // 각 발주서에 대한 입고 처리 작업 목록 생성
-    // 상태가 유효하지 않거나 이미 완료된 항목은 사전 필터링
-    type OrderTask =
-      | { skip: true; orderId: string; orderNumber: string; reason: string }
-      | { skip: false; orderId: string; orderNumber: string; input: ConfirmInboundInput };
-
-    const tasks: OrderTask[] = orders.map((order) => {
+    for (const order of orders) {
       if (!inboundCapableStatuses.includes(order.status)) {
-        return {
-          skip: true,
+        errors.push({
           orderId: order.id,
           orderNumber: order.orderNumber,
-          reason: `현재 상태(${order.status})에서는 입고 처리할 수 없습니다`,
-        };
+          error: `현재 상태(${order.status})에서는 입고 처리할 수 없습니다`,
+        });
+        continue;
       }
 
-      const items = itemsByOrderId.get(order.id) || [];
-      const pendingItems = items.filter(
-        (item) => (item.receivedQuantity ?? 0) < item.quantity
-      );
+      try {
+        // 해당 발주서의 항목 조회
+        const items = await db
+          .select()
+          .from(purchaseOrderItems)
+          .where(eq(purchaseOrderItems.purchaseOrderId, order.id));
 
-      if (pendingItems.length === 0) {
-        return {
-          skip: true,
-          orderId: order.id,
-          orderNumber: order.orderNumber,
-          reason: "이미 전량 입고 완료된 발주서입니다",
-        };
-      }
+        // 미입고 항목 필터링
+        const pendingItems = items.filter(
+          (item) => (item.receivedQuantity ?? 0) < item.quantity
+        );
 
-      const inboundItems = pendingItems.map((item) => ({
-        orderItemId: item.id,
-        productId: item.productId,
-        expectedQuantity: item.quantity - (item.receivedQuantity ?? 0),
-        receivedQuantity: item.quantity - (item.receivedQuantity ?? 0),
-      }));
+        if (pendingItems.length === 0) {
+          errors.push({
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            error: "이미 전량 입고 완료된 발주서입니다",
+          });
+          continue;
+        }
 
-      return {
-        skip: false,
-        orderId: order.id,
-        orderNumber: order.orderNumber,
-        input: {
+        // confirmInbound 호출용 데이터 구성
+        const inboundItems = pendingItems.map((item) => ({
+          orderItemId: item.id,
+          productId: item.productId,
+          expectedQuantity: item.quantity - (item.receivedQuantity ?? 0),
+          receivedQuantity: item.quantity - (item.receivedQuantity ?? 0),
+        }));
+
+        const result = await confirmInbound({
           orderId: order.id,
           items: inboundItems,
           notes: "일괄 입고확인 처리",
-        },
-      };
-    });
-
-    // 건너뛸 항목 에러 목록에 추가
-    for (const task of tasks) {
-      if (task.skip) {
-        errors.push({
-          orderId: task.orderId,
-          orderNumber: task.orderNumber,
-          error: task.reason,
         });
-      }
-    }
 
-    // 처리 대상 작업만 추출하여 병렬 실행
-    const activeTasks = tasks.filter((t): t is Extract<OrderTask, { skip: false }> => !t.skip);
-
-    const results = await Promise.allSettled(
-      activeTasks.map((task) => {
-        const order = orders.find(o => o.id === task.orderId);
-        const orderItems = itemsByOrderId.get(task.orderId) || [];
-        const taskProductIds = task.input.items.map(i => i.productId);
-        const taskProducts = allProducts.filter(p => taskProductIds.includes(p.id));
-        return confirmInbound(task.input, {
-          user,
-          purchaseOrder: order,
-          orderItems,
-          productsData: taskProducts,
-        });
-      })
-    );
-
-    for (let i = 0; i < results.length; i++) {
-      const task = activeTasks[i];
-      const result = results[i];
-
-      if (result.status === "fulfilled" && result.value.success) {
-        processedCount++;
-      } else {
-        const errorMessage =
-          result.status === "rejected"
-            ? "입고 처리 중 오류 발생"
-            : result.value.error || "입고 처리 실패";
-
+        if (result.success) {
+          processedCount++;
+        } else {
+          errors.push({
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            error: result.error || "입고 처리 실패",
+          });
+        }
+      } catch (err) {
         errors.push({
-          orderId: task.orderId,
-          orderNumber: task.orderNumber,
-          error: errorMessage,
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          error: "입고 처리 중 오류 발생",
         });
       }
     }
@@ -870,7 +727,6 @@ export async function getWarehouseInboundOrders(): Promise<{
     id: string;
     orderNumber: string;
     supplierName: string | null;
-    destinationWarehouseName: string | null;
     status: string;
     expectedDate: string | null;
     orderDate: string | null;
@@ -882,60 +738,79 @@ export async function getWarehouseInboundOrders(): Promise<{
   try {
     const user = await requireAuth();
 
-    // 입고 대기중인 발주서 조회 (항목 통계 LEFT JOIN으로 단일 쿼리 처리)
+    // 입고 대기중인 발주서 조회
     const inboundCapableStatuses = ["ordered", "confirmed", "shipped", "partially_received"] as (typeof purchaseOrders.status.enumValues)[number][];
 
-    const ordersWithStats = await db
+    const ordersData = await db
       .select({
-        // 발주서 필드
-        id: purchaseOrders.id,
-        orderNumber: purchaseOrders.orderNumber,
-        status: purchaseOrders.status,
-        orderDate: purchaseOrders.orderDate,
-        expectedDate: purchaseOrders.expectedDate,
-        organizationId: purchaseOrders.organizationId,
-        supplierId: purchaseOrders.supplierId,
-        destinationWarehouseId: purchaseOrders.destinationWarehouseId,
-        // 공급업체
-        supplierName: suppliers.name,
-        // 창고
-        warehouseName: warehouses.name,
-        // 항목 집계 통계
-        itemsCount: sql<number>`count(${purchaseOrderItems.id})`.as('items_count'),
-        totalQuantity: sql<number>`coalesce(sum(${purchaseOrderItems.quantity}), 0)`.as('total_quantity'),
-        receivedQuantity: sql<number>`coalesce(sum(${purchaseOrderItems.receivedQuantity}), 0)`.as('received_quantity'),
+        order: purchaseOrders,
+        supplier: {
+          name: suppliers.name,
+        },
       })
       .from(purchaseOrders)
       .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
-      .leftJoin(warehouses, eq(purchaseOrders.destinationWarehouseId, warehouses.id))
-      .leftJoin(purchaseOrderItems, eq(purchaseOrderItems.purchaseOrderId, purchaseOrders.id))
       .where(
         and(
           eq(purchaseOrders.organizationId, user.organizationId),
-          inArray(purchaseOrders.status, inboundCapableStatuses),
-          isNull(purchaseOrders.deletedAt)
+          inArray(purchaseOrders.status, inboundCapableStatuses)
         )
       )
-      .groupBy(purchaseOrders.id, suppliers.name, warehouses.name)
       .orderBy(sql`${purchaseOrders.expectedDate} ASC NULLS LAST, ${purchaseOrders.orderDate} ASC`);
 
+    // 각 발주서의 항목 통계 조회
+    const orderIds = ordersData.map((row) => row.order.id);
+
+    if (orderIds.length === 0) {
+      return { orders: [] };
+    }
+
+    const itemsStats = await db
+      .select({
+        purchaseOrderId: purchaseOrderItems.purchaseOrderId,
+        itemsCount: sql<number>`count(*)`,
+        totalQuantity: sql<number>`coalesce(sum(${purchaseOrderItems.quantity}), 0)`,
+        receivedQuantity: sql<number>`coalesce(sum(${purchaseOrderItems.receivedQuantity}), 0)`,
+      })
+      .from(purchaseOrderItems)
+      .where(inArray(purchaseOrderItems.purchaseOrderId, orderIds))
+      .groupBy(purchaseOrderItems.purchaseOrderId);
+
+    const statsMap = new Map(
+      itemsStats.map((stat) => [
+        stat.purchaseOrderId,
+        {
+          itemsCount: Number(stat.itemsCount),
+          totalQuantity: Number(stat.totalQuantity),
+          receivedQuantity: Number(stat.receivedQuantity),
+        },
+      ])
+    );
+
     return {
-      orders: ordersWithStats.map((row) => ({
-        id: row.id,
-        orderNumber: row.orderNumber,
-        supplierName: row.supplierName || null,
-        destinationWarehouseName: row.warehouseName || null,
-        status: row.status,
-        expectedDate: row.expectedDate,
-        orderDate: row.orderDate,
-        itemsCount: Number(row.itemsCount),
-        totalQuantity: Number(row.totalQuantity),
-        receivedQuantity: Number(row.receivedQuantity),
-      })),
+      orders: ordersData.map((row) => {
+        const stats = statsMap.get(row.order.id) || {
+          itemsCount: 0,
+          totalQuantity: 0,
+          receivedQuantity: 0,
+        };
+
+        return {
+          id: row.order.id,
+          orderNumber: row.order.orderNumber,
+          supplierName: row.supplier?.name || null,
+          status: row.order.status,
+          expectedDate: row.order.expectedDate,
+          orderDate: row.order.orderDate,
+          itemsCount: stats.itemsCount,
+          totalQuantity: stats.totalQuantity,
+          receivedQuantity: stats.receivedQuantity,
+        };
+      }),
     };
   } catch (error) {
     console.error("창고 입고예정 목록 조회 오류:", error);
-    return { orders: [] };
+    throw new Error("창고 입고예정 목록 조회에 실패했습니다");
   }
 }
 
@@ -1020,9 +895,6 @@ export async function getWarehouseInboundOrderDetail(orderId: string): Promise<{
     };
   } catch (error) {
     console.error("발주서 상세 조회 오류:", error);
-    return {
-      order: { id: "", orderNumber: "", supplierName: null, status: "", expectedDate: null },
-      items: [],
-    };
+    throw new Error("발주서 상세 조회에 실패했습니다");
   }
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, memo } from "react";
+import { useState, useMemo, useRef } from "react";
 import {
   Table,
   TableBody,
@@ -11,9 +11,9 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Eye, Download, ArrowUpDown, ArrowUp, ArrowDown, CheckCircle } from "lucide-react";
+import { Eye, Download, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-import { cn, formatKRW } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 export interface PurchaseOrderListItem {
   id: string;
@@ -21,7 +21,7 @@ export interface PurchaseOrderListItem {
   supplierName: string;
   itemsCount: number;
   totalAmount: number;
-  status: "draft" | "pending" | "ordered" | "pending_receipt" | "received" | "cancelled";
+  status: "draft" | "ordered" | "pending_receipt" | "received" | "cancelled";
   orderDate: string;
   expectedDate: string | null;
 }
@@ -30,21 +30,20 @@ interface PurchaseOrdersTableProps {
   orders: PurchaseOrderListItem[];
   onViewClick: (orderId: string) => void;
   onDownloadClick?: (orderId: string) => void;
-  onApproveClick?: (orderId: string) => void;
   selectedIds?: string[];
   onSelectChange?: (ids: string[]) => void;
-  isAdmin?: boolean;
   className?: string;
 }
 
 type SortKey = "orderNumber" | "supplier" | "itemsCount" | "totalAmount" | "status" | "orderDate" | "expectedDate";
 type SortDirection = "asc" | "desc";
 
-const STATUS_ORDER = ["draft", "pending", "ordered", "pending_receipt", "received", "cancelled"];
+const STATUS_ORDER = ["draft", "ordered", "pending_receipt", "received", "cancelled"];
 
-export const PurchaseOrdersTable = memo(function PurchaseOrdersTable({ orders, onViewClick, onDownloadClick, onApproveClick, selectedIds, onSelectChange, isAdmin, className }: PurchaseOrdersTableProps) {
-  // 모든 상태 체크 가능
-  const checkableOrders = orders;
+export function PurchaseOrdersTable({ orders, onViewClick, onDownloadClick, selectedIds, onSelectChange, className }: PurchaseOrdersTableProps) {
+  // 체크 가능한 상태: 취소/완료 제외 전부
+  const checkableStatuses: PurchaseOrderListItem["status"][] = ["draft", "ordered", "pending_receipt"];
+  const checkableOrders = orders.filter((o) => checkableStatuses.includes(o.status));
   const allCheckableSelected = checkableOrders.length > 0 && checkableOrders.every((o) => selectedIds?.includes(o.id));
 
   // Shift+클릭 범위 선택을 위한 lastCheckedIndex
@@ -122,6 +121,7 @@ export const PurchaseOrdersTable = memo(function PurchaseOrdersTable({ orders, o
       const end = Math.max(lastCheckedIndexRef.current, index);
       const rangeIds = sorted
         .slice(start, end + 1)
+        .filter((o) => checkableStatuses.includes(o.status))
         .map((o) => o.id);
 
       const newIds = Array.from(new Set([...selectedIds, ...rangeIds]));
@@ -140,8 +140,6 @@ export const PurchaseOrdersTable = memo(function PurchaseOrdersTable({ orders, o
     switch (status) {
       case "draft":
         return <Badge variant="outline">초안</Badge>;
-      case "pending":
-        return <Badge className="bg-yellow-600">결재대기</Badge>;
       case "ordered":
         return <Badge className="bg-blue-600">발주완료</Badge>;
       case "pending_receipt":
@@ -163,6 +161,13 @@ export const PurchaseOrdersTable = memo(function PurchaseOrdersTable({ orders, o
     });
   };
 
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("ko-KR", {
+      style: "currency",
+      currency: "KRW",
+    }).format(amount);
+  };
+
   if (orders.length === 0) {
     return (
       <div className="flex h-96 items-center justify-center text-slate-400">
@@ -178,11 +183,11 @@ export const PurchaseOrdersTable = memo(function PurchaseOrdersTable({ orders, o
       {/* 모바일 카드 뷰 */}
       <div className={cn("space-y-3 md:hidden", className)}>
         {sorted.map((order) => (
-          <div key={order.id} className="rounded-lg border bg-white dark:bg-slate-800 p-4 space-y-2">
+          <div key={order.id} className="rounded-lg border bg-white p-4 space-y-2">
             <div className="flex items-center justify-between">
               <div className="min-w-0 flex-1">
                 <p className="font-mono text-sm font-medium">{order.orderNumber}</p>
-                <p className="text-sm text-slate-600 dark:text-slate-300 truncate">{order.supplierName}</p>
+                <p className="text-sm text-slate-600 truncate">{order.supplierName}</p>
               </div>
               <div className="shrink-0 ml-2">
                 {getStatusBadge(order.status)}
@@ -190,21 +195,13 @@ export const PurchaseOrdersTable = memo(function PurchaseOrdersTable({ orders, o
             </div>
             <div className="flex items-center justify-between text-sm">
               <div className="space-y-0.5">
-                <p className="font-semibold">{formatKRW(order.totalAmount)}</p>
+                <p className="font-semibold">{formatCurrency(order.totalAmount)}</p>
                 <p className="text-slate-500">{formatDate(order.orderDate)} · {order.itemsCount}품목</p>
               </div>
-              <div className="flex gap-1.5">
-                {isAdmin && order.status === "pending" && onApproveClick && (
-                  <Button size="sm" onClick={() => onApproveClick(order.id)} className="bg-green-600 hover:bg-green-700">
-                    <CheckCircle className="mr-1 h-4 w-4" />
-                    승인
-                  </Button>
-                )}
-                <Button size="sm" variant="outline" onClick={() => onViewClick(order.id)}>
-                  <Eye className="mr-1 h-4 w-4" />
-                  상세
-                </Button>
-              </div>
+              <Button size="sm" variant="outline" onClick={() => onViewClick(order.id)}>
+                <Eye className="mr-1 h-4 w-4" />
+                상세
+              </Button>
             </div>
           </div>
         ))}
@@ -250,42 +247,41 @@ export const PurchaseOrdersTable = memo(function PurchaseOrdersTable({ orders, o
         </TableHeader>
         <TableBody>
           {sorted.map((order, index) => {
+            const isCheckable = checkableStatuses.includes(order.status);
             return (
             <TableRow key={order.id}>
               {onSelectChange && (
                 <TableCell>
-                  <Checkbox
-                    checked={selectedIds?.includes(order.id) ?? false}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      const isCurrentlyChecked = selectedIds?.includes(order.id) ?? false;
-                      handleSelectOne(order.id, !isCurrentlyChecked, index, e.shiftKey);
-                    }}
-                    aria-label={`${order.orderNumber} 선택`}
-                  />
+                  {isCheckable ? (
+                    <Checkbox
+                      checked={selectedIds?.includes(order.id) ?? false}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        const isCurrentlyChecked = selectedIds?.includes(order.id) ?? false;
+                        handleSelectOne(order.id, !isCurrentlyChecked, index, e.shiftKey);
+                      }}
+                      aria-label={`${order.orderNumber} 선택`}
+                    />
+                  ) : (
+                    <div className="h-4 w-4" />
+                  )}
                 </TableCell>
               )}
               <TableCell className="whitespace-nowrap font-mono text-sm">{order.orderNumber}</TableCell>
               <TableCell className="font-medium">{order.supplierName}</TableCell>
               <TableCell className="whitespace-nowrap text-right">{order.itemsCount}개</TableCell>
               <TableCell className="whitespace-nowrap text-right font-semibold">
-                {formatKRW(order.totalAmount)}
+                {formatCurrency(order.totalAmount)}
               </TableCell>
               <TableCell className="whitespace-nowrap">{getStatusBadge(order.status)}</TableCell>
-              <TableCell className="whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
+              <TableCell className="whitespace-nowrap text-sm text-slate-600">
                 {formatDate(order.orderDate)}
               </TableCell>
-              <TableCell className="whitespace-nowrap text-sm text-slate-600 dark:text-slate-300">
+              <TableCell className="whitespace-nowrap text-sm text-slate-600">
                 {order.expectedDate ? formatDate(order.expectedDate) : "-"}
               </TableCell>
               <TableCell className="text-right">
-                <div className="flex justify-end gap-1.5">
-                  {isAdmin && order.status === "pending" && onApproveClick && (
-                    <Button size="sm" onClick={() => onApproveClick(order.id)} className="bg-green-600 hover:bg-green-700">
-                      <CheckCircle className="mr-1 h-4 w-4" />
-                      승인
-                    </Button>
-                  )}
+                <div className="flex justify-end gap-2">
                   <Button size="sm" variant="outline" onClick={() => onViewClick(order.id)}>
                     <Eye className="mr-1 h-4 w-4" />
                     상세
@@ -305,4 +301,4 @@ export const PurchaseOrdersTable = memo(function PurchaseOrdersTable({ orders, o
       </div>
     </>
   );
-});
+}

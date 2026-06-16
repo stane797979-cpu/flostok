@@ -1,38 +1,19 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  deleteProduct,
-  deleteProducts,
-  checkProductDeleteDependencies,
-} from "@/server/actions/products";
-import {
-  Loader2,
-  AlertTriangle,
-  ShieldAlert,
-  Info,
-  Package,
-  History,
-  FileText,
-  TrendingDown,
-  Truck,
-} from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import type { DependencyCheckResult } from "@/server/services/deletion/dependency-checker";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { deleteProduct, deleteProducts } from "@/server/actions/products";
+import { Loader2 } from "lucide-react";
 
 interface ProductDeleteDialogProps {
   open: boolean;
@@ -41,14 +22,6 @@ interface ProductDeleteDialogProps {
   productNames?: string[];
 }
 
-const DEPENDENCY_ICONS: Record<string, React.ReactNode> = {
-  inventory: <Package className="h-4 w-4" />,
-  inventory_history: <History className="h-4 w-4" />,
-  purchase_order_items: <FileText className="h-4 w-4" />,
-  sales_records: <TrendingDown className="h-4 w-4" />,
-  inbound_records: <Truck className="h-4 w-4" />,
-};
-
 export function ProductDeleteDialog({
   open,
   onOpenChange,
@@ -56,186 +29,60 @@ export function ProductDeleteDialog({
   productNames = [],
 }: ProductDeleteDialogProps) {
   const router = useRouter();
-  const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const [isChecking, setIsChecking] = useState(false);
-  const [reason, setReason] = useState("");
-  const [depCheck, setDepCheck] = useState<DependencyCheckResult | null>(null);
   const isBulk = productIds.length > 1;
 
-  // 다이얼로그 열릴 때 의존성 체크 (단건만)
-  useEffect(() => {
-    if (open && !isBulk && productIds[0]) {
-      setIsChecking(true);
-      setDepCheck(null);
-      setReason("");
-      checkProductDeleteDependencies(productIds[0])
-        .then(setDepCheck)
-        .catch(console.error)
-        .finally(() => setIsChecking(false));
-    } else if (open && isBulk) {
-      setReason("");
-      setDepCheck(null);
-    }
-  }, [open, productIds, isBulk]);
-
   const handleDelete = async () => {
-    if (!reason.trim()) return;
     setIsLoading(true);
     try {
       if (isBulk) {
-        const result = await deleteProducts(productIds, reason);
-        if (result.success) {
-          if (result.isRequest) {
-            toast({ title: "삭제 요청 제출됨", description: `${result.requestedCount}건의 삭제 요청이 제출되었습니다. 슈퍼관리자 승인 후 삭제됩니다.` });
-          } else {
-            toast({ title: "삭제 완료", description: `${result.deletedCount}건이 삭제되었습니다.` });
-          }
-        } else {
-          toast({ title: "삭제 실패", description: result.error, variant: "destructive" });
-        }
+        await deleteProducts(productIds);
       } else if (productIds[0]) {
-        const result = await deleteProduct(productIds[0], reason);
-        if (result.success) {
-          if (result.isRequest) {
-            toast({ title: "삭제 요청 제출됨", description: `${productNames[0] || "제품"} 삭제 요청이 제출되었습니다. 슈퍼관리자 승인 후 삭제됩니다.` });
-          } else {
-            toast({ title: "삭제 완료", description: `${productNames[0] || "제품"}이(가) 삭제되었습니다.` });
-          }
-        } else {
-          toast({ title: "삭제 실패", description: result.error, variant: "destructive" });
-        }
+        await deleteProduct(productIds[0]);
       }
       onOpenChange(false);
       router.refresh();
     } catch (error) {
       console.error("삭제 오류:", error);
-      toast({ title: "오류", description: "삭제 처리 중 오류가 발생했습니다.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const impactColor =
-    depCheck?.impactLevel === "high"
-      ? "destructive"
-      : depCheck?.impactLevel === "medium"
-        ? "secondary"
-        : "outline";
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-yellow-500" />
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
             {isBulk ? `${productIds.length}개 제품 삭제` : "제품 삭제"}
-          </DialogTitle>
-          <DialogDescription>
-            {isBulk
-              ? `선택한 ${productIds.length}개 제품에 대해 삭제를 진행합니다.`
-              : `${productNames[0] || "이 제품"}에 대해 삭제를 진행합니다.`}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          {/* 의존성 체크 로딩 */}
-          {isChecking && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              영향 범위 분석 중...
-            </div>
-          )}
-
-          {/* 의존성 경고 (단건) */}
-          {depCheck && depCheck.dependencies.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <ShieldAlert className="h-4 w-4 text-orange-500" />
-                <span className="text-sm font-medium">영향 범위</span>
-                <Badge variant={impactColor as "destructive" | "secondary" | "outline"}>
-                  {depCheck.impactLevel === "high"
-                    ? "높음"
-                    : depCheck.impactLevel === "medium"
-                      ? "보통"
-                      : "낮음"}
-                </Badge>
-              </div>
-              <div className="rounded-md border p-3 space-y-1">
-                {depCheck.dependencies.map((dep) => (
-                  <div
-                    key={dep.entityType}
-                    className="flex items-center justify-between text-sm"
-                  >
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      {DEPENDENCY_ICONS[dep.entityType] || (
-                        <Package className="h-4 w-4" />
-                      )}
-                      {dep.label}
-                    </div>
-                    <Badge variant="secondary">{dep.count}건</Badge>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* 에러 (삭제 불가) */}
-          {depCheck?.errors.map((error, i) => (
-            <Alert key={i} variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          ))}
-
-          {/* 경고 */}
-          {depCheck?.warnings.map((warning, i) => (
-            <Alert key={i}>
-              <Info className="h-4 w-4" />
-              <AlertDescription>{warning}</AlertDescription>
-            </Alert>
-          ))}
-
-          {/* 삭제 사유 입력 */}
-          <div className="space-y-2">
-            <Label htmlFor="delete-reason">삭제 사유 (필수)</Label>
-            <Textarea
-              id="delete-reason"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="삭제가 필요한 이유를 입력해주세요..."
-              rows={3}
-            />
-          </div>
-
-          {/* 프로세스 안내 */}
-          <Alert>
-            <Info className="h-4 w-4" />
-            <AlertDescription>
-              삭제된 데이터는 감사 로그에 기록되며, 관리자가 복구할 수 있습니다.
-            </AlertDescription>
-          </Alert>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
-            취소
-          </Button>
-          <Button
-            variant="destructive"
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            {isBulk ? (
+              <>
+                선택한 <strong>{productIds.length}개</strong> 제품을 삭제하시겠습니까?
+                <br />이 작업은 되돌릴 수 없습니다.
+              </>
+            ) : (
+              <>
+                <strong>{productNames[0] || "이 제품"}</strong>을(를) 삭제하시겠습니까?
+                <br />
+                관련된 재고 및 발주 기록도 함께 삭제됩니다.
+              </>
+            )}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isLoading}>취소</AlertDialogCancel>
+          <AlertDialogAction
             onClick={handleDelete}
-            disabled={
-              !reason.trim() ||
-              isLoading ||
-              isChecking ||
-              (depCheck !== null && !depCheck.canDelete)
-            }
+            disabled={isLoading}
+            className="bg-red-600 hover:bg-red-700"
           >
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             삭제
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

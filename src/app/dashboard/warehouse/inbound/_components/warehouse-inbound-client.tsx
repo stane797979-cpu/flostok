@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -13,8 +12,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { RefreshCw, Package, PackageCheck, Loader2 } from "lucide-react";
-import { getWarehouseInboundOrders, bulkConfirmInbound } from "@/server/actions/inbound";
+import { RefreshCw, Package } from "lucide-react";
+import { getWarehouseInboundOrders } from "@/server/actions/inbound";
 import { InboundConfirmDialog } from "./inbound-confirm-dialog";
 import { useToast } from "@/hooks/use-toast";
 
@@ -22,7 +21,6 @@ interface WarehouseOrder {
   id: string;
   orderNumber: string;
   supplierName: string | null;
-  destinationWarehouseName: string | null;
   status: string;
   expectedDate: string | null;
   orderDate: string | null;
@@ -41,25 +39,11 @@ const statusConfig: Record<
   partially_received: { label: "부분입고", className: "bg-purple-600" },
 };
 
-interface Warehouse {
-  id: string;
-  code: string;
-  name: string;
-  isDefault?: boolean;
-}
-
-interface WarehouseInboundClientProps {
-  initialOrders?: WarehouseOrder[];
-  warehouses: Warehouse[];
-}
-
-export function WarehouseInboundClient({ initialOrders, warehouses }: WarehouseInboundClientProps) {
-  const [orders, setOrders] = useState<WarehouseOrder[]>(initialOrders ?? []);
-  const [isLoading, setIsLoading] = useState(initialOrders === undefined);
+export function WarehouseInboundClient() {
+  const [orders, setOrders] = useState<WarehouseOrder[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
-  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
   const { toast } = useToast();
 
   const loadOrders = useCallback(async () => {
@@ -67,12 +51,11 @@ export function WarehouseInboundClient({ initialOrders, warehouses }: WarehouseI
     try {
       const result = await getWarehouseInboundOrders();
       setOrders(result.orders);
-      setCheckedIds(new Set());
     } catch (error) {
-      console.error("입고확정 목록 조회 오류:", error);
+      console.error("입고예정 목록 조회 오류:", error);
       toast({
         title: "조회 실패",
-        description: "입고확정 목록을 불러오지 못했습니다",
+        description: "입고예정 목록을 불러오지 못했습니다",
         variant: "destructive",
       });
     } finally {
@@ -81,12 +64,8 @@ export function WarehouseInboundClient({ initialOrders, warehouses }: WarehouseI
   }, [toast]);
 
   useEffect(() => {
-    if (initialOrders !== undefined) {
-      setIsLoading(false);
-      return;
-    }
     loadOrders();
-  }, [loadOrders, initialOrders]);
+  }, [loadOrders]);
 
   const handleInboundClick = (orderId: string) => {
     setSelectedOrderId(orderId);
@@ -103,63 +82,11 @@ export function WarehouseInboundClient({ initialOrders, warehouses }: WarehouseI
     handleDialogClose();
   };
 
-  // 체크박스 관련
-  const allChecked = orders.length > 0 && checkedIds.size === orders.length;
-  const someChecked = checkedIds.size > 0 && checkedIds.size < orders.length;
-
-  const handleToggleAll = (checked: boolean) => {
-    if (checked) {
-      setCheckedIds(new Set(orders.map((o) => o.id)));
-    } else {
-      setCheckedIds(new Set());
-    }
-  };
-
-  const handleToggleOne = (orderId: string, checked: boolean) => {
-    setCheckedIds((prev) => {
-      const next = new Set(prev);
-      if (checked) next.add(orderId);
-      else next.delete(orderId);
-      return next;
-    });
-  };
-
-  // 일괄 전체입고
-  const handleBulkInbound = async () => {
-    if (checkedIds.size === 0) return;
-
-    setIsBulkProcessing(true);
-    try {
-      const result = await bulkConfirmInbound(Array.from(checkedIds));
-      if (result.success) {
-        toast({
-          title: "일괄 입고 완료",
-          description: `${result.processedCount}건 입고 처리 완료${result.errors.length > 0 ? `, ${result.errors.length}건 실패` : ""}`,
-        });
-      } else {
-        toast({
-          title: "일괄 입고 실패",
-          description: result.errors[0]?.error || "처리 중 오류가 발생했습니다",
-          variant: "destructive",
-        });
-      }
-      loadOrders();
-    } catch {
-      toast({
-        title: "일괄 입고 실패",
-        description: "서버 오류가 발생했습니다",
-        variant: "destructive",
-      });
-    } finally {
-      setIsBulkProcessing(false);
-    }
-  };
-
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">입고확정(창고)</h1>
-        <p className="mt-2 text-slate-500">입고 대기중인 발주서를 확인하고 입고 처리합니다</p>
+        <h1 className="text-3xl font-bold tracking-tight">입고예정</h1>
+        <p className="mt-2 text-slate-500">입고 대기중인 발주서 목록입니다</p>
       </div>
 
       <Card>
@@ -171,36 +98,15 @@ export function WarehouseInboundClient({ initialOrders, warehouses }: WarehouseI
                 발주완료, 공급자확인, 출하됨, 부분입고 상태의 발주서
               </CardDescription>
             </div>
-            <div className="flex items-center gap-2">
-              {checkedIds.size > 0 && (
-                <Button
-                  size="sm"
-                  onClick={handleBulkInbound}
-                  disabled={isBulkProcessing}
-                >
-                  {isBulkProcessing ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      처리중...
-                    </>
-                  ) : (
-                    <>
-                      <PackageCheck className="mr-2 h-4 w-4" />
-                      선택 전체입고 ({checkedIds.size}건)
-                    </>
-                  )}
-                </Button>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={loadOrders}
-                disabled={isLoading}
-              >
-                <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-                새로고침
-              </Button>
-            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={loadOrders}
+              disabled={isLoading}
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+              새로고침
+            </Button>
           </div>
         </CardHeader>
         <CardContent>
@@ -216,7 +122,7 @@ export function WarehouseInboundClient({ initialOrders, warehouses }: WarehouseI
           ) : (
             <>
               <div className="mb-3 text-sm text-slate-500">
-                총 {orders.length}건{checkedIds.size > 0 && ` · ${checkedIds.size}건 선택`}
+                총 {orders.length}건
               </div>
 
               {/* 모바일 카드 뷰 */}
@@ -230,26 +136,16 @@ export function WarehouseInboundClient({ initialOrders, warehouses }: WarehouseI
                     className: "bg-slate-600",
                   };
                   return (
-                    <div key={order.id} className="rounded-lg border bg-white dark:bg-slate-800 p-4 space-y-3">
-                      <div className="flex items-center gap-3">
-                        <Checkbox
-                          checked={checkedIds.has(order.id)}
-                          onCheckedChange={(v) => handleToggleOne(order.id, !!v)}
-                          disabled={isBulkProcessing}
-                        />
-                        <div className="flex-1 flex items-center justify-between">
-                          <div>
-                            <p className="font-medium">{order.orderNumber}</p>
-                            <p className="text-sm text-slate-500">{order.supplierName || "-"}</p>
-                          </div>
-                          <Badge className={config.className}>{config.label}</Badge>
+                    <div key={order.id} className="rounded-lg border bg-white p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium">{order.orderNumber}</p>
+                          <p className="text-sm text-slate-500">{order.supplierName || "-"}</p>
                         </div>
+                        <Badge className={config.className}>{config.label}</Badge>
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <div className="space-y-1">
-                          {order.destinationWarehouseName && (
-                            <p className="text-slate-600 dark:text-slate-300 font-medium">{order.destinationWarehouseName}</p>
-                          )}
                           <p className="text-slate-500">예상입고: {order.expectedDate || "-"}</p>
                           <p className="text-slate-500">
                             {order.itemsCount}품목 · {order.receivedQuantity}/{order.totalQuantity} ({progress}%)
@@ -269,21 +165,8 @@ export function WarehouseInboundClient({ initialOrders, warehouses }: WarehouseI
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[40px]">
-                        <Checkbox
-                          checked={allChecked}
-                          ref={(el) => {
-                            if (el) {
-                              (el as unknown as HTMLInputElement).indeterminate = someChecked;
-                            }
-                          }}
-                          onCheckedChange={(v) => handleToggleAll(!!v)}
-                          disabled={isBulkProcessing}
-                        />
-                      </TableHead>
                       <TableHead>발주번호</TableHead>
                       <TableHead>공급업체</TableHead>
-                      <TableHead>입고 창고</TableHead>
                       <TableHead>상태</TableHead>
                       <TableHead>예상입고일</TableHead>
                       <TableHead className="text-center">품목수</TableHead>
@@ -303,13 +186,6 @@ export function WarehouseInboundClient({ initialOrders, warehouses }: WarehouseI
 
                       return (
                         <TableRow key={order.id}>
-                          <TableCell>
-                            <Checkbox
-                              checked={checkedIds.has(order.id)}
-                              onCheckedChange={(v) => handleToggleOne(order.id, !!v)}
-                              disabled={isBulkProcessing}
-                            />
-                          </TableCell>
                           <TableCell className="font-medium">
                             {order.orderNumber}
                             <div className="text-xs text-slate-500">
@@ -317,7 +193,6 @@ export function WarehouseInboundClient({ initialOrders, warehouses }: WarehouseI
                             </div>
                           </TableCell>
                           <TableCell>{order.supplierName || "-"}</TableCell>
-                          <TableCell>{order.destinationWarehouseName || "-"}</TableCell>
                           <TableCell>
                             <Badge className={config.className}>
                               {config.label}
@@ -363,7 +238,6 @@ export function WarehouseInboundClient({ initialOrders, warehouses }: WarehouseI
           open={dialogOpen}
           onOpenChange={setDialogOpen}
           orderId={selectedOrderId}
-          warehouses={warehouses}
           onSuccess={handleInboundSuccess}
         />
       )}
