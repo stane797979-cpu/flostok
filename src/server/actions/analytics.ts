@@ -610,3 +610,83 @@ export async function getSalesTrend(days: number = 30): Promise<{
     return { data: [], hasData: false }
   }
 }
+
+/**
+ * 제품별 판매 추이 조회
+ * - 조직 내 제품 목록 반환
+ * - 특정 productId 지정 시 해당 제품의 일별 판매액 + 수량 반환
+ */
+export async function getProductSalesTrend(
+  productId: string,
+  days: number = 30
+): Promise<{
+  data: Array<{ date: string; sales: number; quantity: number }>;
+  hasData: boolean;
+}> {
+  try {
+    const user = await requireAuth()
+    const orgId = user.organizationId
+
+    const startDate = new Date()
+    startDate.setDate(startDate.getDate() - days)
+    const startDateStr = startDate.toISOString().split('T')[0]
+
+    const rows = await db
+      .select({
+        date: salesRecords.date,
+        sales: sql<number>`COALESCE(SUM(${salesRecords.totalAmount}), 0)`,
+        quantity: sql<number>`COALESCE(SUM(${salesRecords.quantity}), 0)`,
+      })
+      .from(salesRecords)
+      .where(
+        and(
+          eq(salesRecords.organizationId, orgId),
+          eq(salesRecords.productId, productId),
+          gte(salesRecords.date, startDateStr)
+        )
+      )
+      .groupBy(salesRecords.date)
+      .orderBy(salesRecords.date)
+
+    if (rows.length === 0) {
+      return { data: [], hasData: false }
+    }
+
+    const dataMap = new Map(rows.map((r) => [r.date, { sales: Number(r.sales), quantity: Number(r.quantity) }]))
+    const data: Array<{ date: string; sales: number; quantity: number }> = []
+
+    for (let i = days; i >= 0; i--) {
+      const d = new Date()
+      d.setDate(d.getDate() - i)
+      const dateStr = d.toISOString().split('T')[0]
+      const entry = dataMap.get(dateStr) ?? { sales: 0, quantity: 0 }
+      data.push({ date: dateStr, ...entry })
+    }
+
+    return { data, hasData: true }
+  } catch (error) {
+    console.error('제품별 판매 추이 조회 오류:', error)
+    return { data: [], hasData: false }
+  }
+}
+
+/**
+ * 판매 추이용 제품 목록 조회 (id + sku + name만)
+ */
+export async function getProductListForTrend(): Promise<
+  Array<{ id: string; sku: string; name: string }>
+> {
+  try {
+    const user = await requireAuth()
+    const orgId = user.organizationId
+
+    return await db
+      .select({ id: products.id, sku: products.sku, name: products.name })
+      .from(products)
+      .where(eq(products.organizationId, orgId))
+      .orderBy(products.name)
+  } catch (error) {
+    console.error('제품 목록 조회 오류:', error)
+    return []
+  }
+}

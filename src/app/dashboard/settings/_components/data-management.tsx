@@ -4,10 +4,21 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FileSpreadsheet, Upload, Download, Package, ShoppingCart, Loader2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { FileSpreadsheet, Upload, Download, Package, ShoppingCart, Loader2, Trash2, AlertTriangle } from "lucide-react";
 import { ExcelImportDialog } from "@/components/features/excel";
 import type { ImportType } from "@/server/actions/excel-import";
 import { exportProductsToExcel, exportSalesToExcel } from "@/server/actions/data-export";
+import { resetInventoryData, resetInboundData, resetSalesData, resetAllData } from "@/server/actions/data-reset";
 
 interface ImportOption {
   type: ImportType;
@@ -53,11 +64,49 @@ function downloadBase64File(base64: string, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+type ResetTarget = "inventory" | "inbound" | "sales" | "all";
+
+const RESET_OPTIONS: {
+  target: ResetTarget;
+  title: string;
+  description: string;
+  detail: string;
+}[] = [
+  {
+    target: "inventory",
+    title: "재고",
+    description: "현재 재고, 재고 이력, LOT 정보를 모두 삭제합니다.",
+    detail: "inventory / inventory_history / inventory_lots 테이블",
+  },
+  {
+    target: "inbound",
+    title: "입고",
+    description: "모든 입고 기록을 삭제합니다.",
+    detail: "inbound_records 테이블",
+  },
+  {
+    target: "sales",
+    title: "출고/판매",
+    description: "모든 판매(출고) 기록과 출고 요청을 삭제합니다.",
+    detail: "sales_records / outbound_requests 테이블",
+  },
+  {
+    target: "all",
+    title: "전체",
+    description: "재고, 입고, 출고/판매 데이터를 모두 삭제합니다.",
+    detail: "위 항목 전체",
+  },
+];
+
 export function DataManagement() {
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [selectedImportType, setSelectedImportType] = useState<ImportType>("sales");
   const [exportingProducts, setExportingProducts] = useState(false);
   const [exportingSales, setExportingSales] = useState(false);
+
+  const [confirmTarget, setConfirmTarget] = useState<ResetTarget | null>(null);
+  const [resetting, setResetting] = useState<ResetTarget | null>(null);
+  const [resetResult, setResetResult] = useState<{ target: ResetTarget; success: boolean; error?: string } | null>(null);
 
   const handleImportClick = (type: ImportType) => {
     setSelectedImportType(type);
@@ -93,6 +142,30 @@ export function DataManagement() {
       alert("다운로드 중 오류가 발생했습니다");
     } finally {
       setExportingSales(false);
+    }
+  };
+
+  const handleResetConfirm = async () => {
+    if (!confirmTarget) return;
+    const target = confirmTarget;
+    setConfirmTarget(null);
+    setResetting(target);
+    setResetResult(null);
+
+    const actionMap: Record<ResetTarget, () => Promise<{ success: boolean; error?: string }>> = {
+      inventory: resetInventoryData,
+      inbound: resetInboundData,
+      sales: resetSalesData,
+      all: resetAllData,
+    };
+
+    try {
+      const result = await actionMap[target]();
+      setResetResult({ target, ...result });
+    } catch {
+      setResetResult({ target, success: false, error: "삭제 중 오류가 발생했습니다." });
+    } finally {
+      setResetting(null);
     }
   };
 
@@ -215,6 +288,73 @@ export function DataManagement() {
         </CardContent>
       </Card>
 
+      {/* 데이터 초기화 섹션 */}
+      <Card className="border-red-200">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-red-600">
+            <Trash2 className="h-5 w-5" />
+            데이터 초기화
+          </CardTitle>
+          <CardDescription>
+            선택한 데이터를 영구 삭제합니다. 삭제 후 복구할 수 없습니다.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {resetResult && (
+            <div
+              className={`rounded-lg border px-4 py-3 text-sm ${
+                resetResult.success
+                  ? "border-green-200 bg-green-50 text-green-700"
+                  : "border-red-200 bg-red-50 text-red-700"
+              }`}
+            >
+              {resetResult.success
+                ? `${RESET_OPTIONS.find((o) => o.target === resetResult.target)?.title} 데이터가 삭제되었습니다.`
+                : resetResult.error}
+            </div>
+          )}
+
+          <div className="grid gap-3 md:grid-cols-2">
+            {RESET_OPTIONS.map((option) => (
+              <div
+                key={option.target}
+                className={`flex items-start justify-between rounded-lg border p-4 ${
+                  option.target === "all" ? "border-red-300 bg-red-50/50 md:col-span-2" : ""
+                }`}
+              >
+                <div className="flex gap-3">
+                  <div className={`rounded-lg p-2 ${option.target === "all" ? "bg-red-100" : "bg-slate-100"}`}>
+                    <AlertTriangle className={`h-5 w-5 ${option.target === "all" ? "text-red-600" : "text-slate-500"}`} />
+                  </div>
+                  <div>
+                    <h4 className="font-medium">{option.title} 데이터 삭제</h4>
+                    <p className="mt-1 text-sm text-slate-500">{option.description}</p>
+                    <p className="mt-0.5 text-xs text-slate-400">{option.detail}</p>
+                  </div>
+                </div>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="shrink-0"
+                  disabled={resetting !== null}
+                  onClick={() => {
+                    setResetResult(null);
+                    setConfirmTarget(option.target);
+                  }}
+                >
+                  {resetting === option.target ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="mr-2 h-4 w-4" />
+                  )}
+                  삭제
+                </Button>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* 임포트 다이얼로그 */}
       <ExcelImportDialog
         open={importDialogOpen}
@@ -224,6 +364,35 @@ export function DataManagement() {
           console.log("Import success:", result);
         }}
       />
+
+      {/* 삭제 확인 다이얼로그 */}
+      <AlertDialog open={confirmTarget !== null} onOpenChange={(open) => !open && setConfirmTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="h-5 w-5" />
+              {RESET_OPTIONS.find((o) => o.target === confirmTarget)?.title} 데이터 삭제
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <span className="block">
+                {RESET_OPTIONS.find((o) => o.target === confirmTarget)?.description}
+              </span>
+              <span className="block font-semibold text-red-600">
+                삭제된 데이터는 복구할 수 없습니다. 계속하시겠습니까?
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={handleResetConfirm}
+            >
+              삭제
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

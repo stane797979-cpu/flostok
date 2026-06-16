@@ -33,6 +33,7 @@ export interface ProductAnalysis {
   combinedGradeFMR?: string;
   revenue: number;
   variationRate: number;
+  /** 출고 발생월 비율 (0~100, %) */
   avgMonthlyCount?: number;
   strategy: string;
 }
@@ -210,7 +211,7 @@ export function ABCXYZTable({ products, selectedGrade }: ABCXYZTableProps) {
                 </TableHead>
                 <TableHead className="text-right">
                   <button onClick={() => handleSort("avgMonthlyCount")} className="ml-auto flex items-center gap-1 hover:text-slate-900">
-                    월출고건수 <SortIcon field="avgMonthlyCount" />
+                    출고발생률 <SortIcon field="avgMonthlyCount" />
                   </button>
                 </TableHead>
                 <TableHead className="min-w-48">권장 조치</TableHead>
@@ -259,7 +260,7 @@ export function ABCXYZTable({ products, selectedGrade }: ABCXYZTableProps) {
                       {product.variationRate.toFixed(2)}
                     </TableCell>
                     <TableCell className="text-right font-mono text-slate-500">
-                      {product.avgMonthlyCount?.toFixed(1) ?? "-"}
+                      {product.avgMonthlyCount != null ? `${product.avgMonthlyCount.toFixed(1)}%` : "-"}
                     </TableCell>
                     <TableCell className="text-sm text-slate-600">{product.strategy}</TableCell>
                   </TableRow>

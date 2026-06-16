@@ -13,6 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Info } from "lucide-react";
 import type { ABCXYZFMRItem } from "@/server/services/scm/abc-xyz-analysis";
 
 interface AnalyticsFMRProps {
@@ -93,7 +95,9 @@ export function AnalyticsFMR({ items }: AnalyticsFMRProps) {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-blue-700">F등급 (고빈도)</CardTitle>
+            <div className="flex items-center gap-1.5">
+              <CardTitle className="text-sm font-medium text-blue-700">F등급 (고빈도)</CardTitle>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-700">{fCount}개</div>
@@ -103,6 +107,7 @@ export function AnalyticsFMR({ items }: AnalyticsFMRProps) {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-indigo-700">M등급 (중빈도)</CardTitle>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-indigo-700">{mCount}개</div>
@@ -111,7 +116,9 @@ export function AnalyticsFMR({ items }: AnalyticsFMRProps) {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-slate-600">R등급 (저빈도)</CardTitle>
+            <div className="flex items-center gap-1.5">
+              <CardTitle className="text-sm font-medium text-slate-600">R등급 (저빈도)</CardTitle>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-slate-600">{rCount}개</div>
