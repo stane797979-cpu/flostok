@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/server/db'
-import { organizations, inventory, products, alerts } from '@/server/db/schema'
-import { eq, and } from 'drizzle-orm'
+import { organizations, inventory, products, alerts, stockoutRecords } from '@/server/db/schema'
+import { eq, and, isNull } from 'drizzle-orm'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -152,6 +152,52 @@ export async function GET(request: NextRequest) {
             })
           }
         }
+
+        // ── 결품 자동 연계 ──────────────────────────────────
+        const today = new Date().toISOString().split('T')[0]
+
+        // 1. 진행 중인 결품 기록 조회 (stockoutEndDate 없음)
+        const activeStockouts = await db
+          .select({ id: stockoutRecords.id, productId: stockoutRecords.productId })
+          .from(stockoutRecords)
+          .where(and(
+            eq(stockoutRecords.organizationId, org.id),
+            eq(stockoutRecords.isStockout, true),
+            isNull(stockoutRecords.stockoutEndDate)
+          ))
+
+        const activeStockoutProductIds = new Set(activeStockouts.map(r => r.productId))
+
+        for (const item of inventoryItems) {
+          const inv = item.inventory
+          const product = item.product
+          const status = getInventoryStatus(inv.currentStock, product.safetyStock, product.reorderPoint)
+          const isOutOfStock = status.status === 'out_of_stock'
+
+          if (isOutOfStock && !activeStockoutProductIds.has(product.id)) {
+            // 품절 → 결품 자동 등록
+            await db.insert(stockoutRecords).values({
+              organizationId: org.id,
+              productId: product.id,
+              referenceDate: today,
+              baseStock: inv.currentStock,
+              outboundQty: 0,
+              closingStock: 0,
+              isStockout: true,
+              stockoutStartDate: today,
+              actionStatus: 'no_action',
+            })
+          } else if (!isOutOfStock && activeStockoutProductIds.has(product.id)) {
+            // 재고 복구 → 결품 자동 정상화
+            const record = activeStockouts.find(r => r.productId === product.id)
+            if (record) {
+              await db.update(stockoutRecords)
+                .set({ stockoutEndDate: today, actionStatus: 'normalized', updatedAt: new Date() })
+                .where(eq(stockoutRecords.id, record.id))
+            }
+          }
+        }
+        // ────────────────────────────────────────────────────
 
         let newAlertsCreated = 0
         if (alertsToCreate.length > 0) {

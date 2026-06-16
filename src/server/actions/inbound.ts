@@ -8,8 +8,9 @@ import {
   inventoryLots,
   products,
   suppliers,
+  stockoutRecords,
 } from "@/server/db/schema";
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 import { processInventoryTransaction } from "./inventory";
@@ -220,6 +221,30 @@ export async function confirmInbound(input: ConfirmInboundInput): Promise<{
 
       return recordIds;
     });
+
+    // 입고된 제품들에 대해 진행 중인 결품 자동 정상화
+    const today = new Date().toISOString().split("T")[0];
+    const inboundProductIds = validated.items
+      .filter((i) => i.receivedQuantity > 0)
+      .map((i) => i.productId);
+
+    if (inboundProductIds.length > 0) {
+      const activeStockouts = await db
+        .select({ id: stockoutRecords.id, productId: stockoutRecords.productId })
+        .from(stockoutRecords)
+        .where(and(
+          eq(stockoutRecords.organizationId, user.organizationId),
+          eq(stockoutRecords.isStockout, true),
+          isNull(stockoutRecords.stockoutEndDate),
+          inArray(stockoutRecords.productId, inboundProductIds)
+        ));
+
+      for (const record of activeStockouts) {
+        await db.update(stockoutRecords)
+          .set({ stockoutEndDate: today, actionStatus: "normalized", updatedAt: new Date() })
+          .where(eq(stockoutRecords.id, record.id));
+      }
+    }
 
     await logActivity({
       user,
