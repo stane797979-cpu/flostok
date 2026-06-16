@@ -22,7 +22,15 @@ import { ExcelImportDialog } from "@/components/features/excel/excel-import-dial
 import { useToast } from "@/hooks/use-toast";
 import { getOutboundRecords, deleteOutboundRecord, type OutboundRecord } from "@/server/actions/outbound";
 import { exportInventoryMovementToExcel } from "@/server/actions/excel-export";
-import { getOutboundRequests } from "@/server/actions/outbound-requests";
+import { getOutboundRequests, cancelOutboundRequest, holdOutboundRequest, resumeOutboundRequest } from "@/server/actions/outbound-requests";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 /**
  * 월의 시작일/종료일 계산
@@ -68,17 +76,38 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
 
   const { toast } = useToast();
 
-  // 출고 요청 카운트 조회
-  const loadRequestCounts = useCallback(async () => {
+  // 출고 요청 목록 상태
+  const [outboundRequestList, setOutboundRequestList] = useState<Array<{
+    id: string;
+    requestNumber: string;
+    status: string;
+    outboundType: string;
+    outboundTypeLabel: string;
+    requestedByName: string | null;
+    itemsCount: number;
+    totalQuantity: number;
+    createdAt: Date;
+  }>>([]);
+  const [isLoadingRequests, setIsLoadingRequests] = useState(false);
+
+  // 출고 요청 목록 조회
+  const loadOutboundRequests = useCallback(async () => {
+    setIsLoadingRequests(true);
     try {
-      const [pending, holding] = await Promise.all([
-        getOutboundRequests({ status: "pending" }),
-        getOutboundRequests({ status: "holding" }),
-      ]);
-      setPendingCount(pending.requests.length);
-      setHoldingCount(holding.requests.length);
-    } catch {}
+      const result = await getOutboundRequests({ limit: 100 });
+      setOutboundRequestList(result.requests);
+      const pending = result.requests.filter((r) => r.status === "pending").length;
+      const holding = result.requests.filter((r) => r.status === "holding").length;
+      setPendingCount(pending);
+      setHoldingCount(holding);
+    } catch {
+    } finally {
+      setIsLoadingRequests(false);
+    }
   }, []);
+
+  // 출고 요청 카운트 조회 (호환성 유지)
+  const loadRequestCounts = loadOutboundRequests;
 
   // 출고 기록 조회
   const loadOutboundRecords = useCallback(async (month: Date) => {
@@ -213,7 +242,7 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
   useEffect(() => {
     if (initialTab === "records") {
       loadOutboundRecords(outboundMonth);
-      loadRequestCounts();
+      loadOutboundRequests();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -315,6 +344,113 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
               </div>
             </CardHeader>
             <CardContent>
+              {/* 출고 요청 현황 */}
+              <div className="mb-6">
+                <h3 className="mb-3 text-sm font-semibold text-slate-700">출고 요청 현황</h3>
+                {isLoadingRequests ? (
+                  <div className="flex h-24 items-center justify-center text-sm text-slate-400">
+                    불러오는 중...
+                  </div>
+                ) : outboundRequestList.length === 0 ? (
+                  <div className="flex h-24 items-center justify-center rounded-lg border border-dashed text-sm text-slate-400">
+                    출고 요청 내역이 없습니다
+                  </div>
+                ) : (
+                  <div className="rounded-lg border bg-white dark:bg-slate-950">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>요청번호</TableHead>
+                          <TableHead>유형</TableHead>
+                          <TableHead>상태</TableHead>
+                          <TableHead className="text-right">품목수</TableHead>
+                          <TableHead className="text-right">총수량</TableHead>
+                          <TableHead>요청자</TableHead>
+                          <TableHead>요청일시</TableHead>
+                          <TableHead className="w-[160px]" />
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {outboundRequestList.map((req) => (
+                          <TableRow key={req.id}>
+                            <TableCell className="font-mono text-sm">{req.requestNumber}</TableCell>
+                            <TableCell className="text-sm">{req.outboundTypeLabel}</TableCell>
+                            <TableCell>
+                              {req.status === "pending" && (
+                                <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">출고요청중</Badge>
+                              )}
+                              {req.status === "holding" && (
+                                <Badge className="bg-yellow-100 text-yellow-700 hover:bg-yellow-100">홀딩</Badge>
+                              )}
+                              {req.status === "confirmed" && (
+                                <Badge className="bg-green-100 text-green-700 hover:bg-green-100">출고완료</Badge>
+                              )}
+                              {req.status === "cancelled" && (
+                                <Badge className="bg-slate-100 text-slate-500 hover:bg-slate-100">취소</Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-sm">{req.itemsCount}</TableCell>
+                            <TableCell className="text-right font-mono text-sm">{req.totalQuantity.toLocaleString()}</TableCell>
+                            <TableCell className="text-sm text-slate-500">{req.requestedByName || "-"}</TableCell>
+                            <TableCell className="text-sm text-slate-500">
+                              {new Date(req.createdAt).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex gap-1">
+                                {req.status === "pending" && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 text-xs"
+                                    onClick={async () => {
+                                      await holdOutboundRequest(req.id);
+                                      loadOutboundRequests();
+                                    }}
+                                  >
+                                    홀딩
+                                  </Button>
+                                )}
+                                {req.status === "holding" && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 text-xs"
+                                    onClick={async () => {
+                                      await resumeOutboundRequest(req.id);
+                                      loadOutboundRequests();
+                                    }}
+                                  >
+                                    요청재개
+                                  </Button>
+                                )}
+                                {(req.status === "pending" || req.status === "holding") && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 text-xs text-red-600 hover:text-red-700"
+                                    onClick={async () => {
+                                      await cancelOutboundRequest(req.id);
+                                      loadOutboundRequests();
+                                    }}
+                                  >
+                                    취소
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </div>
+
+              {/* 구분선 */}
+              <div className="mb-6 border-t" />
+
+              {/* 출고 완료 기록 */}
+              <h3 className="mb-3 text-sm font-semibold text-slate-700">출고 완료 기록</h3>
               {isLoadingRecords ? (
                 <div className="flex h-48 items-center justify-center text-slate-400">
                   출고 기록을 불러오는 중...
