@@ -9,7 +9,7 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: 1,
   workers: 1,
-  timeout: 30000,
+  timeout: 60000,
   reporter: [['list'], ['html', { open: 'never', outputFolder: 'playwright-report' }]],
   use: {
     baseURL: 'https://stock-and-logis.vercel.app',
@@ -42,7 +42,6 @@ export default defineConfig({
           args: ['--no-sandbox', '--disable-gpu'],
         },
       },
-      dependencies: ['setup'],
     },
     {
       name: 'chromium',

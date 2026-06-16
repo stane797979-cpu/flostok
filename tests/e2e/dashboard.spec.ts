@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('대시보드', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
   });
 
   test('페이지 타이틀 확인', async ({ page }) => {
@@ -11,7 +11,7 @@ test.describe('대시보드', () => {
   });
 
   test('KPI 카드 4개 표시', async ({ page }) => {
-    await expect(page.getByText('총 SKU')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText('총 SKU').first()).toBeVisible({ timeout: 15000 });
     await expect(page.getByText('발주 필요').first()).toBeVisible({ timeout: 10000 });
     await expect(page.getByText('위험 품목')).toBeVisible({ timeout: 10000 });
     await expect(page.getByText('과재고').first()).toBeVisible({ timeout: 10000 });

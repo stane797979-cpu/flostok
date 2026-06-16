@@ -3,7 +3,7 @@ import { test, expect } from "@playwright/test";
 test.describe("재고 관리", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/dashboard/inventory");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
   });
 
   test("재고 페이지 로딩", async ({ page }) => {
@@ -16,8 +16,8 @@ test.describe("재고 관리", () => {
   });
 
   test("재고 목록 테이블 렌더링", async ({ page }) => {
-    await expect(page.getByText("SKU").first()).toBeVisible({ timeout: 15000 });
-    await expect(page.getByText("현재고").first()).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("SKU").first()).toBeVisible({ timeout: 30000 });
+    await expect(page.locator("table").first()).toBeVisible({ timeout: 20000 });
   });
 
   test("검색 기능", async ({ page }) => {

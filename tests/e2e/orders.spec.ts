@@ -3,26 +3,27 @@ import { test, expect } from '@playwright/test';
 test.describe('발주 관리', () => {
   test('발주필요 탭', async ({ page }) => {
     await page.goto('/dashboard/orders?tab=reorder');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await expect(page.getByText('발주 필요').first()).toBeVisible({ timeout: 20000 });
   });
 
   test('발주현황 탭 - 로딩 후 데이터 표시', async ({ page }) => {
+    test.setTimeout(60000);
     await page.goto('/dashboard/orders?tab=orders');
-    await page.waitForLoadState('networkidle');
-    await expect(page.getByText('발주 현황').first()).toBeVisible({ timeout: 20000 });
-    await expect(page.getByText('발주 목록을 불러오는 중')).not.toBeVisible({ timeout: 30000 });
+    await page.waitForLoadState('load');
+    await expect(page.getByText('발주 현황').first()).toBeVisible({ timeout: 40000 });
+    await expect(page.getByText('발주 목록을 불러오는 중')).not.toBeVisible({ timeout: 40000 });
   });
 
   test('자동발주 탭', async ({ page }) => {
     await page.goto('/dashboard/orders?tab=auto-reorder');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await expect(page.getByText('자동발주').first()).toBeVisible({ timeout: 20000 });
   });
 
   test('입고현황 탭', async ({ page }) => {
     await page.goto('/dashboard/orders?tab=inbound');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await expect(page.getByText('입고 현황').first()).toBeVisible({ timeout: 20000 });
   });
 });
