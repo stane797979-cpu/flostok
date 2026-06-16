@@ -204,8 +204,8 @@ export function ProductTable({ products = [], onView, onEdit, onDelete, onBulkDe
                   <SortIcon field="category" />
                 </Button>
               </TableHead>
-              <TableHead className="text-right">현재고</TableHead>
-              <TableHead className="text-right">
+              <TableHead className="text-center">현재고</TableHead>
+              <TableHead className="text-center">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -256,10 +256,10 @@ export function ProductTable({ products = [], onView, onEdit, onDelete, onBulkDe
                 <TableCell className="font-mono text-sm">{product.sku}</TableCell>
                 <TableCell className="font-medium">{product.name}</TableCell>
                 <TableCell className="text-slate-500">{product.category || "-"}</TableCell>
-                <TableCell className="text-right font-mono">
+                <TableCell className="text-center font-mono">
                   {(product.currentStock ?? 0).toLocaleString()}
                 </TableCell>
-                <TableCell className="text-right font-mono text-slate-500">
+                <TableCell className="text-center font-mono text-slate-500">
                   {(product.safetyStock ?? 0).toLocaleString()}
                 </TableCell>
                 <TableCell>
