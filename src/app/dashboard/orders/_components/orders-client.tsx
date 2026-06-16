@@ -1,21 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef, useTransition } from "react";
-import { useRouter } from "next/navigation";
-import dynamic from "next/dynamic";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { ChevronLeft, ChevronRight, Download, Loader2, PackagePlus, XCircle, Upload, Zap, ClipboardEdit, CheckCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Loader2, PackagePlus, XCircle, PackageCheck, Upload } from "lucide-react";
+import { DeliveryComplianceTab } from "./delivery-compliance-tab";
+import { ImportShipmentTab } from "./import-shipment-tab";
 import type { DeliveryComplianceResult } from "@/server/services/scm/delivery-compliance";
 import { ReorderSummary } from "./reorder-summary";
 import { ReorderItemsTable, type ReorderItem } from "./reorder-items-table";
@@ -25,14 +17,10 @@ import {
   type AutoReorderRecommendation,
 } from "./auto-reorder-recommendations-table";
 import { InboundRecordsTable, type InboundRecord } from "./inbound-records-table";
-
-// 다이얼로그 + 독립 탭: 사용자 인터랙션 시에만 로드 (초기 번들 감소)
-const OrderDialog = dynamic(() => import("./order-dialog").then((m) => m.OrderDialog), { ssr: false });
-const BulkOrderDialog = dynamic(() => import("./bulk-order-dialog").then((m) => m.BulkOrderDialog), { ssr: false });
-const OrderDetailDialog = dynamic(() => import("./order-detail-dialog").then((m) => m.OrderDetailDialog), { ssr: false });
-const OtherInboundDialog = dynamic(() => import("./other-inbound-dialog").then((m) => m.OtherInboundDialog), { ssr: false });
-const DeliveryComplianceTab = dynamic(() => import("./delivery-compliance-tab").then((m) => m.DeliveryComplianceTab));
-const ImportShipmentTab = dynamic(() => import("./import-shipment-tab").then((m) => m.ImportShipmentTab));
+import { OrderDialog } from "./order-dialog";
+import { BulkOrderDialog } from "./bulk-order-dialog";
+import { OrderDetailDialog } from "./order-detail-dialog";
+import { OtherInboundDialog } from "./other-inbound-dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
   createPurchaseOrder,
@@ -43,10 +31,9 @@ import {
   getReorderItems,
   cancelBulkPurchaseOrders,
   uploadPurchaseOrderExcel,
-  updatePurchaseOrderStatus,
 } from "@/server/actions/purchase-orders";
-import { exportPurchaseOrderToExcel, exportInboundRecordsToExcel, exportPurchaseOrdersListToExcel } from "@/server/actions/excel-export";
-import { getInboundRecords } from "@/server/actions/inbound";
+import { exportPurchaseOrderToExcel, exportInboundRecordsToExcel } from "@/server/actions/excel-export";
+import { getInboundRecords, bulkConfirmInbound } from "@/server/actions/inbound";
 import type { ReorderItem as ServerReorderItem } from "@/server/services/scm/reorder-recommendation";
 
 /**
@@ -73,7 +60,6 @@ function mapServerToClientReorderItem(item: ServerReorderItem): ReorderItem {
 
 /**
  * 발주 필요 품목 → 자동발주 추천 변환
- * 수동발주와 차별화: 시스템이 수요예측·리드타임·재고상태를 종합 분석하여 추천
  */
 function generateAutoReorderRecommendations(
   items: ReorderItem[]
@@ -82,16 +68,11 @@ function generateAutoReorderRecommendations(
     const expectedDate = new Date();
     expectedDate.setDate(expectedDate.getDate() + item.leadTime);
 
-    // 추천 근거: 수요예측 기반인지 발주점 기반인지 구분
-    const forecastLabel = item.forecastBased
-      ? `[수요예측 기반] ${item.forecastMethod || "분석"} 모델 적용`
-      : "[발주점 기반] 현재고 < 발주점";
-
     const statusReasons: Record<number, string> = {
-      0: `${forecastLabel} · 품절 (현재고 ${item.currentStock}개)`,
-      1: `${forecastLabel} · 위험 (재고일수 ${item.daysOfInventory.toFixed(1)}일)`,
-      2: `${forecastLabel} · 부족 (재고일수 ${item.daysOfInventory.toFixed(1)}일)`,
-      3: `${forecastLabel} · 주의 (발주점 도달)`,
+      0: `품절 상태 (현재고 ${item.currentStock}개)`,
+      1: `위험 상태 (재고일수 ${item.daysOfInventory.toFixed(1)}일)`,
+      2: `부족 상태 (재고일수 ${item.daysOfInventory.toFixed(1)}일)`,
+      3: `주의 상태 (발주점 도달)`,
     };
 
     return {
@@ -122,7 +103,7 @@ const mapOrderStatus = (
 ): PurchaseOrderListItem["status"] => {
   const statusMap: Record<string, PurchaseOrderListItem["status"]> = {
     draft: "draft",
-    pending: "pending",
+    pending: "draft",
     approved: "ordered",
     ordered: "ordered",
     confirmed: "ordered",
@@ -153,80 +134,22 @@ function formatMonth(date: Date): string {
   return `${date.getFullYear()}년 ${date.getMonth() + 1}월`;
 }
 
-interface WarehouseOption {
-  id: string;
-  code: string;
-  name: string;
-  isDefault?: boolean;
-}
-
 interface OrdersClientProps {
-  initialTab?: "reorder" | "auto-reorder" | "orders" | "order-history" | "inbound" | "delivery" | "import-shipment";
+  initialTab?: "reorder" | "auto-reorder" | "orders" | "inbound" | "delivery" | "import-shipment";
   serverReorderItems?: ServerReorderItem[];
-  serverReorderTotal?: number;
-  preselectedProductIds?: string[];
   deliveryComplianceData?: DeliveryComplianceResult | null;
-  warehouses?: WarehouseOption[];
-  serverPurchaseOrdersTotal?: number;
-  userRole?: "admin" | "manager" | "viewer" | "warehouse";
-  serverInboundTotal?: number;
-  serverOrderHistoryTotal?: number;
-  serverOrderHistory?: Array<{
-    id: string;
-    orderNumber: string;
-    supplier?: { name: string } | null;
-    itemsCount: number;
-    totalAmount: number | null;
-    status: string;
-    orderDate: string | null;
-    expectedDate: string | null;
-    createdAt?: string | null;
-  }>;
-  serverPurchaseOrders?: Array<{
-    id: string;
-    orderNumber: string;
-    supplier?: { name: string } | null;
-    itemsCount: number;
-    totalAmount: number | null;
-    status: string;
-    orderDate: string | null;
-    expectedDate: string | null;
-    createdAt?: string | null;
-  }>;
-  serverInboundRecords?: Array<{
-    id: string;
-    date: string;
-    productName: string;
-    productSku: string;
-    expectedQuantity: number;
-    receivedQuantity: number;
-    acceptedQuantity: number;
-    rejectedQuantity: number;
-    qualityResult: string | null;
-    lotNumber: string | null;
-    orderNumber: string | null;
-    supplierName: string | null;
-    location: string | null;
-    notes: string | null;
-    createdAt: string;
-  }>;
 }
 
-export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], serverReorderTotal = 0, deliveryComplianceData = null, serverPurchaseOrders, serverPurchaseOrdersTotal = 0, serverInboundRecords, serverInboundTotal = 0, serverOrderHistory, serverOrderHistoryTotal = 0, warehouses = [], preselectedProductIds, userRole = "viewer" }: OrdersClientProps) {
+export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], deliveryComplianceData = null }: OrdersClientProps) {
   // 발주 필요 품목 (발주 후 재조회 가능하도록 state로 관리)
   const [reorderItems, setReorderItems] = useState<ReorderItem[]>(
     () => serverReorderItems.map(mapServerToClientReorderItem)
   );
 
-  // 승인 완료된 productId 추적 (중복 발주 방지)
-  const [approvedProductIds, setApprovedProductIds] = useState<Set<string>>(new Set());
-
-  // 자동발주 추천 생성 (발주 필요 품목 기반, 승인된 품목 제외)
+  // 자동발주 추천 생성 (발주 필요 품목 기반)
   const autoReorderRecommendations = useMemo(
-    () => generateAutoReorderRecommendations(
-      reorderItems.filter((item) => !approvedProductIds.has(item.productId))
-    ),
-    [reorderItems, approvedProductIds]
+    () => generateAutoReorderRecommendations(reorderItems),
+    [reorderItems]
   );
 
   // 발주 필요 품목 재조회
@@ -239,105 +162,40 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
     }
   }, []);
 
-  const [selectedIds, setSelectedIds] = useState<string[]>(() => {
-    if (!preselectedProductIds?.length) return [];
-    const preselectedSet = new Set(preselectedProductIds);
-    return reorderItems
-      .filter((item) => preselectedSet.has(item.productId))
-      .map((item) => item.productId);
-  });
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [selectedAutoReorderIds, setSelectedAutoReorderIds] = useState<string[]>([]);
   const [orderDialogOpen, setOrderDialogOpen] = useState(false);
   const [bulkOrderDialogOpen, setBulkOrderDialogOpen] = useState(false);
   const [orderDetailDialogOpen, setOrderDetailDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ReorderItem | null>(null);
   const [selectedOrderId, setSelectedOrderId] = useState<string>("");
-  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrderListItem[]>(() => {
-    if (!serverPurchaseOrders) return [];
-    return serverPurchaseOrders.map((order) => ({
-      id: order.id,
-      orderNumber: order.orderNumber,
-      supplierName: order.supplier?.name || "미지정",
-      itemsCount: order.itemsCount,
-      totalAmount: order.totalAmount || 0,
-      status: mapOrderStatus(order.status),
-      orderDate: order.orderDate || (order.createdAt ? new Date(order.createdAt).toISOString().split("T")[0] : ""),
-      expectedDate: order.expectedDate || null,
-    }));
-  });
-  const [isLoadingOrders, setIsLoadingOrders] = useState(false);
+  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrderListItem[]>([]);
+  const [isLoadingOrders, setIsLoadingOrders] = useState(initialTab === "orders");
 
   // 발주 현황 체크박스
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [isCancellingOrders, setIsCancellingOrders] = useState(false);
-  const [isApprovingOrders, setIsApprovingOrders] = useState(false);
+  const [isConfirmingInbound, setIsConfirmingInbound] = useState(false);
   const [hideReceived, setHideReceived] = useState(false);
-
-  // 수동발주 페이지네이션 (클라이언트)
-  const [reorderPage, setReorderPage] = useState(1);
-  const [reorderPageSize, setReorderPageSize] = useState(50);
-
-  // 자동발주 페이지네이션 (클라이언트)
-  const [autoReorderPage, setAutoReorderPage] = useState(1);
-  const [autoReorderPageSize, setAutoReorderPageSize] = useState(50);
-
-  const [isDownloadingOrders, setIsDownloadingOrders] = useState(false);
-
-  // 발주현황 페이지네이션
-  const [ordersPage, setOrdersPage] = useState(1);
-  const [ordersPageSize, setOrdersPageSize] = useState(50);
-  const [ordersTotalItems, setOrdersTotalItems] = useState(serverPurchaseOrdersTotal);
-  const ordersTotalPages = Math.max(1, Math.ceil(ordersTotalItems / ordersPageSize));
-
-  // 발주 이력 (취소된 발주)
-  const [orderHistory, setOrderHistory] = useState<PurchaseOrderListItem[]>(() => {
-    if (!serverOrderHistory) return [];
-    return serverOrderHistory.map((order) => ({
-      id: order.id,
-      orderNumber: order.orderNumber,
-      supplierName: order.supplier?.name || "미지정",
-      itemsCount: order.itemsCount,
-      totalAmount: order.totalAmount || 0,
-      status: mapOrderStatus(order.status),
-      orderDate: order.orderDate || (order.createdAt ? new Date(order.createdAt).toISOString().split("T")[0] : ""),
-      expectedDate: order.expectedDate || null,
-    }));
-  });
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-  const [historyPage, setHistoryPage] = useState(1);
-  const [historyPageSize, setHistoryPageSize] = useState(50);
-  const [historyTotalItems, setHistoryTotalItems] = useState(serverOrderHistoryTotal);
-  const historyTotalPages = Math.max(1, Math.ceil(historyTotalItems / historyPageSize));
 
   // 입고 현황 상태
   const [inboundMonth, setInboundMonth] = useState<Date>(() => new Date());
-  const [inboundRecords, setInboundRecords] = useState<InboundRecord[]>(() => {
-    if (!serverInboundRecords) return [];
-    return serverInboundRecords.map((r) => ({ ...r, createdAt: new Date(r.createdAt) }));
-  });
+  const [inboundRecords, setInboundRecords] = useState<InboundRecord[]>([]);
   const [isLoadingInbound, setIsLoadingInbound] = useState(false);
   const [isDownloadingInbound, setIsDownloadingInbound] = useState(false);
   const [otherInboundOpen, setOtherInboundOpen] = useState(false);
-
-  // 입고현황 페이지네이션
-  const [inboundPage, setInboundPage] = useState(1);
-  const [inboundPageSize, setInboundPageSize] = useState(50);
-  const [inboundTotalItems, setInboundTotalItems] = useState(serverInboundTotal);
-  const inboundTotalPages = Math.max(1, Math.ceil(inboundTotalItems / inboundPageSize));
 
   // 발주 엑셀 업로드
   const orderUploadRef = useRef<HTMLInputElement>(null);
   const [isUploadingOrders, startUploadTransition] = useTransition();
 
-  const router = useRouter();
   const { toast } = useToast();
 
-  // DB에서 발주 목록 불러오기 (취소 제외)
-  const loadPurchaseOrders = useCallback(async (page = ordersPage, size = ordersPageSize) => {
+  // DB에서 발주 목록 불러오기
+  const loadPurchaseOrders = useCallback(async () => {
     setIsLoadingOrders(true);
     try {
-      const offset = (page - 1) * size;
-      const result = await getPurchaseOrders({ limit: size, offset, excludeStatus: "cancelled" });
+      const result = await getPurchaseOrders({ limit: 100 });
       const mapped: PurchaseOrderListItem[] = result.orders.map((order) => ({
         id: order.id,
         orderNumber: order.orderNumber,
@@ -349,66 +207,37 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
         expectedDate: order.expectedDate || null,
       }));
       setPurchaseOrders(mapped);
-      setOrdersTotalItems(result.total);
     } catch (error) {
       console.error("발주 목록 조회 오류:", error);
     } finally {
       setIsLoadingOrders(false);
     }
-  }, [ordersPage, ordersPageSize]);
-
-  // DB에서 발주 이력 불러오기 (취소된 발주)
-  const loadOrderHistory = useCallback(async (page = historyPage, size = historyPageSize) => {
-    setIsLoadingHistory(true);
-    try {
-      const offset = (page - 1) * size;
-      const result = await getPurchaseOrders({ limit: size, offset, status: "cancelled" });
-      const mapped: PurchaseOrderListItem[] = result.orders.map((order) => ({
-        id: order.id,
-        orderNumber: order.orderNumber,
-        supplierName: order.supplier?.name || "미지정",
-        itemsCount: order.itemsCount,
-        totalAmount: order.totalAmount || 0,
-        status: mapOrderStatus(order.status),
-        orderDate: order.orderDate || (order.createdAt ? new Date(order.createdAt).toISOString().split("T")[0] : ""),
-        expectedDate: order.expectedDate || null,
-      }));
-      setOrderHistory(mapped);
-      setHistoryTotalItems(result.total);
-    } catch (error) {
-      console.error("발주 이력 조회 오류:", error);
-    } finally {
-      setIsLoadingHistory(false);
-    }
-  }, [historyPage, historyPageSize]);
+  }, []);
 
   // 입고 기록 조회
-  const loadInboundRecords = useCallback(async (month: Date, page = 1, size = inboundPageSize) => {
+  const loadInboundRecords = useCallback(async (month: Date) => {
     setIsLoadingInbound(true);
     try {
       const { startDate, endDate } = getMonthRange(month);
-      const offset = (page - 1) * size;
-      const result = await getInboundRecords({ startDate, endDate, limit: size, offset });
+      const result = await getInboundRecords({ startDate, endDate, limit: 500 });
       setInboundRecords(
         result.records.map((r) => ({
           ...r,
           createdAt: new Date(r.createdAt),
         }))
       );
-      setInboundTotalItems(result.total);
     } catch (error) {
       console.error("입고 기록 조회 오류:", error);
     } finally {
       setIsLoadingInbound(false);
     }
-  }, [inboundPageSize]);
+  }, []);
 
   // 월 이동
   const handlePrevMonth = useCallback(() => {
     setInboundMonth((prev) => {
       const next = new Date(prev.getFullYear(), prev.getMonth() - 1, 1);
-      setInboundPage(1);
-      loadInboundRecords(next, 1);
+      loadInboundRecords(next);
       return next;
     });
   }, [loadInboundRecords]);
@@ -416,50 +245,10 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
   const handleNextMonth = useCallback(() => {
     setInboundMonth((prev) => {
       const next = new Date(prev.getFullYear(), prev.getMonth() + 1, 1);
-      setInboundPage(1);
-      loadInboundRecords(next, 1);
+      loadInboundRecords(next);
       return next;
     });
   }, [loadInboundRecords]);
-
-  // 발주현황 페이지 이동
-  const handleOrdersPageChange = useCallback((page: number) => {
-    setOrdersPage(page);
-    loadPurchaseOrders(page);
-  }, [loadPurchaseOrders]);
-
-  const handleOrdersPageSizeChange = useCallback((size: string) => {
-    const newSize = size === "all" ? 9999 : Number(size);
-    setOrdersPageSize(newSize);
-    setOrdersPage(1);
-    loadPurchaseOrders(1, newSize);
-  }, [loadPurchaseOrders]);
-
-  // 발주이력 페이지 이동
-  const handleHistoryPageChange = useCallback((page: number) => {
-    setHistoryPage(page);
-    loadOrderHistory(page);
-  }, [loadOrderHistory]);
-
-  const handleHistoryPageSizeChange = useCallback((size: string) => {
-    const newSize = size === "all" ? 9999 : Number(size);
-    setHistoryPageSize(newSize);
-    setHistoryPage(1);
-    loadOrderHistory(1, newSize);
-  }, [loadOrderHistory]);
-
-  // 입고현황 페이지 이동
-  const handleInboundPageChange = useCallback((page: number) => {
-    setInboundPage(page);
-    loadInboundRecords(inboundMonth, page);
-  }, [loadInboundRecords, inboundMonth]);
-
-  const handleInboundPageSizeChange = useCallback((size: string) => {
-    const newSize = Number(size);
-    setInboundPageSize(newSize);
-    setInboundPage(1);
-    loadInboundRecords(inboundMonth, 1, newSize);
-  }, [loadInboundRecords, inboundMonth]);
 
   // 입고 엑셀 다운로드
   const handleDownloadInbound = useCallback(async () => {
@@ -509,44 +298,20 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
     }
   }, [inboundMonth, toast]);
 
-  // 초기 로드 (서버에서 프리페치된 데이터가 없는 탭만 클라이언트에서 로드)
+  // 초기 로드 (탭에 따라 필요한 데이터만 로드)
   useEffect(() => {
-    if (initialTab === "orders" && !serverPurchaseOrders) {
+    if (initialTab === "orders") {
       loadPurchaseOrders();
-    } else if (initialTab === "order-history" && !serverOrderHistory) {
-      loadOrderHistory();
-    } else if (initialTab === "inbound" && !serverInboundRecords) {
+    } else if (initialTab === "inbound") {
       loadInboundRecords(inboundMonth);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [initialTab]);
 
-  // 수동발주 탭에서도 발주 완료 품목 제외
-  const filteredReorderItems = useMemo(
-    () => reorderItems.filter((item) => !approvedProductIds.has(item.productId)),
-    [reorderItems, approvedProductIds]
-  );
-
-  // 수동발주 페이지네이션 계산
-  const reorderTotalItems = filteredReorderItems.length;
-  const reorderTotalPages = Math.max(1, Math.ceil(reorderTotalItems / reorderPageSize));
-  const paginatedReorderItems = useMemo(
-    () => filteredReorderItems.slice((reorderPage - 1) * reorderPageSize, reorderPage * reorderPageSize),
-    [filteredReorderItems, reorderPage, reorderPageSize]
-  );
-
-  // 자동발주 페이지네이션 계산
-  const autoReorderTotalItems = autoReorderRecommendations.length;
-  const autoReorderTotalPages = Math.max(1, Math.ceil(autoReorderTotalItems / autoReorderPageSize));
-  const paginatedAutoReorderRecommendations = useMemo(
-    () => autoReorderRecommendations.slice((autoReorderPage - 1) * autoReorderPageSize, autoReorderPage * autoReorderPageSize),
-    [autoReorderRecommendations, autoReorderPage, autoReorderPageSize]
-  );
-
-  // 긴급도별 카운트 (필터링된 목록 기준)
-  const urgentCount = filteredReorderItems.filter((item) => item.urgencyLevel <= 1).length;
-  const lowCount = filteredReorderItems.filter((item) => item.urgencyLevel === 2).length;
-  const cautionCount = filteredReorderItems.filter((item) => item.urgencyLevel === 3).length;
+  // 긴급도별 카운트
+  const urgentCount = reorderItems.filter((item) => item.urgencyLevel <= 1).length;
+  const lowCount = reorderItems.filter((item) => item.urgencyLevel === 2).length;
+  const cautionCount = reorderItems.filter((item) => item.urgencyLevel === 3).length;
 
   const handleOrderClick = (item: ReorderItem) => {
     if (!item.supplierId) {
@@ -582,12 +347,6 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
     notes: string;
   }) => {
     try {
-      // 낙관적 업데이트: 서버 응답 전에 즉시 UI 반영
-      const orderedPids = new Set(data.items.map((i) => i.productId));
-      setApprovedProductIds((prev) => new Set([...prev, ...orderedPids]));
-      setSelectedIds([]);
-      setBulkOrderDialogOpen(false);
-
       const result = await createBulkPurchaseOrders({
         items: data.items,
         notes: data.notes,
@@ -598,15 +357,11 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
           title: "일괄 발주 완료",
           description: `${result.createdOrders.length}개의 발주서가 생성되었습니다`,
         });
-        // 백그라운드 병렬 리로드 (UI 블로킹 없음)
-        Promise.all([loadPurchaseOrders(), loadReorderItems()]).catch(console.error);
+        setSelectedIds([]);
+        setBulkOrderDialogOpen(false);
+        loadPurchaseOrders();
+        loadReorderItems();
       } else if (result.errors.length > 0) {
-        // 실패 시 낙관적 업데이트 롤백
-        setApprovedProductIds((prev) => {
-          const next = new Set(prev);
-          orderedPids.forEach((pid) => next.delete(pid));
-          return next;
-        });
         toast({
           title: "일괄 발주 실패",
           description: result.errors[0]?.error || "발주서 생성에 실패했습니다",
@@ -631,12 +386,6 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
     notes: string;
   }) => {
     try {
-      // 낙관적 업데이트: 즉시 UI 반영
-      const productName = selectedProduct?.productName;
-      setApprovedProductIds((prev) => new Set([...prev, data.productId]));
-      setSelectedProduct(null);
-      setOrderDialogOpen(false);
-
       const result = await createPurchaseOrder({
         items: [
           {
@@ -652,17 +401,13 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
       if (result.success) {
         toast({
           title: "발주 완료",
-          description: `${productName} ${data.quantity}개 발주가 생성되었습니다`,
+          description: `${selectedProduct?.productName} ${data.quantity}개 발주가 생성되었습니다`,
         });
-        // 백그라운드 병렬 리로드
-        Promise.all([loadPurchaseOrders(), loadReorderItems()]).catch(console.error);
+        setSelectedProduct(null);
+        setOrderDialogOpen(false);
+        loadPurchaseOrders();
+        loadReorderItems();
       } else {
-        // 실패 시 낙관적 업데이트 롤백
-        setApprovedProductIds((prev) => {
-          const next = new Set(prev);
-          next.delete(data.productId);
-          return next;
-        });
         toast({
           title: "발주 실패",
           description: result.error || "발주서 생성에 실패했습니다",
@@ -671,12 +416,6 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
       }
     } catch (error) {
       console.error("발주 오류:", error);
-      // 에러 시 낙관적 업데이트 롤백
-      setApprovedProductIds((prev) => {
-        const next = new Set(prev);
-        next.delete(data.productId);
-        return next;
-      });
       toast({
         title: "오류",
         description: "발주 처리 중 오류가 발생했습니다",
@@ -736,40 +475,6 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
     }
   };
 
-  // 발주현황 전체 엑셀 다운로드
-  const handleDownloadOrdersList = useCallback(async () => {
-    setIsDownloadingOrders(true);
-    try {
-      const result = await exportPurchaseOrdersListToExcel({ excludeStatus: "cancelled" });
-      if (result.success && result.data) {
-        const binaryString = atob(result.data.buffer);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        const blob = new Blob([bytes], {
-          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        });
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = result.data.filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-        toast({ title: "다운로드 완료", description: `${result.data.filename} 파일이 다운로드되었습니다` });
-      } else {
-        toast({ title: "다운로드 실패", description: result.error || "Excel 다운로드에 실패했습니다", variant: "destructive" });
-      }
-    } catch (error) {
-      console.error("발주현황 Excel 다운로드 오류:", error);
-      toast({ title: "오류", description: "Excel 다운로드 중 오류가 발생했습니다", variant: "destructive" });
-    } finally {
-      setIsDownloadingOrders(false);
-    }
-  }, [toast]);
-
   const handleBulkCancel = async () => {
     if (selectedOrderIds.length === 0) return;
 
@@ -806,64 +511,6 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
     }
   };
 
-  // 개별 승인 (목록에서 바로)
-  const handleApproveOrder = async (orderId: string) => {
-    try {
-      const result = await updatePurchaseOrderStatus(orderId, "ordered");
-      if (result.success) {
-        toast({ title: "승인 완료", description: "발주가 승인 및 확정되었습니다" });
-        loadPurchaseOrders();
-      } else {
-        toast({ title: "승인 실패", description: result.error || "승인에 실패했습니다", variant: "destructive" });
-      }
-    } catch {
-      toast({ title: "오류", description: "승인 처리 중 오류가 발생했습니다", variant: "destructive" });
-    }
-  };
-
-  // 일괄 승인 (선택된 pending 건)
-  const handleBulkApprove = async () => {
-    const pendingIds = selectedOrderIds.filter((id) =>
-      purchaseOrders.find((o) => o.id === id && o.status === "pending")
-    );
-    if (pendingIds.length === 0) {
-      toast({ title: "대상 없음", description: "결재대기 상태인 발주서가 선택되지 않았습니다", variant: "destructive" });
-      return;
-    }
-
-    setIsApprovingOrders(true);
-    let successCount = 0;
-    const errors: string[] = [];
-
-    // 병렬 승인 처리 (Promise.allSettled)
-    const results = await Promise.allSettled(
-      pendingIds.map((id) => updatePurchaseOrderStatus(id, "ordered"))
-    );
-
-    results.forEach((r, i) => {
-      if (r.status === "fulfilled" && r.value.success) {
-        successCount++;
-      } else {
-        const errMsg = r.status === "fulfilled" ? r.value.error : "처리 실패";
-        errors.push(`${pendingIds[i]}: ${errMsg}`);
-      }
-    });
-
-    if (successCount > 0) {
-      toast({ title: "일괄 승인 완료", description: `${successCount}건의 발주서가 승인되었습니다` });
-      setSelectedOrderIds([]);
-      loadPurchaseOrders();
-    }
-    if (errors.length > 0) {
-      toast({
-        title: successCount > 0 ? "일부 승인 실패" : "승인 실패",
-        description: `${errors.length}건 실패`,
-        variant: "destructive",
-      });
-    }
-    setIsApprovingOrders(false);
-  };
-
   const handleOrderExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -885,6 +532,57 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
     e.target.value = "";
   };
 
+  const handleBulkInbound = async () => {
+    if (selectedOrderIds.length === 0) return;
+
+    // 입고 가능한 상태의 발주만 필터
+    const inboundCapableStatuses = ["ordered", "pending_receipt"];
+    const inboundableIds = purchaseOrders
+      .filter((o) => selectedOrderIds.includes(o.id) && inboundCapableStatuses.includes(o.status))
+      .map((o) => o.id);
+
+    if (inboundableIds.length === 0) {
+      toast({
+        title: "입고 처리 불가",
+        description: "선택된 발주서 중 입고 가능한 발주서가 없습니다 (발주완료/입고대기 상태만 가능)",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsConfirmingInbound(true);
+    try {
+      const result = await bulkConfirmInbound(inboundableIds);
+
+      if (result.success) {
+        toast({
+          title: "일괄 입고 완료",
+          description: `${result.processedCount}건의 발주서가 전량 입고 처리되었습니다`,
+        });
+        setSelectedOrderIds([]);
+        loadPurchaseOrders();
+        loadReorderItems();
+      }
+
+      if (result.errors.length > 0) {
+        toast({
+          title: result.processedCount > 0 ? "일부 입고 실패" : "입고 실패",
+          description: result.errors[0]?.error || "입고 처리에 실패한 발주서가 있습니다",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("일괄 입고확인 오류:", error);
+      toast({
+        title: "오류",
+        description: "일괄 입고확인 처리 중 오류가 발생했습니다",
+        variant: "destructive",
+      });
+    } finally {
+      setIsConfirmingInbound(false);
+    }
+  };
+
   const handleApproveAutoReorders = async (ids: string[]) => {
     try {
       // 선택된 추천 목록에서 발주 데이터 추출
@@ -897,43 +595,26 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
         supplierId: r.supplierId || "",
       }));
 
-      // 낙관적 업데이트: 즉시 UI에서 제거 + 선택 해제
-      const approvedPids = new Set(selectedRecs.map((r) => r.productId));
-      setApprovedProductIds((prev) => new Set([...prev, ...approvedPids]));
-      setSelectedAutoReorderIds([]);
-
       const result = await approveAutoReorders(ids, items);
 
       if (result.success && result.errors.length === 0) {
         toast({
           title: "자동 발주 승인 완료",
-          description: `${result.createdOrders.length}개의 발주서가 생성되었습니다. 발주 현황으로 이동합니다.`,
+          description: `${result.createdOrders.length}개의 발주서가 생성되었습니다`,
         });
-        // 발주현황 페이지로 자동 이동
-        router.push("/dashboard/orders?tab=orders");
+        setSelectedAutoReorderIds([]);
+        loadPurchaseOrders();
+        loadReorderItems();
       } else if (result.success && result.errors.length > 0) {
-        // 실패한 품목만 롤백
-        const failedPids = new Set(result.errors.map((e) => e.recommendationId));
-        setApprovedProductIds((prev) => {
-          const next = new Set(prev);
-          failedPids.forEach((pid) => next.delete(pid));
-          return next;
-        });
         toast({
           title: "자동 발주 부분 완료",
           description: `${result.createdOrders.length}개 생성, ${result.errors.length}개 실패 (${result.errors[0]?.error || "공급자 미지정"})`,
           variant: "destructive",
         });
-        if (result.createdOrders.length > 0) {
-          router.push("/dashboard/orders?tab=orders");
-        }
+        setSelectedAutoReorderIds([]);
+        loadPurchaseOrders();
+        loadReorderItems();
       } else {
-        // 전체 실패 시 롤백
-        setApprovedProductIds((prev) => {
-          const next = new Set(prev);
-          approvedPids.forEach((pid) => next.delete(pid));
-          return next;
-        });
         toast({
           title: "자동 발주 승인 실패",
           description: result.errors[0]?.error || "자동 발주 승인에 실패했습니다",
@@ -980,10 +661,9 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
 
   // 페이지 제목 매핑
   const pageTitles: Record<string, { title: string; description: string }> = {
-    reorder: { title: "수동 발주", description: "발주점 이하 품목을 확인하고, 담당자가 직접 수량·공급자를 선택하여 발주합니다" },
-    "auto-reorder": { title: "자동발주 추천", description: "시스템이 재고 상태·수요예측·리드타임을 분석하여 최적 발주를 추천합니다. 승인만 하면 즉시 발주됩니다" },
+    reorder: { title: "발주 필요", description: "재고 상태를 확인하고 발주를 진행하세요" },
+    "auto-reorder": { title: "자동발주", description: "AI가 분석한 자동 발주 추천 목록입니다" },
     orders: { title: "발주 현황", description: "진행 중인 발주서 목록을 확인하세요" },
-    "order-history": { title: "발주 이력", description: "취소된 발주서 이력을 확인하세요" },
     inbound: { title: "입고 현황", description: "월별 입고 기록을 확인하세요" },
     delivery: { title: "납기분석", description: "납기 준수율과 공급자 성과를 분석하세요" },
     "import-shipment": { title: "입항스케줄", description: "수입 화물 입항 일정을 관리하세요" },
@@ -995,20 +675,11 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">{currentPage.title}</h1>
-        <p className="mt-2 text-slate-500 dark:text-slate-400">{currentPage.description}</p>
+        <p className="mt-2 text-slate-500">{currentPage.description}</p>
       </div>
 
       {initialTab === "reorder" && (
         <div className="space-y-4">
-          {/* 자동발주와의 차이점 안내 */}
-          <Alert className="border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950">
-            <ClipboardEdit className="h-4 w-4 text-emerald-600" />
-            <AlertTitle className="text-emerald-800">수동 발주란?</AlertTitle>
-            <AlertDescription className="text-emerald-700">
-              발주점 이하 품목을 확인하고, 담당자가 <strong>수량·공급자·납기를 직접 지정</strong>하여 발주합니다.
-              시스템이 자동으로 최적 수량을 계산해서 바로 승인하려면 <strong>자동발주 추천</strong> 탭을 이용하세요.
-            </AlertDescription>
-          </Alert>
           <ReorderSummary
             urgentCount={urgentCount}
             lowCount={lowCount}
@@ -1067,42 +738,12 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
             </CardHeader>
             <CardContent>
               <ReorderItemsTable
-                items={paginatedReorderItems}
+                items={reorderItems}
                 selectedIds={selectedIds}
                 onSelectChange={setSelectedIds}
                 onOrderClick={handleOrderClick}
                 onBulkOrderClick={handleBulkOrderClick}
               />
-              {reorderTotalItems > 0 && (
-                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-                    <span>전체 {reorderTotalItems.toLocaleString("ko-KR")}건</span>
-                    <span>·</span>
-                    <div className="flex items-center gap-1">
-                      <span>표시</span>
-                      <Select value={String(reorderPageSize)} onValueChange={(v) => { setReorderPageSize(Number(v)); setReorderPage(1); }}>
-                        <SelectTrigger className="h-8 w-[80px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="50">50개</SelectItem>
-                          <SelectItem value="100">100개</SelectItem>
-                          <SelectItem value="200">200개</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" disabled={reorderPage <= 1} onClick={() => setReorderPage(reorderPage - 1)} aria-label="이전 페이지">
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <span className="text-sm font-medium">{reorderPage} / {reorderTotalPages}</span>
-                    <Button variant="outline" size="sm" disabled={reorderPage >= reorderTotalPages} onClick={() => setReorderPage(reorderPage + 1)} aria-label="다음 페이지">
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              )}
             </CardContent>
           </Card>
         </div>
@@ -1110,61 +751,21 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
 
       {initialTab === "auto-reorder" && (
         <div className="space-y-4">
-          {/* 수동발주와의 차이점 안내 */}
-          <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
-            <Zap className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-            <AlertTitle className="text-blue-800 dark:text-blue-200">자동발주 추천이란?</AlertTitle>
-            <AlertDescription className="text-blue-700 dark:text-blue-300">
-              시스템이 <strong>재고 상태, 수요예측, 리드타임, 안전재고</strong>를 종합 분석하여 최적 수량을 자동 계산합니다.
-              담당자는 추천 내용을 확인 후 <strong>승인만 하면 즉시 발주서가 생성</strong>됩니다.
-              수량·공급자를 직접 지정하려면 <strong>수동 발주</strong> 탭을 이용하세요.
-            </AlertDescription>
-          </Alert>
           <Card>
             <CardHeader>
-              <CardTitle>자동 발주 추천 목록</CardTitle>
+              <CardTitle>자동 발주 추천</CardTitle>
               <CardDescription>
-                추천 수량과 공급자가 자동 지정되어 있습니다. 확인 후 승인/거부하세요.
+                AI가 재고 상태와 수요 예측을 분석하여 자동으로 생성한 발주 추천 목록입니다
               </CardDescription>
             </CardHeader>
             <CardContent>
               <AutoReorderRecommendationsTable
-                recommendations={paginatedAutoReorderRecommendations}
+                recommendations={autoReorderRecommendations}
                 selectedIds={selectedAutoReorderIds}
                 onSelectChange={setSelectedAutoReorderIds}
                 onApprove={handleApproveAutoReorders}
                 onReject={handleRejectAutoReorders}
               />
-              {autoReorderTotalItems > 0 && (
-                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-                    <span>전체 {autoReorderTotalItems.toLocaleString("ko-KR")}건</span>
-                    <span>·</span>
-                    <div className="flex items-center gap-1">
-                      <span>표시</span>
-                      <Select value={String(autoReorderPageSize)} onValueChange={(v) => { setAutoReorderPageSize(Number(v)); setAutoReorderPage(1); }}>
-                        <SelectTrigger className="h-8 w-[80px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="50">50개</SelectItem>
-                          <SelectItem value="100">100개</SelectItem>
-                          <SelectItem value="200">200개</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" disabled={autoReorderPage <= 1} onClick={() => setAutoReorderPage(autoReorderPage - 1)} aria-label="이전 페이지">
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <span className="text-sm font-medium">{autoReorderPage} / {autoReorderTotalPages}</span>
-                    <Button variant="outline" size="sm" disabled={autoReorderPage >= autoReorderTotalPages} onClick={() => setAutoReorderPage(autoReorderPage + 1)} aria-label="다음 페이지">
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              )}
             </CardContent>
           </Card>
         </div>
@@ -1186,46 +787,30 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                       checked={hideReceived}
                       onCheckedChange={(checked) => setHideReceived(!!checked)}
                     />
-                    <Label htmlFor="hide-received" className="text-xs text-slate-500 dark:text-slate-400 cursor-pointer">
+                    <Label htmlFor="hide-received" className="text-xs text-slate-500 cursor-pointer">
                       입고완료 숨기기
                     </Label>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleDownloadOrdersList}
-                    disabled={isDownloadingOrders || purchaseOrders.length === 0}
-                  >
-                    {isDownloadingOrders ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Download className="mr-2 h-4 w-4" />
-                    )}
-                    전체 엑셀 다운로드
-                  </Button>
-                  {selectedOrderIds.length > 0 && userRole === "admin" && selectedOrderIds.some((id) => purchaseOrders.find((o) => o.id === id && o.status === "pending")) && (
+                {selectedOrderIds.length > 0 && (
+                  <div className="flex gap-2">
                     <Button
                       size="sm"
-                      onClick={handleBulkApprove}
-                      disabled={isApprovingOrders}
-                      className="bg-green-600 hover:bg-green-700"
+                      onClick={handleBulkInbound}
+                      disabled={isConfirmingInbound || isCancellingOrders}
                     >
-                      {isApprovingOrders ? (
+                      {isConfirmingInbound ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       ) : (
-                        <CheckCircle className="mr-2 h-4 w-4" />
+                        <PackageCheck className="mr-2 h-4 w-4" />
                       )}
-                      {selectedOrderIds.filter((id) => purchaseOrders.find((o) => o.id === id && o.status === "pending")).length}건 일괄 승인
+                      {selectedOrderIds.length}건 일괄 입고확인
                     </Button>
-                  )}
-                  {selectedOrderIds.length > 0 && (
                     <Button
                       variant="destructive"
                       size="sm"
                       onClick={handleBulkCancel}
-                      disabled={isCancellingOrders}
+                      disabled={isCancellingOrders || isConfirmingInbound}
                     >
                       {isCancellingOrders ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1234,149 +819,23 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                       )}
                       {selectedOrderIds.length}건 일괄 취소
                     </Button>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             </CardHeader>
             <CardContent>
               {isLoadingOrders ? (
-                <div className="flex h-48 items-center justify-center text-slate-400 dark:text-slate-500">
+                <div className="flex h-48 items-center justify-center text-slate-400">
                   발주 목록을 불러오는 중...
                 </div>
               ) : (
-                <>
-                  <PurchaseOrdersTable
-                    orders={hideReceived ? purchaseOrders.filter((o) => o.status !== "received") : purchaseOrders}
-                    onViewClick={handleViewOrder}
-                    onDownloadClick={handleDownloadOrder}
-                    onApproveClick={handleApproveOrder}
-                    selectedIds={selectedOrderIds}
-                    onSelectChange={setSelectedOrderIds}
-                    isAdmin={userRole === "admin"}
-                  />
-                  {ordersTotalItems > 0 && (
-                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-                        <span>전체 {ordersTotalItems.toLocaleString("ko-KR")}건</span>
-                        <span>·</span>
-                        <div className="flex items-center gap-1">
-                          <span>표시</span>
-                          <Select value={ordersPageSize >= 9999 ? "all" : String(ordersPageSize)} onValueChange={handleOrdersPageSizeChange}>
-                            <SelectTrigger className="h-8 w-[80px]">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="50">50개</SelectItem>
-                              <SelectItem value="100">100개</SelectItem>
-                              <SelectItem value="200">200개</SelectItem>
-                              <SelectItem value="all">전체</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={ordersPage <= 1}
-                          onClick={() => handleOrdersPageChange(ordersPage - 1)}
-                          aria-label="이전 월"
-                        >
-                          <ChevronLeft className="h-4 w-4" />
-                        </Button>
-                        <span className="text-sm font-medium">
-                          {ordersPage} / {ordersTotalPages}
-                        </span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={ordersPage >= ordersTotalPages}
-                          onClick={() => handleOrdersPageChange(ordersPage + 1)}
-                          aria-label="다음 월"
-                        >
-                          <ChevronRight className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {initialTab === "order-history" && (
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <div>
-                <CardTitle>발주 이력</CardTitle>
-                <CardDescription>취소된 발주서 이력입니다</CardDescription>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {isLoadingHistory ? (
-                <div className="flex h-48 items-center justify-center text-slate-400">
-                  발주 이력을 불러오는 중...
-                </div>
-              ) : orderHistory.length === 0 ? (
-                <div className="flex h-48 items-center justify-center text-slate-400 dark:text-slate-500">
-                  취소된 발주서가 없습니다
-                </div>
-              ) : (
-                <>
-                  <PurchaseOrdersTable
-                    orders={orderHistory}
-                    onViewClick={handleViewOrder}
-                    onDownloadClick={handleDownloadOrder}
-                  />
-                  {historyTotalItems > 0 && (
-                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-                        <span>전체 {historyTotalItems.toLocaleString("ko-KR")}건</span>
-                        <span>·</span>
-                        <div className="flex items-center gap-1">
-                          <span>표시</span>
-                          <Select value={historyPageSize >= 9999 ? "all" : String(historyPageSize)} onValueChange={handleHistoryPageSizeChange}>
-                            <SelectTrigger className="h-8 w-[80px]">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="50">50개</SelectItem>
-                              <SelectItem value="100">100개</SelectItem>
-                              <SelectItem value="200">200개</SelectItem>
-                              <SelectItem value="all">전체</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={historyPage <= 1}
-                          onClick={() => handleHistoryPageChange(historyPage - 1)}
-                          aria-label="이전 페이지"
-                        >
-                          <ChevronLeft className="h-4 w-4" />
-                        </Button>
-                        <span className="text-sm font-medium">
-                          {historyPage} / {historyTotalPages}
-                        </span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={historyPage >= historyTotalPages}
-                          onClick={() => handleHistoryPageChange(historyPage + 1)}
-                          aria-label="다음 페이지"
-                        >
-                          <ChevronRight className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </>
+                <PurchaseOrdersTable
+                  orders={hideReceived ? purchaseOrders.filter((o) => o.status !== "received") : purchaseOrders}
+                  onViewClick={handleViewOrder}
+                  onDownloadClick={handleDownloadOrder}
+                  selectedIds={selectedOrderIds}
+                  onSelectChange={setSelectedOrderIds}
+                />
               )}
             </CardContent>
           </Card>
@@ -1393,13 +852,13 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
                   <CardDescription>월별 입고 기록을 확인하고 엑셀로 다운로드할 수 있습니다</CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button variant="outline" size="icon" onClick={handlePrevMonth} aria-label="이전 월">
+                  <Button variant="outline" size="icon" onClick={handlePrevMonth}>
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
                   <span className="min-w-[120px] text-center font-medium">
                     {formatMonth(inboundMonth)}
                   </span>
-                  <Button variant="outline" size="icon" onClick={handleNextMonth} aria-label="다음 월">
+                  <Button variant="outline" size="icon" onClick={handleNextMonth}>
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                   <Button
@@ -1428,56 +887,15 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
             </CardHeader>
             <CardContent>
               {isLoadingInbound ? (
-                <div className="flex h-48 items-center justify-center text-slate-400 dark:text-slate-500">
+                <div className="flex h-48 items-center justify-center text-slate-400">
                   입고 기록을 불러오는 중...
                 </div>
               ) : (
                 <>
+                  <div className="mb-3 text-sm text-slate-500">
+                    총 {inboundRecords.length}건
+                  </div>
                   <InboundRecordsTable records={inboundRecords} />
-                  {inboundTotalItems > 0 && (
-                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-                        <span>전체 {inboundTotalItems.toLocaleString("ko-KR")}건</span>
-                        <span>·</span>
-                        <div className="flex items-center gap-1">
-                          <span>표시</span>
-                          <Select value={String(inboundPageSize)} onValueChange={handleInboundPageSizeChange}>
-                            <SelectTrigger className="h-8 w-[80px]">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="50">50개</SelectItem>
-                              <SelectItem value="100">100개</SelectItem>
-                              <SelectItem value="200">200개</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={inboundPage <= 1}
-                          onClick={() => handleInboundPageChange(inboundPage - 1)}
-                          aria-label="이전 페이지"
-                        >
-                          <ChevronLeft className="h-4 w-4" />
-                        </Button>
-                        <span className="text-sm font-medium">
-                          {inboundPage} / {inboundTotalPages}
-                        </span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={inboundPage >= inboundTotalPages}
-                          onClick={() => handleInboundPageChange(inboundPage + 1)}
-                          aria-label="다음 페이지"
-                        >
-                          <ChevronRight className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  )}
                 </>
               )}
             </CardContent>
@@ -1497,7 +915,6 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
         open={orderDialogOpen}
         onOpenChange={setOrderDialogOpen}
         product={selectedProduct}
-        warehouses={warehouses}
         onSubmit={handleOrderSubmit}
       />
 
@@ -1513,7 +930,6 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
           open={orderDetailDialogOpen}
           onOpenChange={setOrderDetailDialogOpen}
           orderId={selectedOrderId}
-          userRole={userRole}
           onStatusChange={() => {
             loadPurchaseOrders();
             loadReorderItems();
