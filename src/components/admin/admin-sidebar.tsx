@@ -19,7 +19,9 @@ interface AdminSidebarProps {
 export function AdminSidebar({ className, userInfo }: AdminSidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
 
-  const userName = userInfo?.name || "슈퍼관리자";
+  const roleLabel: Record<string, string> = { CEO: "관리자", ADMIN: "관리자", MANAGER: "매니저", STAFF: "스태프", VIEWER: "뷰어" };
+  const rawName = userInfo?.name || "슈퍼관리자";
+  const userName = roleLabel[rawName] ?? rawName;
   const userEmail = userInfo?.email || "";
   const firstChar = userName.charAt(0).toUpperCase();
 
