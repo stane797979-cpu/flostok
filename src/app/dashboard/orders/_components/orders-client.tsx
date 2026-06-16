@@ -632,10 +632,17 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
           title: "자동 발주 승인 완료",
           description: `${result.createdOrders.length}개의 발주서가 생성되었습니다`,
         });
+        // 승인된 항목 즉시 목록에서 제거
+        const approvedProductIds = selectedRecs.map((r) => r.productId);
+        setReorderItems((prev) => prev.filter((item) => !approvedProductIds.includes(item.productId)));
         setSelectedAutoReorderIds([]);
         loadPurchaseOrders();
-        loadReorderItems();
       } else if (result.success && result.errors.length > 0) {
+        // 성공한 항목만 제거, 실패한 항목은 유지
+        const failedProductIds = new Set(result.errors.map((e) => e.recommendationId));
+        const successRecs = selectedRecs.filter((r) => !failedProductIds.has(r.id));
+        const successProductIds = successRecs.map((r) => r.productId);
+        setReorderItems((prev) => prev.filter((item) => !successProductIds.includes(item.productId)));
         toast({
           title: "자동 발주 부분 완료",
           description: `${result.createdOrders.length}개 생성, ${result.errors.length}개 실패 (${result.errors[0]?.error || "공급자 미지정"})`,
@@ -643,7 +650,6 @@ export function OrdersClient({ initialTab = "reorder", serverReorderItems = [], 
         });
         setSelectedAutoReorderIds([]);
         loadPurchaseOrders();
-        loadReorderItems();
       } else {
         toast({
           title: "자동 발주 승인 실패",
