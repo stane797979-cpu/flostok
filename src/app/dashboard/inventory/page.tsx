@@ -1,6 +1,8 @@
 import { getInventoryList, getInventoryStats } from "@/server/actions/inventory";
 import { InventoryPageClient } from "@/components/features/inventory/inventory-page-client";
 
+export const dynamic = "force-dynamic";
+
 export default async function InventoryPage() {
   try {
     const [{ items }, stats] = await Promise.all([
