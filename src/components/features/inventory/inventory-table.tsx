@@ -19,7 +19,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ShoppingCart, MoreHorizontal, Settings2, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { ShoppingCart, MoreHorizontal, Settings2, ArrowUpDown, ArrowUp, ArrowDown, Info } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { getInventoryStatus } from "@/lib/constants/inventory-status";
 
@@ -270,10 +271,47 @@ export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
               <TableHead className={cn("text-right", sortableHeadClass)} onClick={() => handleSort("currentStock")}>
                 <div className="flex items-center justify-end gap-0.5">현재고 <span className="text-[10px] text-primary-600">{sortLabel("currentStock")}</span><SortIcon columnKey="currentStock" /></div>
               </TableHead>
-              <TableHead className="text-right text-orange-600">할당재고</TableHead>
-              <TableHead className="text-right text-blue-600">가용재고</TableHead>
+              <TableHead className="text-right text-orange-600">
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-center justify-end gap-1 cursor-default">
+                        할당재고 <Info className="h-3 w-3 text-orange-400" />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-[200px] text-xs">
+                      출고요청 중이거나 홀딩된 수량. 아직 출고 완료 전이라 실사용 불가.
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </TableHead>
+              <TableHead className="text-right text-blue-600">
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-center justify-end gap-1 cursor-default">
+                        가용재고 <Info className="h-3 w-3 text-blue-400" />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-[200px] text-xs">
+                      실제로 사용 가능한 수량. 현재고에서 할당재고를 뺀 값.
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </TableHead>
               <TableHead className={cn("text-right", sortableHeadClass)} onClick={() => handleSort("safetyStock")}>
-                <div className="flex items-center justify-end gap-0.5">안전재고 <span className="text-[10px] text-primary-600">{sortLabel("safetyStock")}</span><SortIcon columnKey="safetyStock" /></div>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-center justify-end gap-0.5">
+                        안전재고 <span className="text-[10px] text-primary-600">{sortLabel("safetyStock")}</span><SortIcon columnKey="safetyStock" />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-[220px] text-xs">
+                      품절 방지를 위한 최소 보유 수량. 현재고에 포함된 수량으로, 이 수량 이하로 내려가면 발주를 권장.
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </TableHead>
               <TableHead className={cn("text-right", sortableHeadClass)} onClick={() => handleSort("reorderPoint")}>
                 <div className="flex items-center justify-end gap-0.5">발주점 <span className="text-[10px] text-primary-600">{sortLabel("reorderPoint")}</span><SortIcon columnKey="reorderPoint" /></div>
