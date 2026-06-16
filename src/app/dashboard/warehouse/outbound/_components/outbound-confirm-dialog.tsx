@@ -112,9 +112,9 @@ export function OutboundConfirmDialog({
       .finally(() => setIsLoading(false));
   }, [open, requestId, onOpenChange, toast]);
 
-  // 확정 수량 변경
+  // 확정 수량 변경 (최소 1)
   const handleQuantityChange = (itemId: string, value: string) => {
-    const quantity = Math.max(0, parseInt(value) || 0);
+    const quantity = Math.max(1, parseInt(value) || 1);
     setConfirmedQuantities((prev) => ({ ...prev, [itemId]: quantity }));
   };
 
@@ -134,9 +134,15 @@ export function OutboundConfirmDialog({
 
   // 재고 부족 항목 체크
   const hasStockIssues = request?.items.some((item) => {
-    const confirmed = confirmedQuantities[item.id] || 0;
+    const confirmed = confirmedQuantities[item.id] ?? item.requestedQuantity;
     return confirmed > item.currentStock;
   });
+
+  // 부분취소 항목 (확인수량 < 요청수량)
+  const partialItems = request?.items.filter((item) => {
+    const confirmed = confirmedQuantities[item.id] ?? item.requestedQuantity;
+    return confirmed < item.requestedQuantity;
+  }) ?? [];
 
   // 출고 확정 제출
   const handleSubmit = async () => {
@@ -266,12 +272,15 @@ export function OutboundConfirmDialog({
                       <TableHead className="text-right">요청수량</TableHead>
                       <TableHead className="text-right">현재고</TableHead>
                       <TableHead className="text-right">확인수량</TableHead>
+                      <TableHead className="text-right">부분취소</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {request.items.map((item) => {
-                      const confirmed = confirmedQuantities[item.id] || 0;
+                      const confirmed = confirmedQuantities[item.id] ?? item.requestedQuantity;
                       const isInsufficient = confirmed > item.currentStock;
+                      const cancelQty = item.requestedQuantity - confirmed;
+                      const isPartial = cancelQty > 0;
 
                       return (
                         <TableRow key={item.id}>
@@ -285,28 +294,31 @@ export function OutboundConfirmDialog({
                             {item.requestedQuantity.toLocaleString()}개
                           </TableCell>
                           <TableCell
-                            className={`text-right ${
-                              isInsufficient
-                                ? "font-medium text-red-600"
-                                : ""
-                            }`}
+                            className={`text-right ${isInsufficient ? "font-medium text-red-600" : ""}`}
                           >
                             {item.currentStock.toLocaleString()}개
                           </TableCell>
                           <TableCell className="text-right">
                             <Input
                               type="number"
-                              min="0"
+                              min="1"
                               max={item.currentStock}
                               value={confirmed}
                               onChange={(e) =>
                                 handleQuantityChange(item.id, e.target.value)
                               }
-                              className={`w-24 text-right ${
-                                isInsufficient ? "border-red-600" : ""
-                              }`}
+                              className={`w-24 text-right ${isInsufficient ? "border-red-600" : ""}`}
                               disabled={isSubmitting}
                             />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {isPartial ? (
+                              <span className="text-sm font-medium text-orange-600">
+                                -{cancelQty.toLocaleString()}개
+                              </span>
+                            ) : (
+                              <span className="text-slate-300 text-sm">-</span>
+                            )}
                           </TableCell>
                         </TableRow>
                       );
@@ -321,7 +333,22 @@ export function OutboundConfirmDialog({
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertDescription>
-                  재고가 부족한 항목이 있습니다. 확인 수량을 조정하세요.
+                  재고가 부족한 항목이 있습니다. 확인수량을 현재고 이하로 조정하세요.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* 부분취소 안내 */}
+            {!hasStockIssues && partialItems.length > 0 && (
+              <Alert className="border-orange-200 bg-orange-50 text-orange-800">
+                <AlertTriangle className="h-4 w-4 text-orange-600" />
+                <AlertDescription>
+                  <span className="font-medium">부분취소 발생:</span>{" "}
+                  {partialItems.map((item) => {
+                    const confirmed = confirmedQuantities[item.id] ?? item.requestedQuantity;
+                    const cancelQty = item.requestedQuantity - confirmed;
+                    return `${item.productName} ${cancelQty}개`;
+                  }).join(", ")}이(가) 취소됩니다. 확정 시 확인수량만 출고 처리됩니다.
                 </AlertDescription>
               </Alert>
             )}
