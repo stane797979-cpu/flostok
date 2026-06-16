@@ -13,8 +13,9 @@ import { users } from "./users";
 
 // 출고요청 상태
 export const outboundRequestStatusEnum = pgEnum("outbound_request_status", [
-  "pending", // 대기 (백오피스에서 생성)
-  "confirmed", // 출고완료 (창고에서 확인)
+  "pending",   // 출고요청중
+  "holding",   // 홀딩
+  "confirmed", // 출고완료
   "cancelled", // 취소
 ]);
 

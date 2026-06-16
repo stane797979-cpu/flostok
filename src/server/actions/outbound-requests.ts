@@ -468,20 +468,16 @@ export async function cancelOutboundRequest(requestId: string): Promise<{
       return { success: false, error: "출고 요청을 찾을 수 없습니다" };
     }
 
-    if (request.status !== "pending") {
+    if (!["pending", "holding"].includes(request.status)) {
       return {
         success: false,
         error: "이미 처리되었거나 취소된 요청입니다",
       };
     }
 
-    // 상태 업데이트 (cancelled)
     await db
       .update(outboundRequests)
-      .set({
-        status: "cancelled",
-        updatedAt: new Date(),
-      })
+      .set({ status: "cancelled", updatedAt: new Date() })
       .where(eq(outboundRequests.id, requestId));
 
     revalidatePath("/dashboard/outbound");
@@ -494,5 +490,73 @@ export async function cancelOutboundRequest(requestId: string): Promise<{
       success: false,
       error: error instanceof Error ? error.message : "출고 요청 취소에 실패했습니다",
     };
+  }
+}
+
+/**
+ * 출고 요청 홀딩
+ */
+export async function holdOutboundRequest(requestId: string): Promise<{
+  success: boolean;
+  error?: string;
+}> {
+  try {
+    const user = await requireManagerOrAbove();
+
+    const [request] = await db
+      .select()
+      .from(outboundRequests)
+      .where(and(eq(outboundRequests.id, requestId), eq(outboundRequests.organizationId, user.organizationId)))
+      .limit(1);
+
+    if (!request) return { success: false, error: "출고 요청을 찾을 수 없습니다" };
+    if (request.status !== "pending") return { success: false, error: "출고요청중 상태에서만 홀딩 가능합니다" };
+
+    await db
+      .update(outboundRequests)
+      .set({ status: "holding", updatedAt: new Date() })
+      .where(eq(outboundRequests.id, requestId));
+
+    revalidatePath("/dashboard/outbound");
+    revalidatePath("/dashboard/warehouse/outbound");
+
+    return { success: true };
+  } catch (error) {
+    console.error("출고 요청 홀딩 오류:", error);
+    return { success: false, error: error instanceof Error ? error.message : "홀딩 처리에 실패했습니다" };
+  }
+}
+
+/**
+ * 홀딩 → 출고요청중 복귀
+ */
+export async function resumeOutboundRequest(requestId: string): Promise<{
+  success: boolean;
+  error?: string;
+}> {
+  try {
+    const user = await requireManagerOrAbove();
+
+    const [request] = await db
+      .select()
+      .from(outboundRequests)
+      .where(and(eq(outboundRequests.id, requestId), eq(outboundRequests.organizationId, user.organizationId)))
+      .limit(1);
+
+    if (!request) return { success: false, error: "출고 요청을 찾을 수 없습니다" };
+    if (request.status !== "holding") return { success: false, error: "홀딩 상태에서만 복귀 가능합니다" };
+
+    await db
+      .update(outboundRequests)
+      .set({ status: "pending", updatedAt: new Date() })
+      .where(eq(outboundRequests.id, requestId));
+
+    revalidatePath("/dashboard/outbound");
+    revalidatePath("/dashboard/warehouse/outbound");
+
+    return { success: true };
+  } catch (error) {
+    console.error("출고 요청 복귀 오류:", error);
+    return { success: false, error: error instanceof Error ? error.message : "복귀 처리에 실패했습니다" };
   }
 }

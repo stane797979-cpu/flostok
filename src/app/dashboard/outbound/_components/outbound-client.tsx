@@ -14,6 +14,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ChevronLeft, ChevronRight, Download, Loader2, PackageMinus, Upload } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { OutboundRecordsTable } from "./outbound-records-table";
 import { OutboundEditDialog } from "./outbound-edit-dialog";
 import { OutboundRequestDialog } from "./outbound-request-dialog";
@@ -21,6 +22,7 @@ import { ExcelImportDialog } from "@/components/features/excel/excel-import-dial
 import { useToast } from "@/hooks/use-toast";
 import { getOutboundRecords, deleteOutboundRecord, type OutboundRecord } from "@/server/actions/outbound";
 import { exportInventoryMovementToExcel } from "@/server/actions/excel-export";
+import { getOutboundRequests } from "@/server/actions/outbound-requests";
 
 /**
  * 월의 시작일/종료일 계산
@@ -49,6 +51,10 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
   const [isLoadingRecords, setIsLoadingRecords] = useState(false);
   const [isDownloadingMovement, setIsDownloadingMovement] = useState(false);
 
+  // 출고 요청 현황 카운트
+  const [pendingCount, setPendingCount] = useState(0);
+  const [holdingCount, setHoldingCount] = useState(0);
+
   // 출고 업로드/요청 상태
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
@@ -61,6 +67,18 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
   const [isDeleting, setIsDeleting] = useState(false);
 
   const { toast } = useToast();
+
+  // 출고 요청 카운트 조회
+  const loadRequestCounts = useCallback(async () => {
+    try {
+      const [pending, holding] = await Promise.all([
+        getOutboundRequests({ status: "pending" }),
+        getOutboundRequests({ status: "holding" }),
+      ]);
+      setPendingCount(pending.requests.length);
+      setHoldingCount(holding.requests.length);
+    } catch {}
+  }, []);
 
   // 출고 기록 조회
   const loadOutboundRecords = useCallback(async (month: Date) => {
@@ -195,6 +213,7 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
   useEffect(() => {
     if (initialTab === "records") {
       loadOutboundRecords(outboundMonth);
+      loadRequestCounts();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -243,11 +262,23 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
         <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <div>
+                <div className="space-y-1">
                   <CardTitle>출고 현황</CardTitle>
                   <CardDescription>
                     월별 출고 기록을 확인하고 재고 수불부를 다운로드할 수 있습니다
                   </CardDescription>
+                  <div className="flex gap-2 pt-1">
+                    {pendingCount > 0 && (
+                      <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">
+                        출고요청중 {pendingCount}건
+                      </Badge>
+                    )}
+                    {holdingCount > 0 && (
+                      <Badge className="bg-yellow-100 text-yellow-700 hover:bg-yellow-100">
+                        홀딩 {holdingCount}건
+                      </Badge>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <Button variant="outline" size="icon" onClick={handlePrevMonth}>
