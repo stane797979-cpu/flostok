@@ -154,8 +154,8 @@ export const InventoryStatusChart = memo<InventoryStatusChartProps>(function Inv
                   ))}
                   {/* 세그먼트 라벨 (도넛 바깥) */}
                   {segments.map((seg) => {
-                    const pct = Math.round(seg.percentage * 100);
-                    if (pct === 0) return null;
+                    const pct = totalSku > 0 ? Math.round((seg.count / totalSku) * 100) : 0;
+                    if (seg.count === 0) return null;
                     const angle = (seg.midAngle * Math.PI) / 180;
                     const lx = center + labelRadius * Math.cos(angle);
                     const ly = center + labelRadius * Math.sin(angle);
