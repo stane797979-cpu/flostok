@@ -107,7 +107,6 @@ export function AnalyticsFMR({ items }: AnalyticsFMRProps) {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-indigo-700">M등급 (중빈도)</CardTitle>
-            </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-indigo-700">{mCount}개</div>
