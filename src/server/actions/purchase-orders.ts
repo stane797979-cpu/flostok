@@ -590,7 +590,7 @@ export async function updatePurchaseOrderStatus(
     const [order] = await db
       .select()
       .from(purchaseOrders)
-      .where(and(eq(purchaseOrders.id, orderId), eq(purchaseOrders.organizationId, TEMP_ORG_ID)))
+      .where(eq(purchaseOrders.id, orderId))
       .limit(1);
 
     if (!order) {
@@ -665,7 +665,9 @@ export async function getPurchaseOrders(options?: {
 }> {
   const { status, supplierId, startDate, endDate, limit = 50, offset = 0 } = options || {};
 
-  const conditions = [eq(purchaseOrders.organizationId, TEMP_ORG_ID)];
+  const user = await getCurrentUser();
+  const orgId = user?.organizationId || TEMP_ORG_ID;
+  const conditions = [eq(purchaseOrders.organizationId, orgId)];
 
   if (status) {
     conditions.push(
@@ -742,7 +744,7 @@ export async function getPurchaseOrderById(orderId: string): Promise<
     })
     .from(purchaseOrders)
     .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
-    .where(and(eq(purchaseOrders.id, orderId), eq(purchaseOrders.organizationId, TEMP_ORG_ID)))
+    .where(and(eq(purchaseOrders.id, orderId)))
     .limit(1);
 
   if (!orderData) return null;
@@ -862,12 +864,7 @@ export async function cancelBulkPurchaseOrders(
     const orders = await db
       .select({ id: purchaseOrders.id, orderNumber: purchaseOrders.orderNumber, status: purchaseOrders.status })
       .from(purchaseOrders)
-      .where(
-        and(
-          eq(purchaseOrders.organizationId, TEMP_ORG_ID),
-          inArray(purchaseOrders.id, orderIds)
-        )
-      );
+      .where(inArray(purchaseOrders.id, orderIds));
 
     const cancellableStatuses = ["draft", "pending", "approved", "ordered", "confirmed"];
 
