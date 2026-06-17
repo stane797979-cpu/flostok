@@ -33,11 +33,11 @@ import { exportPurchaseOrderToExcel } from "@/server/actions/excel-export";
 // 상태별 다음 단계 정의
 const nextStatusActions: Record<string, { label: string; status: string; variant?: "default" | "outline" }[]> = {
   draft: [
-    { label: "발주 확정", status: "ordered" },
+    { label: "결재 요청", status: "pending" },
     { label: "취소", status: "cancelled", variant: "outline" },
   ],
   pending: [
-    { label: "발주 확정", status: "ordered" },
+    { label: "승인", status: "approved" },
     { label: "취소", status: "cancelled", variant: "outline" },
   ],
   approved: [

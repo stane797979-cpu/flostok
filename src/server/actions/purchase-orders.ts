@@ -432,12 +432,12 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
     const user = await getCurrentUser();
     const orgId = user?.organizationId || TEMP_ORG_ID;
 
-    // 공급자 + 제품 + 발주번호 시퀀스 병렬 조회
+    // 공급자 + 제품 병렬 조회
     const productIds = validated.items.map((item) => item.productId);
     const today = new Date();
     const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
 
-    const [supplierResult, productsData, todayOrders] = await Promise.all([
+    const [supplierResult, productsData] = await Promise.all([
       db
         .select()
         .from(suppliers)
@@ -447,15 +447,6 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
         .select()
         .from(products)
         .where(and(inArray(products.id, productIds), eq(products.organizationId, orgId))),
-      db
-        .select({ count: sql<number>`count(*)` })
-        .from(purchaseOrders)
-        .where(
-          and(
-            eq(purchaseOrders.organizationId, orgId),
-            sql`DATE(${purchaseOrders.createdAt}) = CURRENT_DATE`
-          )
-        ),
     ]);
 
     const supplier = supplierResult[0];
@@ -486,9 +477,10 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
       };
     });
 
-    // 발주번호 생성 (PO-YYYYMMDD-XXX)
-    const sequence = (Number(todayOrders[0]?.count || 0) + 1).toString().padStart(3, "0");
-    const orderNumber = `PO-${dateStr}-${sequence}`;
+    // 발주번호 생성 (PO-YYYYMMDDHHMMSS-mmm) — 초+밀리초 기반으로 동시 중복 방지
+    const timeStr = today.toTimeString().slice(0, 8).replace(/:/g, "");
+    const msStr = today.getMilliseconds().toString().padStart(3, "0");
+    const orderNumber = `PO-${dateStr}${timeStr}-${msStr}`;
 
     // 예상입고일 계산 (리드타임 기반)
     let expectedDate = validated.expectedDate;
@@ -507,7 +499,7 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
           organizationId: orgId,
           orderNumber,
           supplierId: validated.supplierId,
-          status: "ordered",
+          status: "draft",
           totalAmount,
           orderDate: today.toISOString().split("T")[0],
           expectedDate,
@@ -564,8 +556,8 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
  * received → completed
  */
 const validStatusTransitions: Record<string, string[]> = {
-  draft: ["ordered", "cancelled"],
-  pending: ["approved", "ordered", "cancelled"],
+  draft: ["pending", "cancelled"],
+  pending: ["approved", "cancelled"],
   approved: ["ordered", "cancelled"],
   ordered: ["confirmed", "shipped", "partially_received", "received", "cancelled"],
   confirmed: ["shipped", "partially_received", "received", "cancelled"],
@@ -1122,15 +1114,10 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
       db.select().from(products).where(
         and(eq(products.organizationId, orgId), inArray(products.id, allProductIds))
       ),
-      // 오늘 발주 수 1회만 조회
-      db.select({ count: sql<number>`count(*)` }).from(purchaseOrders).where(
-        and(eq(purchaseOrders.organizationId, orgId), sql`DATE(${purchaseOrders.createdAt}) = CURRENT_DATE`)
-      ),
     ]);
 
     const suppliersMap = new Map(allSuppliersData.map((s) => [s.id, s]));
     const productsMap = new Map(allProductsData.map((p) => [p.id, p]));
-    const baseOrderCount = Number(todayOrderCount[0]?.count || 0);
     const today = new Date();
     const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
 
@@ -1167,9 +1154,11 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
 
         if (orderItems.length === 0) continue;
 
-        // 발주번호 생성 (사전 조회된 카운트 사용)
-        const sequence = (baseOrderCount + createdOrders.length + 1).toString().padStart(3, "0");
-        const orderNumber = `PO-${dateStr}-${sequence}`;
+        // 발주번호 생성 (PO-YYYYMMDDHHMMSS-mmm) — 초+밀리초 기반으로 동시 중복 방지
+        const now = new Date();
+        const tStr = now.toTimeString().slice(0, 8).replace(/:/g, "");
+        const msStr = now.getMilliseconds().toString().padStart(3, "0");
+        const orderNumber = `PO-${dateStr}${tStr}-${msStr}`;
 
         // 예상입고일 계산 (리드타임 기반)
         const expectedDateObj = new Date();
@@ -1185,7 +1174,7 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
               organizationId: orgId,
               orderNumber,
               supplierId,
-              status: "ordered",
+              status: "draft",
               totalAmount,
               orderDate: today.toISOString().split("T")[0],
               expectedDate,
