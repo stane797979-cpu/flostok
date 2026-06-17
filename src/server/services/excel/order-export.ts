@@ -99,9 +99,9 @@ function buildSheet(wb: ExcelJS.Workbook, order: PurchaseOrderWithDetails, sheet
 
   // 컬럼 정의: A~G (No / SKU / 제품명 / 단위 / 수량 / 단가 / 금액)
   ws.columns = [
-    { key: "no",     width: 6  },
+    { key: "no",     width: 14 },
     { key: "sku",    width: 16 },
-    { key: "name",   width: 32 },
+    { key: "name",   width: 28 },
     { key: "unit",   width: 8  },
     { key: "qty",    width: 10 },
     { key: "price",  width: 16 },

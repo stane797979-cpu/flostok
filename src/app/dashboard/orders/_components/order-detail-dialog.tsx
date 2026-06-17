@@ -749,7 +749,7 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={handleDownloadClick}>
                     <Download className="mr-2 h-4 w-4" />
-                    Excel 다운로드
+                    발주서 다운로드
                   </Button>
                 </div>
               </div>
