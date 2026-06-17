@@ -8,7 +8,8 @@ import { importSalesData, importProductData, createSalesTemplate, createProductT
 import type { ExcelImportResult, ProductExcelRow } from "@/server/services/excel";
 import { requireAuth } from "./auth-helpers";
 import { logActivity } from "@/server/services/activity-log";
-import { revalidatePath } from "next/cache";
+import { refreshGradesForOrganization } from "@/server/services/scm/grade-refresh";
+import { revalidatePath, revalidateTag } from "next/cache";
 
 export type ImportType = "sales" | "products" | "inbound";
 
@@ -60,6 +61,7 @@ export async function importExcelFile(input: ImportExcelInput): Promise<ImportEx
       });
 
       if (result.successCount > 0) {
+        await refreshGradesForOrganization(user.organizationId);
         await logActivity({
           user,
           action: "IMPORT",
@@ -67,6 +69,8 @@ export async function importExcelFile(input: ImportExcelInput): Promise<ImportEx
           description: `판매(출고) 데이터 Excel 임포트 (${result.successCount}/${result.totalRows}건 성공)`,
         });
         revalidatePath("/dashboard/psi");
+        revalidatePath("/dashboard/analytics");
+        revalidateTag(`analytics-${user.organizationId}`);
       }
 
       return {
@@ -115,12 +119,15 @@ export async function importExcelFile(input: ImportExcelInput): Promise<ImportEx
     });
 
     if (result.success && result.successCount > 0) {
+      await refreshGradesForOrganization(user.organizationId);
       await logActivity({
         user,
         action: "IMPORT",
         entityType: "excel_import",
         description: `제품 데이터 Excel 임포트 (${result.successCount}/${result.totalRows}건 성공)`,
       });
+      revalidatePath("/dashboard/analytics");
+      revalidateTag(`analytics-${user.organizationId}`);
     }
 
     return {
