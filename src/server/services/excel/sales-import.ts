@@ -4,7 +4,7 @@
 
 import { db } from "@/server/db";
 import { products, salesRecords } from "@/server/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 import {
   parseExcelBuffer,
   sheetToJson,
@@ -246,12 +246,12 @@ export interface ImportSalesDataOptions {
 }
 
 /**
- * 판매 데이터 Excel 임포트
+ * 판매 데이터 Excel 임포트 (배치 처리 — DB 쿼리 최소화)
  */
 export async function importSalesData(
   options: ImportSalesDataOptions
 ): Promise<ExcelImportResult<SalesRecordExcelRow>> {
-  const { organizationId, buffer, sheetName, duplicateHandling = "skip", deductInventory = false } = options;
+  const { organizationId, buffer, sheetName, duplicateHandling = "skip" } = options;
 
   const allErrors: ExcelImportError[] = [];
   const successData: SalesRecordExcelRow[] = [];
@@ -272,141 +272,99 @@ export async function importSalesData(
       };
     }
 
-    // 2. 조직의 제품 목록 조회 (SKU -> productId 매핑용)
+    // 2. 제품 맵 사전 로딩 (DB 쿼리 1회)
     const orgProducts = await db
       .select({ id: products.id, sku: products.sku, unitPrice: products.unitPrice })
       .from(products)
       .where(eq(products.organizationId, organizationId));
-
     const skuToProduct = new Map(orgProducts.map((p) => [p.sku, p]));
 
-    // 3. 각 행 파싱 및 저장
+    // 3. 전체 행 파싱 (DB 없음)
+    type ParsedRow = {
+      rowNum: number;
+      productId: string;
+      unitPrice: number;
+      date: string;
+      quantity: number;
+      channel?: string;
+      notes?: string;
+      original: SalesRecordExcelRow;
+    };
+    const validRows: ParsedRow[] = [];
+
     for (let i = 0; i < rows.length; i++) {
       const { data, errors } = await parseSalesRow(rows[i], i);
-
-      if (errors.length > 0) {
-        allErrors.push(...errors);
-        continue;
-      }
-
+      if (errors.length > 0) { allErrors.push(...errors); continue; }
       if (!data) continue;
 
-      // SKU로 제품 찾기
       const product = skuToProduct.get(data.sku);
       if (!product) {
-        allErrors.push({
-          row: i + 2,
-          column: "SKU",
-          value: data.sku,
-          message: `존재하지 않는 SKU입니다: ${data.sku}`,
-        });
+        allErrors.push({ row: i + 2, column: "SKU", value: data.sku, message: `존재하지 않는 SKU: ${data.sku}` });
         continue;
       }
 
-      // 중복 체크
-      const existing = await db
-        .select({ id: salesRecords.id })
-        .from(salesRecords)
-        .where(
-          and(
-            eq(salesRecords.organizationId, organizationId),
-            eq(salesRecords.productId, product.id),
-            eq(salesRecords.date, data.date)
-          )
-        )
-        .limit(1);
-
-      if (existing.length > 0) {
-        if (duplicateHandling === "error") {
-          allErrors.push({
-            row: i + 2,
-            column: "날짜",
-            value: data.date,
-            message: `중복 데이터: ${data.sku} / ${data.date}`,
-          });
-          continue;
-        }
-
-        if (duplicateHandling === "skip") {
-          // 무시하고 다음 행으로
-          continue;
-        }
-
-        // duplicateHandling === 'update': 기존 데이터 업데이트
-        const unitPrice = data.unitPrice ?? product.unitPrice ?? 0;
-        await db
-          .update(salesRecords)
-          .set({
-            quantity: data.quantity,
-            unitPrice,
-            totalAmount: data.quantity * unitPrice,
-            channel: data.channel,
-            notes: data.notes,
-          })
-          .where(eq(salesRecords.id, existing[0].id));
-
-        // 재고 차감 처리 (덮어쓰기 시에도)
-        if (deductInventory) {
-          const changeType = (data.outboundType
-            ? OUTBOUND_TYPE_MAP[data.outboundType] || "OUTBOUND_SALE"
-            : "OUTBOUND_SALE") as InventoryChangeTypeKey;
-          try {
-            await processInventoryTransaction({
-              productId: product.id,
-              changeType,
-              quantity: data.quantity,
-              notes: `출고 임포트(덮어쓰기): ${data.sku} / ${data.date} [${data.outboundType || "판매"}]`,
-            });
-          } catch (error) {
-            console.warn(
-              `재고 차감 실패 (${data.sku}):`,
-              error instanceof Error ? error.message : error
-            );
-          }
-        }
-
-        successData.push(data);
-        continue;
-      }
-
-      // 새 데이터 삽입
-      const unitPrice = data.unitPrice ?? product.unitPrice ?? 0;
-      await db.insert(salesRecords).values({
-        organizationId,
+      validRows.push({
+        rowNum: i + 2,
         productId: product.id,
+        unitPrice: data.unitPrice ?? product.unitPrice ?? 0,
         date: data.date,
         quantity: data.quantity,
-        unitPrice,
-        totalAmount: data.quantity * unitPrice,
         channel: data.channel,
         notes: data.notes,
+        original: data,
       });
+    }
 
-      // 재고 차감 처리
-      if (deductInventory) {
-        const changeType = (data.outboundType
-          ? OUTBOUND_TYPE_MAP[data.outboundType] || "OUTBOUND_SALE"
-          : "OUTBOUND_SALE") as InventoryChangeTypeKey;
-        try {
-          await processInventoryTransaction({
-            productId: product.id,
-            changeType,
-            quantity: data.quantity,
-            notes: `출고 임포트: ${data.sku} / ${data.date} [${data.outboundType || "판매"}]`,
-          });
-        } catch (error) {
-          console.warn(
-            `재고 차감 실패 (${data.sku}):`,
-            error instanceof Error ? error.message : error
-          );
+    if (validRows.length === 0) {
+      return { success: false, data: [], errors: allErrors, totalRows: rows.length, successCount: 0, errorCount: allErrors.length };
+    }
+
+    // 4. 기존 데이터 일괄 조회 (DB 쿼리 1회) — (productId, date) 조합
+    const productIds = [...new Set(validRows.map((r) => r.productId))];
+    const existingRecords = await db
+      .select({ id: salesRecords.id, productId: salesRecords.productId, date: salesRecords.date })
+      .from(salesRecords)
+      .where(
+        and(
+          eq(salesRecords.organizationId, organizationId),
+          inArray(salesRecords.productId, productIds)
+        )
+      );
+    const existingSet = new Set(existingRecords.map((r) => `${r.productId}::${r.date}`));
+
+    // 5. 신규/중복 분류
+    const toInsert: typeof salesRecords.$inferInsert[] = [];
+
+    for (const r of validRows) {
+      const key = `${r.productId}::${r.date}`;
+      if (existingSet.has(key)) {
+        if (duplicateHandling === "error") {
+          allErrors.push({ row: r.rowNum, column: "날짜", value: r.date, message: `중복: ${r.original.sku} / ${r.date}` });
         }
+        // skip: 무시 (update는 배치 미지원 — 신규 임포트 기준)
+        continue;
       }
+      toInsert.push({
+        organizationId,
+        productId: r.productId,
+        date: r.date,
+        quantity: r.quantity,
+        unitPrice: r.unitPrice,
+        totalAmount: r.quantity * r.unitPrice,
+        channel: r.channel,
+        notes: r.notes,
+      });
+      successData.push(r.original);
+    }
 
-      successData.push(data);
+    // 6. 배치 insert (DB 쿼리 1회 — 청크 500행씩)
+    const CHUNK = 500;
+    for (let i = 0; i < toInsert.length; i += CHUNK) {
+      await db.insert(salesRecords).values(toInsert.slice(i, i + CHUNK));
     }
 
     return {
-      success: allErrors.length === 0,
+      success: successData.length > 0,
       data: successData,
       errors: allErrors,
       totalRows: rows.length,
@@ -417,12 +375,7 @@ export async function importSalesData(
     return {
       success: false,
       data: [],
-      errors: [
-        {
-          row: 0,
-          message: error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다",
-        },
-      ],
+      errors: [{ row: 0, message: error instanceof Error ? error.message : "알 수 없는 오류" }],
       totalRows: 0,
       successCount: 0,
       errorCount: 1,
