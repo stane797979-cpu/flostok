@@ -10,6 +10,7 @@ import {
   inboundRecords,
   salesRecords,
   outboundRequests,
+  suppliers,
 } from '@/server/db/schema'
 import { eq } from 'drizzle-orm'
 
@@ -76,6 +77,22 @@ export async function resetSalesData(): Promise<{ success: boolean; error?: stri
   }
 }
 
+/** 공급업체 전체 초기화 (suppliers) */
+export async function resetSuppliersData(): Promise<{ success: boolean; error?: string }> {
+  try {
+    const user = await requireAuth()
+    const orgId = user.organizationId
+
+    await db.delete(suppliers).where(eq(suppliers.organizationId, orgId))
+
+    revalidatePath('/dashboard/suppliers')
+    return { success: true }
+  } catch (error) {
+    console.error('공급업체 초기화 오류:', error)
+    return { success: false, error: '공급업체 데이터 삭제 중 오류가 발생했습니다.' }
+  }
+}
+
 /** 전체 초기화 (재고 + 입고 + 출고/판매) */
 export async function resetAllData(): Promise<{ success: boolean; error?: string }> {
   try {
@@ -89,9 +106,11 @@ export async function resetAllData(): Promise<{ success: boolean; error?: string
       await tx.delete(inboundRecords).where(eq(inboundRecords.organizationId, orgId))
       await tx.delete(outboundRequests).where(eq(outboundRequests.organizationId, orgId))
       await tx.delete(salesRecords).where(eq(salesRecords.organizationId, orgId))
+      await tx.delete(suppliers).where(eq(suppliers.organizationId, orgId))
     })
 
     revalidateAll(orgId)
+    revalidatePath('/dashboard/suppliers')
     return { success: true }
   } catch (error) {
     console.error('전체 초기화 오류:', error)

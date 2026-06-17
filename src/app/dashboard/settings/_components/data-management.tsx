@@ -18,7 +18,7 @@ import { FileSpreadsheet, Upload, Download, Package, ShoppingCart, Loader2, Tras
 import { ExcelImportDialog } from "@/components/features/excel";
 import type { ImportType } from "@/server/actions/excel-import";
 import { exportProductsToExcel, exportSalesToExcel } from "@/server/actions/data-export";
-import { resetInventoryData, resetInboundData, resetSalesData, resetAllData } from "@/server/actions/data-reset";
+import { resetInventoryData, resetInboundData, resetSalesData, resetSuppliersData, resetAllData } from "@/server/actions/data-reset";
 
 interface ImportOption {
   type: ImportType;
@@ -64,7 +64,7 @@ function downloadBase64File(base64: string, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-type ResetTarget = "inventory" | "inbound" | "sales" | "all";
+type ResetTarget = "inventory" | "inbound" | "sales" | "suppliers" | "all";
 
 const RESET_OPTIONS: {
   target: ResetTarget;
@@ -91,9 +91,15 @@ const RESET_OPTIONS: {
     detail: "sales_records / outbound_requests 테이블",
   },
   {
+    target: "suppliers",
+    title: "공급업체",
+    description: "등록된 모든 공급업체 정보를 삭제합니다.",
+    detail: "suppliers 테이블",
+  },
+  {
     target: "all",
     title: "전체",
-    description: "재고, 입고, 출고/판매 데이터를 모두 삭제합니다.",
+    description: "재고, 입고, 출고/판매, 공급업체 데이터를 모두 삭제합니다.",
     detail: "위 항목 전체",
   },
 ];
@@ -156,6 +162,7 @@ export function DataManagement() {
       inventory: resetInventoryData,
       inbound: resetInboundData,
       sales: resetSalesData,
+      suppliers: resetSuppliersData,
       all: resetAllData,
     };
 
