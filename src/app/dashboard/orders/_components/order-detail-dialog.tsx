@@ -284,7 +284,7 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
   const getStatusBadge = (status: string) => {
     const statusMap: Record<string, { label: string; className: string }> = {
       draft: { label: "초안", className: "bg-slate-500" },
-      pending: { label: "검토대기", className: "bg-yellow-600" },
+      pending: { label: "결재 진행중", className: "bg-yellow-600" },
       approved: { label: "승인됨", className: "bg-blue-600" },
       ordered: { label: "발주완료", className: "bg-indigo-600" },
       confirmed: { label: "공급자확인", className: "bg-purple-600" },

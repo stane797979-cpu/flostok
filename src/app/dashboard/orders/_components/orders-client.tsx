@@ -104,8 +104,8 @@ const mapOrderStatus = (
 ): PurchaseOrderListItem["status"] => {
   const statusMap: Record<string, PurchaseOrderListItem["status"]> = {
     draft: "draft",
-    pending: "draft",
-    approved: "ordered",
+    pending: "pending",
+    approved: "approved",
     ordered: "ordered",
     confirmed: "ordered",
     shipped: "pending_receipt",

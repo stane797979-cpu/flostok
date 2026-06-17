@@ -435,7 +435,8 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
     // 공급자 + 제품 병렬 조회
     const productIds = validated.items.map((item) => item.productId);
     const today = new Date();
-    const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
+    const kst = new Date(today.getTime() + 9 * 60 * 60 * 1000);
+    const dateStr = kst.toISOString().slice(0, 10).replace(/-/g, "");
 
     const [supplierResult, productsData] = await Promise.all([
       db
@@ -477,10 +478,10 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
       };
     });
 
-    // 발주번호 생성 (PO-YYYYMMDDHHMMSS-mmm) — 초+밀리초 기반으로 동시 중복 방지
-    const timeStr = today.toTimeString().slice(0, 8).replace(/:/g, "");
+    // 발주번호 생성 (PO-YYYYMMDD-HHMMSS-mmm, KST 기준) — 초+밀리초로 동시 중복 방지
+    const timeStr = kst.toISOString().slice(11, 19).replace(/:/g, "");
     const msStr = today.getMilliseconds().toString().padStart(3, "0");
-    const orderNumber = `PO-${dateStr}${timeStr}-${msStr}`;
+    const orderNumber = `PO-${dateStr}-${timeStr}-${msStr}`;
 
     // 예상입고일 계산 (리드타임 기반)
     let expectedDate = validated.expectedDate;
@@ -1119,7 +1120,8 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
     const suppliersMap = new Map(allSuppliersData.map((s) => [s.id, s]));
     const productsMap = new Map(allProductsData.map((p) => [p.id, p]));
     const today = new Date();
-    const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
+    const todayKst = new Date(today.getTime() + 9 * 60 * 60 * 1000);
+    const dateStr = todayKst.toISOString().slice(0, 10).replace(/-/g, "");
 
     // 3. 공급자별로 발주서 생성 (DB 조회 없이 메모리에서 처리)
     for (const [supplierId, items] of itemsBySupplier.entries()) {
@@ -1154,11 +1156,12 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
 
         if (orderItems.length === 0) continue;
 
-        // 발주번호 생성 (PO-YYYYMMDDHHMMSS-mmm) — 초+밀리초 기반으로 동시 중복 방지
+        // 발주번호 생성 (PO-YYYYMMDD-HHMMSS-mmm, KST 기준) — 초+밀리초로 동시 중복 방지
         const now = new Date();
-        const tStr = now.toTimeString().slice(0, 8).replace(/:/g, "");
+        const nowKst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+        const tStr = nowKst.toISOString().slice(11, 19).replace(/:/g, "");
         const msStr = now.getMilliseconds().toString().padStart(3, "0");
-        const orderNumber = `PO-${dateStr}${tStr}-${msStr}`;
+        const orderNumber = `PO-${dateStr}-${tStr}-${msStr}`;
 
         // 예상입고일 계산 (리드타임 기반)
         const expectedDateObj = new Date();
