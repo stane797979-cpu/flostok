@@ -83,6 +83,15 @@ export async function confirmInbound(input: ConfirmInboundInput): Promise<{
       };
     }
 
+    // 날짜 검증: 오늘 이전(과거) 날짜 입고 불가
+    const today = new Date().toISOString().split("T")[0];
+    if (purchaseOrder.expectedDate && purchaseOrder.expectedDate < today) {
+      return {
+        success: false,
+        error: `입고일(${purchaseOrder.expectedDate})이 오늘(${today})보다 이전입니다. 과거 날짜 입고는 허용되지 않습니다.`,
+      };
+    }
+
     // 발주 항목 조회
     const orderItems = await db
       .select()
@@ -111,8 +120,6 @@ export async function confirmInbound(input: ConfirmInboundInput): Promise<{
         };
       }
     }
-
-    const today = new Date().toISOString().split("T")[0];
 
     // 트랜잭션으로 전체 입고 처리
     const result = await db.transaction(async (tx) => {

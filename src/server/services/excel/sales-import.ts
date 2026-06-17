@@ -129,6 +129,20 @@ async function parseSalesRow(
     });
   }
 
+  // 날짜 범위 검증: 오늘 초과(미래) 날짜 불가
+  if (parsedDate) {
+    const today = new Date().toISOString().split("T")[0];
+    const dateStr = formatDateToString(parsedDate);
+    if (dateStr > today) {
+      errors.push({
+        row: rowNum,
+        column: "날짜",
+        value: dateValue,
+        message: `출고일(${dateStr})이 오늘(${today})보다 미래입니다. 미래 출고는 임포트할 수 없습니다.`,
+      });
+    }
+  }
+
   // 오류가 있으면 null 반환
   if (errors.length > 0) {
     return { data: null, errors };

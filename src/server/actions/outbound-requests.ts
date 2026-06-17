@@ -337,6 +337,7 @@ export async function getOutboundRequestById(requestId: string): Promise<{
  */
 const confirmOutboundRequestSchema = z.object({
   requestId: z.string().uuid(),
+  scheduledDate: z.string().optional(), // 출고 예정일 (YYYY-MM-DD), 없으면 오늘
   items: z.array(
     z.object({
       itemId: z.string().uuid(),
@@ -383,6 +384,16 @@ export async function confirmOutboundRequest(
     const totalConfirmed = validated.items.reduce((sum, i) => sum + i.confirmedQuantity, 0);
     if (totalConfirmed === 0) {
       return { success: false, error: "확인수량이 모두 0입니다. 최소 1개 이상 입력하세요." };
+    }
+
+    // 날짜 검증: 미래 날짜면 현재고 차감 불가
+    const today = new Date().toISOString().split("T")[0];
+    const scheduledDate = validated.scheduledDate || today;
+    if (scheduledDate > today) {
+      return {
+        success: false,
+        error: `출고 예정일(${scheduledDate})이 오늘(${today})보다 미래입니다. 미래 출고는 예약 상태로 유지되며 현재고에서 차감되지 않습니다. 실제 출고일에 다시 확정하세요.`,
+      };
     }
 
     // 항목별 확정 수량 업데이트 및 재고 차감
