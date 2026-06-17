@@ -30,15 +30,14 @@ import type { ActivityLog } from "@/server/actions/activity-logs";
 import { useToast } from "@/hooks/use-toast";
 import { exportPurchaseOrderToExcel } from "@/server/actions/excel-export";
 
-// 상태별 다음 단계 정의 (결재라인: 초안 → 결재요청 → 승인 → 발주확정)
+// 상태별 다음 단계 정의
 const nextStatusActions: Record<string, { label: string; status: string; variant?: "default" | "outline" }[]> = {
   draft: [
-    { label: "결재 요청", status: "pending" },
+    { label: "발주 확정", status: "ordered" },
     { label: "취소", status: "cancelled", variant: "outline" },
   ],
   pending: [
-    { label: "승인", status: "approved" },
-    { label: "반려", status: "draft", variant: "outline" },
+    { label: "발주 확정", status: "ordered" },
     { label: "취소", status: "cancelled", variant: "outline" },
   ],
   approved: [
