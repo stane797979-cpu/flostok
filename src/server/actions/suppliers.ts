@@ -7,6 +7,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getCurrentUser } from "./auth-helpers";
 import { logActivity } from "@/server/services/activity-log";
+import ExcelJS from "exceljs";
+import { generateSupplierExcel, generateSupplierTemplate, parseSupplierRow } from "@/server/services/excel/supplier-excel";
 
 // TODO: 인증 구현 후 실제 organizationId로 교체
 const TEMP_ORG_ID = "00000000-0000-0000-0000-000000000001";
@@ -302,6 +304,160 @@ export async function getSupplierStats(): Promise<{
     avgRating: Number(result[0]?.avgRating || 0),
     avgLeadTime: Number(result[0]?.avgLeadTime || 7),
   };
+}
+
+/**
+ * 공급업체 엑셀 다운로드 (현재 데이터)
+ */
+export async function exportSuppliersExcel(): Promise<{ data: number[]; filename: string }> {
+  const { suppliers: list } = await getSuppliers({ limit: 9999 });
+  const buf = await generateSupplierExcel(list);
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  return { data: Array.from(buf), filename: `공급업체_${date}.xlsx` };
+}
+
+/**
+ * 공급업체 엑셀 템플릿 다운로드 (빈 양식)
+ */
+export async function downloadSupplierTemplate(): Promise<{ data: number[]; filename: string }> {
+  const buf = await generateSupplierTemplate();
+  return { data: Array.from(buf), filename: "공급업체_등록양식.xlsx" };
+}
+
+/**
+ * 공급업체 엑셀 일괄 업로드
+ */
+export async function importSuppliersExcel(fileData: number[]): Promise<{
+  success: boolean;
+  imported: number;
+  skipped: number;
+  errors: string[];
+}> {
+  try {
+    const user = await getCurrentUser();
+    const orgId = user?.organizationId || TEMP_ORG_ID;
+
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(fileData));
+
+    // 첫 번째 시트 또는 "공급업체" 이름 시트 사용
+    const ws = wb.getWorksheet(1) ?? wb.getWorksheet("공급업체 목록") ?? wb.getWorksheet("공급업체 등록");
+    if (!ws) return { success: false, imported: 0, skipped: 0, errors: ["시트를 찾을 수 없습니다"] };
+
+    // 기존 업체명 목록 (중복 체크)
+    const existing = await db
+      .select({ name: suppliers.name })
+      .from(suppliers)
+      .where(eq(suppliers.organizationId, orgId));
+    const existingNames = new Set(existing.map((e) => e.name.toLowerCase()));
+
+    let imported = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+
+    // 2행부터 (1행 = 헤더)
+    ws.eachRow((row, rowNum) => {
+      if (rowNum === 1) return;
+      const parsed = parseSupplierRow(row);
+      if (!parsed) { skipped++; return; }
+
+      // 샘플 데이터 감지 (이탤릭 회색 행 스킵)
+      const nameCell = row.getCell(1);
+      const fontColor = (nameCell.font as ExcelJS.Font | undefined)?.color?.argb;
+      if (fontColor === "FF94A3B8") { skipped++; return; }
+
+      if (existingNames.has(parsed.name.toLowerCase())) {
+        skipped++;
+        return;
+      }
+
+      errors; // placeholder to avoid unused var lint
+      db.insert(suppliers).values({
+        organizationId: orgId,
+        name: parsed.name,
+        code: parsed.code ?? null,
+        businessNumber: parsed.businessNumber ?? null,
+        contactName: parsed.contactName ?? null,
+        contactPhone: parsed.contactPhone ?? null,
+        contactEmail: parsed.contactEmail ?? null,
+        address: parsed.address ?? null,
+        paymentTerms: parsed.paymentTerms ?? null,
+        minOrderAmount: parsed.minOrderAmount,
+        avgLeadTime: parsed.avgLeadTime,
+        minLeadTime: parsed.minLeadTime,
+        maxLeadTime: parsed.maxLeadTime,
+        rating: String(parsed.rating),
+        notes: parsed.notes ?? null,
+      }).catch((e: unknown) => {
+        errors.push(`${rowNum}행 "${parsed.name}": ${e instanceof Error ? e.message : "저장 오류"}`);
+      });
+
+      existingNames.add(parsed.name.toLowerCase());
+      imported++;
+    });
+
+    // 모든 insert 완료 대기 (순차 처리로 재구성)
+    const rows: ReturnType<typeof parseSupplierRow>[] = [];
+    ws.eachRow((row, rowNum) => {
+      if (rowNum === 1) return;
+      const parsed = parseSupplierRow(row);
+      if (!parsed) return;
+      const nameCell = row.getCell(1);
+      const fontColor = (nameCell.font as ExcelJS.Font | undefined)?.color?.argb;
+      if (fontColor === "FF94A3B8") return;
+      rows.push(parsed);
+    });
+
+    // 위 eachRow 내 비동기는 fire-and-forget이므로 여기서 재처리
+    // 실제 insert는 아래에서 순차 처리
+    imported = 0; skipped = 0; errors.length = 0;
+    const existingNames2 = new Set(existing.map((e) => e.name.toLowerCase()));
+
+    for (const parsed of rows) {
+      if (!parsed) { skipped++; continue; }
+      if (existingNames2.has(parsed.name.toLowerCase())) { skipped++; continue; }
+      try {
+        await db.insert(suppliers).values({
+          organizationId: orgId,
+          name: parsed.name,
+          code: parsed.code ?? null,
+          businessNumber: parsed.businessNumber ?? null,
+          contactName: parsed.contactName ?? null,
+          contactPhone: parsed.contactPhone ?? null,
+          contactEmail: parsed.contactEmail ?? null,
+          address: parsed.address ?? null,
+          paymentTerms: parsed.paymentTerms ?? null,
+          minOrderAmount: parsed.minOrderAmount,
+          avgLeadTime: parsed.avgLeadTime,
+          minLeadTime: parsed.minLeadTime,
+          maxLeadTime: parsed.maxLeadTime,
+          rating: String(parsed.rating),
+          notes: parsed.notes ?? null,
+        });
+        existingNames2.add(parsed.name.toLowerCase());
+        imported++;
+      } catch (e) {
+        errors.push(`"${parsed.name}": ${e instanceof Error ? e.message : "저장 오류"}`);
+        skipped++;
+      }
+    }
+
+    if (user) {
+      await logActivity({
+        user,
+        action: "CREATE",
+        entityType: "supplier",
+        entityId: "bulk",
+        description: `공급업체 엑셀 일괄 등록 ${imported}건`,
+      });
+    }
+
+    revalidatePath("/dashboard/suppliers");
+    return { success: true, imported, skipped, errors };
+  } catch (error) {
+    console.error("공급업체 엑셀 업로드 오류:", error);
+    return { success: false, imported: 0, skipped: 0, errors: [error instanceof Error ? error.message : "업로드 실패"] };
+  }
 }
 
 /**
