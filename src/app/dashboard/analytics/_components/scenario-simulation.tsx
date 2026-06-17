@@ -102,8 +102,8 @@ export function ScenarioSimulation({ data }: ScenarioSimulationProps) {
             시뮬레이션 데이터 없음
           </h3>
           <p className="mt-2 max-w-md text-sm text-muted-foreground/70">
-            최근 90일간 판매 데이터가 있는 제품이 없습니다. 판매 기록 또는
-            출고 이력을 입력하면 시나리오 분석이 가능합니다.
+            판매 데이터가 있는 제품이 없습니다. 설정 &gt; 데이터 임포트에서
+            판매 데이터를 업로드하면 시나리오 분석이 가능합니다.
           </p>
         </CardContent>
       </Card>
