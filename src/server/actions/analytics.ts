@@ -228,6 +228,21 @@ async function _getABCXYZAnalysisInternal(orgId: string) {
   const allCvs = analysisProducts.map((p) => p.variationRate).filter((v) => v > 0)
   const avgCV = allCvs.length > 0 ? allCvs.reduce((s, v) => s + v, 0) / allCvs.length : 0
 
+  // 계산된 등급을 DB에 즉시 저장 (분석 탭 = PSI = 제품목록 모두 동일한 등급 사용)
+  const fmrMap3 = new Map(fmrResults.map((r) => [r.id, r.grade]))
+  await Promise.all(
+    combined.map((item) =>
+      db.update(products)
+        .set({
+          abcGrade: item.abcGrade as "A" | "B" | "C",
+          xyzGrade: item.xyzGrade as "X" | "Y" | "Z",
+          fmrGrade: (fmrMap3.get(item.id) ?? null) as "F" | "M" | "R" | null,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(products.id, item.id), eq(products.organizationId, orgId)))
+    )
+  )
+
   return {
     products: analysisProducts,
     matrixData,
@@ -278,12 +293,7 @@ async function _getABCXYZAnalysisInternal(orgId: string) {
 export async function getABCXYZAnalysis() {
   const user = await requireAuth()
   const orgId = user.organizationId
-
-  return unstable_cache(
-    () => _getABCXYZAnalysisInternal(orgId),
-    [`analytics-data-${orgId}`],
-    { revalidate: 60, tags: [`analytics-${orgId}`] }
-  )()
+  return _getABCXYZAnalysisInternal(orgId)
 }
 
 /**
