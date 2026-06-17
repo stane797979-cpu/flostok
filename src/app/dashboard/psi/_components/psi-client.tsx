@@ -27,11 +27,11 @@ import { PSIFilters } from "./psi-filters";
 import { PSITable } from "./psi-table";
 import { uploadPSIPlanExcel, generateSOPQuantities, type SOPMethod } from "@/server/actions/psi";
 import { useToast } from "@/hooks/use-toast";
-import { useRouter } from "next/navigation";
 import type { PSIResult } from "@/server/services/scm/psi-aggregation";
 
 interface PSIClientProps {
   data: PSIResult;
+  onRefresh?: () => void;
 }
 
 const SOP_METHODS: Array<{ value: SOPMethod; label: string; description: string }> = [
@@ -62,7 +62,7 @@ const SOP_METHODS: Array<{ value: SOPMethod; label: string; description: string 
   },
 ];
 
-export function PSIClient({ data }: PSIClientProps) {
+export function PSIClient({ data, onRefresh }: PSIClientProps) {
   const [search, setSearch] = useState("");
   const [abcFilter, setAbcFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -76,7 +76,6 @@ export function PSIClient({ data }: PSIClientProps) {
   const [sopDialogOpen, setSopDialogOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
-  const router = useRouter();
 
   // 카테고리 목록 추출
   const categories = useMemo(() => {
@@ -128,7 +127,7 @@ export function PSIClient({ data }: PSIClientProps) {
       const result = await uploadPSIPlanExcel(formData);
       if (result.success) {
         toast({ title: "업로드 완료", description: result.message });
-        router.refresh();
+        onRefresh?.();
       } else {
         toast({ title: "업로드 실패", description: result.message, variant: "destructive" });
       }
@@ -195,7 +194,7 @@ export function PSIClient({ data }: PSIClientProps) {
       if (result.success) {
         toast({ title: "SCM 가이드 산출 완료", description: result.message });
         setSopDialogOpen(false);
-        router.refresh();
+        onRefresh?.();
       } else {
         toast({ title: "SCM 가이드 산출 실패", description: result.message, variant: "destructive" });
       }

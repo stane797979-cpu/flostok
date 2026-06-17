@@ -4,21 +4,11 @@
  * Excel 데이터 임포트 Server Actions
  */
 
-import { parseSalesExcel, importProductData, createSalesTemplate, createProductTemplate, importOtherInboundData, createOtherInboundTemplate } from "@/server/services/excel";
-import type { ExcelImportResult, SalesRecordExcelRow, ProductExcelRow } from "@/server/services/excel";
+import { importSalesData, importProductData, createSalesTemplate, createProductTemplate, importOtherInboundData, createOtherInboundTemplate } from "@/server/services/excel";
+import type { ExcelImportResult, ProductExcelRow } from "@/server/services/excel";
 import { requireAuth } from "./auth-helpers";
 import { logActivity } from "@/server/services/activity-log";
-import { db } from "@/server/db";
-import { outboundRequests, outboundRequestItems, products } from "@/server/db/schema";
-import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-
-function generateRequestNumber(): string {
-  const now = new Date();
-  const dateStr = now.toISOString().slice(0, 10).replace(/-/g, "");
-  const random = Math.floor(Math.random() * 1000).toString().padStart(3, "0");
-  return `OR-${dateStr}-${random}`;
-}
 
 export type ImportType = "sales" | "products" | "inbound";
 
@@ -60,72 +50,29 @@ export async function importExcelFile(input: ImportExcelInput): Promise<ImportEx
     const buffer = bytes.buffer;
 
     if (input.type === "sales") {
-      // 엑셀 파싱만 수행 (salesRecords insert X, 재고 차감 X)
-      const result = await parseSalesExcel({
+      // sales_records에 직접 저장 (재고 차감 없음 — 기초 데이터 적재용)
+      const result = await importSalesData({
         organizationId: user.organizationId,
         buffer,
         sheetName: input.sheetName,
+        duplicateHandling: input.duplicateHandling ?? "skip",
+        deductInventory: false,
       });
 
       if (result.successCount > 0) {
-        // SKU → productId 매핑
-        const orgProducts = await db
-          .select({ id: products.id, sku: products.sku })
-          .from(products)
-          .where(eq(products.organizationId, user.organizationId));
-        const skuMap = new Map(orgProducts.map((p) => [p.sku, p.id]));
-
-        // SKU별 수량 집계 → outbound_request 1건 생성
-        const itemsMap = new Map<string, { productId: string; quantity: number }>();
-        for (const row of result.data as SalesRecordExcelRow[]) {
-          const productId = skuMap.get(row.sku);
-          if (!productId) continue;
-          const existing = itemsMap.get(productId);
-          if (existing) {
-            existing.quantity += row.quantity;
-          } else {
-            itemsMap.set(productId, { productId, quantity: row.quantity });
-          }
-        }
-
-        const items = Array.from(itemsMap.values());
-        if (items.length > 0) {
-          const [request] = await db
-            .insert(outboundRequests)
-            .values({
-              organizationId: user.organizationId,
-              requestNumber: generateRequestNumber(),
-              status: "pending",
-              outboundType: "OUTBOUND_SALE",
-              requestedById: user.id,
-              notes: `엑셀 업로드: ${input.fileName}`,
-            })
-            .returning();
-
-          await db.insert(outboundRequestItems).values(
-            items.map((item) => ({
-              outboundRequestId: request.id,
-              productId: item.productId,
-              requestedQuantity: item.quantity,
-            }))
-          );
-
-          revalidatePath("/dashboard/outbound");
-          revalidatePath("/dashboard/warehouse/outbound");
-        }
-
         await logActivity({
           user,
           action: "IMPORT",
           entityType: "excel_import",
-          description: `출고 업로드 (${result.successCount}건 파싱 → 출고요청 생성)`,
+          description: `판매(출고) 데이터 Excel 임포트 (${result.successCount}/${result.totalRows}건 성공)`,
         });
+        revalidatePath("/dashboard/psi");
       }
 
       return {
         success: result.successCount > 0 || result.totalRows > 0,
         message: result.successCount > 0
-          ? `출고 요청 생성 완료 (${result.successCount}건)`
+          ? `판매 데이터 ${result.successCount}건 저장 완료`
           : `업로드 중 ${result.errorCount}건 오류 발생`,
         totalRows: result.totalRows,
         successCount: result.successCount,

@@ -34,10 +34,10 @@ import {
  * ABC-XYZ 분석 데이터 조회 내부 로직 (캐싱 대상)
  */
 async function _getABCXYZAnalysisInternal(orgId: string) {
-  // 최근 6개월 시작일
-  const sixMonthsAgo = new Date()
-  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
-  const startDate = sixMonthsAgo.toISOString().split('T')[0]
+  // 최근 12개월 시작일
+  const twelveMonthsAgo = new Date()
+  twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12)
+  const startDate = twelveMonthsAgo.toISOString().split('T')[0]
 
   // 병렬 데이터 로드
   const [allProducts, salesByProduct, monthlySales, monthlyOutboundCounts] = await Promise.all([

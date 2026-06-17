@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/server/db";
-import { products, inventory, inboundRecords, demandForecasts, psiPlans, purchaseOrders, purchaseOrderItems, inventoryHistory } from "@/server/db/schema";
+import { products, inventory, inboundRecords, demandForecasts, psiPlans, purchaseOrders, purchaseOrderItems, inventoryHistory, salesRecords } from "@/server/db/schema";
 import { eq, and, gte, lte, sql } from "drizzle-orm";
 import { getCurrentUser } from "./auth-helpers";
 import {
@@ -15,8 +15,8 @@ import { revalidatePath, unstable_cache, revalidateTag } from "next/cache";
 /**
  * PSI 데이터 조회 내부 로직 (캐싱 대상)
  */
-async function _getPSIDataInternal(orgId: string): Promise<PSIResult> {
-  const periods = generatePeriods(1, 6);
+async function _getPSIDataInternal(orgId: string, pastMonths: number = 1): Promise<PSIResult> {
+  const periods = generatePeriods(pastMonths, 6);
   const firstPeriod = periods[0]; // YYYY-MM
   const lastPeriod = periods[periods.length - 1];
   const startDate = `${firstPeriod}-01`;
@@ -48,23 +48,22 @@ async function _getPSIDataInternal(orgId: string): Promise<PSIResult> {
       .from(inventory)
       .where(eq(inventory.organizationId, orgId)),
 
-    // 출고 실적 (월별 집계 — inventory_history에서 changeAmount < 0)
+    // 출고 실적 (월별 집계 — sales_records 우선, inventory_history 보완)
     db
       .select({
-        productId: inventoryHistory.productId,
-        month: sql<string>`to_char(${inventoryHistory.date}::date, 'YYYY-MM')`.as("month"),
-        totalQty: sql<number>`sum(abs(${inventoryHistory.changeAmount}))::int`.as("total_qty"),
+        productId: salesRecords.productId,
+        month: sql<string>`to_char(${salesRecords.date}::date, 'YYYY-MM')`.as("month"),
+        totalQty: sql<number>`sum(${salesRecords.quantity})::int`.as("total_qty"),
       })
-      .from(inventoryHistory)
+      .from(salesRecords)
       .where(
         and(
-          eq(inventoryHistory.organizationId, orgId),
-          sql`${inventoryHistory.changeAmount} < 0`,
-          gte(inventoryHistory.date, startDate),
-          lte(inventoryHistory.date, endDate)
+          eq(salesRecords.organizationId, orgId),
+          gte(salesRecords.date, startDate),
+          lte(salesRecords.date, endDate)
         )
       )
-      .groupBy(inventoryHistory.productId, sql`to_char(${inventoryHistory.date}::date, 'YYYY-MM')`),
+      .groupBy(salesRecords.productId, sql`to_char(${salesRecords.date}::date, 'YYYY-MM')`),
 
     // 입고 실적 (월별 집계)
     db
@@ -214,16 +213,16 @@ async function _getPSIDataInternal(orgId: string): Promise<PSIResult> {
 }
 
 /**
- * PSI 데이터 조회 (8개월: 전월1 + 현재 + 미래6)
- * unstable_cache로 60초간 캐싱
+ * PSI 데이터 조회 (과거 pastMonths + 미래6개월)
+ * pastMonths: 과거 몇 개월을 포함할지 (기본 6개월)
  */
-export async function getPSIData(): Promise<PSIResult> {
+export async function getPSIData(pastMonths: number = 6): Promise<PSIResult> {
   const user = await getCurrentUser();
   const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
 
   return unstable_cache(
-    () => _getPSIDataInternal(orgId),
-    [`psi-data-${orgId}`],
+    () => _getPSIDataInternal(orgId, pastMonths),
+    [`psi-data-${orgId}-${pastMonths}`],
     { revalidate: 60, tags: [`psi-${orgId}`] }
   )();
 }
