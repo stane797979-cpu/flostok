@@ -665,19 +665,32 @@ export function DemandForecastChart() {
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">예측 정확도</CardTitle>
+                <CardTitle className="text-sm font-medium">예측 정확도 (FA)</CardTitle>
                 <Target className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="flex items-center gap-2">
-                  <span className="text-lg font-bold">MAPE {forecast.mape}%</span>
-                  <Badge className={cn("text-xs", CONFIDENCE_MAP[forecast.confidence]?.color)}>
-                    {CONFIDENCE_MAP[forecast.confidence]?.label || forecast.confidence}
-                  </Badge>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {forecast.mape < 15 ? "매우 정확한 예측입니다" : forecast.mape < 30 ? "양호한 예측 수준입니다" : "변동성이 큰 제품입니다"}
-                </p>
+                {(() => {
+                  const fa = Math.max(0, Math.round((100 - forecast.mape) * 10) / 10);
+                  return (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <span className={cn(
+                          "text-2xl font-bold",
+                          fa >= 85 ? "text-green-600" : fa >= 70 ? "text-yellow-600" : "text-red-600"
+                        )}>
+                          {fa}%
+                        </span>
+                        <Badge className={cn("text-xs", CONFIDENCE_MAP[forecast.confidence]?.color)}>
+                          {CONFIDENCE_MAP[forecast.confidence]?.label || forecast.confidence}
+                        </Badge>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {fa >= 85 ? "매우 정확한 예측" : fa >= 70 ? "양호한 예측 수준" : "변동성이 큰 제품"}
+                        <span className="ml-1 text-slate-400">(MAPE {forecast.mape}%)</span>
+                      </p>
+                    </>
+                  );
+                })()}
               </CardContent>
             </Card>
 
@@ -788,8 +801,20 @@ export function DemandForecastChart() {
 
           {/* 상세 데이터 테이블 */}
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-start justify-between pb-3">
               <CardTitle className="text-base">월별 상세 데이터</CardTitle>
+              <div className="text-right">
+                <div className="text-xs text-slate-500">예측 정확도 (FA)</div>
+                <div className={cn(
+                  "text-lg font-bold",
+                  Math.max(0, 100 - forecast.mape) >= 85 ? "text-green-600"
+                    : Math.max(0, 100 - forecast.mape) >= 70 ? "text-yellow-600"
+                    : "text-red-600"
+                )}>
+                  {Math.max(0, Math.round((100 - forecast.mape) * 10) / 10)}%
+                </div>
+                <div className="text-[10px] text-slate-400">FA = 100 - MAPE({forecast.mape}%)</div>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
