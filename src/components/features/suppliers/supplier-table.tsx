@@ -20,7 +20,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { type Supplier } from "@/server/db/schema";
-import { cn } from "@/lib/utils";
 
 interface SupplierTableProps {
   suppliers: Supplier[];
@@ -28,7 +27,7 @@ interface SupplierTableProps {
   onDelete?: (supplier: Supplier) => void;
 }
 
-type SortField = "name" | "contactName" | "contactPhone" | "contactEmail" | "avgLeadTime" | "category";
+type SortField = "name" | "representative" | "contactPhone" | "contactEmail" | "avgLeadTime" | "category" | "paymentTerms";
 type SortDirection = "asc" | "desc" | null;
 
 export function SupplierTable({ suppliers, onEdit, onDelete }: SupplierTableProps) {
@@ -74,29 +73,19 @@ export function SupplierTable({ suppliers, onEdit, onDelete }: SupplierTableProp
 
       switch (sortField) {
         case "name":
-          aValue = a.name;
-          bValue = b.name;
-          break;
-        case "contactName":
-          aValue = a.contactName;
-          bValue = b.contactName;
-          break;
+          aValue = a.name; bValue = b.name; break;
+        case "representative":
+          aValue = a.representative; bValue = b.representative; break;
         case "contactPhone":
-          aValue = a.contactPhone;
-          bValue = b.contactPhone;
-          break;
+          aValue = a.contactPhone; bValue = b.contactPhone; break;
         case "contactEmail":
-          aValue = a.contactEmail;
-          bValue = b.contactEmail;
-          break;
+          aValue = a.contactEmail; bValue = b.contactEmail; break;
         case "avgLeadTime":
-          aValue = a.avgLeadTime;
-          bValue = b.avgLeadTime;
-          break;
+          aValue = a.avgLeadTime; bValue = b.avgLeadTime; break;
         case "category":
-          aValue = a.category;
-          bValue = b.category;
-          break;
+          aValue = a.category; bValue = b.category; break;
+        case "paymentTerms":
+          aValue = a.paymentTerms; bValue = b.paymentTerms; break;
         default:
           return 0;
       }
@@ -124,69 +113,40 @@ export function SupplierTable({ suppliers, onEdit, onDelete }: SupplierTableProp
         <TableHeader>
           <TableRow>
             <TableHead>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-auto p-0 font-medium hover:bg-transparent"
-                onClick={() => handleSort("name")}
-              >
-                공급자명
-                <SortIcon field="name" />
+              <Button variant="ghost" size="sm" className="h-auto p-0 font-medium hover:bg-transparent" onClick={() => handleSort("name")}>
+                거래처명<SortIcon field="name" />
               </Button>
             </TableHead>
             <TableHead>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-auto p-0 font-medium hover:bg-transparent"
-                onClick={() => handleSort("contactName")}
-              >
-                담당자
-                <SortIcon field="contactName" />
+              <Button variant="ghost" size="sm" className="h-auto p-0 font-medium hover:bg-transparent" onClick={() => handleSort("representative")}>
+                대표자<SortIcon field="representative" />
+              </Button>
+            </TableHead>
+            <TableHead>사업자번호</TableHead>
+            <TableHead>
+              <Button variant="ghost" size="sm" className="h-auto p-0 font-medium hover:bg-transparent" onClick={() => handleSort("contactPhone")}>
+                전화번호<SortIcon field="contactPhone" />
               </Button>
             </TableHead>
             <TableHead>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-auto p-0 font-medium hover:bg-transparent"
-                onClick={() => handleSort("contactPhone")}
-              >
-                연락처
-                <SortIcon field="contactPhone" />
+              <Button variant="ghost" size="sm" className="h-auto p-0 font-medium hover:bg-transparent" onClick={() => handleSort("contactEmail")}>
+                이메일<SortIcon field="contactEmail" />
+              </Button>
+            </TableHead>
+            <TableHead>주소</TableHead>
+            <TableHead>
+              <Button variant="ghost" size="sm" className="h-auto p-0 font-medium hover:bg-transparent" onClick={() => handleSort("paymentTerms")}>
+                결제조건<SortIcon field="paymentTerms" />
               </Button>
             </TableHead>
             <TableHead>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-auto p-0 font-medium hover:bg-transparent"
-                onClick={() => handleSort("contactEmail")}
-              >
-                이메일
-                <SortIcon field="contactEmail" />
-              </Button>
-            </TableHead>
-            <TableHead>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-auto p-0 font-medium hover:bg-transparent"
-                onClick={() => handleSort("category")}
-              >
-                분류
-                <SortIcon field="category" />
+              <Button variant="ghost" size="sm" className="h-auto p-0 font-medium hover:bg-transparent" onClick={() => handleSort("category")}>
+                분류<SortIcon field="category" />
               </Button>
             </TableHead>
             <TableHead className="text-center">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-auto p-0 font-medium hover:bg-transparent"
-                onClick={() => handleSort("avgLeadTime")}
-              >
-                리드타임
-                <SortIcon field="avgLeadTime" />
+              <Button variant="ghost" size="sm" className="h-auto p-0 font-medium hover:bg-transparent" onClick={() => handleSort("avgLeadTime")}>
+                리드타임<SortIcon field="avgLeadTime" />
               </Button>
             </TableHead>
             <TableHead className="w-[50px]"></TableHead>
@@ -195,17 +155,20 @@ export function SupplierTable({ suppliers, onEdit, onDelete }: SupplierTableProp
         <TableBody>
           {suppliers.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={7} className="h-24 text-center text-slate-500">
+              <TableCell colSpan={10} className="h-24 text-center text-slate-500">
                 등록된 공급자가 없습니다.
               </TableCell>
             </TableRow>
           ) : (
             sortedSuppliers.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((supplier) => (
               <TableRow key={supplier.id}>
-                <TableCell className="font-medium">{supplier.name}</TableCell>
-                <TableCell>{supplier.contactName || "-"}</TableCell>
-                <TableCell className="font-mono text-sm">{supplier.contactPhone || "-"}</TableCell>
-                <TableCell className="text-slate-500">{supplier.contactEmail || "-"}</TableCell>
+                <TableCell className="font-medium whitespace-nowrap">{supplier.name}</TableCell>
+                <TableCell className="whitespace-nowrap">{supplier.representative || "-"}</TableCell>
+                <TableCell className="font-mono text-sm whitespace-nowrap">{supplier.businessNumber || "-"}</TableCell>
+                <TableCell className="font-mono text-sm whitespace-nowrap">{supplier.contactPhone || "-"}</TableCell>
+                <TableCell className="text-slate-500 text-sm">{supplier.contactEmail || "-"}</TableCell>
+                <TableCell className="text-slate-500 text-sm max-w-[200px] truncate">{supplier.address || "-"}</TableCell>
+                <TableCell className="text-sm whitespace-nowrap">{supplier.paymentTerms || "-"}</TableCell>
                 <TableCell>
                   {supplier.category ? (
                     <Badge variant="secondary">{supplier.category}</Badge>
