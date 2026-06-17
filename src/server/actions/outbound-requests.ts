@@ -6,6 +6,7 @@ import {
   outboundRequestItems,
   products,
   inventory,
+  salesRecords,
   users,
 } from "@/server/db/schema";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
@@ -436,6 +437,21 @@ export async function confirmOutboundRequest(
           error: `재고 차감 실패: ${result.error}`,
         };
       }
+
+      // 확정 수량만큼 reservedStock 차감 (할당재고 해제 — currentStock은 processInventoryTransaction에서 이미 차감)
+      await db
+        .update(inventory)
+        .set({
+          reservedStock: sql`greatest(0, coalesce(${inventory.reservedStock}, 0) - ${item.confirmedQuantity})`,
+          availableStock: sql`${inventory.currentStock} - greatest(0, coalesce(${inventory.reservedStock}, 0) - ${item.confirmedQuantity})`,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(inventory.organizationId, user.organizationId),
+            eq(inventory.productId, requestItem.productId)
+          )
+        );
     }
 
     // 요청 상태 업데이트 (confirmed)
@@ -496,6 +512,29 @@ export async function cancelOutboundRequest(requestId: string): Promise<{
         success: false,
         error: "이미 처리되었거나 취소된 요청입니다",
       };
+    }
+
+    // 취소 시 할당재고(reservedStock) 복원
+    const items = await db
+      .select({ productId: outboundRequestItems.productId, qty: sql<number>`sum(${outboundRequestItems.requestedQuantity})` })
+      .from(outboundRequestItems)
+      .where(eq(outboundRequestItems.outboundRequestId, requestId))
+      .groupBy(outboundRequestItems.productId);
+
+    for (const item of items) {
+      await db
+        .update(inventory)
+        .set({
+          reservedStock: sql`greatest(0, coalesce(${inventory.reservedStock}, 0) - ${item.qty})`,
+          availableStock: sql`${inventory.currentStock} - greatest(0, coalesce(${inventory.reservedStock}, 0) - ${item.qty})`,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(inventory.organizationId, user.organizationId),
+            eq(inventory.productId, item.productId)
+          )
+        );
     }
 
     await db

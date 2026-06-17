@@ -3,7 +3,7 @@
  */
 
 import { db } from "@/server/db";
-import { products, salesRecords } from "@/server/db/schema";
+import { products, salesRecords, inventory } from "@/server/db/schema";
 import { eq, and, inArray, sql } from "drizzle-orm";
 import {
   parseExcelBuffer,
@@ -343,8 +343,38 @@ export async function importSalesData(
       return { success: false, data: [], errors: allErrors, totalRows: rows.length, successCount: 0, errorCount: allErrors.length };
     }
 
-    // 4. 기존 데이터 일괄 조회 (DB 쿼리 1회) — (productId, date) 조합
+    // 4. 재고 조회 — 제품별 현재고/예약재고 확인
     const productIds = [...new Set(validRows.map((r) => r.productId))];
+    const inventoryRows = await db
+      .select({ productId: inventory.productId, currentStock: inventory.currentStock, reservedStock: inventory.reservedStock })
+      .from(inventory)
+      .where(and(eq(inventory.organizationId, organizationId), inArray(inventory.productId, productIds)));
+    const inventoryMap = new Map(inventoryRows.map((r) => [r.productId, r]));
+
+    // 5. 제품별 요청 수량 합산 → 재고 초과 체크
+    const requestedQtyMap = new Map<string, number>();
+    for (const r of validRows) {
+      requestedQtyMap.set(r.productId, (requestedQtyMap.get(r.productId) || 0) + r.quantity);
+    }
+    for (const [productId, totalQty] of requestedQtyMap) {
+      const inv = inventoryMap.get(productId);
+      const currentStock = inv?.currentStock ?? 0;
+      const reservedStock = inv?.reservedStock ?? 0;
+      const availableStock = currentStock - reservedStock;
+      if (totalQty > availableStock) {
+        const sku = validRows.find((r) => r.productId === productId)?.original.sku || productId;
+        allErrors.push({
+          row: 0,
+          column: "수량",
+          message: `재고 부족 [${sku}]: 가용재고 ${availableStock}개, 요청 ${totalQty}개 (현재고 ${currentStock} - 할당 ${reservedStock})`,
+        });
+      }
+    }
+    if (allErrors.length > 0) {
+      return { success: false, data: [], errors: allErrors, totalRows: rows.length, successCount: 0, errorCount: allErrors.length };
+    }
+
+    // 6. 기존 데이터 일괄 조회 (DB 쿼리 1회) — (productId, date) 조합
     const existingRecords = await db
       .select({ id: salesRecords.id, productId: salesRecords.productId, date: salesRecords.date })
       .from(salesRecords)
@@ -356,7 +386,7 @@ export async function importSalesData(
       );
     const existingSet = new Set(existingRecords.map((r) => `${r.productId}::${r.date}`));
 
-    // 5. 신규/중복 분류
+    // 7. 신규/중복 분류
     const autoOutboundNumber = generateOutboundNumber();
     const toInsert: typeof salesRecords.$inferInsert[] = [];
 
@@ -366,7 +396,6 @@ export async function importSalesData(
         if (duplicateHandling === "error") {
           allErrors.push({ row: r.rowNum, column: "날짜", value: r.date, message: `중복: ${r.original.sku} / ${r.date}` });
         }
-        // skip: 무시 (update는 배치 미지원 — 신규 임포트 기준)
         continue;
       }
       toInsert.push({
@@ -383,10 +412,23 @@ export async function importSalesData(
       successData.push(r.original);
     }
 
-    // 6. 배치 insert (DB 쿼리 1회 — 청크 500행씩)
+    // 8. 배치 insert (DB 쿼리 1회 — 청크 500행씩)
     const CHUNK = 500;
     for (let i = 0; i < toInsert.length; i += CHUNK) {
       await db.insert(salesRecords).values(toInsert.slice(i, i + CHUNK));
+    }
+
+    // 9. 제품별 reservedStock 증가 (할당재고)
+    for (const [productId, totalQty] of requestedQtyMap) {
+      if (!toInsert.some((r) => r.productId === productId)) continue; // 중복으로 skip된 경우 제외
+      await db
+        .update(inventory)
+        .set({
+          reservedStock: sql`coalesce(${inventory.reservedStock}, 0) + ${totalQty}`,
+          availableStock: sql`${inventory.currentStock} - (coalesce(${inventory.reservedStock}, 0) + ${totalQty})`,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(inventory.organizationId, organizationId), eq(inventory.productId, productId)));
     }
 
     return {

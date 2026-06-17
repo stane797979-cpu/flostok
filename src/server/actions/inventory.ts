@@ -286,7 +286,7 @@ export async function processInventoryTransaction(input: InventoryTransactionInp
         .update(inventory)
         .set({
           currentStock: stockAfter,
-          availableStock: stockAfter, // TODO: 예약재고 반영
+          availableStock: sql`${stockAfter} - coalesce(${inventory.reservedStock}, 0)`,
           status: statusResult.key as (typeof inventory.status.enumValues)[number],
           location: validated.location || currentInventory.location,
           lastUpdatedAt: new Date(),
