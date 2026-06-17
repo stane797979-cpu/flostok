@@ -21,7 +21,7 @@ async function getXLSX() {
  */
 const COLUMN_ALIASES: Record<string, string[]> = {
   sku: ["SKU", "sku", "품목코드", "제품코드", "상품코드"],
-  date: ["입고일", "날짜", "date", "Date", "일자", "입고날짜"],
+  date: ["입고일", "실제입고일", "날짜", "date", "Date", "일자", "입고날짜", "납품일"],
   inboundType: ["입고유형", "유형", "입고 유형", "type", "Type"],
   quantity: ["수량", "입고수량", "quantity", "Quantity", "Qty"],
   location: ["위치", "적치위치", "적치 위치", "location", "Location"],

@@ -379,9 +379,9 @@ export async function importSalesData(
       }
     }
 
-    // 6. 기존 데이터 일괄 조회 (DB 쿼리 1회) — (productId, date) 조합
+    // 6. 기존 데이터 일괄 조회 (DB 쿼리 1회) — (productId, date, outboundNumber) 조합
     const existingRecords = await db
-      .select({ id: salesRecords.id, productId: salesRecords.productId, date: salesRecords.date })
+      .select({ id: salesRecords.id, productId: salesRecords.productId, date: salesRecords.date, outboundNumber: salesRecords.outboundNumber })
       .from(salesRecords)
       .where(
         and(
@@ -389,14 +389,18 @@ export async function importSalesData(
           inArray(salesRecords.productId, productIds)
         )
       );
-    const existingSet = new Set(existingRecords.map((r) => `${r.productId}::${r.date}`));
+    // 출고번호가 있으면 출고번호로, 없으면 (productId, date)로 중복 체크
+    const existingSet = new Set(existingRecords.map((r) =>
+      r.outboundNumber ? `${r.productId}::${r.outboundNumber}` : `${r.productId}::${r.date}`
+    ));
 
     // 7. 신규/중복 분류
     const autoOutboundNumber = generateOutboundNumber();
     const toInsert: typeof salesRecords.$inferInsert[] = [];
 
     for (const r of validRows) {
-      const key = `${r.productId}::${r.date}`;
+      const orNum = r.original.outboundNumber;
+      const key = orNum ? `${r.productId}::${orNum}` : `${r.productId}::${r.date}`;
       if (existingSet.has(key)) {
         if (duplicateHandling === "error") {
           allErrors.push({ row: r.rowNum, column: "날짜", value: r.date, message: `중복: ${r.original.sku} / ${r.date}` });
