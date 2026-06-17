@@ -5,6 +5,7 @@ import { requireAuth } from './auth-helpers'
 import { db } from '@/server/db'
 import {
   products,
+  supplierProducts,
   inventory,
   inventoryHistory,
   inventoryLots,
@@ -23,7 +24,7 @@ import {
   psiPlans,
   activityLogs,
 } from '@/server/db/schema'
-import { eq } from 'drizzle-orm'
+import { eq, inArray, sql } from 'drizzle-orm'
 
 function revalidateAll(orgId: string) {
   revalidateTag(`analytics-${orgId}`)
@@ -52,7 +53,7 @@ export async function resetInventoryData(): Promise<{ success: boolean; error?: 
     return { success: true }
   } catch (error) {
     console.error('재고 초기화 오류:', error)
-    return { success: false, error: '재고 데이터 삭제 중 오류가 발생했습니다.' }
+    return { success: false, error: `재고 데이터 삭제 중 오류: ${error instanceof Error ? error.message : String(error)}` }
   }
 }
 
@@ -68,7 +69,7 @@ export async function resetInboundData(): Promise<{ success: boolean; error?: st
     return { success: true }
   } catch (error) {
     console.error('입고 초기화 오류:', error)
-    return { success: false, error: '입고 데이터 삭제 중 오류가 발생했습니다.' }
+    return { success: false, error: `입고 데이터 삭제 중 오류: ${error instanceof Error ? error.message : String(error)}` }
   }
 }
 
@@ -87,23 +88,35 @@ export async function resetSalesData(): Promise<{ success: boolean; error?: stri
     return { success: true }
   } catch (error) {
     console.error('출고/판매 초기화 오류:', error)
-    return { success: false, error: '출고/판매 데이터 삭제 중 오류가 발생했습니다.' }
+    return { success: false, error: `출고/판매 데이터 삭제 중 오류: ${error instanceof Error ? error.message : String(error)}` }
   }
 }
 
-/** 공급업체 전체 초기화 (suppliers) */
+/** 공급업체 전체 초기화 (supplier_products → suppliers) */
 export async function resetSuppliersData(): Promise<{ success: boolean; error?: string }> {
   try {
     const user = await requireAuth()
     const orgId = user.organizationId
 
-    await db.delete(suppliers).where(eq(suppliers.organizationId, orgId))
+    await db.transaction(async (tx) => {
+      // supplier_products에는 organizationId가 없으므로 supplierId 경유
+      const supplierIds = await tx
+        .select({ id: suppliers.id })
+        .from(suppliers)
+        .where(eq(suppliers.organizationId, orgId))
+      if (supplierIds.length > 0) {
+        await tx.delete(supplierProducts).where(
+          inArray(supplierProducts.supplierId, supplierIds.map((s) => s.id))
+        )
+      }
+      await tx.delete(suppliers).where(eq(suppliers.organizationId, orgId))
+    })
 
     revalidateAll(orgId)
     return { success: true }
   } catch (error) {
     console.error('공급업체 초기화 오류:', error)
-    return { success: false, error: '공급업체 데이터 삭제 중 오류가 발생했습니다.' }
+    return { success: false, error: `공급업체 데이터 삭제 중 오류: ${error instanceof Error ? error.message : String(error)}` }
   }
 }
 
@@ -122,7 +135,7 @@ export async function resetOrdersData(): Promise<{ success: boolean; error?: str
     return { success: true }
   } catch (error) {
     console.error('발주 초기화 오류:', error)
-    return { success: false, error: '발주 데이터 삭제 중 오류가 발생했습니다.' }
+    return { success: false, error: `발주 데이터 삭제 중 오류: ${error instanceof Error ? error.message : String(error)}` }
   }
 }
 
@@ -133,11 +146,19 @@ export async function resetAllData(): Promise<{ success: boolean; error?: string
     const orgId = user.organizationId
 
     await db.transaction(async (tx) => {
-      // 자식 테이블 먼저
+      // FK 제약 임시 비활성화
+      await tx.execute(sql`SET CONSTRAINTS ALL DEFERRED`)
+
+      // leaf 테이블 먼저
       await tx.delete(purchaseOrderItems).where(eq(purchaseOrderItems.organizationId, orgId))
       await tx.delete(inventoryLots).where(eq(inventoryLots.organizationId, orgId))
       await tx.delete(inventoryHistory).where(eq(inventoryHistory.organizationId, orgId))
       await tx.delete(outboundRequests).where(eq(outboundRequests.organizationId, orgId))
+      // supplier_products (organizationId 없음 — supplierId 경유)
+      const supplierIds = await tx.select({ id: suppliers.id }).from(suppliers).where(eq(suppliers.organizationId, orgId))
+      if (supplierIds.length > 0) {
+        await tx.delete(supplierProducts).where(inArray(supplierProducts.supplierId, supplierIds.map((s) => s.id)))
+      }
       // 부모 테이블
       await tx.delete(purchaseOrders).where(eq(purchaseOrders.organizationId, orgId))
       await tx.delete(inventory).where(eq(inventory.organizationId, orgId))
@@ -153,7 +174,7 @@ export async function resetAllData(): Promise<{ success: boolean; error?: string
       await tx.delete(importShipments).where(eq(importShipments.organizationId, orgId))
       await tx.delete(psiPlans).where(eq(psiPlans.organizationId, orgId))
       await tx.delete(activityLogs).where(eq(activityLogs.organizationId, orgId))
-      // 마스터 데이터 (제품)
+      // 마스터 데이터 (제품 — supplier_products는 위에서 이미 삭제)
       await tx.delete(products).where(eq(products.organizationId, orgId))
     })
 
@@ -161,6 +182,6 @@ export async function resetAllData(): Promise<{ success: boolean; error?: string
     return { success: true }
   } catch (error) {
     console.error('전체 초기화 오류:', error)
-    return { success: false, error: '전체 데이터 삭제 중 오류가 발생했습니다.' }
+    return { success: false, error: `전체 데이터 삭제 중 오류: ${error instanceof Error ? error.message : String(error)}` }
   }
 }
