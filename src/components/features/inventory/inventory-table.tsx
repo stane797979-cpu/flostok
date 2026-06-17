@@ -256,7 +256,7 @@ export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
                   className={cn(isSomeSelected && "data-[state=checked]:bg-slate-400")}
                 />
               </TableHead>
-              <TableHead className={cn("w-[100px]", sortableHeadClass)} onClick={() => handleSort("sku")}>
+              <TableHead className={cn("w-[140px] whitespace-nowrap", sortableHeadClass)} onClick={() => handleSort("sku")}>
                 <div className="flex items-center gap-0.5">SKU <span className="text-[10px] text-primary-600">{sortLabel("sku")}</span><SortIcon columnKey="sku" /></div>
               </TableHead>
               <TableHead className={sortableHeadClass} onClick={() => handleSort("name")}>
@@ -355,7 +355,7 @@ export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
                       aria-label={`${item.product.name} 선택`}
                     />
                   </TableCell>
-                  <TableCell className="font-mono text-sm">{item.product.sku}</TableCell>
+                  <TableCell className="font-mono text-sm whitespace-nowrap">{item.product.sku}</TableCell>
                   <TableCell className="font-medium">{item.product.name}</TableCell>
                   <TableCell>
                     <Badge
