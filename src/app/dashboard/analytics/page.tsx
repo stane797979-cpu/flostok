@@ -63,16 +63,6 @@ const ABCXYZPolicyGuide = dynamic(
   }
 );
 
-const SalesTrendChart = dynamic(
-  () =>
-    import("./_components/sales-trend-chart").then((mod) => ({ default: mod.SalesTrendChart })),
-  {
-    loading: () => (
-      <div className="h-96 flex items-center justify-center text-slate-400">로딩 중...</div>
-    ),
-  }
-);
-
 const DemandForecastChart = dynamic(
   () =>
     import("./_components/demand-forecast-chart").then((mod) => ({ default: mod.DemandForecastChart })),
@@ -163,7 +153,6 @@ export default async function AnalyticsPage() {
           <TabsTrigger value="grade-change">등급변동</TabsTrigger>
           <TabsTrigger value="demand-forecast">수요예측</TabsTrigger>
           <TabsTrigger value="turnover">재고회전율</TabsTrigger>
-          <TabsTrigger value="sales-trend">판매 추이</TabsTrigger>
           <TabsTrigger value="aging">재고 에이징</TabsTrigger>
           <TabsTrigger value="lot-expiry">유통기한</TabsTrigger>
           <TabsTrigger value="scenario">시나리오</TabsTrigger>
@@ -221,10 +210,6 @@ export default async function AnalyticsPage() {
           <Suspense fallback={<TabLoadingSkeleton />}>
             <AnalyticsTurnover />
           </Suspense>
-        </TabsContent>
-
-        <TabsContent value="sales-trend">
-          <SalesTrendChart />
         </TabsContent>
 
         <TabsContent value="aging">

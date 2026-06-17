@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { getDemandForecast, getAggregateForecast } from "@/server/actions/analytics";
 import { getFulfillmentRateData } from "@/server/actions/fulfillment-rate";
 import { FulfillmentRateTable } from "./fulfillment-rate-table";
+import { SalesTrendChart } from "./sales-trend-chart";
 import {
   Command,
   CommandEmpty,
@@ -41,7 +42,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-type MainTab = "forecast" | "fulfillment";
+type MainTab = "sales-trend" | "forecast" | "fulfillment";
 type ViewTab = "product" | "abc" | "xyz" | "all";
 
 interface AggregateGroup {
@@ -345,21 +346,12 @@ export function DemandForecastChart() {
     return { avgHistory, avgPredicted, trend };
   }, [forecast]);
 
-  if (isLoading) {
-    return (
-      <div className="flex h-96 items-center justify-center text-slate-400">
-        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-        수요예측 데이터를 분석 중...
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-4">
-      {/* 메인 탭: 수요예측 / 실출고율 */}
+      {/* 메인 탭: 출고량 추이 / 수요예측 / 실출고율 */}
       <div className="flex gap-1 border-b pb-0">
-        {(["forecast", "fulfillment"] as MainTab[]).map((tab) => {
-          const labels: Record<MainTab, string> = { forecast: "수요예측", fulfillment: "실출고율" };
+        {(["sales-trend", "forecast", "fulfillment"] as MainTab[]).map((tab) => {
+          const labels: Record<MainTab, string> = { "sales-trend": "출고량 추이", forecast: "수요예측", fulfillment: "실출고율" };
           return (
             <button
               key={tab}
@@ -377,6 +369,11 @@ export function DemandForecastChart() {
         })}
       </div>
 
+      {/* 출고량 추이 탭 */}
+      {mainTab === "sales-trend" && (
+        <SalesTrendChart />
+      )}
+
       {/* 실출고율 탭 */}
       {mainTab === "fulfillment" && (
         <div>
@@ -391,7 +388,7 @@ export function DemandForecastChart() {
         </div>
       )}
 
-      {/* 수요예측 탭 */}
+      {/* 수요예측 */}
       {mainTab === "forecast" && (
       <div className="space-y-4">
       {/* 뷰 탭 */}
@@ -428,7 +425,12 @@ export function DemandForecastChart() {
       {/* 개별 제품 뷰 */}
       {viewTab === "product" && (
       <div className="space-y-4">
-      {products.length === 0 ? (
+      {isLoading ? (
+        <div className="flex h-64 items-center justify-center text-slate-400">
+          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+          수요예측 데이터를 분석 중...
+        </div>
+      ) : products.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <AlertCircle className="mb-4 h-12 w-12 text-muted-foreground/50" />
