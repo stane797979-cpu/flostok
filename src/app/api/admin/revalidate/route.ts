@@ -7,7 +7,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const orgId = "00000000-0000-0000-0000-000000000000";
+  const orgId = "836007fe-007b-4f73-af91-78cca38d305d";
 
   revalidateTag(`inventory-${orgId}`);
   revalidateTag(`kpi-${orgId}`);
