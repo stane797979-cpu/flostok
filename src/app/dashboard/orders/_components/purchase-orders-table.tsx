@@ -223,18 +223,18 @@ export function PurchaseOrdersTable({ orders, onViewClick, onDownloadClick, sele
 
       {/* 데스크톱 테이블 뷰 */}
       <div className={cn("hidden rounded-md border md:block", className)}>
-        <Table>
+        <Table className="table-fixed">
         <colgroup>
-          {onSelectChange && <col className="w-10" />}
-          <col className="w-44" />
-          <col className="w-32" />
-          <col className="w-24" />
-          <col className="w-36" />
-          <col className="w-28" />
-          <col className="w-28" />
-          <col className="w-28" />
-          <col className="w-28" />
-          <col className="w-32" />
+          {onSelectChange && <col style={{ width: "40px" }} />}
+          <col style={{ width: "180px" }} />
+          <col style={{ width: "120px" }} />
+          <col style={{ width: "80px" }} />
+          <col style={{ width: "140px" }} />
+          <col style={{ width: "110px" }} />
+          <col style={{ width: "110px" }} />
+          <col style={{ width: "110px" }} />
+          <col style={{ width: "110px" }} />
+          <col style={{ width: "100px" }} />
         </colgroup>
         <TableHeader>
           <TableRow>
