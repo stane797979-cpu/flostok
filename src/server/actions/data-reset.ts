@@ -11,15 +11,28 @@ import {
   salesRecords,
   outboundRequests,
   suppliers,
+  purchaseOrders,
+  purchaseOrderItems,
+  demandForecasts,
+  gradeHistory,
+  stockoutRecords,
+  alerts,
+  kpiMonthlySnapshots,
+  importShipments,
+  psiPlans,
+  activityLogs,
 } from '@/server/db/schema'
 import { eq } from 'drizzle-orm'
 
 function revalidateAll(orgId: string) {
   revalidateTag(`analytics-${orgId}`)
+  revalidatePath('/dashboard')
   revalidatePath('/dashboard/inventory')
   revalidatePath('/dashboard/analytics')
   revalidatePath('/dashboard/inbound')
   revalidatePath('/dashboard/outbound')
+  revalidatePath('/dashboard/orders')
+  revalidatePath('/dashboard/suppliers')
 }
 
 /** 재고 전체 초기화 (inventory + inventoryHistory + inventoryLots) */
@@ -85,7 +98,7 @@ export async function resetSuppliersData(): Promise<{ success: boolean; error?: 
 
     await db.delete(suppliers).where(eq(suppliers.organizationId, orgId))
 
-    revalidatePath('/dashboard/suppliers')
+    revalidateAll(orgId)
     return { success: true }
   } catch (error) {
     console.error('공급업체 초기화 오류:', error)
@@ -93,24 +106,55 @@ export async function resetSuppliersData(): Promise<{ success: boolean; error?: 
   }
 }
 
-/** 전체 초기화 (재고 + 입고 + 출고/판매) */
+/** 발주 전체 초기화 (purchase_order_items → purchase_orders) */
+export async function resetOrdersData(): Promise<{ success: boolean; error?: string }> {
+  try {
+    const user = await requireAuth()
+    const orgId = user.organizationId
+
+    await db.transaction(async (tx) => {
+      await tx.delete(purchaseOrderItems).where(eq(purchaseOrderItems.organizationId, orgId))
+      await tx.delete(purchaseOrders).where(eq(purchaseOrders.organizationId, orgId))
+    })
+
+    revalidateAll(orgId)
+    return { success: true }
+  } catch (error) {
+    console.error('발주 초기화 오류:', error)
+    return { success: false, error: '발주 데이터 삭제 중 오류가 발생했습니다.' }
+  }
+}
+
+/** 전체 초기화 — 모든 운영 데이터 삭제 (제품·조직·사용자 제외) */
 export async function resetAllData(): Promise<{ success: boolean; error?: string }> {
   try {
     const user = await requireAuth()
     const orgId = user.organizationId
 
     await db.transaction(async (tx) => {
+      // 자식 테이블 먼저
+      await tx.delete(purchaseOrderItems).where(eq(purchaseOrderItems.organizationId, orgId))
       await tx.delete(inventoryLots).where(eq(inventoryLots.organizationId, orgId))
       await tx.delete(inventoryHistory).where(eq(inventoryHistory.organizationId, orgId))
+      await tx.delete(outboundRequests).where(eq(outboundRequests.organizationId, orgId))
+      // 부모 테이블
+      await tx.delete(purchaseOrders).where(eq(purchaseOrders.organizationId, orgId))
       await tx.delete(inventory).where(eq(inventory.organizationId, orgId))
       await tx.delete(inboundRecords).where(eq(inboundRecords.organizationId, orgId))
-      await tx.delete(outboundRequests).where(eq(outboundRequests.organizationId, orgId))
       await tx.delete(salesRecords).where(eq(salesRecords.organizationId, orgId))
       await tx.delete(suppliers).where(eq(suppliers.organizationId, orgId))
+      // 분석·이력 데이터
+      await tx.delete(demandForecasts).where(eq(demandForecasts.organizationId, orgId))
+      await tx.delete(gradeHistory).where(eq(gradeHistory.organizationId, orgId))
+      await tx.delete(stockoutRecords).where(eq(stockoutRecords.organizationId, orgId))
+      await tx.delete(alerts).where(eq(alerts.organizationId, orgId))
+      await tx.delete(kpiMonthlySnapshots).where(eq(kpiMonthlySnapshots.organizationId, orgId))
+      await tx.delete(importShipments).where(eq(importShipments.organizationId, orgId))
+      await tx.delete(psiPlans).where(eq(psiPlans.organizationId, orgId))
+      await tx.delete(activityLogs).where(eq(activityLogs.organizationId, orgId))
     })
 
     revalidateAll(orgId)
-    revalidatePath('/dashboard/suppliers')
     return { success: true }
   } catch (error) {
     console.error('전체 초기화 오류:', error)
