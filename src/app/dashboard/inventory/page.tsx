@@ -32,7 +32,7 @@ export default async function InventoryPage() {
 
     const clientStats = {
       totalProducts: stats.totalProducts,
-      needsOrder: stats.outOfStock + stats.critical + stats.shortage,
+      needsOrder: stats.outOfStock + stats.critical + stats.shortage + stats.caution,
       outOfStockAndCritical: stats.outOfStock + stats.critical,
       excess: stats.excess,
     };
