@@ -6,13 +6,12 @@ const COLUMNS = [
   { key: "code",           header: "거래처코드",       width: 16 },
   { key: "representative", header: "대표자",           width: 14 },
   { key: "businessNumber", header: "사업자번호",       width: 18 },
-  { key: "address",        header: "주소",             width: 36 },
   { key: "contactPhone",   header: "전화번호",         width: 18 },
-  { key: "contactEmail",   header: "이메일",           width: 28 },
-  { key: "fax",            header: "팩스",             width: 16 },
+  { key: "contactEmail",   header: "이메일",           width: 30 },
+  { key: "address",        header: "주소",             width: 40 },
   { key: "paymentTerms",   header: "결제조건",         width: 22 },
-  { key: "avgLeadTime",    header: "기본리드타임(일)", width: 18 },
   { key: "category",       header: "분류",             width: 14 },
+  { key: "avgLeadTime",    header: "리드타임(일)",     width: 14 },
   { key: "notes",          header: "메모",             width: 36 },
 ] as const;
 
@@ -71,13 +70,12 @@ export async function generateSupplierExcel(supplierList: Supplier[]): Promise<B
       s.code ?? "",
       s.representative ?? "",
       s.businessNumber ?? "",
-      s.address ?? "",
       s.contactPhone ?? "",
       s.contactEmail ?? "",
-      s.fax ?? "",
+      s.address ?? "",
       s.paymentTerms ?? "",
-      s.avgLeadTime ?? 7,
       s.category ?? "",
+      s.avgLeadTime ?? 7,
       s.notes ?? "",
     ]);
     applyDataRow(row, i + 1);
@@ -100,9 +98,9 @@ export async function generateSupplierTemplate(): Promise<Buffer> {
 
   // 샘플 행 2개 (회색 이탤릭 — 업로드 시 자동 무시)
   const samples = [
-    ["(주)샘플무역", "SUP-001", "홍길동", "123-45-67890", "서울시 강남구 테헤란로 1", "02-1234-5678", "sample@example.com", "02-1234-5679", "월말마감 익월말", 7, "완제품", "주력 공급처"],
-    ["글로벌소싱", "SUP-002", "김영희", "234-56-78901", "경기도 성남시 분당구 판교로 1", "031-234-5678", "", "031-234-5679", "납품 후 30일", 14, "소모품", ""],
-    ["", "", "", "", "", "", "", "", "", "", "", ""],
+    ["(주)샘플무역", "SUP-001", "홍길동", "123-45-67890", "02-1234-5678", "sample@example.com", "서울시 강남구 테헤란로 1", "월말마감 익월말", "완제품", 7, "주력 공급처"],
+    ["글로벌소싱",   "SUP-002", "김영희", "234-56-78901", "031-234-5678", "",                   "경기도 성남시 분당구 판교로 1", "납품 후 30일", "소모품", 14, ""],
+    ["", "", "", "", "", "", "", "", "", "", ""],
   ];
   samples.forEach((data, i) => {
     const row = ws.addRow(data);
@@ -131,18 +129,17 @@ function addGuideSheet(wb: ExcelJS.Workbook) {
   titleRow.height = 20;
 
   const rows: [string, string][] = [
-    ["거래처명*",       "필수 항목. 동일명 존재 시 건너뜁니다."],
-    ["거래처코드",      "고유 식별 코드 (선택). 없으면 비워두세요."],
-    ["대표자",          "대표자 이름 (선택)"],
-    ["사업자번호",      "XXX-XX-XXXXX 형식 권장 (선택)"],
-    ["주소",            "전체 주소 (선택)"],
-    ["전화번호",        "전화번호 (선택)"],
-    ["이메일",          "이메일 형식 (선택)"],
-    ["팩스",            "팩스번호 (선택)"],
-    ["결제조건",        "예: 월말마감 익월말, 납품 후 30일 (선택)"],
-    ["기본리드타임(일)","정수 입력. 기본값 7 (선택)"],
-    ["분류",            "예: 완제품, 소모품, 원자재 등 (선택)"],
-    ["메모",            "자유 메모 (선택)"],
+    ["거래처명*",   "필수 항목. 동일명 존재 시 건너뜁니다."],
+    ["거래처코드",  "고유 식별 코드 (선택)"],
+    ["대표자",      "대표자 이름 (선택)"],
+    ["사업자번호",  "XXX-XX-XXXXX 형식 권장 (선택)"],
+    ["전화번호",    "전화번호 (선택)"],
+    ["이메일",      "이메일 형식 (선택)"],
+    ["주소",        "전체 주소 (선택)"],
+    ["결제조건",    "예: 월말마감 익월말, 납품 후 30일 (선택)"],
+    ["분류",        "예: 완제품, 소모품, 원자재 등 (선택)"],
+    ["리드타임(일)","정수 입력. 기본값 7 (선택)"],
+    ["메모",        "자유 메모 (선택)"],
     ["", ""],
     ["업로드 규칙",     "* 표시 항목만 필수입니다."],
     ["",                "동일한 거래처명이 있으면 해당 행은 건너뜁니다."],
@@ -200,16 +197,15 @@ export function parseSupplierRow(row: ExcelJS.Row): {
     code:           get(2)  || undefined,
     representative: get(3)  || undefined,
     businessNumber: get(4)  || undefined,
-    address:        get(5)  || undefined,
-    contactPhone:   get(6)  || undefined,
-    contactEmail:   get(7)  || undefined,
-    fax:            get(8)  || undefined,
-    paymentTerms:   get(9)  || undefined,
+    contactPhone:   get(5)  || undefined,
+    contactEmail:   get(6)  || undefined,
+    address:        get(7)  || undefined,
+    paymentTerms:   get(8)  || undefined,
+    category:       get(9)  || undefined,
     avgLeadTime,
     minLeadTime:    Math.max(1, Math.round(avgLeadTime * 0.7)),
     maxLeadTime:    Math.round(avgLeadTime * 1.5),
-    category:       get(11) || undefined,
-    notes:          get(12) || undefined,
+    notes:          get(11) || undefined,
     minOrderAmount: 0,
   };
 }
