@@ -26,6 +26,7 @@ const COLUMN_ALIASES: Record<string, string[]> = {
   costPrice: ["원가", "costPrice", "매입가", "CostPrice", "Cost"],
   currentStock: ["재고수량", "currentStock", "현재고", "재고", "수량", "Stock", "Qty"],
   safetyStock: ["안전재고", "safetyStock", "SafetyStock"],
+  reorderPoint: ["발주점", "reorderPoint", "ReorderPoint", "발주기준"],
   leadTime: ["리드타임", "leadTime", "LeadTime", "LT"],
   moq: ["MOQ", "moq", "최소발주수량"],
 };
@@ -88,6 +89,7 @@ function parseProductRow(
   const costPrice = parseNumber(getColumnValue(row, "costPrice"));
   const currentStock = parseNumber(getColumnValue(row, "currentStock"));
   const safetyStock = parseNumber(getColumnValue(row, "safetyStock"));
+  const reorderPoint = parseNumber(getColumnValue(row, "reorderPoint"));
   const leadTime = parseNumber(getColumnValue(row, "leadTime"));
   const moq = parseNumber(getColumnValue(row, "moq"));
 
@@ -101,6 +103,7 @@ function parseProductRow(
       costPrice: costPrice ?? undefined,
       currentStock: currentStock ?? undefined,
       safetyStock: safetyStock ?? undefined,
+      reorderPoint: reorderPoint ?? undefined,
       leadTime: leadTime ?? undefined,
       moq: moq ?? undefined,
     },
@@ -187,6 +190,7 @@ export async function importProductData(
             unitPrice: data.unitPrice ?? 0,
             costPrice: data.costPrice ?? 0,
             safetyStock: data.safetyStock ?? 0,
+            reorderPoint: data.reorderPoint ?? 0,
             leadTime: data.leadTime ?? 7,
             moq: data.moq ?? 1,
             updatedAt: new Date(),
@@ -212,6 +216,7 @@ export async function importProductData(
         unitPrice: data.unitPrice ?? 0,
         costPrice: data.costPrice ?? 0,
         safetyStock: data.safetyStock ?? 0,
+        reorderPoint: data.reorderPoint ?? 0,
         leadTime: data.leadTime ?? 7,
         moq: data.moq ?? 1,
       }).returning({ id: products.id });

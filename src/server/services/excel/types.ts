@@ -75,6 +75,8 @@ export interface ProductExcelRow {
   currentStock?: number;
   /** 안전재고 (선택) */
   safetyStock?: number;
+  /** 발주점 (선택) */
+  reorderPoint?: number;
   /** 리드타임 (선택) */
   leadTime?: number;
   /** MOQ (선택) */
