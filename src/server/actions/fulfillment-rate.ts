@@ -1,6 +1,5 @@
 "use server";
 
-import { unstable_cache } from "next/cache";
 import { db } from "@/server/db";
 import { demandForecasts, products, salesRecords } from "@/server/db/schema";
 import { eq, and, sql, gte, lte, isNotNull, inArray } from "drizzle-orm";
@@ -108,13 +107,13 @@ async function _getFulfillmentRateInternal(orgId: string): Promise<FulfillmentRa
     return buildSummary(items, periodsSet);
   }
 
-  // 예측 있는 경우 — 제품+판매량 병렬 조회 (N+1 제거)
-  const productIds = [...new Set(forecasts.map((f) => f.productId))];
-  const [productList, monthlySalesAll] = await Promise.all([
+  // 예측 있는 SKU 처리 — 제품+판매량 병렬 조회
+  const forecastProductIds = [...new Set(forecasts.map((f) => f.productId))];
+  const [allProductList, monthlySalesAll] = await Promise.all([
     db
       .select({ id: products.id, sku: products.sku, name: products.name })
       .from(products)
-      .where(and(eq(products.organizationId, orgId), inArray(products.id, productIds))),
+      .where(and(eq(products.organizationId, orgId))),
     db
       .select({
         productId: salesRecords.productId,
@@ -125,26 +124,31 @@ async function _getFulfillmentRateInternal(orgId: string): Promise<FulfillmentRa
       .where(
         and(
           eq(salesRecords.organizationId, orgId),
-          inArray(salesRecords.productId, productIds),
           gte(salesRecords.date, startDate.substring(0, 10)),
         )
       )
       .groupBy(salesRecords.productId, sql`to_char(${salesRecords.date}::date, 'YYYY-MM-01')`),
   ]);
 
-  const productMap = new Map(productList.map((p) => [p.id, p]));
+  const productMap = new Map(allProductList.map((p) => [p.id, p]));
   const salesLookup = new Map<string, number>();
+  const salesByProduct = new Map<string, Map<string, number>>();
   for (const row of monthlySalesAll) {
     salesLookup.set(`${row.productId}|${row.period}`, Number(row.total));
+    if (!salesByProduct.has(row.productId)) salesByProduct.set(row.productId, new Map());
+    salesByProduct.get(row.productId)!.set(row.period as string, Number(row.total));
   }
 
   const items: FulfillmentRateItem[] = [];
   const periodsSet = new Set<string>();
+  const forecastProductSet = new Set(forecastProductIds);
+
+  // 예측 있는 SKU
   for (const f of forecasts) {
     const product = productMap.get(f.productId);
     if (!product || !f.forecastQty) continue;
     periodsSet.add(f.period);
-    const actualQty = f.actualQty || salesLookup.get(`${f.productId}|${f.period}`) || 0;
+    const actualQty = f.actualQty ?? salesLookup.get(`${f.productId}|${f.period}`) ?? 0;
     const rate = f.forecastQty > 0 ? (actualQty / f.forecastQty) * 100 : 0;
     items.push({
       productId: f.productId, sku: product.sku, name: product.name, period: f.period,
@@ -152,19 +156,30 @@ async function _getFulfillmentRateInternal(orgId: string): Promise<FulfillmentRa
       fulfillmentRate: Math.round(rate * 10) / 10,
     });
   }
+
+  // 예측 없는 SKU — 판매 데이터로 평균 예측 산출
+  for (const [productId, months] of salesByProduct) {
+    if (forecastProductSet.has(productId)) continue;
+    const product = productMap.get(productId);
+    if (!product) continue;
+    const monthValues = Array.from(months.values());
+    const avgForecast = Math.round(monthValues.reduce((s, v) => s + v, 0) / monthValues.length);
+    for (const [period, actualQty] of months) {
+      periodsSet.add(period);
+      const rate = avgForecast > 0 ? (actualQty / avgForecast) * 100 : 0;
+      items.push({
+        productId, sku: product.sku, name: product.name, period,
+        forecastQty: avgForecast, actualQty,
+        fulfillmentRate: Math.round(rate * 10) / 10,
+      });
+    }
+  }
+
   return buildSummary(items, periodsSet);
 }
 
-/**
- * 실출고율 데이터 조회 (60초 캐시)
- */
 export async function getFulfillmentRateData(): Promise<FulfillmentRateSummary> {
   const user = await getCurrentUser();
   const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
-
-  return unstable_cache(
-    () => _getFulfillmentRateInternal(orgId),
-    [`fulfillment-rate-${orgId}`],
-    { revalidate: 60, tags: [`analytics-${orgId}`] }
-  )();
+  return _getFulfillmentRateInternal(orgId);
 }
