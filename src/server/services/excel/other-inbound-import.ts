@@ -5,7 +5,7 @@
 import { db } from "@/server/db";
 import { products, inboundRecords, inventory, inventoryLots, inventoryHistory } from "@/server/db/schema";
 import { eq, and, isNull, desc, inArray } from "drizzle-orm";
-import { parseExcelBuffer, sheetToJson, parseNumber } from "./parser";
+import { parseExcelBuffer, sheetToJson, parseNumber, parseExcelDate, formatDateToString } from "./parser";
 
 /**
  * XLSX 라이브러리 lazy 로딩
@@ -21,6 +21,7 @@ async function getXLSX() {
  */
 const COLUMN_ALIASES: Record<string, string[]> = {
   sku: ["SKU", "sku", "품목코드", "제품코드", "상품코드"],
+  date: ["입고일", "날짜", "date", "Date", "일자", "입고날짜"],
   inboundType: ["입고유형", "유형", "입고 유형", "type", "Type"],
   quantity: ["수량", "입고수량", "quantity", "Quantity", "Qty"],
   location: ["위치", "적치위치", "적치 위치", "location", "Location"],
@@ -126,9 +127,10 @@ export async function importOtherInboundData(params: {
     const quantity = parseNumber(getColumnValue(row, "quantity"));
     if (!quantity || quantity <= 0) { errors.push({ row: rowNum, message: "수량이 올바르지 않습니다" }); continue; }
 
-    const rawDate = String(getColumnValue(row, "date") || "").trim();
+    const rawDate = getColumnValue(row, "date");
     const today = new Date().toISOString().split("T")[0];
-    const date = rawDate.match(/^\d{4}-\d{2}-\d{2}$/) ? rawDate : today;
+    const parsedDate = await parseExcelDate(rawDate);
+    const date = parsedDate ? formatDateToString(parsedDate) : today;
 
     validRows.push({
       rowNum,
