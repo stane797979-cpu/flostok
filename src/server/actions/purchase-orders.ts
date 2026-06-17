@@ -432,13 +432,14 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
     const user = await getCurrentUser();
     const orgId = user?.organizationId || TEMP_ORG_ID;
 
-    // 공급자 + 제품 병렬 조회
+    // 공급자 + 제품 + 당일 연번 병렬 조회
     const productIds = validated.items.map((item) => item.productId);
     const today = new Date();
     const kst = new Date(today.getTime() + 9 * 60 * 60 * 1000);
     const dateStr = kst.toISOString().slice(0, 10).replace(/-/g, "");
+    const kstDateOnly = kst.toISOString().slice(0, 10);
 
-    const [supplierResult, productsData] = await Promise.all([
+    const [supplierResult, productsData, todayCount] = await Promise.all([
       db
         .select()
         .from(suppliers)
@@ -448,6 +449,10 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
         .select()
         .from(products)
         .where(and(inArray(products.id, productIds), eq(products.organizationId, orgId))),
+      db
+        .select({ count: sql<number>`count(*)` })
+        .from(purchaseOrders)
+        .where(and(eq(purchaseOrders.organizationId, orgId), sql`DATE(${purchaseOrders.createdAt} AT TIME ZONE 'Asia/Seoul') = ${kstDateOnly}`)),
     ]);
 
     const supplier = supplierResult[0];
@@ -478,10 +483,9 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
       };
     });
 
-    // 발주번호 생성 (PO-YYYYMMDD-HHMMSS-mmm, KST 기준) — 초+밀리초로 동시 중복 방지
-    const timeStr = kst.toISOString().slice(11, 19).replace(/:/g, "");
-    const msStr = today.getMilliseconds().toString().padStart(3, "0");
-    const orderNumber = `PO-${dateStr}-${timeStr}-${msStr}`;
+    // 발주번호 생성 (PO-YYYYMMDD-NNN, KST 당일 연번)
+    const seq = (Number(todayCount[0]?.count ?? 0) + 1).toString().padStart(3, "0");
+    const orderNumber = `PO-${dateStr}-${seq}`;
 
     // 예상입고일 계산 (리드타임 기반)
     let expectedDate = validated.expectedDate;
@@ -1122,6 +1126,14 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
     const today = new Date();
     const todayKst = new Date(today.getTime() + 9 * 60 * 60 * 1000);
     const dateStr = todayKst.toISOString().slice(0, 10).replace(/-/g, "");
+    const kstDateOnly = todayKst.toISOString().slice(0, 10);
+
+    // 당일 기존 발주서 수 조회 (연번 시작점)
+    const [baseCountRow] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(purchaseOrders)
+      .where(and(eq(purchaseOrders.organizationId, orgId), sql`DATE(${purchaseOrders.createdAt} AT TIME ZONE 'Asia/Seoul') = ${kstDateOnly}`));
+    let seqBase = Number(baseCountRow?.count ?? 0);
 
     // 3. 공급자별로 발주서 생성 (DB 조회 없이 메모리에서 처리)
     for (const [supplierId, items] of itemsBySupplier.entries()) {
@@ -1156,12 +1168,9 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
 
         if (orderItems.length === 0) continue;
 
-        // 발주번호 생성 (PO-YYYYMMDD-HHMMSS-mmm, KST 기준) — 초+밀리초로 동시 중복 방지
-        const now = new Date();
-        const nowKst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-        const tStr = nowKst.toISOString().slice(11, 19).replace(/:/g, "");
-        const msStr = now.getMilliseconds().toString().padStart(3, "0");
-        const orderNumber = `PO-${dateStr}-${tStr}-${msStr}`;
+        // 발주번호 생성 (PO-YYYYMMDD-NNN, KST 당일 연번)
+        seqBase += 1;
+        const orderNumber = `PO-${dateStr}-${seqBase.toString().padStart(3, "0")}`;
 
         // 예상입고일 계산 (리드타임 기반)
         const expectedDateObj = new Date();
