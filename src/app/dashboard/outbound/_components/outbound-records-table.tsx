@@ -151,7 +151,7 @@ export function OutboundRecordsTable({ records, onEdit, onDelete }: OutboundReco
             <TableRow key={record.id}>
               <TableCell className="font-mono text-sm">{record.date}</TableCell>
               <TableCell className="font-mono text-xs text-slate-500">{record.outboundNumber || "-"}</TableCell>
-              <TableCell className="font-mono text-sm">{record.productSku}</TableCell>
+              <TableCell className="font-mono text-sm whitespace-nowrap">{record.productSku}</TableCell>
               <TableCell className="font-medium">{record.productName}</TableCell>
               <TableCell>
                 <Badge variant="outline" className="text-xs">
