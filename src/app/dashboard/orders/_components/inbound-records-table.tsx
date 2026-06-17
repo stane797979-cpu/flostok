@@ -10,6 +10,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -111,6 +113,8 @@ const qualityBadge = (result: string | null) => {
 export function InboundRecordsTable({ records, className }: InboundRecordsTableProps) {
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [pageSize, setPageSize] = useState(20);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -125,6 +129,7 @@ export function InboundRecordsTable({ records, className }: InboundRecordsTableP
       setSortField(field);
       setSortDirection("asc");
     }
+    setCurrentPage(1);
   };
 
   const sortedRecords = useMemo(() => {
@@ -165,7 +170,7 @@ export function InboundRecordsTable({ records, className }: InboundRecordsTableP
     <>
       {/* 모바일 카드 뷰 */}
       <div className={cn("space-y-3 md:hidden", className)}>
-        {sortedRecords.map((record) => (
+        {sortedRecords.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((record) => (
           <div key={record.id} className="rounded-lg border bg-white p-4 space-y-2">
             <div className="flex items-center justify-between">
               <div className="min-w-0 flex-1">
@@ -290,7 +295,7 @@ export function InboundRecordsTable({ records, className }: InboundRecordsTableP
           </TableRow>
         </TableHeader>
         <TableBody>
-          {sortedRecords.map((record) => (
+          {sortedRecords.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((record) => (
             <TableRow key={record.id}>
               <TableCell className="whitespace-nowrap text-sm">{record.date}</TableCell>
               <TableCell className="whitespace-nowrap text-sm">
@@ -332,6 +337,29 @@ export function InboundRecordsTable({ records, className }: InboundRecordsTableP
         </TableBody>
       </Table>
     </div>
+
+      {/* 페이지네이션 */}
+      <div className="flex items-center justify-between px-4 py-3 border-t text-sm text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <span>페이지당</span>
+          <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }}>
+            <SelectTrigger className="h-7 w-16 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="20">20</SelectItem>
+              <SelectItem value="50">50</SelectItem>
+              <SelectItem value="100">100</SelectItem>
+            </SelectContent>
+          </Select>
+          <span>개 · 총 {sortedRecords.length}개</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)}>이전</Button>
+          <span className="px-2">{currentPage} / {Math.max(1, Math.ceil(sortedRecords.length / pageSize))}</span>
+          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={currentPage >= Math.ceil(sortedRecords.length / pageSize)} onClick={() => setCurrentPage((p) => p + 1)}>다음</Button>
+        </div>
+      </div>
     </>
   );
 }
