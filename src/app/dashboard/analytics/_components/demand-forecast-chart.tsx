@@ -7,7 +7,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLe
 import { Badge } from "@/components/ui/badge";
 import { Loader2, TrendingUp, BarChart3, Target, AlertCircle, Check, ChevronsUpDown, Settings2, Sparkles, Info, HelpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getDemandForecast } from "@/server/actions/analytics";
+import { getDemandForecast, getAggregateForecast } from "@/server/actions/analytics";
 import {
   Command,
   CommandEmpty,
@@ -38,6 +38,19 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+
+type ViewTab = "product" | "abc" | "xyz" | "all";
+
+interface AggregateGroup {
+  key: string;
+  label: string;
+  productCount: number;
+  history: Array<{ month: string; value: number }>;
+  predicted: Array<{ month: string; value: number }>;
+  method: string;
+  mape: number;
+  confidence: string;
+}
 
 interface ForecastData {
   productId: string;
@@ -118,6 +131,9 @@ const forecastChartConfig = {
 } satisfies ChartConfig;
 
 export function DemandForecastChart() {
+  // 뷰 탭: 개별제품 / ABC별 / XYZ별 / 전체
+  const [viewTab, setViewTab] = useState<ViewTab>("product");
+
   const [products, setProducts] = useState<ProductOption[]>([]);
   const [selectedProductId, setSelectedProductId] = useState<string>("");
   const [forecast, setForecast] = useState<ForecastData | null>(null);
@@ -133,6 +149,10 @@ export function DemandForecastChart() {
   const [manualAlpha, setManualAlpha] = useState<string>("0.3");
   const [manualBeta, setManualBeta] = useState<string>("0.1");
   const [manualWindowSize, setManualWindowSize] = useState<string>("3");
+
+  // 집계 예측 상태
+  const [aggGroups, setAggGroups] = useState<AggregateGroup[]>([]);
+  const [aggLoading, setAggLoading] = useState(false);
 
   // 등급 필터링된 제품 목록
   const filteredProducts = useMemo(() => {
@@ -197,6 +217,27 @@ export function DemandForecastChart() {
       setIsLoading(false);
     }
   }, []);
+
+  const loadAggregate = useCallback(async (tab: ViewTab) => {
+    if (tab === "product") return;
+    setAggLoading(true);
+    try {
+      const groupBy = tab === "all" ? "all" : tab === "abc" ? "A" : "X";
+      const result = await getAggregateForecast({ groupBy });
+      setAggGroups(result.groups);
+    } catch {
+      setAggGroups([]);
+    } finally {
+      setAggLoading(false);
+    }
+  }, []);
+
+  const handleTabChange = (tab: ViewTab) => {
+    setViewTab(tab);
+    if (tab !== "product") {
+      loadAggregate(tab);
+    }
+  };
 
   useEffect(() => {
     loadForecast();
@@ -291,29 +332,54 @@ export function DemandForecastChart() {
     );
   }
 
-  if (products.length === 0) {
-    return (
-      <Card className="border-dashed">
-        <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-          <AlertCircle className="mb-4 h-12 w-12 text-muted-foreground/50" />
-          <h3 className="text-lg font-semibold text-muted-foreground">수요예측 데이터 없음</h3>
-          <p className="mt-2 max-w-md text-sm text-muted-foreground/70">
-            제품을 등록하고 판매 데이터를 입력하면 수요예측 결과가 표시됩니다.
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
     <div className="space-y-4">
-      {/* 기준 기간 */}
-      <div className="flex items-center gap-2">
-        <Badge variant="outline" className="text-xs px-2.5 py-1">
+      {/* 뷰 탭 */}
+      <div className="flex items-center gap-1 flex-wrap">
+        {(["product", "abc", "xyz", "all"] as ViewTab[]).map((tab) => {
+          const labels: Record<ViewTab, string> = {
+            product: "개별 제품",
+            abc: "ABC 등급별",
+            xyz: "XYZ 등급별",
+            all: "전체 집계",
+          };
+          return (
+            <Button
+              key={tab}
+              size="sm"
+              variant={viewTab === tab ? "default" : "outline"}
+              onClick={() => handleTabChange(tab)}
+              className="h-8 px-3 text-xs"
+            >
+              {labels[tab]}
+            </Button>
+          );
+        })}
+        <Badge variant="outline" className="ml-2 text-xs px-2.5 py-1">
           기준: 최근 12개월 판매 데이터 기반 예측
         </Badge>
       </div>
 
+      {/* 집계 뷰 (ABC / XYZ / 전체) */}
+      {viewTab !== "product" && (
+        <AggregateView tab={viewTab} groups={aggGroups} loading={aggLoading} />
+      )}
+
+      {/* 개별 제품 뷰 */}
+      {viewTab === "product" && (
+      <div className="space-y-4">
+      {products.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+            <AlertCircle className="mb-4 h-12 w-12 text-muted-foreground/50" />
+            <h3 className="text-lg font-semibold text-muted-foreground">수요예측 데이터 없음</h3>
+            <p className="mt-2 max-w-md text-sm text-muted-foreground/70">
+              제품을 등록하고 판매 데이터를 입력하면 수요예측 결과가 표시됩니다.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+      <>
       {/* 제품 선택 + 방법 선택 */}
       <Card>
         <CardHeader className="pb-3">
@@ -852,6 +918,139 @@ export function DemandForecastChart() {
           </Card>
         </>
       )}
+      </>
+      )}
+      </div>
+      )}
+    </div>
+  );
+}
+
+/** 집계 예측 뷰 컴포넌트 */
+function AggregateView({ tab, groups, loading }: { tab: ViewTab; groups: AggregateGroup[]; loading: boolean }) {
+  const tabLabel: Record<ViewTab, string> = {
+    product: "",
+    abc: "ABC 등급별",
+    xyz: "XYZ 등급별",
+    all: "전체",
+  };
+
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center text-slate-400">
+        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+        집계 데이터 분석 중...
+      </div>
+    );
+  }
+
+  if (groups.length === 0) {
+    return (
+      <Card className="border-dashed">
+        <CardContent className="flex h-40 items-center justify-center text-slate-400 text-sm">
+          판매 데이터가 없습니다
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const METHOD_LABELS_AGG: Record<string, string> = {
+    WMA: "가중이동평균 (WMA)",
+    SES: "지수평활법 (SES)",
+    Holts: "이중지수평활 (Holt's)",
+  };
+
+  const aggChartConfig = {
+    history: { label: "과거 실적", color: "#3b82f6" },
+    predicted: { label: "수요 예측", color: "#f59e0b" },
+  } satisfies ChartConfig;
+
+  return (
+    <div className="space-y-6">
+      <div className="text-sm font-semibold text-slate-600">{tabLabel[tab]} 수요예측</div>
+      {groups.map((group) => {
+        const fa = Math.max(0, Math.round((100 - group.mape) * 10) / 10);
+        const historyCount = group.history.length;
+        const chartData: Array<{ month: string; history: number | null; predicted: number | null }> = [];
+        group.history.forEach((h) => chartData.push({ month: h.month, history: h.value, predicted: null }));
+        if (chartData.length > 0 && group.predicted.length > 0) {
+          chartData[historyCount - 1].predicted = chartData[historyCount - 1].history;
+        }
+        group.predicted.forEach((p) => chartData.push({ month: p.month, history: null, predicted: p.value }));
+        const boundaryMonth = group.history[group.history.length - 1]?.month ?? null;
+        const lastMonth = group.predicted[group.predicted.length - 1]?.month ?? null;
+        const avgHistory = group.history.length > 0
+          ? Math.round(group.history.reduce((s, h) => s + h.value, 0) / group.history.length)
+          : 0;
+        const avgPredicted = group.predicted.length > 0
+          ? Math.round(group.predicted.reduce((s, p) => s + p.value, 0) / group.predicted.length)
+          : 0;
+        const trend = avgHistory > 0 ? ((avgPredicted - avgHistory) / avgHistory) * 100 : 0;
+
+        return (
+          <Card key={group.key}>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div>
+                  <CardTitle className="text-base">{group.label}</CardTitle>
+                  <CardDescription>제품 {group.productCount}개 합산 | {METHOD_LABELS_AGG[group.method] ?? group.method}</CardDescription>
+                </div>
+                <div className="flex items-center gap-3 text-sm">
+                  <div className="text-right">
+                    <div className="text-xs text-slate-400">FA</div>
+                    <div className={cn("text-lg font-bold", fa >= 85 ? "text-green-600" : fa >= 70 ? "text-yellow-600" : "text-red-600")}>
+                      {fa}%
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xs text-slate-400">예측 추세</div>
+                    <div className={cn("text-lg font-bold", trend >= 0 ? "text-green-600" : "text-red-600")}>
+                      {trend >= 0 ? "+" : ""}{trend.toFixed(1)}%
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xs text-slate-400">예측 평균</div>
+                    <div className="text-lg font-bold">{avgPredicted.toLocaleString("ko-KR")}개</div>
+                  </div>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <ChartContainer config={aggChartConfig} className="h-[160px] w-full">
+                <LineChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="4 4" vertical={false} />
+                  <XAxis dataKey="month" tickFormatter={(m) => m.slice(2).replace("-", "/")} fontSize={10} tickLine={false} axisLine={false} />
+                  <YAxis fontSize={10} tickLine={false} axisLine={false} width={52} tickFormatter={(v) => v.toLocaleString("ko-KR")} />
+                  {boundaryMonth && lastMonth && (
+                    <ReferenceArea x1={boundaryMonth} x2={lastMonth} fill="#f0f9ff" fillOpacity={0.5} />
+                  )}
+                  {boundaryMonth && (
+                    <ReferenceLine x={boundaryMonth} stroke="#93c5fd" strokeDasharray="6 3" />
+                  )}
+                  <ChartTooltip
+                    content={
+                      <ChartTooltipContent
+                        formatter={(value, name) => [`${Number(value).toLocaleString("ko-KR")}개`, name === "history" ? "실적" : "예측"]}
+                      />
+                    }
+                  />
+                  <Line type="monotone" dataKey="history" stroke="var(--color-history)" strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
+                  <Line type="monotone" dataKey="predicted" stroke="var(--color-predicted)" strokeWidth={2} strokeDasharray="8 4" dot={{ r: 3 }} connectNulls={false} />
+                  <ChartLegend content={<ChartLegendContent />} />
+                </LineChart>
+              </ChartContainer>
+
+              {/* 예측 수량 요약 */}
+              <div className="mt-3 flex gap-4 text-xs text-slate-500 border-t pt-3">
+                <span>과거 평균: {avgHistory.toLocaleString("ko-KR")}개/월</span>
+                {group.predicted.map((p) => (
+                  <span key={p.month}>{p.month}: <strong className="text-amber-700">{p.value.toLocaleString("ko-KR")}개</strong></span>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
     </div>
   );
 }

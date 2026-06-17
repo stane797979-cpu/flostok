@@ -562,6 +562,163 @@ export async function getDemandForecast(options?: {
 }
 
 /**
+ * 집계 수요예측: 전체 / ABC등급별 / XYZ등급별 집계 판매량으로 예측
+ */
+export async function getAggregateForecast(options?: {
+  /** 'all' | 'A' | 'B' | 'C' | 'X' | 'Y' | 'Z' */
+  groupBy?: string
+  manualMethod?: ForecastMethodType
+  manualParams?: Record<string, number>
+}): Promise<{
+  groups: Array<{
+    key: string
+    label: string
+    productCount: number
+    history: Array<{ month: string; value: number }>
+    predicted: Array<{ month: string; value: number }>
+    method: string
+    mape: number
+    confidence: string
+  }>
+}> {
+  try {
+    const user = await requireAuth()
+    const orgId = user.organizationId
+    const groupBy = options?.groupBy ?? 'all'
+    const manualMethod = options?.manualMethod
+    const manualParams = options?.manualParams
+
+    const twelveMonthsAgo = new Date()
+    twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12)
+    const startDate = twelveMonthsAgo.toISOString().split('T')[0]
+
+    // 월별 + 그룹별 판매 집계
+    let rows: Array<{ groupKey: string; month: string; qty: number }>
+
+    if (groupBy === 'all') {
+      const raw = await db
+        .select({
+          month: sql<string>`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`,
+          qty: sql<number>`COALESCE(SUM(${salesRecords.quantity}), 0)`,
+        })
+        .from(salesRecords)
+        .where(and(eq(salesRecords.organizationId, orgId), gte(salesRecords.date, startDate)))
+        .groupBy(sql`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`)
+        .orderBy(sql`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`)
+      rows = raw.map((r) => ({ groupKey: 'all', month: r.month, qty: Number(r.qty) }))
+    } else if (['A', 'B', 'C'].includes(groupBy)) {
+      const raw = await db
+        .select({
+          abcGrade: products.abcGrade,
+          month: sql<string>`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`,
+          qty: sql<number>`COALESCE(SUM(${salesRecords.quantity}), 0)`,
+        })
+        .from(salesRecords)
+        .innerJoin(products, eq(salesRecords.productId, products.id))
+        .where(and(eq(salesRecords.organizationId, orgId), gte(salesRecords.date, startDate)))
+        .groupBy(products.abcGrade, sql`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`)
+        .orderBy(products.abcGrade, sql`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`)
+      rows = raw
+        .filter((r) => r.abcGrade)
+        .map((r) => ({ groupKey: r.abcGrade!, month: r.month, qty: Number(r.qty) }))
+    } else {
+      // X, Y, Z
+      const raw = await db
+        .select({
+          xyzGrade: products.xyzGrade,
+          month: sql<string>`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`,
+          qty: sql<number>`COALESCE(SUM(${salesRecords.quantity}), 0)`,
+        })
+        .from(salesRecords)
+        .innerJoin(products, eq(salesRecords.productId, products.id))
+        .where(and(eq(salesRecords.organizationId, orgId), gte(salesRecords.date, startDate)))
+        .groupBy(products.xyzGrade, sql`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`)
+        .orderBy(products.xyzGrade, sql`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`)
+      rows = raw
+        .filter((r) => r.xyzGrade)
+        .map((r) => ({ groupKey: r.xyzGrade!, month: r.month, qty: Number(r.qty) }))
+    }
+
+    // 제품 수 집계
+    const productCountRaw = await db
+      .select({ abcGrade: products.abcGrade, xyzGrade: products.xyzGrade, cnt: sql<number>`COUNT(*)` })
+      .from(products)
+      .where(eq(products.organizationId, orgId))
+      .groupBy(products.abcGrade, products.xyzGrade)
+
+    function getProductCount(key: string): number {
+      if (key === 'all') return productCountRaw.reduce((s, r) => s + Number(r.cnt), 0)
+      if (['A', 'B', 'C'].includes(key)) return productCountRaw.filter(r => r.abcGrade === key).reduce((s, r) => s + Number(r.cnt), 0)
+      return productCountRaw.filter(r => r.xyzGrade === key).reduce((s, r) => s + Number(r.cnt), 0)
+    }
+
+    // 그룹별로 묶어 예측
+    const groupMap = new Map<string, Array<{ month: string; qty: number }>>()
+    for (const r of rows) {
+      if (!groupMap.has(r.groupKey)) groupMap.set(r.groupKey, [])
+      groupMap.get(r.groupKey)!.push({ month: r.month, qty: r.qty })
+    }
+
+    const GROUP_LABELS: Record<string, string> = {
+      all: '전체',
+      A: 'ABC: A등급 (핵심)',
+      B: 'ABC: B등급 (일반)',
+      C: 'ABC: C등급 (저매출)',
+      X: 'XYZ: X등급 (안정)',
+      Y: 'XYZ: Y등급 (변동)',
+      Z: 'XYZ: Z등급 (불규칙)',
+    }
+
+    // 표시 순서
+    const ORDER = groupBy === 'all' ? ['all'] : ['A', 'B', 'C'].includes(groupBy) ? ['A', 'B', 'C'] : ['X', 'Y', 'Z']
+
+    const groups = ORDER.filter((k) => groupMap.has(k)).map((key) => {
+      const monthData = groupMap.get(key)!
+      const historyValues = monthData.map((d) => d.qty)
+
+      let forecastResult
+      if (manualMethod) {
+        forecastResult = forecastDemandWithMethod(historyValues, 3, manualMethod, manualParams)
+      } else {
+        forecastResult = forecastDemand({
+          history: monthData.map((d) => ({ date: new Date(`${d.month}-01`), value: d.qty })),
+          periods: 3,
+        })
+      }
+
+      const backtestResult = backtestForecast(historyValues, 3, forecastResult.method)
+      const mapeValue = Math.round((forecastResult.mape ?? backtestResult.mape) * 10) / 10
+
+      const lastMonth = monthData[monthData.length - 1].month
+      const predicted = forecastResult.forecast.map((value, i) => {
+        const d = new Date(`${lastMonth}-01`)
+        d.setMonth(d.getMonth() + i + 1)
+        return {
+          month: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+          value: Math.round(value),
+        }
+      })
+
+      return {
+        key,
+        label: GROUP_LABELS[key] ?? key,
+        productCount: getProductCount(key),
+        history: monthData.map((d) => ({ month: d.month, value: d.qty })),
+        predicted,
+        method: forecastResult.method,
+        mape: mapeValue,
+        confidence: forecastResult.confidence ?? backtestResult.confidence,
+      }
+    })
+
+    return { groups }
+  } catch (error) {
+    console.error('집계 수요예측 조회 오류:', error)
+    return { groups: [] }
+  }
+}
+
+/**
  * 판매 추이 조회
  * - 최근 N일 일별 판매액 + 판매 수량 반환
  */
