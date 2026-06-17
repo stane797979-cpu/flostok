@@ -1442,6 +1442,7 @@ export async function uploadPurchaseOrderExcel(
     };
   } catch (error) {
     console.error("발주 엑셀 업로드 실패:", error);
-    return { success: false, message: "업로드 중 오류가 발생했습니다", createdCount: 0 };
+    const msg = error instanceof Error ? error.message : String(error);
+    return { success: false, message: `업로드 중 오류: ${msg}`, createdCount: 0 };
   }
 }
