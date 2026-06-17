@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, TrendingUp, BarChart3, Target, AlertCircle, Check, ChevronsUpDown, Settings2, Sparkles, Info, HelpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getDemandForecast, getAggregateForecast } from "@/server/actions/analytics";
+import { getFulfillmentRateData } from "@/server/actions/fulfillment-rate";
+import { FulfillmentRateTable } from "./fulfillment-rate-table";
 import {
   Command,
   CommandEmpty,
@@ -39,6 +41,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
+type MainTab = "forecast" | "fulfillment";
 type ViewTab = "product" | "abc" | "xyz" | "all";
 
 interface AggregateGroup {
@@ -131,6 +134,9 @@ const forecastChartConfig = {
 } satisfies ChartConfig;
 
 export function DemandForecastChart() {
+  // 메인 탭: 수요예측 / 실출고율
+  const [mainTab, setMainTab] = useState<MainTab>("forecast");
+
   // 뷰 탭: 개별제품 / ABC별 / XYZ별 / 전체
   const [viewTab, setViewTab] = useState<ViewTab>("product");
 
@@ -153,6 +159,11 @@ export function DemandForecastChart() {
   // 집계 예측 상태
   const [aggGroups, setAggGroups] = useState<AggregateGroup[]>([]);
   const [aggLoading, setAggLoading] = useState(false);
+
+  // 실출고율 상태
+  type FulfillmentData = Awaited<ReturnType<typeof getFulfillmentRateData>>;
+  const [fulfillmentData, setFulfillmentData] = useState<FulfillmentData>(null);
+  const [fulfillmentLoading, setFulfillmentLoading] = useState(false);
 
   // 등급 필터링된 제품 목록
   const filteredProducts = useMemo(() => {
@@ -236,6 +247,17 @@ export function DemandForecastChart() {
     setViewTab(tab);
     if (tab !== "product") {
       loadAggregate(tab);
+    }
+  };
+
+  const handleMainTabChange = (tab: MainTab) => {
+    setMainTab(tab);
+    if (tab === "fulfillment" && fulfillmentData === null && !fulfillmentLoading) {
+      setFulfillmentLoading(true);
+      getFulfillmentRateData()
+        .then((data) => setFulfillmentData(data))
+        .catch(() => setFulfillmentData(null))
+        .finally(() => setFulfillmentLoading(false));
     }
   };
 
@@ -334,6 +356,44 @@ export function DemandForecastChart() {
 
   return (
     <div className="space-y-4">
+      {/* 메인 탭: 수요예측 / 실출고율 */}
+      <div className="flex gap-1 border-b pb-0">
+        {(["forecast", "fulfillment"] as MainTab[]).map((tab) => {
+          const labels: Record<MainTab, string> = { forecast: "수요예측", fulfillment: "실출고율" };
+          return (
+            <button
+              key={tab}
+              onClick={() => handleMainTabChange(tab)}
+              className={cn(
+                "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
+                mainTab === tab
+                  ? "border-primary text-primary"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              )}
+            >
+              {labels[tab]}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 실출고율 탭 */}
+      {mainTab === "fulfillment" && (
+        <div>
+          {fulfillmentLoading ? (
+            <div className="flex h-64 items-center justify-center text-slate-400">
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              실출고율 데이터 로딩 중...
+            </div>
+          ) : (
+            <FulfillmentRateTable data={fulfillmentData} />
+          )}
+        </div>
+      )}
+
+      {/* 수요예측 탭 */}
+      {mainTab === "forecast" && (
+      <div className="space-y-4">
       {/* 뷰 탭 */}
       <div className="flex items-center gap-1 flex-wrap">
         {(["product", "abc", "xyz", "all"] as ViewTab[]).map((tab) => {
@@ -919,6 +979,8 @@ export function DemandForecastChart() {
         </>
       )}
       </>
+      )}
+      </div>
       )}
       </div>
       )}

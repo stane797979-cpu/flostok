@@ -10,11 +10,6 @@ const AnalyticsGradeChange = dynamic(
   { loading: () => <div className="animate-pulse h-[400px] bg-muted rounded-lg" /> }
 );
 
-const AnalyticsFulfillment = dynamic(
-  () => import("./_components/analytics-fulfillment").then((m) => ({ default: m.AnalyticsFulfillment })),
-  { loading: () => <div className="animate-pulse h-[400px] bg-muted rounded-lg" /> }
-);
-
 const AnalyticsTurnover = dynamic(
   () => import("./_components/analytics-turnover").then((m) => ({ default: m.AnalyticsTurnover })),
   { loading: () => <div className="animate-pulse h-[400px] bg-muted rounded-lg" /> }
@@ -166,7 +161,6 @@ export default async function AnalyticsPage() {
           <TabsTrigger value="abc-xyz">ABC-XYZ 분석</TabsTrigger>
           <TabsTrigger value="fmr">FMR 분석</TabsTrigger>
           <TabsTrigger value="grade-change">등급변동</TabsTrigger>
-          <TabsTrigger value="fulfillment">실출고율</TabsTrigger>
           <TabsTrigger value="demand-forecast">수요예측</TabsTrigger>
           <TabsTrigger value="turnover">재고회전율</TabsTrigger>
           <TabsTrigger value="sales-trend">판매 추이</TabsTrigger>
@@ -216,12 +210,6 @@ export default async function AnalyticsPage() {
         <TabsContent value="grade-change">
           <Suspense fallback={<TabLoadingSkeleton />}>
             <AnalyticsGradeChange />
-          </Suspense>
-        </TabsContent>
-
-        <TabsContent value="fulfillment">
-          <Suspense fallback={<TabLoadingSkeleton />}>
-            <AnalyticsFulfillment />
           </Suspense>
         </TabsContent>
 
