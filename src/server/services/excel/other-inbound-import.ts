@@ -191,8 +191,6 @@ export async function importOtherInboundData(params: {
   }
 
   const invInserts: typeof inventory.$inferInsert[] = [];
-  const invHistoryValues: typeof inventoryHistory.$inferInsert[] = [];
-  const today = new Date().toISOString().split("T")[0];
 
   for (const [productId, totalQty] of qtyByProduct) {
     const cur = invMap.get(productId);
@@ -204,17 +202,29 @@ export async function importOtherInboundData(params: {
     } else {
       invInserts.push({ organizationId, productId, currentStock: stockAfter, availableStock: stockAfter, status: "optimal" });
     }
+  }
 
+  // inventory_history: 행별로 실제 입고일 기준 기록 (stockBefore 누적 계산)
+  const invHistoryValues: typeof inventoryHistory.$inferInsert[] = [];
+  const runningStock = new Map<string, number>();
+  for (const [productId] of qtyByProduct) {
+    const cur = invMap.get(productId);
+    runningStock.set(productId, cur ? (cur.currentStock || 0) : 0);
+  }
+  for (const r of validRows) {
+    const before = runningStock.get(r.productId) ?? 0;
+    const after = before + r.quantity;
     invHistoryValues.push({
       organizationId,
-      productId,
-      date: today,
-      stockBefore,
-      stockAfter,
-      changeAmount: totalQty,
+      productId: r.productId,
+      date: r.date,
+      stockBefore: before,
+      stockAfter: after,
+      changeAmount: r.quantity,
       changeType: "INBOUND_ADJUSTMENT",
-      notes: "엑셀 일괄 입고",
+      notes: r.notes || "엑셀 일괄 입고",
     });
+    runningStock.set(r.productId, after);
   }
 
   if (invInserts.length > 0) await db.insert(inventory).values(invInserts);

@@ -267,6 +267,8 @@ export interface ImportSalesDataOptions {
   duplicateHandling?: "skip" | "update" | "error";
   /** 재고 차감 여부 (true일 때 출고 처리 + inventory_history 기록) */
   deductInventory?: boolean;
+  /** 재고 부족 체크 건너뜀 (과거 데이터 일괄 임포트 시 사용) */
+  skipStockCheck?: boolean;
 }
 
 /**
@@ -351,27 +353,30 @@ export async function importSalesData(
       .where(and(eq(inventory.organizationId, organizationId), inArray(inventory.productId, productIds)));
     const inventoryMap = new Map(inventoryRows.map((r) => [r.productId, r]));
 
-    // 5. 제품별 요청 수량 합산 → 재고 초과 체크
+    // 5. 재고 초과 체크 — deductInventory가 true일 때(실시간 출고)만 적용
+    //    과거 데이터 일괄 임포트(deductInventory: false)는 체크 스킵
     const requestedQtyMap = new Map<string, number>();
     for (const r of validRows) {
       requestedQtyMap.set(r.productId, (requestedQtyMap.get(r.productId) || 0) + r.quantity);
     }
-    for (const [productId, totalQty] of requestedQtyMap) {
-      const inv = inventoryMap.get(productId);
-      const currentStock = inv?.currentStock ?? 0;
-      const reservedStock = inv?.reservedStock ?? 0;
-      const availableStock = currentStock - reservedStock;
-      if (totalQty > availableStock) {
-        const sku = validRows.find((r) => r.productId === productId)?.original.sku || productId;
-        allErrors.push({
-          row: 0,
-          column: "수량",
-          message: `재고 부족 [${sku}]: 가용재고 ${availableStock}개, 요청 ${totalQty}개 (현재고 ${currentStock} - 할당 ${reservedStock})`,
-        });
+    if (options.deductInventory !== false) {
+      for (const [productId, totalQty] of requestedQtyMap) {
+        const inv = inventoryMap.get(productId);
+        const currentStock = inv?.currentStock ?? 0;
+        const reservedStock = inv?.reservedStock ?? 0;
+        const availableStock = currentStock - reservedStock;
+        if (totalQty > availableStock) {
+          const sku = validRows.find((r) => r.productId === productId)?.original.sku || productId;
+          allErrors.push({
+            row: 0,
+            column: "수량",
+            message: `재고 부족 [${sku}]: 가용재고 ${availableStock}개, 요청 ${totalQty}개 (현재고 ${currentStock} - 할당 ${reservedStock})`,
+          });
+        }
       }
-    }
-    if (allErrors.length > 0) {
-      return { success: false, data: [], errors: allErrors, totalRows: rows.length, successCount: 0, errorCount: allErrors.length };
+      if (allErrors.length > 0) {
+        return { success: false, data: [], errors: allErrors, totalRows: rows.length, successCount: 0, errorCount: allErrors.length };
+      }
     }
 
     // 6. 기존 데이터 일괄 조회 (DB 쿼리 1회) — (productId, date) 조합
@@ -418,17 +423,19 @@ export async function importSalesData(
       await db.insert(salesRecords).values(toInsert.slice(i, i + CHUNK));
     }
 
-    // 9. 제품별 reservedStock 증가 (할당재고)
-    for (const [productId, totalQty] of requestedQtyMap) {
-      if (!toInsert.some((r) => r.productId === productId)) continue; // 중복으로 skip된 경우 제외
-      await db
-        .update(inventory)
-        .set({
-          reservedStock: sql`coalesce(${inventory.reservedStock}, 0) + ${totalQty}`,
-          availableStock: sql`${inventory.currentStock} - (coalesce(${inventory.reservedStock}, 0) + ${totalQty})`,
-          updatedAt: new Date(),
-        })
-        .where(and(eq(inventory.organizationId, organizationId), eq(inventory.productId, productId)));
+    // 9. 제품별 reservedStock 증가 (할당재고) — 실시간 출고 요청 시만 적용
+    if (options.deductInventory !== false) {
+      for (const [productId, totalQty] of requestedQtyMap) {
+        if (!toInsert.some((r) => r.productId === productId)) continue;
+        await db
+          .update(inventory)
+          .set({
+            reservedStock: sql`coalesce(${inventory.reservedStock}, 0) + ${totalQty}`,
+            availableStock: sql`${inventory.currentStock} - (coalesce(${inventory.reservedStock}, 0) + ${totalQty})`,
+            updatedAt: new Date(),
+          })
+          .where(and(eq(inventory.organizationId, organizationId), eq(inventory.productId, productId)));
+      }
     }
 
     return {
