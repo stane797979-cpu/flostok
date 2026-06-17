@@ -690,3 +690,67 @@ export async function getProductListForTrend(): Promise<
     return []
   }
 }
+
+/**
+ * 카테고리별 판매 추이 조회
+ * - 날짜 × 카테고리 조합으로 일별 판매수량 반환
+ */
+export async function getCategoryTrend(days: number = 30): Promise<{
+  data: Array<{ date: string; [category: string]: number | string }>
+  categories: string[]
+  hasData: boolean
+}> {
+  try {
+    const user = await requireAuth()
+    const orgId = user.organizationId
+
+    const startDate = new Date()
+    startDate.setDate(startDate.getDate() - days)
+    const startDateStr = startDate.toISOString().split('T')[0]
+
+    const rows = await db
+      .select({
+        date: salesRecords.date,
+        category: products.category,
+        quantity: sql<number>`COALESCE(SUM(${salesRecords.quantity}), 0)`,
+      })
+      .from(salesRecords)
+      .innerJoin(products, eq(salesRecords.productId, products.id))
+      .where(and(eq(salesRecords.organizationId, orgId), gte(salesRecords.date, startDateStr)))
+      .groupBy(salesRecords.date, products.category)
+      .orderBy(salesRecords.date)
+
+    if (rows.length === 0) return { data: [], categories: [], hasData: false }
+
+    // 카테고리 목록 추출 (null → '미분류')
+    const categorySet = new Set<string>()
+    rows.forEach((r) => categorySet.add(r.category ?? '미분류'))
+    const categories = Array.from(categorySet).sort()
+
+    // 날짜 × 카테고리 매핑
+    const dateMap = new Map<string, Record<string, number>>()
+    rows.forEach((r) => {
+      const cat = r.category ?? '미분류'
+      if (!dateMap.has(r.date)) dateMap.set(r.date, {})
+      dateMap.get(r.date)![cat] = (dateMap.get(r.date)![cat] ?? 0) + Number(r.quantity)
+    })
+
+    // 날짜 공백 채우기
+    const data: Array<{ date: string; [key: string]: number | string }> = []
+    for (let i = days; i >= 0; i--) {
+      const d = new Date()
+      d.setDate(d.getDate() - i)
+      const dateStr = d.toISOString().split('T')[0]
+      const entry: { date: string; [key: string]: number | string } = { date: dateStr }
+      categories.forEach((cat) => {
+        entry[cat] = dateMap.get(dateStr)?.[cat] ?? 0
+      })
+      data.push(entry)
+    }
+
+    return { data, categories, hasData: true }
+  } catch (error) {
+    console.error('카테고리별 판매 추이 조회 오류:', error)
+    return { data: [], categories: [], hasData: false }
+  }
+}

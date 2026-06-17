@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, useMemo, useEffect, useTransition } from "react";
-import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import {
+  Area, AreaChart, Line, LineChart,
+  CartesianGrid, XAxis, YAxis, Legend,
+} from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { Button } from "@/components/ui/button";
@@ -9,7 +12,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TrendingUp, TrendingDown, AlertCircle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getSalesTrend, getProductSalesTrend, getProductListForTrend } from "@/server/actions/analytics";
+import {
+  getSalesTrend,
+  getProductSalesTrend,
+  getProductListForTrend,
+  getCategoryTrend,
+} from "@/server/actions/analytics";
 
 export interface SalesTrendDataPoint {
   date: string;
@@ -18,7 +26,14 @@ export interface SalesTrendDataPoint {
 }
 
 type Period = "7" | "30" | "90";
-type ViewMode = "total" | "product";
+type ViewMode = "total" | "product" | "category";
+
+// 카테고리 색상 팔레트
+const CATEGORY_COLORS = [
+  "#3b82f6", "#10b981", "#f59e0b", "#ef4444",
+  "#8b5cf6", "#06b6d4", "#f97316", "#84cc16",
+  "#ec4899", "#64748b",
+];
 
 const salesChartConfig = {
   quantity: { label: "판매수량", color: "#3b82f6" },
@@ -33,7 +48,6 @@ function formatDate(dateStr: string, period: Period): string {
     const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
     return `${month}/${day}(${weekdays[date.getDay()]})`;
   }
-
   return `${month}/${day}`;
 }
 
@@ -220,6 +234,161 @@ function TrendChart({
   );
 }
 
+function CategoryTrendChart({
+  data,
+  categories,
+  period,
+}: {
+  data: Array<{ date: string; [key: string]: number | string }>;
+  categories: string[];
+  period: Period;
+}) {
+  const tickInterval = useMemo(() => {
+    if (data.length === 0) return 0;
+    if (period === "7") return 0;
+    if (period === "30") return Math.floor(data.length / 6);
+    return Math.floor(data.length / 9);
+  }, [period, data.length]);
+
+  // 카테고리별 합계로 범례 정렬
+  const sortedCategories = useMemo(() => {
+    return [...categories].sort((a, b) => {
+      const sumA = data.reduce((s, d) => s + (Number(d[a]) || 0), 0);
+      const sumB = data.reduce((s, d) => s + (Number(d[b]) || 0), 0);
+      return sumB - sumA;
+    });
+  }, [categories, data]);
+
+  // 카테고리별 합계 요약
+  const categorySummary = useMemo(() => {
+    return sortedCategories.map((cat, i) => ({
+      name: cat,
+      total: data.reduce((s, d) => s + (Number(d[cat]) || 0), 0),
+      color: CATEGORY_COLORS[i % CATEGORY_COLORS.length],
+    }));
+  }, [sortedCategories, data]);
+
+  const chartConfig = useMemo(() => {
+    const cfg: ChartConfig = {};
+    sortedCategories.forEach((cat, i) => {
+      cfg[cat] = { label: cat, color: CATEGORY_COLORS[i % CATEGORY_COLORS.length] };
+    });
+    return cfg;
+  }, [sortedCategories]);
+
+  return (
+    <div className="space-y-4">
+      {/* 카테고리별 합계 요약 카드 */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {categorySummary.slice(0, 4).map((cat) => (
+          <Card key={cat.name}>
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <div className="h-3 w-3 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
+                <CardTitle className="text-sm font-medium truncate">{cat.name}</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{cat.total.toLocaleString("ko-KR")}개</div>
+              <p className="text-muted-foreground mt-1 text-xs">최근 {period}일 합계</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* 카테고리별 추이 라인 차트 */}
+      <Card>
+        <CardHeader>
+          <CardTitle>카테고리별 판매 추이</CardTitle>
+          <CardDescription>일별 카테고리 판매수량 비교</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ChartContainer config={chartConfig} className="h-[280px] w-full">
+            <LineChart data={data} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
+              <CartesianGrid strokeDasharray="4 4" vertical={false} />
+              <XAxis
+                dataKey="date"
+                tickFormatter={(d) => formatDate(d, period)}
+                fontSize={11}
+                tickLine={false}
+                axisLine={false}
+                interval={tickInterval}
+              />
+              <YAxis
+                tickFormatter={(v) => `${Number(v).toLocaleString("ko-KR")}`}
+                fontSize={11}
+                tickLine={false}
+                axisLine={false}
+                width={48}
+              />
+              <ChartTooltip
+                content={
+                  <ChartTooltipContent
+                    labelFormatter={(label) => formatDate(label as string, period)}
+                    formatter={(value, name) => [
+                      `${Number(value).toLocaleString("ko-KR")}개`,
+                      String(name),
+                    ]}
+                  />
+                }
+              />
+              <Legend
+                wrapperStyle={{ fontSize: "12px", paddingTop: "12px" }}
+              />
+              {sortedCategories.map((cat, i) => (
+                <Line
+                  key={cat}
+                  type="monotone"
+                  dataKey={cat}
+                  stroke={CATEGORY_COLORS[i % CATEGORY_COLORS.length]}
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 4 }}
+                />
+              ))}
+            </LineChart>
+          </ChartContainer>
+        </CardContent>
+      </Card>
+
+      {/* 카테고리별 전체 순위 테이블 */}
+      {categorySummary.length > 4 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">전체 카테고리 순위</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {categorySummary.map((cat, i) => {
+                const maxTotal = categorySummary[0].total || 1;
+                return (
+                  <div key={cat.name} className="flex items-center gap-3">
+                    <span className="w-5 text-xs text-muted-foreground text-right">{i + 1}</span>
+                    <div className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
+                    <span className="w-24 truncate text-sm">{cat.name}</span>
+                    <div className="flex-1 h-2 rounded-full bg-slate-100">
+                      <div
+                        className="h-2 rounded-full transition-all"
+                        style={{
+                          width: `${(cat.total / maxTotal) * 100}%`,
+                          backgroundColor: cat.color,
+                        }}
+                      />
+                    </div>
+                    <span className="text-sm font-medium w-20 text-right">
+                      {cat.total.toLocaleString("ko-KR")}개
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 function NoDataCard() {
   return (
     <Card className="border-dashed">
@@ -251,6 +420,12 @@ export function SalesTrendChart({ className }: { className?: string }) {
   const [productData, setProductData] = useState<SalesTrendDataPoint[]>([]);
   const [productHasData, setProductHasData] = useState(true);
   const [productLoading, setProductLoading] = useState(false);
+
+  // 카테고리별 추이
+  const [categoryData, setCategoryData] = useState<Array<{ date: string; [key: string]: number | string }>>([]);
+  const [categoryList, setCategoryList] = useState<string[]>([]);
+  const [categoryHasData, setCategoryHasData] = useState(true);
+  const [categoryLoading, setCategoryLoading] = useState(false);
 
   // 전체 데이터 로드
   useEffect(() => {
@@ -293,6 +468,24 @@ export function SalesTrendChart({ className }: { className?: string }) {
       .finally(() => setProductLoading(false));
   }, [viewMode, selectedProductId, period]);
 
+  // 카테고리별 데이터 로드
+  useEffect(() => {
+    if (viewMode !== "category") return;
+    setCategoryLoading(true);
+    getCategoryTrend(Number(period))
+      .then((result) => {
+        setCategoryData(result.data);
+        setCategoryList(result.categories);
+        setCategoryHasData(result.hasData);
+      })
+      .catch(() => {
+        setCategoryData([]);
+        setCategoryList([]);
+        setCategoryHasData(false);
+      })
+      .finally(() => setCategoryLoading(false));
+  }, [viewMode, period]);
+
   const handlePeriodChange = (newPeriod: Period) => {
     startTransition(() => setPeriod(newPeriod));
   };
@@ -307,6 +500,7 @@ export function SalesTrendChart({ className }: { className?: string }) {
           <TabsList>
             <TabsTrigger value="total">전체</TabsTrigger>
             <TabsTrigger value="product">제품별</TabsTrigger>
+            <TabsTrigger value="category">카테고리별</TabsTrigger>
           </TabsList>
         </Tabs>
 
@@ -356,7 +550,7 @@ export function SalesTrendChart({ className }: { className?: string }) {
               data={totalData}
               period={period}
               title="전체 판매 추이"
-              description="일별 전체 제품 합산 판매액"
+              description="일별 전체 제품 합산 판매수량"
             />
           )}
         </>
@@ -384,7 +578,27 @@ export function SalesTrendChart({ className }: { className?: string }) {
               data={productData}
               period={period}
               title={`${selectedProduct?.name ?? ""} 판매 추이`}
-              description={`SKU: ${selectedProduct?.sku ?? ""} · 일별 판매액`}
+              description={`SKU: ${selectedProduct?.sku ?? ""} · 일별 판매수량`}
+            />
+          )}
+        </>
+      )}
+
+      {/* 카테고리별 추이 */}
+      {viewMode === "category" && (
+        <>
+          {categoryLoading ? (
+            <div className="flex h-96 items-center justify-center text-slate-400">
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              카테고리 데이터를 불러오는 중...
+            </div>
+          ) : !categoryHasData || categoryList.length === 0 ? (
+            <NoDataCard />
+          ) : (
+            <CategoryTrendChart
+              data={categoryData}
+              categories={categoryList}
+              period={period}
             />
           )}
         </>
