@@ -27,7 +27,7 @@ interface SupplierTableProps {
   onDelete?: (supplier: Supplier) => void;
 }
 
-type SortField = "name" | "representative" | "contactPhone" | "contactEmail" | "avgLeadTime" | "category" | "paymentTerms";
+type SortField = "name" | "code" | "representative" | "contactPhone" | "contactEmail" | "avgLeadTime" | "category" | "paymentTerms";
 type SortDirection = "asc" | "desc" | null;
 
 export function SupplierTable({ suppliers, onEdit, onDelete }: SupplierTableProps) {
@@ -74,6 +74,8 @@ export function SupplierTable({ suppliers, onEdit, onDelete }: SupplierTableProp
       switch (sortField) {
         case "name":
           aValue = a.name; bValue = b.name; break;
+        case "code":
+          aValue = a.code; bValue = b.code; break;
         case "representative":
           aValue = a.representative; bValue = b.representative; break;
         case "contactPhone":
@@ -118,6 +120,11 @@ export function SupplierTable({ suppliers, onEdit, onDelete }: SupplierTableProp
               </Button>
             </TableHead>
             <TableHead>
+              <Button variant="ghost" size="sm" className="h-auto p-0 font-medium hover:bg-transparent" onClick={() => handleSort("code")}>
+                거래처코드<SortIcon field="code" />
+              </Button>
+            </TableHead>
+            <TableHead>
               <Button variant="ghost" size="sm" className="h-auto p-0 font-medium hover:bg-transparent" onClick={() => handleSort("representative")}>
                 대표자<SortIcon field="representative" />
               </Button>
@@ -149,13 +156,14 @@ export function SupplierTable({ suppliers, onEdit, onDelete }: SupplierTableProp
                 리드타임<SortIcon field="avgLeadTime" />
               </Button>
             </TableHead>
+            <TableHead>메모</TableHead>
             <TableHead className="w-[50px]"></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {suppliers.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={10} className="h-24 text-center text-slate-500">
+              <TableCell colSpan={11} className="h-24 text-center text-slate-500">
                 등록된 공급자가 없습니다.
               </TableCell>
             </TableRow>
@@ -163,6 +171,7 @@ export function SupplierTable({ suppliers, onEdit, onDelete }: SupplierTableProp
             sortedSuppliers.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((supplier) => (
               <TableRow key={supplier.id}>
                 <TableCell className="font-medium whitespace-nowrap">{supplier.name}</TableCell>
+                <TableCell className="text-sm whitespace-nowrap">{supplier.code || "-"}</TableCell>
                 <TableCell className="whitespace-nowrap">{supplier.representative || "-"}</TableCell>
                 <TableCell className="font-mono text-sm whitespace-nowrap">{supplier.businessNumber || "-"}</TableCell>
                 <TableCell className="font-mono text-sm whitespace-nowrap">{supplier.contactPhone || "-"}</TableCell>
@@ -179,6 +188,7 @@ export function SupplierTable({ suppliers, onEdit, onDelete }: SupplierTableProp
                 <TableCell className="text-center">
                   <Badge variant="outline">{supplier.avgLeadTime}일</Badge>
                 </TableCell>
+                <TableCell className="text-slate-500 text-sm max-w-[150px] truncate">{supplier.notes || "-"}</TableCell>
                 <TableCell>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -224,6 +234,7 @@ export function SupplierTable({ suppliers, onEdit, onDelete }: SupplierTableProp
           <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)}>이전</Button>
           <span className="px-2">{currentPage} / {Math.max(1, Math.ceil(sortedSuppliers.length / pageSize))}</span>
           <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={currentPage >= Math.ceil(sortedSuppliers.length / pageSize)} onClick={() => setCurrentPage((p) => p + 1)}>다음</Button>
+
         </div>
       </div>
     </div>
