@@ -480,7 +480,12 @@ async function _getInventoryStatsInternal(orgId: string) {
     }
   });
 
-  return stats;
+  return {
+    ...stats,
+    // 집계 편의 필드 — 여기서 한 번만 계산해 모든 페이지에서 재사용
+    needsOrder: stats.outOfStock + stats.critical + stats.shortage + stats.caution,
+    urgent: stats.outOfStock + stats.critical,
+  };
 }
 
 /**
@@ -495,6 +500,8 @@ export async function getInventoryStats(): Promise<{
   optimal: number;
   excess: number;
   totalValue: number;
+  needsOrder: number;
+  urgent: number;
 }> {
   const user = await requireAuth();
   return unstable_cache(

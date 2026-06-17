@@ -66,7 +66,7 @@ async function loadDashboardData() {
         totalSku: stats.totalProducts,
         outOfStock: stats.outOfStock,
         critical: stats.critical,
-        needsOrder: stats.outOfStock + stats.critical + stats.shortage + stats.caution,
+        needsOrder: stats.needsOrder,
         excess: stats.excess,
       },
       needsOrderProducts,
