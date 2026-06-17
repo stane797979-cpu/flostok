@@ -223,6 +223,7 @@ export function OrdersClient({ serverReorderItems = [], deliveryComplianceData =
   const [isCancellingOrders, setIsCancellingOrders] = useState(false);
   const [isConfirmingInbound, setIsConfirmingInbound] = useState(false);
   const [hideReceived, setHideReceived] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
   // 입고 현황 상태
   const [inboundMonth, setInboundMonth] = useState<Date>(() => new Date());
@@ -859,6 +860,28 @@ export function OrdersClient({ serverReorderItems = [], deliveryComplianceData =
                       입고완료 숨기기
                     </Label>
                   </div>
+                  <div className="flex items-center gap-1">
+                    {[
+                      { value: "all", label: "전체" },
+                      { value: "draft", label: "초안" },
+                      { value: "pending", label: "승인대기" },
+                      { value: "ordered", label: "발주완료" },
+                      { value: "pending_receipt", label: "입고대기" },
+                      { value: "cancelled", label: "취소" },
+                    ].map((f) => (
+                      <button
+                        key={f.value}
+                        onClick={() => setStatusFilter(f.value)}
+                        className={`px-2 py-0.5 rounded text-xs border transition-colors ${
+                          statusFilter === f.value
+                            ? "bg-slate-800 text-white border-slate-800"
+                            : "bg-white text-slate-600 border-slate-300 hover:border-slate-500"
+                        }`}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 {selectedOrderIds.length > 0 && (
                   <div className="flex gap-2">
@@ -898,7 +921,11 @@ export function OrdersClient({ serverReorderItems = [], deliveryComplianceData =
                 </div>
               ) : (
                 <PurchaseOrdersTable
-                  orders={hideReceived ? purchaseOrders.filter((o) => o.status !== "received") : purchaseOrders}
+                  orders={purchaseOrders.filter((o) => {
+                    if (hideReceived && o.status === "received") return false;
+                    if (statusFilter !== "all" && o.status !== statusFilter) return false;
+                    return true;
+                  })}
                   onViewClick={handleViewOrder}
                   onDownloadClick={handleDownloadOrder}
                   selectedIds={selectedOrderIds}

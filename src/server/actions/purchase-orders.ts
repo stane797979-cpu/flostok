@@ -562,7 +562,7 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
  */
 const validStatusTransitions: Record<string, string[]> = {
   draft: ["pending", "cancelled"],
-  pending: ["approved", "cancelled"],
+  pending: ["ordered", "cancelled"],
   approved: ["ordered", "cancelled"],
   ordered: ["confirmed", "shipped", "partially_received", "received", "cancelled"],
   confirmed: ["shipped", "partially_received", "received", "cancelled"],
