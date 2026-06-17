@@ -209,15 +209,7 @@ export async function measureKPIMetrics(
     };
   } catch (error) {
     console.error("[measureKPIMetrics] Error:", error);
-    return {
-      inventoryTurnoverRate: 0,
-      averageInventoryDays: 999,
-      inventoryAccuracy: 95.0,
-      stockoutRate: 0,
-      onTimeOrderRate: 0,
-      averageLeadTime: 0,
-      orderFulfillmentRate: 0,
-    };
+    throw error;
   }
 }
 
@@ -412,6 +404,6 @@ export async function getKPITrendData(
     });
   } catch (error) {
     console.error("[getKPITrendData] Error:", error);
-    return [];
+    throw error;
   }
 }

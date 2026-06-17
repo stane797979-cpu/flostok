@@ -5,9 +5,14 @@ import { KpiTabsClient } from "./_components/kpi-tabs-client";
 
 export default async function KPIPage() {
   let data;
+  let errorMessage: string | null = null;
   try {
     data = await getKPIDashboardData();
-  } catch {
+  } catch (err) {
+    errorMessage = err instanceof Error ? err.message : String(err);
+  }
+
+  if (!data) {
     return (
       <div className="space-y-6">
         <div>
@@ -18,6 +23,11 @@ export default async function KPIPage() {
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <AlertCircle className="mb-4 h-12 w-12 text-muted-foreground/50" />
             <h3 className="text-lg font-semibold text-muted-foreground">KPI 데이터를 불러올 수 없습니다</h3>
+            {errorMessage && (
+              <p className="mt-2 max-w-xl text-xs text-red-500 font-mono break-all">
+                {errorMessage}
+              </p>
+            )}
             <p className="mt-2 max-w-md text-sm text-muted-foreground/70">
               로그인 후 다시 시도해 주세요. 문제가 계속되면 관리자에게 문의하세요.
             </p>
