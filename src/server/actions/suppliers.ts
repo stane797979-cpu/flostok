@@ -19,17 +19,19 @@ const TEMP_ORG_ID = "00000000-0000-0000-0000-000000000001";
 const supplierSchema = z.object({
   name: z.string().min(1, "공급자명은 필수입니다"),
   code: z.string().optional(),
+  representative: z.string().optional(),
   businessNumber: z.string().optional(),
   contactName: z.string().optional(),
   contactEmail: z.string().email().optional().or(z.literal("")),
   contactPhone: z.string().optional(),
+  fax: z.string().optional(),
   address: z.string().optional(),
   paymentTerms: z.string().optional(),
+  category: z.string().optional(),
   minOrderAmount: z.coerce.number().min(0).default(0),
   avgLeadTime: z.coerce.number().min(0).default(7),
   minLeadTime: z.coerce.number().min(0).default(3),
   maxLeadTime: z.coerce.number().min(0).default(14),
-  rating: z.coerce.number().min(0).max(100).default(0),
   notes: z.string().optional(),
 });
 
@@ -40,7 +42,7 @@ export type SupplierInput = z.infer<typeof supplierSchema>;
  */
 export async function getSuppliers(options?: {
   search?: string;
-  sortBy?: "name" | "createdAt" | "rating";
+  sortBy?: "name" | "createdAt";
   sortOrder?: "asc" | "desc";
   limit?: number;
   offset?: number;
@@ -62,7 +64,6 @@ export async function getSuppliers(options?: {
   const orderByColumn = {
     name: suppliers.name,
     createdAt: suppliers.createdAt,
-    rating: suppliers.rating,
   }[sortBy];
 
   const orderBy = sortOrder === "asc" ? asc(orderByColumn) : desc(orderByColumn);
@@ -123,7 +124,6 @@ export async function createSupplier(
         ...validated,
         organizationId: orgId,
         contactEmail: validated.contactEmail || null,
-        rating: String(validated.rating),
       })
       .returning();
 
@@ -175,9 +175,6 @@ export async function updateSupplier(
       contactEmail: input.contactEmail || null,
       updatedAt: new Date(),
     };
-    if (input.rating !== undefined) {
-      updateData.rating = String(input.rating);
-    }
 
     const orgId = user?.organizationId || TEMP_ORG_ID;
     const [updated] = await db
@@ -285,7 +282,6 @@ export async function deleteSuppliers(
  */
 export async function getSupplierStats(): Promise<{
   total: number;
-  avgRating: number;
   avgLeadTime: number;
 }> {
   const user = await getCurrentUser();
@@ -293,7 +289,6 @@ export async function getSupplierStats(): Promise<{
   const result = await db
     .select({
       count: sql<number>`count(*)`,
-      avgRating: sql<number>`avg(${suppliers.rating})`,
       avgLeadTime: sql<number>`avg(${suppliers.avgLeadTime})`,
     })
     .from(suppliers)
@@ -301,7 +296,6 @@ export async function getSupplierStats(): Promise<{
 
   return {
     total: Number(result[0]?.count || 0),
-    avgRating: Number(result[0]?.avgRating || 0),
     avgLeadTime: Number(result[0]?.avgLeadTime || 7),
   };
 }
@@ -338,10 +332,11 @@ export async function importSuppliersExcel(fileData: number[]): Promise<{
     const orgId = user?.organizationId || TEMP_ORG_ID;
 
     const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(Buffer.from(fileData));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await wb.xlsx.load(Buffer.from(fileData) as any);
 
     // 첫 번째 시트 또는 "공급업체" 이름 시트 사용
-    const ws = wb.getWorksheet(1) ?? wb.getWorksheet("공급업체 목록") ?? wb.getWorksheet("공급업체 등록");
+    const ws = wb.getWorksheet(1) ?? wb.getWorksheet("거래처 목록") ?? wb.getWorksheet("거래처 등록");
     if (!ws) return { success: false, imported: 0, skipped: 0, errors: ["시트를 찾을 수 없습니다"] };
 
     // 기존 업체명 목록 (중복 체크)
@@ -356,47 +351,7 @@ export async function importSuppliersExcel(fileData: number[]): Promise<{
     const errors: string[] = [];
 
     // 2행부터 (1행 = 헤더)
-    ws.eachRow((row, rowNum) => {
-      if (rowNum === 1) return;
-      const parsed = parseSupplierRow(row);
-      if (!parsed) { skipped++; return; }
-
-      // 샘플 데이터 감지 (이탤릭 회색 행 스킵)
-      const nameCell = row.getCell(1);
-      const fontColor = (nameCell.font as ExcelJS.Font | undefined)?.color?.argb;
-      if (fontColor === "FF94A3B8") { skipped++; return; }
-
-      if (existingNames.has(parsed.name.toLowerCase())) {
-        skipped++;
-        return;
-      }
-
-      errors; // placeholder to avoid unused var lint
-      db.insert(suppliers).values({
-        organizationId: orgId,
-        name: parsed.name,
-        code: parsed.code ?? null,
-        businessNumber: parsed.businessNumber ?? null,
-        contactName: parsed.contactName ?? null,
-        contactPhone: parsed.contactPhone ?? null,
-        contactEmail: parsed.contactEmail ?? null,
-        address: parsed.address ?? null,
-        paymentTerms: parsed.paymentTerms ?? null,
-        minOrderAmount: parsed.minOrderAmount,
-        avgLeadTime: parsed.avgLeadTime,
-        minLeadTime: parsed.minLeadTime,
-        maxLeadTime: parsed.maxLeadTime,
-        rating: String(parsed.rating),
-        notes: parsed.notes ?? null,
-      }).catch((e: unknown) => {
-        errors.push(`${rowNum}행 "${parsed.name}": ${e instanceof Error ? e.message : "저장 오류"}`);
-      });
-
-      existingNames.add(parsed.name.toLowerCase());
-      imported++;
-    });
-
-    // 모든 insert 완료 대기 (순차 처리로 재구성)
+    // 순차 처리로 insert
     const rows: ReturnType<typeof parseSupplierRow>[] = [];
     ws.eachRow((row, rowNum) => {
       if (rowNum === 1) return;
@@ -421,17 +376,18 @@ export async function importSuppliersExcel(fileData: number[]): Promise<{
           organizationId: orgId,
           name: parsed.name,
           code: parsed.code ?? null,
+          representative: parsed.representative ?? null,
           businessNumber: parsed.businessNumber ?? null,
-          contactName: parsed.contactName ?? null,
           contactPhone: parsed.contactPhone ?? null,
           contactEmail: parsed.contactEmail ?? null,
+          fax: parsed.fax ?? null,
           address: parsed.address ?? null,
           paymentTerms: parsed.paymentTerms ?? null,
+          category: parsed.category ?? null,
           minOrderAmount: parsed.minOrderAmount,
           avgLeadTime: parsed.avgLeadTime,
           minLeadTime: parsed.minLeadTime,
           maxLeadTime: parsed.maxLeadTime,
-          rating: String(parsed.rating),
           notes: parsed.notes ?? null,
         });
         existingNames2.add(parsed.name.toLowerCase());

@@ -35,23 +35,24 @@ export function SupplierFormDialog({ open, onOpenChange, supplier }: SupplierFor
   const getInitialFormData = (s?: Supplier | null): SupplierInput => ({
     name: s?.name || "",
     code: s?.code || "",
+    representative: s?.representative || "",
     businessNumber: s?.businessNumber || "",
     contactName: s?.contactName || "",
     contactEmail: s?.contactEmail || "",
     contactPhone: s?.contactPhone || "",
+    fax: s?.fax || "",
     address: s?.address || "",
     paymentTerms: s?.paymentTerms || "",
+    category: s?.category || "",
     minOrderAmount: s?.minOrderAmount || 0,
     avgLeadTime: s?.avgLeadTime || 7,
     minLeadTime: s?.minLeadTime || 3,
     maxLeadTime: s?.maxLeadTime || 14,
-    rating: Number(s?.rating) || 0,
     notes: s?.notes || "",
   });
 
   const [formData, setFormData] = useState<SupplierInput>(getInitialFormData(supplier));
 
-  // supplier prop이 변경될 때 폼 데이터 갱신
   useEffect(() => {
     setFormData(getInitialFormData(supplier));
     setError(null);
@@ -69,10 +70,10 @@ export function SupplierFormDialog({ open, onOpenChange, supplier }: SupplierFor
 
       if (result.success) {
         toast({
-          title: isEditing ? "공급자 수정 완료" : "공급자 추가 완료",
+          title: isEditing ? "거래처 수정 완료" : "거래처 추가 완료",
           description: isEditing
-            ? "공급자 정보가 성공적으로 수정되었습니다."
-            : "새로운 공급자가 성공적으로 등록되었습니다.",
+            ? "거래처 정보가 성공적으로 수정되었습니다."
+            : "새로운 거래처가 성공적으로 등록되었습니다.",
         });
         onOpenChange(false);
       } else {
@@ -91,11 +92,11 @@ export function SupplierFormDialog({ open, onOpenChange, supplier }: SupplierFor
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[600px]">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[620px]">
         <DialogHeader>
-          <DialogTitle>{isEditing ? "공급자 수정" : "공급자 등록"}</DialogTitle>
+          <DialogTitle>{isEditing ? "거래처 수정" : "거래처 등록"}</DialogTitle>
           <DialogDescription>
-            {isEditing ? "공급자 정보를 수정합니다." : "새로운 공급자를 등록합니다."}
+            {isEditing ? "거래처 정보를 수정합니다." : "새로운 거래처를 등록합니다."}
           </DialogDescription>
         </DialogHeader>
 
@@ -104,38 +105,90 @@ export function SupplierFormDialog({ open, onOpenChange, supplier }: SupplierFor
             {/* 기본 정보 */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="name">공급자명 *</Label>
+                <Label htmlFor="name">거래처명 *</Label>
                 <Input
                   id="name"
                   value={formData.name}
                   onChange={(e) => handleChange("name", e.target.value)}
-                  placeholder="한국볼트"
+                  placeholder="꿈비산업"
                   required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="code">공급자 코드</Label>
+                <Label htmlFor="code">거래처코드</Label>
                 <Input
                   id="code"
                   value={formData.code}
                   onChange={(e) => handleChange("code", e.target.value)}
-                  placeholder="SUP-001"
+                  placeholder="SUP-KV-001"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="representative">대표자</Label>
+                <Input
+                  id="representative"
+                  value={formData.representative}
+                  onChange={(e) => handleChange("representative", e.target.value)}
+                  placeholder="홍길동"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="businessNumber">사업자번호</Label>
+                <Input
+                  id="businessNumber"
+                  value={formData.businessNumber}
+                  onChange={(e) => handleChange("businessNumber", e.target.value)}
+                  placeholder="123-45-67890"
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="businessNumber">사업자번호</Label>
+              <Label htmlFor="address">주소</Label>
               <Input
-                id="businessNumber"
-                value={formData.businessNumber}
-                onChange={(e) => handleChange("businessNumber", e.target.value)}
-                placeholder="123-45-67890"
+                id="address"
+                value={formData.address}
+                onChange={(e) => handleChange("address", e.target.value)}
+                placeholder="경기도 화성시 팔탄면 산단로 123"
               />
             </div>
 
-            {/* 담당자 정보 */}
+            {/* 연락처 */}
             <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="contactPhone">전화번호</Label>
+                <Input
+                  id="contactPhone"
+                  value={formData.contactPhone}
+                  onChange={(e) => handleChange("contactPhone", e.target.value)}
+                  placeholder="031-123-4567"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="fax">팩스</Label>
+                <Input
+                  id="fax"
+                  value={formData.fax}
+                  onChange={(e) => handleChange("fax", e.target.value)}
+                  placeholder="031-123-4568"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="contactEmail">이메일</Label>
+                <Input
+                  id="contactEmail"
+                  type="email"
+                  value={formData.contactEmail}
+                  onChange={(e) => handleChange("contactEmail", e.target.value)}
+                  placeholder="order@supplier.com"
+                />
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="contactName">담당자명</Label>
                 <Input
@@ -145,36 +198,6 @@ export function SupplierFormDialog({ open, onOpenChange, supplier }: SupplierFor
                   placeholder="김철수"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="contactPhone">연락처</Label>
-                <Input
-                  id="contactPhone"
-                  value={formData.contactPhone}
-                  onChange={(e) => handleChange("contactPhone", e.target.value)}
-                  placeholder="02-1234-5678"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="contactEmail">이메일</Label>
-              <Input
-                id="contactEmail"
-                type="email"
-                value={formData.contactEmail}
-                onChange={(e) => handleChange("contactEmail", e.target.value)}
-                placeholder="contact@supplier.com"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="address">주소</Label>
-              <Input
-                id="address"
-                value={formData.address}
-                onChange={(e) => handleChange("address", e.target.value)}
-                placeholder="경기도 안산시 단원구 산업로 123"
-              />
             </div>
 
             {/* 거래 조건 */}
@@ -189,15 +212,25 @@ export function SupplierFormDialog({ open, onOpenChange, supplier }: SupplierFor
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="minOrderAmount">최소발주금액 (원)</Label>
+                <Label htmlFor="category">분류</Label>
                 <Input
-                  id="minOrderAmount"
-                  type="number"
-                  min={0}
-                  value={formData.minOrderAmount}
-                  onChange={(e) => handleChange("minOrderAmount", parseInt(e.target.value) || 0)}
+                  id="category"
+                  value={formData.category}
+                  onChange={(e) => handleChange("category", e.target.value)}
+                  placeholder="완제품"
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="minOrderAmount">최소발주금액 (원)</Label>
+              <Input
+                id="minOrderAmount"
+                type="number"
+                min={0}
+                value={formData.minOrderAmount}
+                onChange={(e) => handleChange("minOrderAmount", parseInt(e.target.value) || 0)}
+              />
             </div>
 
             {/* 리드타임 */}
@@ -213,7 +246,7 @@ export function SupplierFormDialog({ open, onOpenChange, supplier }: SupplierFor
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="avgLeadTime">평균 리드타임 (일)</Label>
+                <Label htmlFor="avgLeadTime">기본 리드타임 (일)</Label>
                 <Input
                   id="avgLeadTime"
                   type="number"
@@ -234,22 +267,9 @@ export function SupplierFormDialog({ open, onOpenChange, supplier }: SupplierFor
               </div>
             </div>
 
-            {/* 평점 */}
+            {/* 메모 */}
             <div className="space-y-2">
-              <Label htmlFor="rating">평점 (0-100)</Label>
-              <Input
-                id="rating"
-                type="number"
-                min={0}
-                max={100}
-                value={formData.rating}
-                onChange={(e) => handleChange("rating", parseInt(e.target.value) || 0)}
-              />
-            </div>
-
-            {/* 비고 */}
-            <div className="space-y-2">
-              <Label htmlFor="notes">비고</Label>
+              <Label htmlFor="notes">메모</Label>
               <Textarea
                 id="notes"
                 value={formData.notes}

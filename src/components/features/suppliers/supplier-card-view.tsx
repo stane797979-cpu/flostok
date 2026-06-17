@@ -16,11 +16,9 @@ import {
   Mail,
   Phone,
   MapPin,
-  Star,
   Clock,
 } from "lucide-react";
 import { type Supplier } from "@/server/db/schema";
-import { cn } from "@/lib/utils";
 
 interface SupplierCardViewProps {
   suppliers: Supplier[];
@@ -40,31 +38,14 @@ export function SupplierCardView({ suppliers, onEdit, onDelete }: SupplierCardVi
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {suppliers.map((supplier) => {
-        const ratingOutOf5 = Number(supplier.rating) / 20;
-        const fullStars = Math.floor(ratingOutOf5);
-        const hasHalfStar = ratingOutOf5 % 1 >= 0.5;
-
         return (
           <Card key={supplier.id} className="transition-shadow hover:shadow-md">
             <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
               <div className="space-y-1">
                 <CardTitle className="text-lg">{supplier.name}</CardTitle>
-                <div className="flex items-center gap-1">
-                  {[...Array(5)].map((_, i) => (
-                    <Star
-                      key={i}
-                      className={cn(
-                        "h-3 w-3",
-                        i < fullStars
-                          ? "fill-yellow-400 text-yellow-400"
-                          : i === fullStars && hasHalfStar
-                            ? "fill-yellow-200 text-yellow-400"
-                            : "fill-none text-slate-300"
-                      )}
-                    />
-                  ))}
-                  <span className="ml-1 text-xs text-slate-500">{ratingOutOf5.toFixed(1)}</span>
-                </div>
+                {supplier.category && (
+                  <Badge variant="secondary" className="text-xs">{supplier.category}</Badge>
+                )}
               </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

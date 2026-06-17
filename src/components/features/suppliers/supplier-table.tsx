@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal, Edit, Trash2, Star, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { MoreHorizontal, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,7 +28,7 @@ interface SupplierTableProps {
   onDelete?: (supplier: Supplier) => void;
 }
 
-type SortField = "name" | "contactName" | "contactPhone" | "contactEmail" | "avgLeadTime" | "rating";
+type SortField = "name" | "contactName" | "contactPhone" | "contactEmail" | "avgLeadTime" | "category";
 type SortDirection = "asc" | "desc" | null;
 
 export function SupplierTable({ suppliers, onEdit, onDelete }: SupplierTableProps) {
@@ -93,9 +93,9 @@ export function SupplierTable({ suppliers, onEdit, onDelete }: SupplierTableProp
           aValue = a.avgLeadTime;
           bValue = b.avgLeadTime;
           break;
-        case "rating":
-          aValue = a.rating;
-          bValue = b.rating;
+        case "category":
+          aValue = a.category;
+          bValue = b.category;
           break;
         default:
           return 0;
@@ -107,7 +107,7 @@ export function SupplierTable({ suppliers, onEdit, onDelete }: SupplierTableProp
       if (bValue === null) return -1;
 
       // 숫자 정렬
-      if (sortField === "avgLeadTime" || sortField === "rating") {
+      if (sortField === "avgLeadTime") {
         const numA = Number(aValue);
         const numB = Number(bValue);
         return dir * (numA - numB);
@@ -167,6 +167,17 @@ export function SupplierTable({ suppliers, onEdit, onDelete }: SupplierTableProp
                 <SortIcon field="contactEmail" />
               </Button>
             </TableHead>
+            <TableHead>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-auto p-0 font-medium hover:bg-transparent"
+                onClick={() => handleSort("category")}
+              >
+                분류
+                <SortIcon field="category" />
+              </Button>
+            </TableHead>
             <TableHead className="text-center">
               <Button
                 variant="ghost"
@@ -176,17 +187,6 @@ export function SupplierTable({ suppliers, onEdit, onDelete }: SupplierTableProp
               >
                 리드타임
                 <SortIcon field="avgLeadTime" />
-              </Button>
-            </TableHead>
-            <TableHead className="text-center">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-auto p-0 font-medium hover:bg-transparent"
-                onClick={() => handleSort("rating")}
-              >
-                평점
-                <SortIcon field="rating" />
               </Button>
             </TableHead>
             <TableHead className="w-[50px]"></TableHead>
@@ -206,16 +206,15 @@ export function SupplierTable({ suppliers, onEdit, onDelete }: SupplierTableProp
                 <TableCell>{supplier.contactName || "-"}</TableCell>
                 <TableCell className="font-mono text-sm">{supplier.contactPhone || "-"}</TableCell>
                 <TableCell className="text-slate-500">{supplier.contactEmail || "-"}</TableCell>
-                <TableCell className="text-center">
-                  <Badge variant="outline">{supplier.avgLeadTime}일</Badge>
+                <TableCell>
+                  {supplier.category ? (
+                    <Badge variant="secondary">{supplier.category}</Badge>
+                  ) : (
+                    <span className="text-slate-400">-</span>
+                  )}
                 </TableCell>
                 <TableCell className="text-center">
-                  <div className="flex items-center justify-center gap-1">
-                    <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                    <span className="font-medium">
-                      {(Number(supplier.rating) / 20).toFixed(1)}
-                    </span>
-                  </div>
+                  <Badge variant="outline">{supplier.avgLeadTime}일</Badge>
                 </TableCell>
                 <TableCell>
                   <DropdownMenu>
