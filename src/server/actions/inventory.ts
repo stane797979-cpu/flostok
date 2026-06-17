@@ -74,7 +74,7 @@ type InventoryListItem = {
 
 export async function getInventoryList(options?: {
   productId?: string;
-  status?: string;
+  status?: string | string[];
   limit?: number;
   offset?: number;
 }): Promise<{
@@ -90,7 +90,12 @@ export async function getInventoryList(options?: {
     conditions.push(eq(inventory.productId, productId));
   }
   if (status) {
-    conditions.push(eq(inventory.status, status as (typeof inventory.status.enumValues)[number]));
+    type StatusVal = (typeof inventory.status.enumValues)[number];
+    if (Array.isArray(status)) {
+      conditions.push(inArray(inventory.status, status as StatusVal[]));
+    } else {
+      conditions.push(eq(inventory.status, status as StatusVal));
+    }
   }
 
   // 30일 전 날짜 (일평균출고량 계산용)

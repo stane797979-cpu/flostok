@@ -20,19 +20,17 @@ import { getABCXYZAnalysis, getCategoryDemandSummary } from "@/server/actions/an
 async function loadDashboardData() {
   try {
     // 병렬 로드: 통계 + 품절/위험 품목 + KPI + 회전율 + ABC-XYZ (모두 병렬)
-    const [stats, outOfStockResult, criticalResult, kpiSummary, turnoverResult, abcResult, categoryDemand] = await Promise.all([
+    const [stats, needsOrderResult, kpiSummary, turnoverResult, abcResult, categoryDemand] = await Promise.all([
       getInventoryStats(),
-      getInventoryList({ status: "out_of_stock", limit: 10 }),
-      getInventoryList({ status: "critical", limit: 10 }),
+      getInventoryList({ status: ["out_of_stock", "critical", "shortage", "caution"], limit: 10 }),
       getKPISummary(),
       getInventoryTurnoverData().catch(() => null),
       getABCXYZAnalysis().catch(() => ({ products: [], matrixData: [], summary: { aCount: 0, aPercentage: 0, bCount: 0, bPercentage: 0, cCount: 0, cPercentage: 0, period: "" } })),
       getCategoryDemandSummary().catch(() => ({ rows: [], hasData: false })),
     ]);
-    const criticalItems = [...outOfStockResult.items, ...criticalResult.items].slice(0, 10);
 
     // 발주 필요 품목 매핑 (TOP10)
-    const needsOrderProducts = criticalItems.slice(0, 10).map((item) => ({
+    const needsOrderProducts = needsOrderResult.items.slice(0, 10).map((item) => ({
       id: item.productId,
       sku: item.product.sku,
       name: item.product.name,
@@ -68,7 +66,7 @@ async function loadDashboardData() {
         totalSku: stats.totalProducts,
         outOfStock: stats.outOfStock,
         critical: stats.critical,
-        needsOrder: stats.outOfStock + stats.critical + stats.shortage,
+        needsOrder: stats.outOfStock + stats.critical + stats.shortage + stats.caution,
         excess: stats.excess,
       },
       needsOrderProducts,
