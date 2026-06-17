@@ -26,7 +26,7 @@ interface OutboundRecordsTableProps {
   onDelete?: (record: OutboundRecord) => void;
 }
 
-type SortField = "date" | "productSku" | "productName" | "changeTypeLabel" | "changeAmount" | "stockBefore" | "stockAfter";
+type SortField = "date" | "outboundNumber" | "productSku" | "productName" | "changeTypeLabel" | "changeAmount" | "stockBefore" | "stockAfter";
 type SortDirection = "asc" | "desc" | null;
 
 function SortIcon({ field, sortField, sortDirection }: { field: SortField; sortField: SortField; sortDirection: SortDirection }) {
@@ -99,6 +99,12 @@ export function OutboundRecordsTable({ records, onEdit, onDelete }: OutboundReco
                 <SortIcon field="date" sortField={sortField} sortDirection={sortDirection} />
               </button>
             </TableHead>
+            <TableHead>
+              <button onClick={() => handleSort("outboundNumber")} className="flex items-center gap-1 hover:text-slate-900">
+                출고번호
+                <SortIcon field="outboundNumber" sortField={sortField} sortDirection={sortDirection} />
+              </button>
+            </TableHead>
             <TableHead className="w-[100px]">
               <button onClick={() => handleSort("productSku")} className="flex items-center gap-1 hover:text-slate-900">
                 SKU
@@ -117,6 +123,7 @@ export function OutboundRecordsTable({ records, onEdit, onDelete }: OutboundReco
                 <SortIcon field="changeTypeLabel" sortField={sortField} sortDirection={sortDirection} />
               </button>
             </TableHead>
+            <TableHead>채널</TableHead>
             <TableHead className="text-right">
               <button onClick={() => handleSort("changeAmount")} className="ml-auto flex items-center gap-1 hover:text-slate-900">
                 출고수량
@@ -143,6 +150,7 @@ export function OutboundRecordsTable({ records, onEdit, onDelete }: OutboundReco
           {sortedRecords.map((record) => (
             <TableRow key={record.id}>
               <TableCell className="font-mono text-sm">{record.date}</TableCell>
+              <TableCell className="font-mono text-xs text-slate-500">{record.outboundNumber || "-"}</TableCell>
               <TableCell className="font-mono text-sm">{record.productSku}</TableCell>
               <TableCell className="font-medium">{record.productName}</TableCell>
               <TableCell>
@@ -150,14 +158,17 @@ export function OutboundRecordsTable({ records, onEdit, onDelete }: OutboundReco
                   {record.changeTypeLabel}
                 </Badge>
               </TableCell>
+              <TableCell className="text-sm text-slate-500">
+                {record.channel || "-"}
+              </TableCell>
               <TableCell className="text-right font-mono text-red-600">
                 {Math.abs(record.changeAmount).toLocaleString()}
               </TableCell>
               <TableCell className="text-right font-mono text-slate-500">
-                {record.stockBefore.toLocaleString()}
+                {record.source === "sales" ? "-" : record.stockBefore.toLocaleString()}
               </TableCell>
               <TableCell className="text-right font-mono">
-                {record.stockAfter.toLocaleString()}
+                {record.source === "sales" ? "-" : record.stockAfter.toLocaleString()}
               </TableCell>
               <TableCell className="max-w-[200px] truncate text-sm text-slate-500">
                 {record.notes || "-"}

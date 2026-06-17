@@ -1,8 +1,8 @@
 "use server";
 
 import { db } from "@/server/db";
-import { inventory, inventoryHistory, products } from "@/server/db/schema";
-import { eq, and, sql, desc } from "drizzle-orm";
+import { inventory, inventoryHistory, salesRecords, products } from "@/server/db/schema";
+import { eq, and, sql, desc, gte, lte } from "drizzle-orm";
 import { requireAuth } from "./auth-helpers";
 import { getChangeTypeByKey } from "@/server/services/inventory/types";
 import { revalidatePath } from "next/cache";
@@ -18,16 +18,19 @@ export interface OutboundRecord {
   changeAmount: number;
   changeType: string;
   changeTypeLabel: string;
+  channel: string | null;
   stockBefore: number;
   stockAfter: number;
+  outboundNumber: string | null;
   notes: string | null;
+  source: "inventory" | "sales";
   createdAt: Date;
 }
 
 /**
  * 출고 기록 조회
  *
- * inventory_history에서 changeAmount < 0인 기록을 조회합니다.
+ * inventory_history(창고 출고) + sales_records(판매 출고) 합산
  */
 export async function getOutboundRecords(options?: {
   startDate?: string;
@@ -38,59 +41,78 @@ export async function getOutboundRecords(options?: {
   const user = await requireAuth();
   const { startDate, endDate, limit = 100, offset = 0 } = options || {};
 
-  const conditions = [
+  const histConditions = [
     eq(inventoryHistory.organizationId, user.organizationId),
     sql`${inventoryHistory.changeAmount} < 0`,
   ];
+  if (startDate) histConditions.push(sql`${inventoryHistory.date} >= ${startDate}`);
+  if (endDate)   histConditions.push(sql`${inventoryHistory.date} <= ${endDate}`);
 
-  if (startDate) {
-    conditions.push(sql`${inventoryHistory.date} >= ${startDate}`);
-  }
-  if (endDate) {
-    conditions.push(sql`${inventoryHistory.date} <= ${endDate}`);
-  }
+  const salesConditions = [eq(salesRecords.organizationId, user.organizationId)];
+  if (startDate) salesConditions.push(gte(salesRecords.date, startDate));
+  if (endDate)   salesConditions.push(lte(salesRecords.date, endDate));
 
-  const [records, countResult] = await Promise.all([
+  const [histRows, salesRows] = await Promise.all([
     db
-      .select({
-        record: inventoryHistory,
-        product: {
-          sku: products.sku,
-          name: products.name,
-        },
-      })
+      .select({ record: inventoryHistory, product: { sku: products.sku, name: products.name } })
       .from(inventoryHistory)
       .innerJoin(products, eq(inventoryHistory.productId, products.id))
-      .where(and(...conditions))
-      .orderBy(desc(inventoryHistory.createdAt))
-      .limit(limit)
-      .offset(offset),
+      .where(and(...histConditions))
+      .orderBy(desc(inventoryHistory.createdAt)),
     db
-      .select({ count: sql<number>`count(*)` })
-      .from(inventoryHistory)
-      .where(and(...conditions)),
+      .select({ record: salesRecords, product: { sku: products.sku, name: products.name } })
+      .from(salesRecords)
+      .innerJoin(products, eq(salesRecords.productId, products.id))
+      .where(and(...salesConditions))
+      .orderBy(desc(salesRecords.date), desc(salesRecords.createdAt)),
   ]);
 
-  return {
-    records: records.map((row) => {
-      const typeInfo = getChangeTypeByKey(row.record.changeType);
-      return {
-        id: row.record.id,
-        productId: row.record.productId,
-        productSku: row.product.sku,
-        productName: row.product.name,
-        date: row.record.date,
-        changeAmount: row.record.changeAmount,
-        changeType: row.record.changeType,
-        changeTypeLabel: typeInfo?.label || row.record.changeType,
-        stockBefore: row.record.stockBefore,
-        stockAfter: row.record.stockAfter,
-        notes: row.record.notes,
-        createdAt: row.record.createdAt,
-      };
-    }),
-    total: Number(countResult[0]?.count || 0),
-  };
+  const histMapped: OutboundRecord[] = histRows.map((row) => {
+    const typeInfo = getChangeTypeByKey(row.record.changeType);
+    return {
+      id: row.record.id,
+      productId: row.record.productId,
+      productSku: row.product.sku,
+      productName: row.product.name,
+      date: row.record.date,
+      changeAmount: row.record.changeAmount,
+      changeType: row.record.changeType,
+      changeTypeLabel: typeInfo?.label || row.record.changeType,
+      channel: null,
+      stockBefore: row.record.stockBefore,
+      stockAfter: row.record.stockAfter,
+      outboundNumber: row.record.outboundNumber,
+      notes: row.record.notes,
+      source: "inventory" as const,
+      createdAt: row.record.createdAt,
+    };
+  });
+
+  const salesMapped: OutboundRecord[] = salesRows.map((row) => ({
+    id: row.record.id,
+    productId: row.record.productId,
+    productSku: row.product.sku,
+    productName: row.product.name,
+    date: row.record.date,
+    changeAmount: -row.record.quantity,
+    changeType: "OUTBOUND_SALES",
+    changeTypeLabel: "판매출고",
+    channel: row.record.channel || null,
+    stockBefore: 0,
+    stockAfter: 0,
+    outboundNumber: row.record.outboundNumber || null,
+    notes: row.record.notes,
+    source: "sales" as const,
+    createdAt: row.record.createdAt,
+  }));
+
+  const all = [...histMapped, ...salesMapped].sort(
+    (a, b) =>
+      new Date(b.date).getTime() - new Date(a.date).getTime() ||
+      b.createdAt.getTime() - a.createdAt.getTime()
+  );
+
+  return { records: all.slice(offset, offset + limit), total: all.length };
 }
 
 /**
