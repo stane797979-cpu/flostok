@@ -17,9 +17,9 @@ export async function getScenarioSimulationData(): Promise<ScenarioSimulationDat
     const orgId = user?.organizationId;
     if (!orgId) return null;
 
-    // 최근 365일 판매 데이터 기준 (90일 데이터 없을 경우 대비)
+    // 최근 90일 판매 데이터 기준
     const startDateObj = new Date();
-    startDateObj.setDate(startDateObj.getDate() - 365);
+    startDateObj.setDate(startDateObj.getDate() - 90);
     const startDate = startDateObj.toISOString().split("T")[0];
 
     // 제품별 일평균 판매량 + 표준편차 (90일)
@@ -62,7 +62,7 @@ export async function getScenarioSimulationData(): Promise<ScenarioSimulationDat
       if (!product) continue;
 
       const dayCount = Math.max(stat.dayCount || 1, 1);
-      const avgDailyDemand = (stat.totalQty || 0) / Math.max(dayCount, 30); // 실제 판매일 기준 일평균
+      const avgDailyDemand = (stat.totalQty || 0) / 90; // 90일 기준 일평균
       const demandStdDev = Math.max(stat.stdDev || 0, avgDailyDemand * 0.1);
 
       inputs.push({
