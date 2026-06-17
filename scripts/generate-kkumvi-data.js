@@ -297,7 +297,7 @@ function generateInboundData() {
   return rows;
 }
 
-// ── 4. 출고(판매) 데이터 1년 ─────────────────────────────────────────────────
+// ── 4. 출고(판매) 데이터 1년 V3 ──────────────────────────────────────────────
 function generateOutboundData() {
   const rows = [];
   const channels = ["자사몰", "네이버스마트스토어", "쿠팡", "카카오쇼핑", "오프라인매장"];
@@ -309,13 +309,20 @@ function generateOutboundData() {
   // 월별 시즌 계수 (유아용품: 봄/가을 시즌업)
   const seasonFactor = [1.1, 1.0, 1.3, 1.5, 1.4, 1.0, 0.9, 0.9, 1.2, 1.4, 1.3, 1.1];
 
+  // 날짜별 출고번호 시퀀스 관리
+  const dateSeqMap = {};
+  function nextOutboundNumber(dateString) {
+    const key = dateString.replace(/-/g, "");
+    dateSeqMap[key] = (dateSeqMap[key] || 0) + 1;
+    return `OR-${key}-${String(dateSeqMap[key]).padStart(3, "0")}`;
+  }
+
   for (const p of PRODUCTS) {
     let d = new Date(start);
     while (d <= end) {
-      const month = d.getMonth(); // 0-11
+      const month = d.getMonth();
       const factor = seasonFactor[month];
 
-      // 일평균 판매수량 (제품별 다름)
       const baseDaily = {
         "KV-CAR-001": 3,
         "KV-STR-002": 5,
@@ -324,21 +331,22 @@ function generateOutboundData() {
         "KV-STR-005": 8,
       }[p.sku] || 3;
 
-      // 주말은 1.3배, 평일은 기본
-      const dow = d.getDay(); // 0=일,6=토
+      const dow = d.getDay();
       const weekendBoost = (dow === 0 || dow === 6) ? 1.3 : 1.0;
       const qty = Math.max(1, Math.round(baseDaily * factor * weekendBoost * (0.7 + Math.random() * 0.6)));
 
       const type = outboundTypes[Math.floor(Math.random() * outboundTypes.length)];
       const channel = channels[Math.floor(Math.random() * channels.length)];
+      const ds = dateStr(d);
 
       rows.push({
         SKU: p.sku,
-        날짜: dateStr(d),
+        날짜: ds,
         수량: type === "샘플" ? 1 : Math.max(1, qty),
         단가: type === "판매" ? p.unitPrice : 0,
         채널: type === "판매" ? channel : "",
         출고유형: type,
+        출고번호: nextOutboundNumber(ds),
         비고: type === "반품" ? "고객 반품" : (type === "샘플" ? "마케팅 샘플" : ""),
       });
 
@@ -353,11 +361,11 @@ function generateOutboundData() {
   const ws = XLSX.utils.json_to_sheet(rows);
   ws["!cols"] = [
     { wch: 14 }, { wch: 12 }, { wch: 8 }, { wch: 10 },
-    { wch: 18 }, { wch: 10 }, { wch: 16 },
+    { wch: 18 }, { wch: 10 }, { wch: 20 }, { wch: 16 },
   ];
   XLSX.utils.book_append_sheet(wb, ws, "출고데이터");
-  XLSX.writeFile(wb, path.join(OUT_DIR, "04_출고데이터_1년.xlsx"));
-  console.log("04_출고데이터_1년.xlsx 생성 완료 (" + rows.length + "건)");
+  XLSX.writeFile(wb, path.join(OUT_DIR, "04_출고데이터_1년_V3.xlsx"));
+  console.log("04_출고데이터_1년_V3.xlsx 생성 완료 (" + rows.length + "건)");
 }
 
 // ── 메인 ─────────────────────────────────────────────────────────────────────

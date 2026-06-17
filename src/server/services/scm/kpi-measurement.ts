@@ -101,10 +101,10 @@ export async function measureKPIMetrics(
 
     // 5개 쿼리 병렬 실행
     const [salesData, inventoryData, stockoutData, orderData, fulfillmentData] = await Promise.all([
-      // 1) 연간 COGS
+      // 1) 연간 판매금액 (COGS: costPrice 우선, 없으면 unitPrice fallback)
       db
         .select({
-          totalCOGS: sql<number>`COALESCE(SUM(${salesRecords.quantity} * COALESCE(${products.costPrice}, 0)), 0)`,
+          totalCOGS: sql<number>`COALESCE(SUM(${salesRecords.quantity} * COALESCE(NULLIF(${products.costPrice}, 0), NULLIF(${products.unitPrice}, 0), 0)), 0)`,
         })
         .from(salesRecords)
         .leftJoin(products, eq(salesRecords.productId, products.id))
@@ -114,12 +114,13 @@ export async function measureKPIMetrics(
           ...productFilter(salesRecords.productId),
         )),
 
-      // 2) 평균 재고금액
+      // 2) 현재 재고금액 (currentStock × costPrice, costPrice 없으면 unitPrice)
       db
         .select({
-          avgValue: sql<number>`COALESCE(AVG(${inventory.inventoryValue}), 0)`,
+          avgValue: sql<number>`COALESCE(AVG(${inventory.currentStock} * COALESCE(NULLIF(${products.costPrice}, 0), NULLIF(${products.unitPrice}, 0), 0)), 0)`,
         })
         .from(inventory)
+        .leftJoin(products, eq(inventory.productId, products.id))
         .where(and(
           eq(inventory.organizationId, organizationId),
           ...productFilter(inventory.productId),
@@ -137,34 +138,34 @@ export async function measureKPIMetrics(
           ...productFilter(inventory.productId),
         )),
 
-      // 4) 적시발주율 + 평균 리드타임 (완료 발주 한번에)
+      // 4) 적시발주율 + 평균 리드타임 (draft/cancelled 제외한 모든 발주)
       db
         .select({
           totalCount: sql<number>`COUNT(*)`,
-          onTimeCount: sql<number>`COUNT(*) FILTER (WHERE ${purchaseOrders.actualDate} IS NOT NULL AND ${purchaseOrders.expectedDate} IS NOT NULL AND ${purchaseOrders.actualDate}::date - ${purchaseOrders.expectedDate}::date <= 1)`,
-          avgLeadTime: sql<number>`COALESCE(AVG(CASE WHEN ${purchaseOrders.actualDate} IS NOT NULL THEN ${purchaseOrders.actualDate}::date - ${purchaseOrders.orderDate}::date END), 0)`,
+          onTimeCount: sql<number>`COUNT(*) FILTER (WHERE ${purchaseOrders.actualDate} IS NOT NULL AND ${purchaseOrders.expectedDate} IS NOT NULL AND ${purchaseOrders.actualDate}::date <= ${purchaseOrders.expectedDate}::date)`,
+          avgLeadTime: sql<number>`COALESCE(AVG(CASE WHEN ${purchaseOrders.actualDate} IS NOT NULL AND ${purchaseOrders.orderDate} IS NOT NULL THEN ${purchaseOrders.actualDate}::date - ${purchaseOrders.orderDate}::date END), 0)`,
         })
         .from(purchaseOrders)
         .where(
           and(
             eq(purchaseOrders.organizationId, organizationId),
-            inArray(purchaseOrders.status, ["received", "completed"]),
+            sql`${purchaseOrders.status} NOT IN ('draft', 'cancelled')`,
             ...orderProductFilter,
           )
         ),
 
-      // 5) 발주충족률 (JOIN으로 단일 쿼리)
+      // 5) 발주충족률
       db
         .select({
           totalOrdered: sql<number>`COALESCE(SUM(${purchaseOrderItems.quantity}), 0)`,
-          totalReceived: sql<number>`COALESCE(SUM(${purchaseOrderItems.receivedQuantity}), 0)`,
+          totalReceived: sql<number>`COALESCE(SUM(COALESCE(${purchaseOrderItems.receivedQuantity}, 0)), 0)`,
         })
         .from(purchaseOrderItems)
         .innerJoin(purchaseOrders, eq(purchaseOrderItems.purchaseOrderId, purchaseOrders.id))
         .where(
           and(
             eq(purchaseOrders.organizationId, organizationId),
-            inArray(purchaseOrders.status, ["received", "completed"]),
+            sql`${purchaseOrders.status} NOT IN ('draft', 'cancelled')`,
             ...productFilter(purchaseOrderItems.productId),
           )
         ),
@@ -255,11 +256,11 @@ export async function getKPITrendData(
     // 현재 평균 재고금액 (월별 스냅샷이 없으므로 공통 사용)
     // 4개 GROUP BY 쿼리 + 1개 재고 쿼리 병렬 실행
     const [cogsData, orderRateData, fulfillmentData, avgInvData, stockoutData] = await Promise.all([
-      // 1) 월별 COGS (재고회전율용)
+      // 1) 월별 COGS (재고회전율용, costPrice 없으면 unitPrice fallback)
       db
         .select({
           month: sql<string>`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`.as("month"),
-          totalCOGS: sql<number>`COALESCE(SUM(${salesRecords.quantity} * COALESCE(${products.costPrice}, 0)), 0)`.as("total_cogs"),
+          totalCOGS: sql<number>`COALESCE(SUM(${salesRecords.quantity} * COALESCE(NULLIF(${products.costPrice}, 0), NULLIF(${products.unitPrice}, 0), 0)), 0)`.as("total_cogs"),
         })
         .from(salesRecords)
         .leftJoin(products, eq(salesRecords.productId, products.id))
@@ -274,55 +275,56 @@ export async function getKPITrendData(
         .groupBy(sql`TO_CHAR(${salesRecords.date}::date, 'YYYY-MM')`)
         .execute(),
 
-      // 2) 월별 적시발주율 (actualDate 기준 GROUP BY)
+      // 2) 월별 적시발주율 (orderDate 기준 GROUP BY — actualDate 없는 경우 포함)
       db
         .select({
-          month: sql<string>`TO_CHAR(${purchaseOrders.actualDate}::date, 'YYYY-MM')`.as("month"),
+          month: sql<string>`TO_CHAR(COALESCE(${purchaseOrders.actualDate}, ${purchaseOrders.orderDate})::date, 'YYYY-MM')`.as("month"),
           totalCount: sql<number>`COUNT(*)`.as("total_count"),
-          onTimeCount: sql<number>`COUNT(*) FILTER (WHERE ${purchaseOrders.expectedDate} IS NOT NULL AND ${purchaseOrders.actualDate} <= ${purchaseOrders.expectedDate})`.as("on_time_count"),
+          onTimeCount: sql<number>`COUNT(*) FILTER (WHERE ${purchaseOrders.actualDate} IS NOT NULL AND ${purchaseOrders.expectedDate} IS NOT NULL AND ${purchaseOrders.actualDate}::date <= ${purchaseOrders.expectedDate}::date)`.as("on_time_count"),
         })
         .from(purchaseOrders)
         .where(
           and(
             eq(purchaseOrders.organizationId, organizationId),
-            inArray(purchaseOrders.status, ["received", "completed"]),
-            sql`${purchaseOrders.actualDate} IS NOT NULL`,
-            gte(purchaseOrders.actualDate, startDateStr),
-            lte(purchaseOrders.actualDate, endDateStr),
+            sql`${purchaseOrders.status} NOT IN ('draft', 'cancelled')`,
+            sql`COALESCE(${purchaseOrders.actualDate}, ${purchaseOrders.orderDate}) IS NOT NULL`,
+            sql`COALESCE(${purchaseOrders.actualDate}, ${purchaseOrders.orderDate})::date >= ${startDateStr}::date`,
+            sql`COALESCE(${purchaseOrders.actualDate}, ${purchaseOrders.orderDate})::date <= ${endDateStr}::date`,
             ...orderProductFilter,
           )
         )
-        .groupBy(sql`TO_CHAR(${purchaseOrders.actualDate}::date, 'YYYY-MM')`)
+        .groupBy(sql`TO_CHAR(COALESCE(${purchaseOrders.actualDate}, ${purchaseOrders.orderDate})::date, 'YYYY-MM')`)
         .execute(),
 
       // 3) 월별 발주충족률 (JOIN + GROUP BY)
       db
         .select({
-          month: sql<string>`TO_CHAR(${purchaseOrders.actualDate}::date, 'YYYY-MM')`.as("month"),
+          month: sql<string>`TO_CHAR(COALESCE(${purchaseOrders.actualDate}, ${purchaseOrders.orderDate})::date, 'YYYY-MM')`.as("month"),
           totalOrdered: sql<number>`COALESCE(SUM(${purchaseOrderItems.quantity}), 0)`.as("total_ordered"),
-          totalReceived: sql<number>`COALESCE(SUM(${purchaseOrderItems.receivedQuantity}), 0)`.as("total_received"),
+          totalReceived: sql<number>`COALESCE(SUM(COALESCE(${purchaseOrderItems.receivedQuantity}, 0)), 0)`.as("total_received"),
         })
         .from(purchaseOrderItems)
         .innerJoin(purchaseOrders, eq(purchaseOrderItems.purchaseOrderId, purchaseOrders.id))
         .where(
           and(
             eq(purchaseOrders.organizationId, organizationId),
-            inArray(purchaseOrders.status, ["received", "completed"]),
-            sql`${purchaseOrders.actualDate} IS NOT NULL`,
-            gte(purchaseOrders.actualDate, startDateStr),
-            lte(purchaseOrders.actualDate, endDateStr),
+            sql`${purchaseOrders.status} NOT IN ('draft', 'cancelled')`,
+            sql`COALESCE(${purchaseOrders.actualDate}, ${purchaseOrders.orderDate}) IS NOT NULL`,
+            sql`COALESCE(${purchaseOrders.actualDate}, ${purchaseOrders.orderDate})::date >= ${startDateStr}::date`,
+            sql`COALESCE(${purchaseOrders.actualDate}, ${purchaseOrders.orderDate})::date <= ${endDateStr}::date`,
             ...productFilter(purchaseOrderItems.productId),
           )
         )
-        .groupBy(sql`TO_CHAR(${purchaseOrders.actualDate}::date, 'YYYY-MM')`)
+        .groupBy(sql`TO_CHAR(COALESCE(${purchaseOrders.actualDate}, ${purchaseOrders.orderDate})::date, 'YYYY-MM')`)
         .execute(),
 
-      // 4) 평균 재고금액 (현재 스냅샷 — 모든 월에 공통 사용)
+      // 4) 현재 재고금액 (currentStock × costPrice, costPrice 없으면 unitPrice)
       db
         .select({
-          avgValue: sql<number>`COALESCE(AVG(${inventory.inventoryValue}), 0)`,
+          avgValue: sql<number>`COALESCE(AVG(${inventory.currentStock} * COALESCE(NULLIF(${products.costPrice}, 0), NULLIF(${products.unitPrice}, 0), 0)), 0)`,
         })
         .from(inventory)
+        .leftJoin(products, eq(inventory.productId, products.id))
         .where(and(
           eq(inventory.organizationId, organizationId),
           ...productFilter(inventory.productId),
