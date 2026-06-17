@@ -754,3 +754,133 @@ export async function getCategoryTrend(days: number = 30): Promise<{
     return { data: [], categories: [], hasData: false }
   }
 }
+
+/**
+ * 카테고리별 수요 동향 (대시보드용)
+ * - 당월 vs 전월 판매수량 증감
+ * - 카테고리 내 재고 위험 품목 수 (품절+위험+부족)
+ */
+export async function getCategoryDemandSummary(): Promise<{
+  rows: Array<{
+    category: string
+    currentQty: number
+    prevQty: number
+    changeRate: number       // % (양수=증가, 음수=감소)
+    riskCount: number        // 품절+위험 품목 수
+    shortageCount: number    // 부족 품목 수
+    excessCount: number      // 과재고 품목 수
+  }>
+  hasData: boolean
+}> {
+  try {
+    const user = await requireAuth()
+    const orgId = user.organizationId
+
+    const now = new Date()
+    // 당월 1일 ~ 오늘
+    const curStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
+    // 전월 1일 ~ 전월 말일
+    const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0]
+    const prevEnd = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split('T')[0]
+    const today = now.toISOString().split('T')[0]
+
+    // 당월 카테고리별 판매수량
+    const curRows = await db
+      .select({
+        category: products.category,
+        qty: sql<number>`COALESCE(SUM(${salesRecords.quantity}), 0)`,
+      })
+      .from(salesRecords)
+      .innerJoin(products, eq(salesRecords.productId, products.id))
+      .where(
+        and(
+          eq(salesRecords.organizationId, orgId),
+          gte(salesRecords.date, curStart),
+          sql`${salesRecords.date} <= ${today}`
+        )
+      )
+      .groupBy(products.category)
+
+    // 전월 카테고리별 판매수량
+    const prevRows = await db
+      .select({
+        category: products.category,
+        qty: sql<number>`COALESCE(SUM(${salesRecords.quantity}), 0)`,
+      })
+      .from(salesRecords)
+      .innerJoin(products, eq(salesRecords.productId, products.id))
+      .where(
+        and(
+          eq(salesRecords.organizationId, orgId),
+          gte(salesRecords.date, prevStart),
+          sql`${salesRecords.date} <= ${prevEnd}`
+        )
+      )
+      .groupBy(products.category)
+
+    // 카테고리별 재고 현황 (현재고 vs 안전재고/발주점 기준)
+    const invRows = await db
+      .select({
+        category: products.category,
+        currentStock: inventory.currentStock,
+        safetyStock: products.safetyStock,
+        reorderPoint: products.reorderPoint,
+      })
+      .from(inventory)
+      .innerJoin(products, eq(inventory.productId, products.id))
+      .where(eq(inventory.organizationId, orgId))
+
+    if (curRows.length === 0 && prevRows.length === 0) {
+      return { rows: [], hasData: false }
+    }
+
+    // 카테고리 목록 합산
+    const allCategories = new Set<string>()
+    curRows.forEach((r) => allCategories.add(r.category ?? '미분류'))
+    prevRows.forEach((r) => allCategories.add(r.category ?? '미분류'))
+
+    const curMap = new Map(curRows.map((r) => [r.category ?? '미분류', Number(r.qty)]))
+    const prevMap = new Map(prevRows.map((r) => [r.category ?? '미분류', Number(r.qty)]))
+
+    // 카테고리별 재고 위험 집계
+    const riskMap = new Map<string, { risk: number; shortage: number; excess: number }>()
+    invRows.forEach((r) => {
+      const cat = r.category ?? '미분류'
+      if (!riskMap.has(cat)) riskMap.set(cat, { risk: 0, shortage: 0, excess: 0 })
+      const entry = riskMap.get(cat)!
+      const cur = r.currentStock ?? 0
+      const safety = r.safetyStock ?? 0
+      const reorder = r.reorderPoint ?? 0
+      if (cur === 0 || cur <= safety * 0.5) {
+        entry.risk++
+      } else if (cur <= reorder || cur <= safety) {
+        entry.shortage++
+      } else if (safety > 0 && cur > safety * 3) {
+        entry.excess++
+      }
+    })
+
+    const rows = Array.from(allCategories)
+      .map((cat) => {
+        const cur = curMap.get(cat) ?? 0
+        const prev = prevMap.get(cat) ?? 0
+        const changeRate = prev > 0 ? ((cur - prev) / prev) * 100 : cur > 0 ? 100 : 0
+        const inv = riskMap.get(cat) ?? { risk: 0, shortage: 0, excess: 0 }
+        return {
+          category: cat,
+          currentQty: cur,
+          prevQty: prev,
+          changeRate: Math.round(changeRate * 10) / 10,
+          riskCount: inv.risk,
+          shortageCount: inv.shortage,
+          excessCount: inv.excess,
+        }
+      })
+      .sort((a, b) => b.currentQty - a.currentQty)
+
+    return { rows, hasData: true }
+  } catch (error) {
+    console.error('카테고리 수요 동향 조회 오류:', error)
+    return { rows: [], hasData: false }
+  }
+}

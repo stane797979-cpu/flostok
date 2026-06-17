@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Package, AlertTriangle, TrendingDown, Archive, ShoppingCart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
-import { InventoryStatusChart } from "@/components/features/dashboard/inventory-status-chart";
+import { CategoryDemandWidget } from "@/components/features/dashboard/category-demand-widget";
 import { RecentActivityFeed } from "@/components/features/dashboard/recent-activity-feed";
 import { QuickActions } from "@/components/features/dashboard/quick-actions";
 import { KPICard } from "@/components/features/dashboard/kpi-card";
@@ -14,19 +14,20 @@ import { getInventoryStats, getInventoryList } from "@/server/actions/inventory"
 import { getInventoryStatus } from "@/lib/constants/inventory-status";
 import { getKPISummary } from "@/server/actions/kpi";
 import { getInventoryTurnoverData } from "@/server/actions/turnover";
-import { getABCXYZAnalysis } from "@/server/actions/analytics";
+import { getABCXYZAnalysis, getCategoryDemandSummary } from "@/server/actions/analytics";
 
 /** 안전하게 대시보드 데이터를 로드 (인증 실패 시 빈 데이터) */
 async function loadDashboardData() {
   try {
     // 병렬 로드: 통계 + 품절/위험 품목 + KPI + 회전율 + ABC-XYZ (모두 병렬)
-    const [stats, outOfStockResult, criticalResult, kpiSummary, turnoverResult, abcResult] = await Promise.all([
+    const [stats, outOfStockResult, criticalResult, kpiSummary, turnoverResult, abcResult, categoryDemand] = await Promise.all([
       getInventoryStats(),
       getInventoryList({ status: "out_of_stock", limit: 10 }),
       getInventoryList({ status: "critical", limit: 10 }),
       getKPISummary(),
       getInventoryTurnoverData().catch(() => null),
       getABCXYZAnalysis().catch(() => ({ products: [], matrixData: [], summary: { aCount: 0, aPercentage: 0, bCount: 0, bPercentage: 0, cCount: 0, cPercentage: 0, period: "" } })),
+      getCategoryDemandSummary().catch(() => ({ rows: [], hasData: false })),
     ]);
     const criticalItems = [...outOfStockResult.items, ...criticalResult.items].slice(0, 10);
 
@@ -43,15 +44,6 @@ async function loadDashboardData() {
         item.product.reorderPoint ?? 0
       ),
     }));
-
-    // 재고상태 분포: getInventoryStats()에서 이미 계산된 데이터 활용
-    const statusDistribution: Record<string, number> = {};
-    if (stats.outOfStock > 0) statusDistribution["out_of_stock"] = stats.outOfStock;
-    if (stats.critical > 0) statusDistribution["critical"] = stats.critical;
-    if (stats.shortage > 0) statusDistribution["shortage"] = stats.shortage;
-    if (stats.caution > 0) statusDistribution["caution"] = stats.caution;
-    if (stats.optimal > 0) statusDistribution["optimal"] = stats.optimal;
-    if (stats.excess > 0) statusDistribution["excess"] = stats.excess;
 
     // 회전율 TOP5 데이터
     const turnoverTop5 = turnoverResult
@@ -80,28 +72,28 @@ async function loadDashboardData() {
         excess: stats.excess,
       },
       needsOrderProducts,
-      statusDistribution,
       totalSku: stats.totalProducts,
       kpi: kpiSummary,
       turnoverTop5,
       matrixData: abcResult.matrixData,
+      categoryDemandRows: categoryDemand.rows,
     };
   } catch (error) {
     console.error("대시보드 데이터 로드 실패:", error);
     return {
       stats: { totalSku: 0, outOfStock: 0, critical: 0, needsOrder: 0, excess: 0 },
       needsOrderProducts: [],
-      statusDistribution: {},
       totalSku: 0,
       kpi: { inventoryTurnoverRate: 0, averageInventoryDays: 0, onTimeOrderRate: 0, stockoutRate: 0 },
       turnoverTop5: { fastest: [], slowest: [] },
       matrixData: [],
+      categoryDemandRows: [],
     };
   }
 }
 
 export default async function DashboardPage() {
-  const { stats, needsOrderProducts, statusDistribution, totalSku, kpi, turnoverTop5, matrixData } =
+  const { stats, needsOrderProducts, kpi, turnoverTop5, matrixData, categoryDemandRows } =
     await loadDashboardData();
 
   return (
@@ -196,8 +188,8 @@ export default async function DashboardPage() {
 
       {/* 콘텐츠 영역 */}
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* 재고상태 분포 차트 */}
-        <InventoryStatusChart distribution={statusDistribution} totalSku={totalSku} />
+        {/* 카테고리별 수요 동향 */}
+        <CategoryDemandWidget rows={categoryDemandRows} />
 
         {/* 발주 필요 품목 */}
         <Card>
