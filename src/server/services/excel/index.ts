@@ -15,3 +15,4 @@ export * from "./sales-import";
 export * from "./product-import";
 export * from "./order-export";
 export * from "./data-export";
+export * from "./other-inbound-import";

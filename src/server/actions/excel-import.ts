@@ -4,7 +4,7 @@
  * Excel 데이터 임포트 Server Actions
  */
 
-import { parseSalesExcel, importProductData, createSalesTemplate, createProductTemplate } from "@/server/services/excel";
+import { parseSalesExcel, importProductData, createSalesTemplate, createProductTemplate, importOtherInboundData, createOtherInboundTemplate } from "@/server/services/excel";
 import type { ExcelImportResult, SalesRecordExcelRow, ProductExcelRow } from "@/server/services/excel";
 import { requireAuth } from "./auth-helpers";
 import { logActivity } from "@/server/services/activity-log";
@@ -20,7 +20,7 @@ function generateRequestNumber(): string {
   return `OR-${dateStr}-${random}`;
 }
 
-export type ImportType = "sales" | "products";
+export type ImportType = "sales" | "products" | "inbound";
 
 export interface ImportExcelInput {
   type: ImportType;
@@ -134,6 +134,32 @@ export async function importExcelFile(input: ImportExcelInput): Promise<ImportEx
       };
     }
 
+    if (input.type === "inbound") {
+      const result = await importOtherInboundData({
+        organizationId: user.organizationId,
+        buffer,
+      });
+
+      if (result.successCount > 0) {
+        await logActivity({
+          user,
+          action: "IMPORT",
+          entityType: "excel_import",
+          description: `입고 데이터 Excel 임포트 (${result.successCount}/${result.totalRows}건 성공)`,
+        });
+        revalidatePath("/dashboard/inbound");
+      }
+
+      return {
+        success: result.success,
+        message: result.message,
+        totalRows: result.totalRows,
+        successCount: result.successCount,
+        errorCount: result.errorCount,
+        errors: result.errors.map((e) => ({ row: e.row, message: e.message })),
+      };
+    }
+
     const result = await importProductData({
       organizationId: user.organizationId,
       buffer,
@@ -190,6 +216,9 @@ export async function getExcelTemplateBase64(type: ImportType): Promise<string> 
 
   if (type === "sales") {
     buffer = await createSalesTemplate();
+  } else if (type === "inbound") {
+    const user = await requireAuth();
+    buffer = await createOtherInboundTemplate(user.organizationId);
   } else {
     buffer = await createProductTemplate();
   }

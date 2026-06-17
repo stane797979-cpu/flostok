@@ -14,7 +14,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { FileSpreadsheet, Upload, Download, Package, ShoppingCart, Loader2, Trash2, AlertTriangle } from "lucide-react";
+import { FileSpreadsheet, Upload, Download, Package, ShoppingCart, Loader2, Trash2, AlertTriangle, PackageOpen } from "lucide-react";
 import { ExcelImportDialog } from "@/components/features/excel";
 import type { ImportType } from "@/server/actions/excel-import";
 import { exportProductsToExcel, exportSalesToExcel } from "@/server/actions/data-export";
@@ -41,6 +41,12 @@ const IMPORT_OPTIONS: ImportOption[] = [
     description: "일별 판매/출고 데이터를 업로드하여 수요 예측에 활용합니다.",
     icon: ShoppingCart,
     badge: "수요예측 필수",
+  },
+  {
+    type: "inbound",
+    title: "입고 데이터",
+    description: "반품·조정·이동 입고 데이터를 일괄 등록합니다.",
+    icon: PackageOpen,
   },
 ];
 
