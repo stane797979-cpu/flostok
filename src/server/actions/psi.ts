@@ -10,7 +10,7 @@ import {
   type PSIResult,
 } from "@/server/services/scm/psi-aggregation";
 import { calculateEOQ } from "@/server/services/scm/eoq";
-import { revalidatePath, unstable_cache, revalidateTag } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 
 /**
  * PSI 데이터 조회 내부 로직 (캐싱 대상)
@@ -220,11 +220,7 @@ export async function getPSIData(pastMonths: number = 6): Promise<PSIResult> {
   const user = await getCurrentUser();
   const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
 
-  return unstable_cache(
-    () => _getPSIDataInternal(orgId, pastMonths),
-    [`psi-data-${orgId}-${pastMonths}`],
-    { revalidate: 60, tags: [`psi-${orgId}`] }
-  )();
+  return _getPSIDataInternal(orgId, pastMonths);
 }
 
 /**
