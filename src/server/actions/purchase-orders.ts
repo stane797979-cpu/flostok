@@ -1315,12 +1315,16 @@ export async function uploadPurchaseOrderExcel(
       .where(eq(products.organizationId, orgId));
     const skuMap = new Map(productList.map((p) => [p.sku, p.id]));
 
-    // 공급자명 → supplierId 매핑
+    // 공급자명 → supplierId 매핑 (name, code 양쪽 모두 등록)
     const supplierList = await db
-      .select({ id: suppliers.id, name: suppliers.name })
+      .select({ id: suppliers.id, name: suppliers.name, code: suppliers.code })
       .from(suppliers)
       .where(eq(suppliers.organizationId, orgId));
-    const supplierNameMap = new Map(supplierList.map((s) => [s.name, s.id]));
+    const supplierNameMap = new Map<string, string>();
+    for (const s of supplierList) {
+      if (s.name) supplierNameMap.set(s.name, s.id);
+      if (s.code) supplierNameMap.set(s.code, s.id);
+    }
 
     // 행 파싱 및 공급자별 그룹화
     type ParsedItem = {
