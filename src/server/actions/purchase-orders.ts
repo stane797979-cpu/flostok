@@ -7,6 +7,7 @@ import {
   products,
   inventory,
   suppliers,
+  supplierProducts,
   demandForecasts,
   importShipments,
   type PurchaseOrder,
@@ -1355,11 +1356,19 @@ export async function uploadPurchaseOrderExcel(
         supplierId = supplierNameMap.get(supplierName) || "";
       }
       if (!supplierId) {
-        // 제품의 공급자 매핑에서 조회
+        // 제품의 primary_supplier_id 또는 supplier_products에서 조회
+        const [prodRow] = await db
+          .select({ primarySupplierId: products.primarySupplierId })
+          .from(products)
+          .where(eq(products.id, productId))
+          .limit(1);
+        supplierId = prodRow?.primarySupplierId || "";
+      }
+      if (!supplierId) {
         const [mapping] = await db
-          .select({ supplierId: sql<string>`supplier_id` })
-          .from(sql`supplier_products`)
-          .where(sql`product_id = ${productId}`)
+          .select({ supplierId: supplierProducts.supplierId })
+          .from(supplierProducts)
+          .where(eq(supplierProducts.productId, productId))
           .limit(1);
         supplierId = mapping?.supplierId || "";
       }
