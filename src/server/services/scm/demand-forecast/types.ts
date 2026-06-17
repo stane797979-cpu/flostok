@@ -10,7 +10,7 @@ export type { ABCGrade };
  * 예측 방법 타입
  */
 export type ForecastMethodType =
-  | "SMA" // Simple Moving Average (단순이동평균)
+  | "WMA" // Weighted Moving Average (가중이동평균)
   | "SES" // Simple Exponential Smoothing (단순지수평활)
   | "Holts"; // Holt's Double Exponential Smoothing (이중지수평활)
 

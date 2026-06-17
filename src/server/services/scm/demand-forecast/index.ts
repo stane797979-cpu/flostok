@@ -9,7 +9,7 @@
 
 import { ForecastInput, ForecastResult, ForecastMethodType, TimeSeriesDataPoint } from "./types";
 import { selectBestMethod } from "./selector";
-import { simpleMovingAverage } from "./methods/simple-moving-average";
+import { weightedMovingAverage } from "./methods/weighted-moving-average";
 import { simpleExponentialSmoothing } from "./methods/exponential-smoothing";
 import { holtsMethod } from "./methods/holts-method";
 import { calculateAllMetrics } from "./accuracy/metrics";
@@ -42,8 +42,8 @@ export function forecastDemandWithMethod(
   params?: Record<string, number>
 ): ForecastResult {
   switch (method) {
-    case "SMA":
-      return simpleMovingAverage(history, periods, params?.windowSize || undefined);
+    case "WMA":
+      return weightedMovingAverage(history, periods, params?.windowSize || undefined);
 
     case "SES":
       return simpleExponentialSmoothing(history, periods, params?.alpha || undefined);
@@ -52,8 +52,8 @@ export function forecastDemandWithMethod(
       return holtsMethod(history, periods, params?.alpha || undefined, params?.beta || undefined);
 
     default:
-      // 기본: SMA
-      return simpleMovingAverage(history, periods);
+      // 기본: WMA
+      return weightedMovingAverage(history, periods);
   }
 }
 
@@ -168,7 +168,7 @@ export function simpleForecast(
 // Export 타입 및 서브 모듈
 export * from "./types";
 export * from "./accuracy/metrics";
-export { simpleMovingAverage, selectOptimalWindowSize } from "./methods/simple-moving-average";
+export { weightedMovingAverage, selectOptimalWindowSize } from "./methods/weighted-moving-average";
 export {
   simpleExponentialSmoothing,
   optimizeAlpha,

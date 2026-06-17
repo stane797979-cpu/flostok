@@ -13,7 +13,7 @@
  */
 
 import { ForecastInput, ForecastResult, ForecastMetadata, ForecastMethod } from "./types";
-import { smaMethod } from "./methods/simple-moving-average";
+import { wmaMethod } from "./methods/weighted-moving-average";
 import { sesMethod, sesMethodWithGrade, simpleExponentialSmoothing, getDefaultAlpha } from "./methods/exponential-smoothing";
 import { holtsMethod_auto, detectTrend } from "./methods/holts-method";
 import { calculateMAPE } from "./accuracy/metrics";
@@ -57,9 +57,9 @@ function extractMetadata(input: ForecastInput): ForecastMetadata {
 function getAvailableMethods(metadata: ForecastMetadata): ForecastMethod[] {
   const methods: ForecastMethod[] = [];
 
-  // SMA: 항상 사용 가능 (최소 1개 데이터)
-  if (metadata.dataMonths >= smaMethod.minDataPoints) {
-    methods.push(smaMethod);
+  // WMA: 항상 사용 가능 (최소 1개 데이터)
+  if (metadata.dataMonths >= wmaMethod.minDataPoints) {
+    methods.push(wmaMethod);
   }
 
   // SES: 3개월 이상
@@ -98,7 +98,7 @@ function getAvailableMethods(metadata: ForecastMetadata): ForecastMethod[] {
     }
   }
 
-  // ABC C등급: 복잡한 방법 제거 (SMA 선호)
+  // ABC C등급: 복잡한 방법 제거 (WMA 선호)
   if (metadata.abcGrade === "C" && methods.length > 1) {
     const filtered = methods.filter((m) => m.name !== "Holts");
     if (filtered.length > 0) return filtered;
@@ -179,7 +179,7 @@ function buildSelectionReason(
   if (metadata.isOverstock) factors.push("재고과다(보수적 조정)");
 
   const methodDesc: Record<string, string> = {
-    SMA: "단순이동평균(SMA)",
+    WMA: "가중이동평균(WMA)",
     SES: `지수평활법(SES, α=${params.alpha?.toFixed(2) ?? "auto"})`,
     Holts: `이중지수평활(Holt's, α=${params.alpha?.toFixed(2) ?? "auto"}, β=${params.beta?.toFixed(2) ?? "auto"})`,
   };
@@ -199,12 +199,12 @@ export function selectBestMethod(input: ForecastInput): ForecastResult {
 
   if (availableMethods.length === 0) {
     return {
-      method: "SMA",
+      method: "WMA",
       parameters: {},
       forecast: Array(input.periods).fill(0),
       mape: 999,
       confidence: "low",
-      selectionReason: "데이터 부족 → 단순이동평균(SMA) 기본값",
+      selectionReason: "데이터 부족 → 가중이동평균(WMA) 기본값",
     };
   }
 
@@ -223,7 +223,7 @@ export function selectBestMethod(input: ForecastInput): ForecastResult {
   // Z등급: 단순 방법 선호
   if (metadata.xyzGrade === "Z") {
     const simpleMethod = validationResults.find(
-      (r) => r.method.name === "SMA" || r.method.name === "SES"
+      (r) => r.method.name === "WMA" || r.method.name === "SES"
     );
     if (simpleMethod && simpleMethod.mape < validationResults[0].mape * 1.2) {
       const result = simpleMethod.method.forecast(values, input.periods);
@@ -298,14 +298,14 @@ function postProcess(
 export function selectMethodByRules(metadata: ForecastMetadata): ForecastMethod {
   const { dataMonths, xyzGrade, abcGrade, hasTrend, yoyGrowthRate } = metadata;
 
-  if (dataMonths < 3) return smaMethod;
+  if (dataMonths < 3) return wmaMethod;
 
-  // C+Z: 항상 SMA
-  if (abcGrade === "C" && xyzGrade === "Z") return smaMethod;
+  // C+Z: 항상 WMA
+  if (abcGrade === "C" && xyzGrade === "Z") return wmaMethod;
 
   if (dataMonths < 6) {
     if (xyzGrade === "X") return sesMethodWithGrade("X");
-    if (xyzGrade === "Z") return smaMethod;
+    if (xyzGrade === "Z") return wmaMethod;
     return sesMethod;
   }
 
@@ -317,7 +317,7 @@ export function selectMethodByRules(metadata: ForecastMetadata): ForecastMethod 
 
   if (xyzGrade === "X") return sesMethodWithGrade("X");
   if (xyzGrade === "Y") return hasTrend ? holtsMethod_auto : sesMethod;
-  if (xyzGrade === "Z") return smaMethod;
+  if (xyzGrade === "Z") return wmaMethod;
 
   return sesMethod;
 }

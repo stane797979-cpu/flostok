@@ -89,7 +89,7 @@ const GRADE_FILTER_OPTIONS = [
 ] as const;
 
 const METHOD_LABELS: Record<string, string> = {
-  SMA: "단순이동평균 (SMA)",
+  WMA: "가중이동평균 (WMA)",
   SES: "지수평활법 (SES)",
   Holts: "이중지수평활 (Holt's)",
 };
@@ -129,7 +129,7 @@ export function DemandForecastChart() {
 
   // 수동/자동 선택 상태
   const [selectionMode, setSelectionMode] = useState<"auto" | "manual">("auto");
-  const [manualMethod, setManualMethod] = useState<string>("SMA");
+  const [manualMethod, setManualMethod] = useState<string>("WMA");
   const [manualAlpha, setManualAlpha] = useState<string>("0.3");
   const [manualBeta, setManualBeta] = useState<string>("0.1");
   const [manualWindowSize, setManualWindowSize] = useState<string>("3");
@@ -181,7 +181,7 @@ export function DemandForecastChart() {
 
       if (productId) options.productId = productId;
       if (mode === "manual" && method) {
-        options.manualMethod = method as "SMA" | "SES" | "Holts";
+        options.manualMethod = method as "WMA" | "SES" | "Holts";
         options.manualParams = params;
       }
 
@@ -214,7 +214,7 @@ export function DemandForecastChart() {
 
   const buildManualParams = () => {
     const params: Record<string, number> = {};
-    if (manualMethod === "SMA") {
+    if (manualMethod === "WMA") {
       params.windowSize = Number(manualWindowSize) || 3;
     } else if (manualMethod === "SES") {
       params.alpha = Number(manualAlpha) || 0.3;
@@ -460,7 +460,7 @@ export function DemandForecastChart() {
                           </TooltipTrigger>
                           <TooltipContent side="top" className="max-w-xs text-xs leading-relaxed">
                             <p className="font-semibold mb-1">예측 방법 비교</p>
-                            <p><strong>SMA</strong>: 최근 N개월 평균. 안정적 수요에 적합</p>
+                            <p><strong>WMA</strong>: 최근 N개월에 선형 가중치 부여. SMA보다 최근 변화에 민감</p>
                             <p><strong>SES</strong>: 최근 데이터에 더 높은 가중치. 변동 수요에 적합</p>
                             <p><strong>Holt&apos;s</strong>: 수요 수준 + 추세(증감) 동시 반영. 지속적 성장/하락 시 적합</p>
                           </TooltipContent>
@@ -471,14 +471,14 @@ export function DemandForecastChart() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="SMA">단순이동평균 (SMA)</SelectItem>
+                          <SelectItem value="WMA">가중이동평균 (WMA)</SelectItem>
                           <SelectItem value="SES">지수평활법 (SES)</SelectItem>
                           <SelectItem value="Holts">이중지수평활 (Holt&apos;s)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
 
-                    {manualMethod === "SMA" && (
+                    {manualMethod === "WMA" && (
                       <div className="space-y-1.5">
                         <div className="flex items-center gap-1">
                           <Label className="text-xs">이동 윈도우 크기</Label>
