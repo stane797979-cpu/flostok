@@ -6,6 +6,7 @@ import { db } from "@/server/db";
 import { products, inboundRecords, inventory, inventoryLots, inventoryHistory } from "@/server/db/schema";
 import { eq, and, isNull, desc, inArray } from "drizzle-orm";
 import { parseExcelBuffer, sheetToJson, parseNumber, parseExcelDate, formatDateToString } from "./parser";
+import { classifyInventoryStatus } from "@/server/services/scm/inventory-status";
 
 /**
  * XLSX 라이브러리 lazy 로딩
@@ -88,6 +89,7 @@ export async function importOtherInboundData(params: {
     .from(products)
     .where(eq(products.organizationId, organizationId));
   const skuMap = new Map(allProducts.map((p) => [p.sku, p]));
+  const productIdMap = new Map(allProducts.map((p) => [p.id, p]));
 
   // 2) 현재 재고 맵 사전 로딩 (DB 쿼리 1회)
   const productIds = allProducts.map((p) => p.id);
@@ -197,10 +199,21 @@ export async function importOtherInboundData(params: {
     const stockBefore = cur ? (cur.currentStock || 0) : 0;
     const stockAfter = stockBefore + totalQty;
 
+    const prod = productIdMap.get(productId);
+    const safetyStock = prod?.safetyStock ?? 0;
+    const reorderPoint = prod?.reorderPoint ?? 0;
+    const statusResult = classifyInventoryStatus({ currentStock: stockAfter, safetyStock, reorderPoint });
+
     if (cur) {
-      await db.update(inventory).set({ currentStock: stockAfter, availableStock: stockAfter, lastUpdatedAt: new Date(), updatedAt: new Date() }).where(eq(inventory.id, cur.id));
+      await db.update(inventory).set({
+        currentStock: stockAfter,
+        availableStock: stockAfter,
+        status: statusResult.key,
+        lastUpdatedAt: new Date(),
+        updatedAt: new Date(),
+      }).where(eq(inventory.id, cur.id));
     } else {
-      invInserts.push({ organizationId, productId, currentStock: stockAfter, availableStock: stockAfter, status: "optimal" });
+      invInserts.push({ organizationId, productId, currentStock: stockAfter, availableStock: stockAfter, status: statusResult.key });
     }
   }
 
