@@ -507,7 +507,7 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
           organizationId: orgId,
           orderNumber,
           supplierId: validated.supplierId,
-          status: "ordered",
+          status: "draft",
           totalAmount,
           orderDate: today.toISOString().split("T")[0],
           expectedDate,
@@ -564,8 +564,8 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
  * received → completed
  */
 const validStatusTransitions: Record<string, string[]> = {
-  draft: ["ordered", "cancelled"],
-  pending: ["approved", "ordered", "cancelled"],
+  draft: ["pending", "cancelled"],
+  pending: ["approved", "draft", "cancelled"],
   approved: ["ordered", "cancelled"],
   ordered: ["confirmed", "shipped", "partially_received", "received", "cancelled"],
   confirmed: ["shipped", "partially_received", "received", "cancelled"],
@@ -1185,7 +1185,7 @@ export async function createBulkPurchaseOrders(input: CreateBulkPurchaseOrdersIn
               organizationId: orgId,
               orderNumber,
               supplierId,
-              status: "ordered",
+              status: "draft",
               totalAmount,
               orderDate: today.toISOString().split("T")[0],
               expectedDate,
