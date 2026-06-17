@@ -308,7 +308,7 @@ export function NotificationTest() {
           이메일 및 SMS 알림을 테스트합니다.
           <br />
           <span className="text-amber-600">
-            ⚠️ Mock 모드 (NOTIFICATIONS_MOCK_MODE=true)일 경우 실제 전송되지 않고 로그만 출력됩니다.
+            Mock 모드 (NOTIFICATIONS_MOCK_MODE=true)일 경우 실제 전송되지 않고 로그만 출력됩니다.
           </span>
         </CardDescription>
       </CardHeader>

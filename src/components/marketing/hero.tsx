@@ -35,7 +35,7 @@ export function Hero() {
             <div className="aspect-[16/9] w-full rounded-md bg-white shadow-2xl ring-1 ring-gray-900/10">
               <div className="flex h-full flex-col items-center justify-center p-8 text-gray-400">
                 <div className="text-center">
-                  <div className="text-6xl font-bold text-gray-300">📊</div>
+                  <div className="text-6xl font-bold text-gray-300">FloStok</div>
                   <p className="mt-4 text-sm">대시보드 스크린샷 영역</p>
                   <p className="mt-2 text-xs text-gray-300">
                     실제 배포 시 대시보드 캡처 이미지로 교체

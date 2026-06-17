@@ -25,6 +25,10 @@ import {
   Calendar,
   ArrowRight,
   CircleDot,
+  Package,
+  FileText,
+  DollarSign,
+  type LucideIcon,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
@@ -72,20 +76,20 @@ export function KPIImprovementCard({ proposal, className }: KPIImprovementCardPr
     },
   };
 
-  const categoryConfig = {
+  const categoryConfig: Record<string, { label: string; icon: LucideIcon; color: string }> = {
     inventory: {
       label: '재고 관리',
-      icon: '📦',
+      icon: Package,
       color: 'bg-purple-50 dark:bg-purple-950',
     },
     order: {
       label: '발주 관리',
-      icon: '📋',
+      icon: FileText,
       color: 'bg-green-50 dark:bg-green-950',
     },
     cost: {
       label: '비용 최적화',
-      icon: '💰',
+      icon: DollarSign,
       color: 'bg-indigo-50 dark:bg-indigo-950',
     },
   };
@@ -141,7 +145,7 @@ export function KPIImprovementCard({ proposal, className }: KPIImprovementCardPr
           {/* 카테고리 및 영향 KPI */}
           <div className="space-y-3">
             <div className="flex items-center gap-3">
-              <span className="text-lg">{catConfig.icon}</span>
+              {(() => { const CatIcon = catConfig.icon; return <CatIcon className="h-5 w-5 text-slate-500" />; })()}
               <div>
                 <p className="text-xs font-medium text-slate-500">카테고리</p>
                 <p className="text-sm font-semibold">{catConfig.label}</p>
@@ -381,8 +385,9 @@ export function KPIImprovementCard({ proposal, className }: KPIImprovementCardPr
               </div>
               <div className="rounded-lg border p-3">
                 <p className="text-xs text-slate-500 mb-1">카테고리</p>
-                <p className="text-sm font-medium">
-                  {catConfig.icon} {catConfig.label}
+                <p className="text-sm font-medium flex items-center gap-1.5">
+                  {(() => { const CatIcon = catConfig.icon; return <CatIcon className="h-4 w-4 text-slate-500" />; })()}
+                  {catConfig.label}
                 </p>
               </div>
             </div>

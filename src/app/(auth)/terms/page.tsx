@@ -225,7 +225,7 @@ export default function TermsPage() {
             시행일: 2026년 2월 11일
           </p>
           <p className="text-xs text-amber-600 mt-2">
-            ⚠️ 본 약관은 초안이며, 법률 전문가의 검수가 필요합니다.
+            본 약관은 초안이며, 법률 전문가의 검수가 필요합니다.
           </p>
         </div>
       </CardContent>

@@ -12,7 +12,7 @@ export default function NDAPage() {
         {/* 안내 메시지 */}
         <div className="mb-12 rounded-lg border border-amber-200 bg-amber-50 p-6">
           <p className="text-sm font-semibold text-amber-900">
-            ⚠️ 법률 검토 필요
+            법률 검토 필요
           </p>
           <p className="mt-2 text-sm leading-6 text-amber-800">
             본 계약서는 참고용 초안이며, 실제 사용 전 반드시 법률 전문가의 검수가 필요합니다.
@@ -276,7 +276,7 @@ export default function NDAPage() {
         {/* 인쇄 안내 */}
         <div className="mt-12 rounded-lg border border-blue-200 bg-blue-50 p-6">
           <p className="text-sm font-semibold text-blue-900">
-            💡 인쇄 안내
+            인쇄 안내
           </p>
           <p className="mt-2 text-sm leading-6 text-blue-800">
             본 계약서는 인쇄 친화적으로 디자인되었습니다. 브라우저의 인쇄 기능(Ctrl+P 또는 Cmd+P)을 이용하여 PDF로 저장하거나 출력할 수 있습니다.
