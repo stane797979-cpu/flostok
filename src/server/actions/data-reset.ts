@@ -28,6 +28,9 @@ import { eq, inArray, sql, and } from 'drizzle-orm'
 
 function revalidateAll(orgId: string) {
   revalidateTag(`analytics-${orgId}`)
+  revalidateTag(`psi-${orgId}`)
+  revalidateTag(`kpi-${orgId}`)
+  revalidateTag(`turnover-${orgId}`)
   revalidatePath('/dashboard')
   revalidatePath('/dashboard/inventory')
   revalidatePath('/dashboard/analytics')
@@ -35,9 +38,11 @@ function revalidateAll(orgId: string) {
   revalidatePath('/dashboard/outbound')
   revalidatePath('/dashboard/orders')
   revalidatePath('/dashboard/suppliers')
+  revalidatePath('/dashboard/psi')
+  revalidatePath('/dashboard/kpi')
 }
 
-/** 재고 전체 초기화 (inventory + inventoryHistory + inventoryLots) */
+/** 재고 전체 초기화 (inventory + inventoryHistory + inventoryLots + psiPlans) */
 export async function resetInventoryData(): Promise<{ success: boolean; error?: string }> {
   try {
     const user = await requireAuth()
@@ -47,6 +52,8 @@ export async function resetInventoryData(): Promise<{ success: boolean; error?: 
       await tx.delete(inventoryLots).where(eq(inventoryLots.organizationId, orgId))
       await tx.delete(inventoryHistory).where(eq(inventoryHistory.organizationId, orgId))
       await tx.delete(inventory).where(eq(inventory.organizationId, orgId))
+      await tx.delete(psiPlans).where(eq(psiPlans.organizationId, orgId))
+      await tx.delete(kpiMonthlySnapshots).where(eq(kpiMonthlySnapshots.organizationId, orgId))
     })
 
     revalidateAll(orgId)
