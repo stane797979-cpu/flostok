@@ -44,6 +44,8 @@ logs/
 
 # Vercel
 .vercel
+.env.vercel.tmp
+.env.vercel*
 
 # TypeScript
 *.tsbuildinfo
