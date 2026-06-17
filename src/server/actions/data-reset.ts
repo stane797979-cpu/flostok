@@ -24,7 +24,7 @@ import {
   psiPlans,
   activityLogs,
 } from '@/server/db/schema'
-import { eq, inArray, sql } from 'drizzle-orm'
+import { eq, inArray, sql, and } from 'drizzle-orm'
 
 function revalidateAll(orgId: string) {
   revalidateTag(`analytics-${orgId}`)
@@ -127,7 +127,11 @@ export async function resetOrdersData(): Promise<{ success: boolean; error?: str
     const orgId = user.organizationId
 
     await db.transaction(async (tx) => {
-      await tx.delete(purchaseOrderItems).where(eq(purchaseOrderItems.organizationId, orgId))
+      // purchase_order_items에는 organizationId가 없어 purchaseOrderId 경유
+      const poIds = await tx.select({ id: purchaseOrders.id }).from(purchaseOrders).where(eq(purchaseOrders.organizationId, orgId))
+      if (poIds.length > 0) {
+        await tx.delete(purchaseOrderItems).where(inArray(purchaseOrderItems.purchaseOrderId, poIds.map((p) => p.id)))
+      }
       await tx.delete(purchaseOrders).where(eq(purchaseOrders.organizationId, orgId))
     })
 
@@ -146,11 +150,11 @@ export async function resetAllData(): Promise<{ success: boolean; error?: string
     const orgId = user.organizationId
 
     await db.transaction(async (tx) => {
-      // FK 제약 임시 비활성화
-      await tx.execute(sql`SET CONSTRAINTS ALL DEFERRED`)
-
-      // leaf 테이블 먼저
-      await tx.delete(purchaseOrderItems).where(eq(purchaseOrderItems.organizationId, orgId))
+      // leaf 테이블 먼저 (organizationId 없는 테이블은 부모 ID 경유)
+      const poIds = await tx.select({ id: purchaseOrders.id }).from(purchaseOrders).where(eq(purchaseOrders.organizationId, orgId))
+      if (poIds.length > 0) {
+        await tx.delete(purchaseOrderItems).where(inArray(purchaseOrderItems.purchaseOrderId, poIds.map((p) => p.id)))
+      }
       await tx.delete(inventoryLots).where(eq(inventoryLots.organizationId, orgId))
       await tx.delete(inventoryHistory).where(eq(inventoryHistory.organizationId, orgId))
       await tx.delete(outboundRequests).where(eq(outboundRequests.organizationId, orgId))
