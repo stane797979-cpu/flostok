@@ -30,6 +30,7 @@ interface ProductExportRow {
 }
 
 interface SalesExportRow {
+  출고번호: string;
   날짜: string;
   SKU: string;
   제품명: string;
@@ -113,11 +114,13 @@ export async function generateSalesExcel(
     unitPrice: number | null;
     totalAmount: number | null;
     channel: string | null;
+    outboundNumber: string | null;
     notes: string | null;
   }>
 ): Promise<ArrayBuffer> {
   const XLSX = await getXLSX();
   const rows: SalesExportRow[] = sales.map((s) => ({
+    출고번호: s.outboundNumber || "",
     날짜: s.date,
     SKU: s.sku,
     제품명: s.productName,
@@ -132,6 +135,7 @@ export async function generateSalesExcel(
   const worksheet = XLSX.utils.json_to_sheet(rows);
 
   worksheet["!cols"] = [
+    { wch: 18 }, // 출고번호
     { wch: 12 }, // 날짜
     { wch: 14 }, // SKU
     { wch: 30 }, // 제품명

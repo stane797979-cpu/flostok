@@ -16,6 +16,7 @@ export const salesRecords = pgTable("sales_records", {
   unitPrice: integer("unit_price"), // 판매단가 (원)
   totalAmount: integer("total_amount"), // 총 판매금액 (원)
   channel: text("channel"), // 판매 채널 (온라인, 오프라인, B2B 등)
+  outboundNumber: text("outbound_number"), // 출고번호 (OR-YYYYMMDD-연번)
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [

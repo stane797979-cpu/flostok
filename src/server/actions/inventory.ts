@@ -43,6 +43,7 @@ const inventoryTransactionSchema = z.object({
   ] as const),
   quantity: z.coerce.number().min(1, "수량은 1 이상이어야 합니다"),
   referenceId: z.string().uuid().optional(),
+  outboundNumber: z.string().optional(),
   notes: z.string().optional(),
   location: z.string().optional(),
 });
@@ -334,6 +335,7 @@ export async function processInventoryTransaction(input: InventoryTransactionInp
       changeType: changeTypeInfo.key,
       referenceId: validated.referenceId,
       referenceType: changeTypeInfo.referenceType,
+      outboundNumber: validated.outboundNumber || null,
       notes: lotNotes || null,
     });
 

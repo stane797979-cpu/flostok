@@ -16,6 +16,13 @@ import type { ExcelImportResult, ExcelImportError, SalesRecordExcelRow } from ".
 import { processInventoryTransaction } from "@/server/actions/inventory";
 import type { InventoryChangeTypeKey } from "@/server/services/inventory/types";
 
+function generateOutboundNumber(): string {
+  const now = new Date();
+  const dateStr = now.toISOString().slice(0, 10).replace(/-/g, ""); // YYYYMMDD
+  const random = Math.floor(Math.random() * 1000).toString().padStart(3, "0");
+  return `OR-${dateStr}-${random}`;
+}
+
 let _xlsx: typeof import("xlsx") | null = null;
 async function getXLSX() {
   if (!_xlsx) _xlsx = await import("xlsx");
@@ -333,6 +340,7 @@ export async function importSalesData(
     const existingSet = new Set(existingRecords.map((r) => `${r.productId}::${r.date}`));
 
     // 5. 신규/중복 분류
+    const outboundNumber = generateOutboundNumber();
     const toInsert: typeof salesRecords.$inferInsert[] = [];
 
     for (const r of validRows) {
@@ -353,6 +361,7 @@ export async function importSalesData(
         totalAmount: r.quantity * r.unitPrice,
         channel: r.channel,
         notes: r.notes,
+        outboundNumber,
       });
       successData.push(r.original);
     }

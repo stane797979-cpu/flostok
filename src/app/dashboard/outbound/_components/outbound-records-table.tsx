@@ -123,7 +123,6 @@ export function OutboundRecordsTable({ records, onEdit, onDelete }: OutboundReco
                 <SortIcon field="changeTypeLabel" sortField={sortField} sortDirection={sortDirection} />
               </button>
             </TableHead>
-            <TableHead>채널</TableHead>
             <TableHead className="text-right">
               <button onClick={() => handleSort("changeAmount")} className="ml-auto flex items-center gap-1 hover:text-slate-900">
                 출고수량

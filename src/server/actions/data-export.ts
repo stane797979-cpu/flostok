@@ -118,6 +118,7 @@ export async function exportSalesToExcel(): Promise<{
         unitPrice: salesRecords.unitPrice,
         totalAmount: salesRecords.totalAmount,
         channel: salesRecords.channel,
+        outboundNumber: salesRecords.outboundNumber,
         notes: salesRecords.notes,
       })
       .from(salesRecords)

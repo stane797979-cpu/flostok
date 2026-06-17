@@ -415,6 +415,7 @@ export async function confirmOutboundRequest(
           | "OUTBOUND_RETURN",
         quantity: item.confirmedQuantity,
         referenceId: validated.requestId,
+        outboundNumber: request.requestNumber,
         notes: validated.notes,
       });
 

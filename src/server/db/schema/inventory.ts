@@ -67,6 +67,7 @@ export const inventoryHistory = pgTable("inventory_history", {
   changeType: text("change_type").notNull(), // inbound, outbound, adjustment, sale
   referenceId: uuid("reference_id"), // 관련 문서 ID (발주서, 판매기록 등)
   referenceType: text("reference_type"), // purchase_order, sale, adjustment
+  outboundNumber: text("outbound_number"), // 출고번호 (OR-YYYYMMDD-연번)
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
