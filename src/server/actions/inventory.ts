@@ -187,14 +187,13 @@ export async function getInventoryList(options?: {
           ? Math.round((row.currentStock / avgDailyOutbound) * 100) / 100
           : null;
 
-      const testAllocated = allocatedStock > 0 ? allocatedStock : 5; // 테스트용 임시값
       return {
         id: row.id,
         organizationId: row.organizationId,
         productId: row.productId,
         currentStock: row.currentStock,
-        allocatedStock: testAllocated,
-        availableStock: row.currentStock - testAllocated,
+        allocatedStock,
+        availableStock: row.currentStock - allocatedStock,
         reservedStock: row.reservedStock,
         incomingStock: row.incomingStock,
         status: row.status,
