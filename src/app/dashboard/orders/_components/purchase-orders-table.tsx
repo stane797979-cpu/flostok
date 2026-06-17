@@ -151,7 +151,7 @@ export function PurchaseOrdersTable({ orders, onViewClick, onDownloadClick, sele
       case "draft":
         return <Badge variant="outline">초안</Badge>;
       case "pending":
-        return <Badge className="bg-yellow-500">결재 진행중</Badge>;
+        return <Badge className="bg-yellow-500">승인대기</Badge>;
       case "approved":
         return <Badge className="bg-indigo-500">승인됨</Badge>;
       case "ordered":
