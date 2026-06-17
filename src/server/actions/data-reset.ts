@@ -4,6 +4,7 @@ import { revalidatePath, revalidateTag } from 'next/cache'
 import { requireAuth } from './auth-helpers'
 import { db } from '@/server/db'
 import {
+  products,
   inventory,
   inventoryHistory,
   inventoryLots,
@@ -152,6 +153,8 @@ export async function resetAllData(): Promise<{ success: boolean; error?: string
       await tx.delete(importShipments).where(eq(importShipments.organizationId, orgId))
       await tx.delete(psiPlans).where(eq(psiPlans.organizationId, orgId))
       await tx.delete(activityLogs).where(eq(activityLogs.organizationId, orgId))
+      // 마스터 데이터 (제품)
+      await tx.delete(products).where(eq(products.organizationId, orgId))
     })
 
     revalidateAll(orgId)
