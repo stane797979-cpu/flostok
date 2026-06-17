@@ -747,6 +747,14 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
 
                 {/* 기존 액션 버튼 */}
                 <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open(`/api/purchase-orders/${orderId}/html`, "_blank")}
+                  >
+                    <FileText className="mr-2 h-4 w-4" />
+                    발주서 보기
+                  </Button>
                   <Button variant="outline" size="sm" onClick={handleDownloadClick}>
                     <Download className="mr-2 h-4 w-4" />
                     발주서 다운로드
