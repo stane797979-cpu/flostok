@@ -346,7 +346,7 @@ export function KpiMonthlyTrendTable({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[100px]">
+                <TableHead className="w-[100px] whitespace-nowrap">
                   <button
                     className="flex items-center justify-start hover:text-foreground transition-colors"
                     onClick={() => handleSort("month")}
@@ -359,7 +359,7 @@ export function KpiMonthlyTrendTable({
                     />
                   </button>
                 </TableHead>
-                <TableHead className="text-center">
+                <TableHead className="whitespace-nowrap text-center">
                   <button
                     className="flex items-center justify-center w-full hover:text-foreground transition-colors"
                     onClick={() => handleSort("inventoryTurnoverRate")}
@@ -372,7 +372,7 @@ export function KpiMonthlyTrendTable({
                     />
                   </button>
                 </TableHead>
-                <TableHead className="text-center">
+                <TableHead className="whitespace-nowrap text-center">
                   <button
                     className="flex items-center justify-center w-full hover:text-foreground transition-colors"
                     onClick={() => handleSort("stockoutRate")}
@@ -385,7 +385,7 @@ export function KpiMonthlyTrendTable({
                     />
                   </button>
                 </TableHead>
-                <TableHead className="text-center">
+                <TableHead className="whitespace-nowrap text-center">
                   <button
                     className="flex items-center justify-center w-full hover:text-foreground transition-colors"
                     onClick={() => handleSort("onTimeOrderRate")}
@@ -398,7 +398,7 @@ export function KpiMonthlyTrendTable({
                     />
                   </button>
                 </TableHead>
-                <TableHead className="text-center">
+                <TableHead className="whitespace-nowrap text-center">
                   <button
                     className="flex items-center justify-center w-full hover:text-foreground transition-colors"
                     onClick={() => handleSort("orderFulfillmentRate")}

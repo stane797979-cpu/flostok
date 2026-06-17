@@ -215,7 +215,7 @@ export function FulfillmentRateTable({ data }: FulfillmentRateTableProps) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>
+                <TableHead className="whitespace-nowrap">
                   <button
                     onClick={() => handleSort("sku")}
                     className="flex items-center hover:text-foreground transition-colors"
@@ -224,7 +224,7 @@ export function FulfillmentRateTable({ data }: FulfillmentRateTableProps) {
                     <SortIcon field="sku" currentField={sortField} direction={sortDirection} />
                   </button>
                 </TableHead>
-                <TableHead>
+                <TableHead className="whitespace-nowrap">
                   <button
                     onClick={() => handleSort("name")}
                     className="flex items-center hover:text-foreground transition-colors"
@@ -233,7 +233,7 @@ export function FulfillmentRateTable({ data }: FulfillmentRateTableProps) {
                     <SortIcon field="name" currentField={sortField} direction={sortDirection} />
                   </button>
                 </TableHead>
-                <TableHead className="text-center">
+                <TableHead className="whitespace-nowrap text-center">
                   <button
                     onClick={() => handleSort("period")}
                     className="flex items-center mx-auto hover:text-foreground transition-colors"
@@ -242,7 +242,7 @@ export function FulfillmentRateTable({ data }: FulfillmentRateTableProps) {
                     <SortIcon field="period" currentField={sortField} direction={sortDirection} />
                   </button>
                 </TableHead>
-                <TableHead className="text-right">
+                <TableHead className="whitespace-nowrap text-right">
                   <button
                     onClick={() => handleSort("forecastQty")}
                     className="flex items-center ml-auto hover:text-foreground transition-colors"
@@ -251,7 +251,7 @@ export function FulfillmentRateTable({ data }: FulfillmentRateTableProps) {
                     <SortIcon field="forecastQty" currentField={sortField} direction={sortDirection} />
                   </button>
                 </TableHead>
-                <TableHead className="text-right">
+                <TableHead className="whitespace-nowrap text-right">
                   <button
                     onClick={() => handleSort("actualQty")}
                     className="flex items-center ml-auto hover:text-foreground transition-colors"
@@ -260,7 +260,7 @@ export function FulfillmentRateTable({ data }: FulfillmentRateTableProps) {
                     <SortIcon field="actualQty" currentField={sortField} direction={sortDirection} />
                   </button>
                 </TableHead>
-                <TableHead className="text-right">
+                <TableHead className="whitespace-nowrap text-right">
                   <button
                     onClick={() => handleSort("diff")}
                     className="flex items-center ml-auto hover:text-foreground transition-colors"
@@ -269,7 +269,7 @@ export function FulfillmentRateTable({ data }: FulfillmentRateTableProps) {
                     <SortIcon field="diff" currentField={sortField} direction={sortDirection} />
                   </button>
                 </TableHead>
-                <TableHead className="text-center">
+                <TableHead className="whitespace-nowrap text-center">
                   <button
                     onClick={() => handleSort("fulfillmentRate")}
                     className="flex items-center mx-auto hover:text-foreground transition-colors"

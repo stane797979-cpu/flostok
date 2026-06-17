@@ -240,7 +240,7 @@ export function GradeChangeTable({ data }: GradeChangeTableProps) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>
+                <TableHead className="whitespace-nowrap">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -251,7 +251,7 @@ export function GradeChangeTable({ data }: GradeChangeTableProps) {
                     <SortIcon field="sku" currentField={sortField} currentDirection={sortDirection} />
                   </Button>
                 </TableHead>
-                <TableHead>
+                <TableHead className="whitespace-nowrap">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -262,7 +262,7 @@ export function GradeChangeTable({ data }: GradeChangeTableProps) {
                     <SortIcon field="name" currentField={sortField} currentDirection={sortDirection} />
                   </Button>
                 </TableHead>
-                <TableHead className="text-center">
+                <TableHead className="whitespace-nowrap text-center">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -273,7 +273,7 @@ export function GradeChangeTable({ data }: GradeChangeTableProps) {
                     <SortIcon field="prevGrade" currentField={sortField} currentDirection={sortDirection} />
                   </Button>
                 </TableHead>
-                <TableHead className="text-center">
+                <TableHead className="whitespace-nowrap text-center">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -284,7 +284,7 @@ export function GradeChangeTable({ data }: GradeChangeTableProps) {
                     <SortIcon field="currentGrade" currentField={sortField} currentDirection={sortDirection} />
                   </Button>
                 </TableHead>
-                <TableHead className="text-center">
+                <TableHead className="whitespace-nowrap text-center">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -295,7 +295,7 @@ export function GradeChangeTable({ data }: GradeChangeTableProps) {
                     <SortIcon field="changeType" currentField={sortField} currentDirection={sortDirection} />
                   </Button>
                 </TableHead>
-                <TableHead className="text-center">
+                <TableHead className="whitespace-nowrap text-center">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -306,8 +306,8 @@ export function GradeChangeTable({ data }: GradeChangeTableProps) {
                     <SortIcon field="riskLevel" currentField={sortField} currentDirection={sortDirection} />
                   </Button>
                 </TableHead>
-                <TableHead>관리신호</TableHead>
-                <TableHead>실행방안</TableHead>
+                <TableHead className="whitespace-nowrap">관리신호</TableHead>
+                <TableHead className="whitespace-nowrap">실행방안</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

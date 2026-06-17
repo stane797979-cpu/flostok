@@ -253,55 +253,55 @@ export function ReorderItemsTable({
                   <SortIcon columnKey="urgency" />
                 </div>
               </TableHead>
-              <TableHead className={cn("w-[120px]", sortableHeadClass)} onClick={() => handleSort("sku")}>
+              <TableHead className={cn("w-[120px] whitespace-nowrap", sortableHeadClass)} onClick={() => handleSort("sku")}>
                 <div className="flex items-center">
                   SKU{sortLabel("sku")}
                   <SortIcon columnKey="sku" />
                 </div>
               </TableHead>
-              <TableHead className={sortableHeadClass} onClick={() => handleSort("name")}>
+              <TableHead className={cn("whitespace-nowrap", sortableHeadClass)} onClick={() => handleSort("name")}>
                 <div className="flex items-center">
                   제품명{sortLabel("name")}
                   <SortIcon columnKey="name" />
                 </div>
               </TableHead>
-              <TableHead className={cn("text-right", sortableHeadClass)} onClick={() => handleSort("currentStock")}>
+              <TableHead className={cn("whitespace-nowrap text-right", sortableHeadClass)} onClick={() => handleSort("currentStock")}>
                 <div className="flex items-center justify-end">
                   현재고{sortLabel("currentStock")}
                   <SortIcon columnKey="currentStock" />
                 </div>
               </TableHead>
-              <TableHead className={cn("text-right", sortableHeadClass)} onClick={() => handleSort("safetyStock")}>
+              <TableHead className={cn("whitespace-nowrap text-right", sortableHeadClass)} onClick={() => handleSort("safetyStock")}>
                 <div className="flex items-center justify-end">
                   안전재고{sortLabel("safetyStock")}
                   <SortIcon columnKey="safetyStock" />
                 </div>
               </TableHead>
-              <TableHead className={cn("text-right", sortableHeadClass)} onClick={() => handleSort("reorderPoint")}>
+              <TableHead className={cn("whitespace-nowrap text-right", sortableHeadClass)} onClick={() => handleSort("reorderPoint")}>
                 <div className="flex items-center justify-end">
                   발주점{sortLabel("reorderPoint")}
                   <SortIcon columnKey="reorderPoint" />
                 </div>
               </TableHead>
-              <TableHead className={cn("text-right", sortableHeadClass)} onClick={() => handleSort("daysOfInventory")}>
+              <TableHead className={cn("whitespace-nowrap text-right", sortableHeadClass)} onClick={() => handleSort("daysOfInventory")}>
                 <div className="flex items-center justify-end">
                   재고일수{sortLabel("daysOfInventory")}
                   <SortIcon columnKey="daysOfInventory" />
                 </div>
               </TableHead>
-              <TableHead className={cn("text-right", sortableHeadClass)} onClick={() => handleSort("recommendedQty")}>
+              <TableHead className={cn("whitespace-nowrap text-right", sortableHeadClass)} onClick={() => handleSort("recommendedQty")}>
                 <div className="flex items-center justify-end">
                   추천수량{sortLabel("recommendedQty")}
                   <SortIcon columnKey="recommendedQty" />
                 </div>
               </TableHead>
-              <TableHead className={sortableHeadClass} onClick={() => handleSort("supplier")}>
+              <TableHead className={cn("whitespace-nowrap", sortableHeadClass)} onClick={() => handleSort("supplier")}>
                 <div className="flex items-center">
                   공급자{sortLabel("supplier")}
                   <SortIcon columnKey="supplier" />
                 </div>
               </TableHead>
-              <TableHead className="w-[100px] text-right">액션</TableHead>
+              <TableHead className="w-[100px] whitespace-nowrap text-right">액션</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

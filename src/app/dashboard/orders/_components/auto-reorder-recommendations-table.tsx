@@ -482,8 +482,8 @@ export function AutoReorderRecommendationsTable({
                   </span>
                 </div>
               </TableHead>
-              <TableHead>예상입고일</TableHead>
-              <TableHead className="min-w-[150px]">발주 사유</TableHead>
+              <TableHead className="whitespace-nowrap">예상입고일</TableHead>
+              <TableHead className="whitespace-nowrap min-w-[150px]">발주 사유</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

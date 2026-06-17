@@ -93,56 +93,56 @@ export function OutboundRecordsTable({ records, onEdit, onDelete }: OutboundReco
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>
+            <TableHead className="whitespace-nowrap">
               <button onClick={() => handleSort("date")} className="flex items-center gap-1 hover:text-slate-900">
                 날짜
                 <SortIcon field="date" sortField={sortField} sortDirection={sortDirection} />
               </button>
             </TableHead>
-            <TableHead>
+            <TableHead className="whitespace-nowrap">
               <button onClick={() => handleSort("outboundNumber")} className="flex items-center gap-1 hover:text-slate-900">
                 출고번호
                 <SortIcon field="outboundNumber" sortField={sortField} sortDirection={sortDirection} />
               </button>
             </TableHead>
-            <TableHead className="w-[100px]">
+            <TableHead className="whitespace-nowrap w-[100px]">
               <button onClick={() => handleSort("productSku")} className="flex items-center gap-1 hover:text-slate-900">
                 SKU
                 <SortIcon field="productSku" sortField={sortField} sortDirection={sortDirection} />
               </button>
             </TableHead>
-            <TableHead>
+            <TableHead className="whitespace-nowrap">
               <button onClick={() => handleSort("productName")} className="flex items-center gap-1 hover:text-slate-900">
                 제품명
                 <SortIcon field="productName" sortField={sortField} sortDirection={sortDirection} />
               </button>
             </TableHead>
-            <TableHead>
+            <TableHead className="whitespace-nowrap">
               <button onClick={() => handleSort("changeTypeLabel")} className="flex items-center gap-1 hover:text-slate-900">
                 유형
                 <SortIcon field="changeTypeLabel" sortField={sortField} sortDirection={sortDirection} />
               </button>
             </TableHead>
-            <TableHead>채널</TableHead>
-            <TableHead className="text-right">
+            <TableHead className="whitespace-nowrap">채널</TableHead>
+            <TableHead className="whitespace-nowrap text-right">
               <button onClick={() => handleSort("changeAmount")} className="ml-auto flex items-center gap-1 hover:text-slate-900">
                 출고수량
                 <SortIcon field="changeAmount" sortField={sortField} sortDirection={sortDirection} />
               </button>
             </TableHead>
-            <TableHead className="text-right">
+            <TableHead className="whitespace-nowrap text-right">
               <button onClick={() => handleSort("stockBefore")} className="ml-auto flex items-center gap-1 hover:text-slate-900">
                 변동 전
                 <SortIcon field="stockBefore" sortField={sortField} sortDirection={sortDirection} />
               </button>
             </TableHead>
-            <TableHead className="text-right">
+            <TableHead className="whitespace-nowrap text-right">
               <button onClick={() => handleSort("stockAfter")} className="ml-auto flex items-center gap-1 hover:text-slate-900">
                 변동 후
                 <SortIcon field="stockAfter" sortField={sortField} sortDirection={sortDirection} />
               </button>
             </TableHead>
-            <TableHead>비고</TableHead>
+            <TableHead className="whitespace-nowrap">비고</TableHead>
             <TableHead className="w-[50px]" />
           </TableRow>
         </TableHeader>
