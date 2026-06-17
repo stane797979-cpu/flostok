@@ -297,7 +297,7 @@ export function InboundConfirmDialog({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[100px]">SKU</TableHead>
+                  <TableHead className="w-[100px] whitespace-nowrap">SKU</TableHead>
                   <TableHead>제품명</TableHead>
                   <TableHead className="w-[100px] text-center">발주수량</TableHead>
                   <TableHead className="w-[100px] text-center">기입고</TableHead>
@@ -314,7 +314,7 @@ export function InboundConfirmDialog({
 
                   return (
                     <TableRow key={item.orderItemId}>
-                      <TableCell className="font-mono text-sm">
+                      <TableCell className="font-mono text-sm whitespace-nowrap">
                         {item.productSku}
                       </TableCell>
                       <TableCell>

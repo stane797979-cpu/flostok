@@ -177,7 +177,7 @@ export function ABCXYZTable({ products, selectedGrade }: ABCXYZTableProps) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-24">SKU</TableHead>
+                <TableHead className="w-[140px] whitespace-nowrap">SKU</TableHead>
                 <TableHead>
                   <button onClick={() => handleSort("name")} className="flex items-center gap-1 hover:text-slate-900">
                     제품명 <SortIcon field="name" />
@@ -227,7 +227,7 @@ export function ABCXYZTable({ products, selectedGrade }: ABCXYZTableProps) {
               ) : (
                 pagedProducts.map((product) => (
                   <TableRow key={product.id}>
-                    <TableCell className="font-mono text-sm">{product.sku}</TableCell>
+                    <TableCell className="font-mono text-sm whitespace-nowrap">{product.sku}</TableCell>
                     <TableCell className="font-medium">{product.name}</TableCell>
                     <TableCell className="text-center">
                       <Badge className={ABC_BADGE_COLORS[product.abcGrade]}>

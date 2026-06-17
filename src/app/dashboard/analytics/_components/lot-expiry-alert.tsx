@@ -287,7 +287,7 @@ export function LotExpiryAlert({ data, className }: LotExpiryAlertProps) {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="min-w-[120px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("lotNumber")}>로트번호<SortIcon column="lotNumber" sortKey={sortKey} sortDir={sortDir} /></TableHead>
-                    <TableHead className="min-w-[90px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("sku")}>SKU<SortIcon column="sku" sortKey={sortKey} sortDir={sortDir} /></TableHead>
+                    <TableHead className="min-w-[90px] whitespace-nowrap cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("sku")}>SKU<SortIcon column="sku" sortKey={sortKey} sortDir={sortDir} /></TableHead>
                     <TableHead className="min-w-[160px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("productName")}>제품명<SortIcon column="productName" sortKey={sortKey} sortDir={sortDir} /></TableHead>
                     <TableHead className="min-w-[120px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("warehouseName")}>창고<SortIcon column="warehouseName" sortKey={sortKey} sortDir={sortDir} /></TableHead>
                     <TableHead className="min-w-[110px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("expiryDate")}>만료일<SortIcon column="expiryDate" sortKey={sortKey} sortDir={sortDir} /></TableHead>
@@ -309,7 +309,7 @@ export function LotExpiryAlert({ data, className }: LotExpiryAlertProps) {
                       )}
                     >
                       <TableCell className="font-mono text-sm">{lot.lotNumber}</TableCell>
-                      <TableCell className="font-medium">{lot.sku}</TableCell>
+                      <TableCell className="font-medium whitespace-nowrap">{lot.sku}</TableCell>
                       <TableCell>
                         <span className="truncate block max-w-[200px]" title={lot.productName}>{lot.productName}</span>
                       </TableCell>

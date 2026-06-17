@@ -448,7 +448,7 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-[100px]">SKU</TableHead>
+                        <TableHead className="w-[100px] whitespace-nowrap">SKU</TableHead>
                         <TableHead>제품명</TableHead>
                         <TableHead className="w-[80px] text-center">단위</TableHead>
                         <TableHead className="w-[100px] text-right">발주수량</TableHead>
@@ -465,7 +465,7 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
 
                         return (
                           <TableRow key={item.id}>
-                            <TableCell className="font-mono text-sm">
+                            <TableCell className="font-mono text-sm whitespace-nowrap">
                               {item.product.sku}
                             </TableCell>
                             <TableCell className="font-medium">{item.product.name}</TableCell>

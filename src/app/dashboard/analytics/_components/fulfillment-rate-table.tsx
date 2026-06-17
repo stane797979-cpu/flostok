@@ -283,7 +283,7 @@ export function FulfillmentRateTable({ data }: FulfillmentRateTableProps) {
             <TableBody>
               {sortedItems.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((item, idx) => (
                 <TableRow key={`${item.productId}-${item.period}-${idx}`}>
-                  <TableCell className="font-medium text-xs">{item.sku}</TableCell>
+                  <TableCell className="font-medium text-xs whitespace-nowrap">{item.sku}</TableCell>
                   <TableCell className="max-w-[120px] truncate" title={item.name}>{item.name}</TableCell>
                   <TableCell className="text-center text-xs">{item.period.substring(0, 7)}</TableCell>
                   <TableCell className="text-right">

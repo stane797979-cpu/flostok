@@ -420,7 +420,7 @@ export function InventoryTurnover({ data, className }: InventoryTurnoverProps) {
             <TableBody>
               {sortedData.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((item) => (
                 <TableRow key={item.id}>
-                  <TableCell className="font-medium">{item.sku}</TableCell>
+                  <TableCell className="font-medium whitespace-nowrap">{item.sku}</TableCell>
                   <TableCell>{item.name}</TableCell>
                   <TableCell className="text-right">
                     {item.annualRevenue.toLocaleString("ko-KR")}원

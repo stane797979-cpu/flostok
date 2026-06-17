@@ -507,7 +507,7 @@ export function AutoReorderRecommendationsTable({
                   </TableCell>
                   <TableCell>{getStatusBadge(recommendation.status)}</TableCell>
                   <TableCell>{getUrgencyBadge(recommendation.urgencyLevel)}</TableCell>
-                  <TableCell className="font-mono text-xs">{recommendation.sku}</TableCell>
+                  <TableCell className="font-mono text-xs whitespace-nowrap">{recommendation.sku}</TableCell>
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-2">
                       <Package className="h-4 w-4 text-slate-400" />

@@ -361,7 +361,7 @@ export function InventoryAging({ data, className }: InventoryAgingProps) {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="min-w-[90px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("sku")}>SKU<SortIcon column="sku" sortKey={sortKey} sortDir={sortDir} /></TableHead>
+                    <TableHead className="min-w-[90px] whitespace-nowrap cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("sku")}>SKU<SortIcon column="sku" sortKey={sortKey} sortDir={sortDir} /></TableHead>
                     <TableHead className="min-w-[140px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("name")}>제품명<SortIcon column="name" sortKey={sortKey} sortDir={sortDir} /></TableHead>
                     <TableHead className="text-right min-w-[80px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("currentStock")}>현재고<SortIcon column="currentStock" sortKey={sortKey} sortDir={sortDir} /></TableHead>
                     <TableHead className="text-right min-w-[100px] cursor-pointer select-none hover:text-foreground" onClick={() => handleSort("inventoryValue")}>재고금액<SortIcon column="inventoryValue" sortKey={sortKey} sortDir={sortDir} /></TableHead>
@@ -379,7 +379,7 @@ export function InventoryAging({ data, className }: InventoryAgingProps) {
                           "bg-red-50 hover:bg-red-100 dark:bg-red-950/20 dark:hover:bg-red-950/30"
                       )}
                     >
-                      <TableCell className="font-medium">{product.sku}</TableCell>
+                      <TableCell className="font-medium whitespace-nowrap">{product.sku}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1.5">
                           {product.isDeadStock && (

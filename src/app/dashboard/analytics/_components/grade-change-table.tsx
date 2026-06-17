@@ -313,7 +313,7 @@ export function GradeChangeTable({ data }: GradeChangeTableProps) {
             <TableBody>
               {sortedChanges.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((item) => (
                 <TableRow key={item.productId}>
-                  <TableCell className="font-medium text-xs">{item.sku}</TableCell>
+                  <TableCell className="font-medium text-xs whitespace-nowrap">{item.sku}</TableCell>
                   <TableCell className="max-w-[120px] truncate" title={item.name}>{item.name}</TableCell>
                   <TableCell className="text-center">
                     {item.prevGrade ? (

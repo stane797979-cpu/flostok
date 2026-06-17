@@ -268,7 +268,7 @@ export function OutboundConfirmDialog({
                   <TableHeader>
                     <TableRow>
                       <TableHead>제품</TableHead>
-                      <TableHead>SKU</TableHead>
+                      <TableHead className="whitespace-nowrap">SKU</TableHead>
                       <TableHead className="text-right">요청수량</TableHead>
                       <TableHead className="text-right">현재고</TableHead>
                       <TableHead className="text-right">확인수량</TableHead>
@@ -287,7 +287,7 @@ export function OutboundConfirmDialog({
                           <TableCell className="font-medium">
                             {item.productName}
                           </TableCell>
-                          <TableCell className="text-slate-500">
+                          <TableCell className="text-slate-500 whitespace-nowrap">
                             {item.productSku}
                           </TableCell>
                           <TableCell className="text-right">

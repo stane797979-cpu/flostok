@@ -314,7 +314,7 @@ export function ReorderItemsTable({
                   />
                 </TableCell>
                 <TableCell>{getUrgencyBadge(item.urgencyLevel)}</TableCell>
-                <TableCell className="font-mono text-xs">{item.sku}</TableCell>
+                <TableCell className="font-mono text-xs whitespace-nowrap">{item.sku}</TableCell>
                 <TableCell className="font-medium">{item.productName}</TableCell>
                 <TableCell className="text-right">{item.currentStock}</TableCell>
                 <TableCell className="text-right">{item.safetyStock}</TableCell>
