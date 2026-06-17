@@ -34,8 +34,9 @@ const IMPORT_OPTIONS: ImportOption[] = [
   {
     type: "products",
     title: "제품 마스터",
-    description: "제품 정보(SKU, 제품명, 카테고리, 단가 등)를 일괄 등록/수정합니다.",
+    description: "제품 정보(SKU, 제품명, 카테고리, 단가 등)를 일괄 등록/수정합니다. 재고수량 컬럼을 채우면 기초 재고도 함께 등록됩니다.",
     icon: Package,
+    badge: "기초재고 포함",
   },
   {
     type: "sales",
