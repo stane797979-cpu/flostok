@@ -14,7 +14,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { FileSpreadsheet, Upload, Download, Package, ShoppingCart, Loader2, Trash2, AlertTriangle, PackageOpen } from "lucide-react";
+import { FileSpreadsheet, Upload, Download, Package, ShoppingCart, Loader2, Trash2, AlertTriangle, PackageOpen, Info } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ExcelImportDialog } from "@/components/features/excel";
 import type { ImportType } from "@/server/actions/excel-import";
 import { exportProductsToExcel, exportSalesToExcel } from "@/server/actions/data-export";
@@ -26,6 +27,7 @@ interface ImportOption {
   description: string;
   icon: typeof Package;
   badge?: string;
+  tooltip?: string;
 }
 
 const IMPORT_OPTIONS: ImportOption[] = [
@@ -47,6 +49,7 @@ const IMPORT_OPTIONS: ImportOption[] = [
     title: "입고 데이터",
     description: "반품·조정·이동 입고 데이터를 일괄 등록합니다.",
     icon: PackageOpen,
+    tooltip: "발주 입고(구매 입고)는 이 메뉴가 아닌 발주관리 > 발주현황에서 입고 처리해야 합니다. 이 임포트는 반품·재고조정·창고 간 이동 입고만 지원합니다.",
   },
 ];
 
@@ -220,6 +223,18 @@ export function DataManagement() {
                         <Badge variant="secondary" className="text-xs">
                           {option.badge}
                         </Badge>
+                      )}
+                      {option.tooltip && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Info className="h-3.5 w-3.5 cursor-pointer text-amber-500" />
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-72 text-xs">
+                              {option.tooltip}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       )}
                     </div>
                     <p className="mt-1 text-sm text-slate-500">{option.description}</p>
