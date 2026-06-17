@@ -49,6 +49,8 @@ export interface SalesRecordExcelRow {
   channel?: string;
   /** 출고유형 (선택): 판매/폐기/이동/손망실/반품/샘플/조정 */
   outboundType?: string;
+  /** 출고번호 (선택): 직접 지정 시 사용, 미입력 시 자동생성 */
+  outboundNumber?: string;
   /** 비고 (선택) */
   notes?: string;
 }

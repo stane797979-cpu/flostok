@@ -47,6 +47,7 @@ const COLUMN_ALIASES: Record<string, string[]> = {
   unitPrice: ["단가", "unitPrice", "판매단가", "UnitPrice", "Price"],
   channel: ["채널", "channel", "판매채널", "Channel"],
   outboundType: ["출고유형", "유형", "outboundType", "type", "Type"],
+  outboundNumber: ["출고번호", "출고요청번호", "outboundNumber", "출고No", "OR번호"],
   notes: ["비고", "notes", "메모", "Notes", "Memo"],
 };
 
@@ -139,6 +140,7 @@ async function parseSalesRow(
 
   const channel = getColumnValue(row, "channel");
   const outboundTypeValue = getColumnValue(row, "outboundType");
+  const outboundNumberValue = getColumnValue(row, "outboundNumber");
   const notes = getColumnValue(row, "notes");
 
   // 출고유형 매핑 (미입력 시 기본값: 판매)
@@ -166,6 +168,7 @@ async function parseSalesRow(
       unitPrice: unitPrice ?? undefined,
       channel: channel ? String(channel).trim() : undefined,
       outboundType,
+      outboundNumber: outboundNumberValue ? String(outboundNumberValue).trim() : undefined,
       notes: notes ? String(notes).trim() : undefined,
     },
     errors: [],
@@ -340,7 +343,7 @@ export async function importSalesData(
     const existingSet = new Set(existingRecords.map((r) => `${r.productId}::${r.date}`));
 
     // 5. 신규/중복 분류
-    const outboundNumber = generateOutboundNumber();
+    const autoOutboundNumber = generateOutboundNumber();
     const toInsert: typeof salesRecords.$inferInsert[] = [];
 
     for (const r of validRows) {
@@ -361,7 +364,7 @@ export async function importSalesData(
         totalAmount: r.quantity * r.unitPrice,
         channel: r.channel,
         notes: r.notes,
-        outboundNumber,
+        outboundNumber: r.original.outboundNumber || autoOutboundNumber,
       });
       successData.push(r.original);
     }
@@ -406,6 +409,7 @@ export async function createSalesTemplate(): Promise<ArrayBuffer> {
       단가: 15000,
       채널: "온라인",
       출고유형: "판매",
+      출고번호: "OR-20260115-001",
       비고: "예시 데이터",
     },
     {
@@ -415,6 +419,7 @@ export async function createSalesTemplate(): Promise<ArrayBuffer> {
       단가: 25000,
       채널: "",
       출고유형: "폐기",
+      출고번호: "",
       비고: "유통기한 만료",
     },
     {
@@ -424,6 +429,7 @@ export async function createSalesTemplate(): Promise<ArrayBuffer> {
       단가: 0,
       채널: "",
       출고유형: "샘플",
+      출고번호: "",
       비고: "거래처 샘플 발송",
     },
   ];
@@ -435,10 +441,11 @@ export async function createSalesTemplate(): Promise<ArrayBuffer> {
   worksheet["!cols"] = [
     { wch: 12 }, // SKU
     { wch: 12 }, // 날짜
-    { wch: 8 }, // 수량
+    { wch: 8 },  // 수량
     { wch: 10 }, // 단가
     { wch: 10 }, // 채널
     { wch: 12 }, // 출고유형
+    { wch: 18 }, // 출고번호
     { wch: 20 }, // 비고
   ];
 
