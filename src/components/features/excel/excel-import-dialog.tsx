@@ -35,7 +35,7 @@ export function ExcelImportDialog({
 }: ExcelImportDialogProps) {
   const [isPending, setIsPending] = useState(false);
   const [file, setFile] = useState<File | null>(null);
-  const [duplicateHandling, setDuplicateHandling] = useState<"skip" | "update" | "error">("skip");
+  const [duplicateHandling, setDuplicateHandling] = useState<"skip" | "update" | "error">("update");
   const [result, setResult] = useState<ImportExcelResult | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
 
