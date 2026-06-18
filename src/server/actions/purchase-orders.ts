@@ -115,9 +115,9 @@ export async function getReorderItems(options?: {
 
     // 일평균 판매량을 단일 그룹 쿼리로 일괄 조회 (N+1 쿼리 제거)
     const productIds = reorderCandidates.map((r) => r.product.id);
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split("T")[0];
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+    const ninetyDaysAgoStr = ninetyDaysAgo.toISOString().split("T")[0];
     const todayStr = new Date().toISOString().split("T")[0];
 
     // 실적 기반 일평균 + 수요예측 기반 일평균을 병렬 조회
@@ -145,7 +145,7 @@ export async function getReorderItems(options?: {
             and(
               eq(salesRecords.organizationId, orgId),
               sql`${salesRecords.productId} IN ${productIds}`,
-              gte(salesRecords.date, thirtyDaysAgoStr),
+              gte(salesRecords.date, ninetyDaysAgoStr),
               lte(salesRecords.date, todayStr)
             )
           )
@@ -171,7 +171,7 @@ export async function getReorderItems(options?: {
       ]);
 
       for (const row of salesData) {
-        avgSalesMap.set(row.productId, Math.round((Number(row.totalQuantity) / 30) * 100) / 100);
+        avgSalesMap.set(row.productId, Math.round((Number(row.totalQuantity) / 90) * 100) / 100);
       }
 
       // 수요예측: 월 평균 예측량 → 일평균 (÷30)
@@ -297,9 +297,9 @@ export async function calculateReorderQuantity(productId: string): Promise<{
       throw new Error("제품을 찾을 수 없습니다");
     }
 
-    // 일평균 판매량 조회 (최근 30일)
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    // 일평균 판매량 조회 (최근 90일)
+    const ninetyDaysAgoSingle = new Date();
+    ninetyDaysAgoSingle.setDate(ninetyDaysAgoSingle.getDate() - 90);
     const salesResult = await db
       .select({ total: sql<number>`coalesce(sum(${salesRecords.quantity}), 0)` })
       .from(salesRecords)
@@ -307,10 +307,10 @@ export async function calculateReorderQuantity(productId: string): Promise<{
         and(
           eq(salesRecords.organizationId, TEMP_ORG_ID),
           eq(salesRecords.productId, productId),
-          gte(salesRecords.date, thirtyDaysAgo.toISOString().split("T")[0])
+          gte(salesRecords.date, ninetyDaysAgoSingle.toISOString().split("T")[0])
         )
       );
-    const avgDailySales = Math.round((Number(salesResult[0]?.total || 0) / 30) * 100) / 100;
+    const avgDailySales = Math.round((Number(salesResult[0]?.total || 0) / 90) * 100) / 100;
 
     // 조직 설정에서 보정계수 로드
     const [singleOrgData] = await db
