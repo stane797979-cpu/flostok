@@ -110,11 +110,42 @@ export function PSIClient({ data, onRefresh }: PSIClientProps) {
   }, [filteredProducts, currentPage, pageSize]);
 
   // 요약 통계
-  const totalSKU = data.totalProducts;
-  const stockoutCount = data.products.filter((p) => p.currentStock === 0).length;
-  const belowSafetyCount = data.products.filter(
-    (p) => p.currentStock > 0 && p.currentStock < p.safetyStock
-  ).length;
+  const now = new Date();
+  const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+  const currentMonthStats = useMemo(() => {
+    let salesPlan = 0, salesActual = 0, inboundPlan = 0;
+    for (const p of data.products) {
+      const m = p.months.find((mo) => mo.period === currentPeriod);
+      if (!m) continue;
+      salesPlan += m.outboundPlan;
+      salesActual += m.outbound;
+      inboundPlan += m.inboundPlan;
+    }
+    const achieveRate = salesPlan > 0 ? Math.round((salesActual / salesPlan) * 100) : 0;
+    return { salesPlan, salesActual, inboundPlan, achieveRate };
+  }, [data.products, currentPeriod]);
+
+  // 평균 재고일수: 현재고 / 일평균출고 (최근 3개월 출고 기준)
+  const avgDoi = useMemo(() => {
+    const pastPeriods = data.periods.filter((p) => p < currentPeriod).slice(-3);
+    if (pastPeriods.length === 0) return 0;
+    let totalStock = 0, totalDailyOut = 0, count = 0;
+    for (const p of data.products) {
+      const pastOut = p.months
+        .filter((m) => pastPeriods.includes(m.period))
+        .reduce((s, m) => s + m.outbound, 0);
+      const avgMonthlyOut = pastOut / pastPeriods.length;
+      const dailyOut = avgMonthlyOut / 30;
+      if (dailyOut > 0) {
+        totalStock += p.currentStock;
+        totalDailyOut += dailyOut;
+        count++;
+      }
+    }
+    if (count === 0 || totalDailyOut === 0) return 0;
+    return Math.round(totalStock / totalDailyOut);
+  }, [data.products, data.periods, currentPeriod]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -395,39 +426,50 @@ export function PSIClient({ data, onRefresh }: PSIClientProps) {
 
       {/* 요약 카드 */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
+        <Card className="border-blue-200">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">전체 SKU</CardTitle>
+            <CardTitle className="text-sm font-medium text-blue-700">이번달 판매계획</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalSKU}개</div>
+            <div className="text-2xl font-bold text-blue-700">
+              {currentMonthStats.salesPlan.toLocaleString()}
+            </div>
+            <p className="text-xs text-muted-foreground">단위: 개</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">조회 기간</CardTitle>
+            <CardTitle className="text-sm font-medium">판매 실적</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{data.periods.length}개월</div>
+            <div className="text-2xl font-bold text-green-600">
+              {currentMonthStats.salesActual.toLocaleString()}
+            </div>
             <p className="text-xs text-muted-foreground">
-              {data.periods[0]} ~ {data.periods[data.periods.length - 1]}
+              달성률 {currentMonthStats.achieveRate}%
             </p>
-          </CardContent>
-        </Card>
-        <Card className="border-red-200">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">품절</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">{stockoutCount}개</div>
           </CardContent>
         </Card>
         <Card className="border-orange-200">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">안전재고 미달</CardTitle>
+            <CardTitle className="text-sm font-medium text-orange-700">발주 계획</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-orange-600">{belowSafetyCount}개</div>
+            <div className="text-2xl font-bold text-orange-700">
+              {currentMonthStats.inboundPlan.toLocaleString()}
+            </div>
+            <p className="text-xs text-muted-foreground">이번달 입고 계획 합계</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">평균 재고일수</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {avgDoi}<span className="text-base text-muted-foreground ml-1">일</span>
+            </div>
+            <p className="text-xs text-muted-foreground">현재고 기준 (최근 3개월 출고)</p>
           </CardContent>
         </Card>
       </div>
@@ -442,7 +484,7 @@ export function PSIClient({ data, onRefresh }: PSIClientProps) {
                 {filteredProducts.length}개 SKU × {data.periods.length}개월 · 발주방식 + 7컬럼(SCM/입고P·A/출고P·A/기말P·A)
               </CardDescription>
             </div>
-            <Badge variant="outline">{filteredProducts.length} / {totalSKU}</Badge>
+            <Badge variant="outline">{filteredProducts.length} / {data.totalProducts}</Badge>
           </div>
           <PSIFilters
             search={search}
