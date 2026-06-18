@@ -109,8 +109,8 @@ export function WarehouseOutboundClient({ hideTitle = false }: { hideTitle?: boo
     <div className="space-y-6">
       {!hideTitle && (
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">출고예정</h1>
-          <p className="mt-2 text-slate-500">출고 요청 목록을 확인하고 출고를 확정하세요</p>
+          <h1 className="text-3xl font-bold tracking-tight">출고확정 (창고)</h1>
+          <p className="mt-2 text-slate-500">대기 중인 출고 요청을 확인하고 출고를 확정하세요</p>
         </div>
       )}
 
