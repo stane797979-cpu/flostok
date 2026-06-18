@@ -16,6 +16,7 @@ import {
   CalendarRange,
   PackageCheck,
   PackageX,
+  Users2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -167,6 +168,13 @@ export const MAIN_SECTIONS: NavSection[] = [
         icon: Factory,
         description: "공급업체 정보 및 연락처",
         menuKey: "suppliers",
+      },
+      {
+        title: "거래처",
+        href: "/dashboard/customers",
+        icon: Users2,
+        description: "거래처(판매처) 정보 관리",
+        menuKey: "customers",
       },
       {
         title: "KPI",
