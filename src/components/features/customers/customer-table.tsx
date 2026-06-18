@@ -112,21 +112,16 @@ export function CustomerTable({ customers, onEdit, onDelete }: CustomerTableProp
         <TableHeader>
           <TableRow>
             <TableHead>
-              <Button variant="ghost" size="sm" className="h-auto p-0 font-medium hover:bg-transparent" onClick={() => handleSort("name")}>
-                거래처명<SortIcon field="name" />
-              </Button>
-            </TableHead>
-            <TableHead>
               <Button variant="ghost" size="sm" className="h-auto p-0 font-medium hover:bg-transparent" onClick={() => handleSort("code")}>
                 거래처코드<SortIcon field="code" />
               </Button>
             </TableHead>
             <TableHead>
-              <Button variant="ghost" size="sm" className="h-auto p-0 font-medium hover:bg-transparent" onClick={() => handleSort("representative")}>
-                대표자<SortIcon field="representative" />
+              <Button variant="ghost" size="sm" className="h-auto p-0 font-medium hover:bg-transparent" onClick={() => handleSort("name")}>
+                거래처명<SortIcon field="name" />
               </Button>
             </TableHead>
-            <TableHead>사업자번호</TableHead>
+            <TableHead>담당자</TableHead>
             <TableHead>
               <Button variant="ghost" size="sm" className="h-auto p-0 font-medium hover:bg-transparent" onClick={() => handleSort("contactPhone")}>
                 전화번호<SortIcon field="contactPhone" />
@@ -142,6 +137,7 @@ export function CustomerTable({ customers, onEdit, onDelete }: CustomerTableProp
                 채널<SortIcon field="channel" />
               </Button>
             </TableHead>
+            <TableHead>사업자번호</TableHead>
             <TableHead>
               <Button variant="ghost" size="sm" className="h-auto p-0 font-medium hover:bg-transparent" onClick={() => handleSort("paymentTerms")}>
                 결제조건<SortIcon field="paymentTerms" />
@@ -161,10 +157,9 @@ export function CustomerTable({ customers, onEdit, onDelete }: CustomerTableProp
           ) : (
             sortedCustomers.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((customer) => (
               <TableRow key={customer.id}>
+                <TableCell className="font-mono text-sm text-slate-500 whitespace-nowrap">{customer.code || "-"}</TableCell>
                 <TableCell className="font-medium whitespace-nowrap">{customer.name}</TableCell>
-                <TableCell className="text-sm whitespace-nowrap">{customer.code || "-"}</TableCell>
-                <TableCell className="whitespace-nowrap">{customer.representative || "-"}</TableCell>
-                <TableCell className="font-mono text-sm whitespace-nowrap">{customer.businessNumber || "-"}</TableCell>
+                <TableCell className="text-sm whitespace-nowrap">{customer.contactName || "-"}</TableCell>
                 <TableCell className="font-mono text-sm whitespace-nowrap">{customer.contactPhone || "-"}</TableCell>
                 <TableCell className="text-slate-500 text-sm">{customer.contactEmail || "-"}</TableCell>
                 <TableCell>
@@ -176,6 +171,7 @@ export function CustomerTable({ customers, onEdit, onDelete }: CustomerTableProp
                     <span className="text-slate-400">-</span>
                   )}
                 </TableCell>
+                <TableCell className="font-mono text-sm whitespace-nowrap">{customer.businessNumber || "-"}</TableCell>
                 <TableCell className="text-sm whitespace-nowrap">{customer.paymentTerms || "-"}</TableCell>
                 <TableCell className="text-slate-500 text-sm max-w-[150px] truncate">{customer.notes || "-"}</TableCell>
                 <TableCell>
