@@ -324,33 +324,46 @@ export function ReorderItemsTable({
                   {item.daysOfInventory !== null ? `${item.daysOfInventory.toFixed(1)}일` : "-"}
                 </TableCell>
                 <TableCell className="text-right">
-                  <TooltipProvider delayDuration={200}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className="flex items-center justify-end gap-1 cursor-help">
-                          {item.forecastBased && (
-                            <Sparkles className="h-3.5 w-3.5 text-violet-500" />
-                          )}
-                          <span className="font-semibold text-blue-600 underline decoration-dotted">
-                            {item.recommendedQty}
-                          </span>
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="text-xs space-y-1 max-w-[220px]">
-                        {item.avgDailySales !== undefined && (
-                          <div>
-                            평균월출량: <b>{Math.round(item.avgDailySales * 30)}개</b>
-                            <span className="text-slate-400 ml-1">({item.avgDailySales.toFixed(1)}/일)</span>
+                  {item.daysOfInventory === null ? (
+                    <TooltipProvider delayDuration={200}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="text-slate-400 underline decoration-dotted cursor-help">-</span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-xs max-w-[200px]">
+                          판매실적 없음 — 수량을 직접 입력하세요
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ) : (
+                    <TooltipProvider delayDuration={200}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="flex items-center justify-end gap-1 cursor-help">
+                            {item.forecastBased && (
+                              <Sparkles className="h-3.5 w-3.5 text-violet-500" />
+                            )}
+                            <span className="font-semibold text-blue-600 underline decoration-dotted">
+                              {item.recommendedQty}
+                            </span>
                           </div>
-                        )}
-                        <div>목표재고: 30일치 + 안전재고</div>
-                        <div>발주량 = 목표재고 - 현재고({item.currentStock})</div>
-                        {item.forecastBased && (
-                          <div className="text-violet-400">수요예측({item.forecastMethod}) 기반</div>
-                        )}
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-xs space-y-1 max-w-[220px]">
+                          {item.avgDailySales !== undefined && item.avgDailySales > 0 && (
+                            <div>
+                              평균월출량: <b>{Math.round(item.avgDailySales * 30)}개</b>
+                              <span className="text-slate-400 ml-1">({item.avgDailySales.toFixed(1)}/일)</span>
+                            </div>
+                          )}
+                          <div>목표재고: 30일치 + 안전재고</div>
+                          <div>발주량 = 목표재고 - 현재고({item.currentStock})</div>
+                          {item.forecastBased && (
+                            <div className="text-violet-400">수요예측({item.forecastMethod}) 기반</div>
+                          )}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
                 </TableCell>
                 <TableCell className="text-sm text-slate-600">{item.supplierName || "-"}</TableCell>
                 <TableCell className="text-right">
