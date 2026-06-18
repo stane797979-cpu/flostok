@@ -55,6 +55,7 @@ function mapServerToClientReorderItem(item: ServerReorderItem): ReorderItem {
     supplierId: item.supplier?.id,
     supplierName: item.supplier?.name,
     leadTime: item.supplier?.leadTime ?? 7,
+    avgDailySales: item.avgDailySales,
     forecastBased: item.forecastBased,
     forecastMethod: item.forecastMethod,
   };
@@ -90,6 +91,7 @@ function generateAutoReorderRecommendations(
       supplierId: item.supplierId,
       supplierName: item.supplierName,
       leadTime: item.leadTime,
+      avgDailySales: item.avgDailySales,
       estimatedCost: 0,
       expectedDate: expectedDate.toISOString().split("T")[0],
       reason: statusReasons[item.urgencyLevel] || "발주 필요",

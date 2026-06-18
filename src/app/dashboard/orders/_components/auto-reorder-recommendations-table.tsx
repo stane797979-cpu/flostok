@@ -23,6 +23,12 @@ import {
   ArrowUp,
   ArrowDown,
 } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import {
   Card,
@@ -46,6 +52,7 @@ export interface AutoReorderRecommendation {
   supplierId?: string;
   supplierName?: string;
   leadTime: number;
+  avgDailySales?: number;
   estimatedCost: number;
   expectedDate: string;
   reason: string; // 발주 사유
@@ -517,8 +524,26 @@ export function AutoReorderRecommendationsTable({
                   <TableCell className="text-right">{recommendation.currentStock}</TableCell>
                   <TableCell className="text-right">{recommendation.safetyStock}</TableCell>
                   <TableCell className="text-right">{recommendation.reorderPoint}</TableCell>
-                  <TableCell className="text-right font-semibold text-blue-600">
-                    {recommendation.recommendedQty}
+                  <TableCell className="text-right">
+                    <TooltipProvider delayDuration={200}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="font-semibold text-blue-600 underline decoration-dotted cursor-help">
+                            {recommendation.recommendedQty}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-xs space-y-1 max-w-[220px]">
+                          {recommendation.avgDailySales !== undefined && (
+                            <div>
+                              평균월출량: <b>{Math.round(recommendation.avgDailySales * 30)}개</b>
+                              <span className="text-slate-400 ml-1">({recommendation.avgDailySales.toFixed(1)}/일)</span>
+                            </div>
+                          )}
+                          <div>목표재고: 30일치 + 안전재고</div>
+                          <div>발주량 = 목표재고 - 현재고({recommendation.currentStock})</div>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </TableCell>
                   <TableCell className="text-right font-medium">
                     ₩{recommendation.estimatedCost.toLocaleString()}
