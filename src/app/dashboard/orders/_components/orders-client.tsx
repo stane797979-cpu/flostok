@@ -699,12 +699,34 @@ export function OrdersClient({ serverReorderItems = [], serverPurchaseOrders, in
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
                   <div>
                     <CardTitle>발주 현황</CardTitle>
                     <CardDescription>진행 중인 발주서 목록입니다</CardDescription>
                   </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => setOrderDialogOpen(true)}>
+                      + 발주 등록
+                    </Button>
+                    {selectedOrderIds.length > 0 && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={handleBulkCancel}
+                        disabled={isCancellingOrders}
+                      >
+                        {isCancellingOrders ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <XCircle className="mr-2 h-4 w-4" />
+                        )}
+                        {selectedOrderIds.length}건 일괄 취소
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 flex-wrap">
                   <div className="flex items-center gap-1.5">
                     <Checkbox
                       id="hide-received"
@@ -715,7 +737,7 @@ export function OrdersClient({ serverReorderItems = [], serverPurchaseOrders, in
                       입고완료 숨기기
                     </Label>
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 flex-wrap">
                     {[
                       { value: "all", label: "전체" },
                       { value: "draft", label: "초안" },
@@ -737,26 +759,6 @@ export function OrdersClient({ serverReorderItems = [], serverPurchaseOrders, in
                       </button>
                     ))}
                   </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={() => setOrderDialogOpen(true)}>
-                    + 발주 등록
-                  </Button>
-                  {selectedOrderIds.length > 0 && (
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={handleBulkCancel}
-                      disabled={isCancellingOrders}
-                    >
-                      {isCancellingOrders ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <XCircle className="mr-2 h-4 w-4" />
-                      )}
-                      {selectedOrderIds.length}건 일괄 취소
-                    </Button>
-                  )}
                 </div>
               </div>
             </CardHeader>

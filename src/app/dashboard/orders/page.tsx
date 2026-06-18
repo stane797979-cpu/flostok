@@ -16,9 +16,7 @@ export default async function OrdersPage({
     Promise<Awaited<ReturnType<typeof getReorderItems>> | null>,
     Promise<Awaited<ReturnType<typeof getPurchaseOrders>> | null>,
   ] = [
-    resolvedTab === "order"
-      ? getReorderItems()
-      : Promise.resolve(null),
+    getReorderItems(),
     resolvedTab === "orders"
       ? getPurchaseOrders({ limit: 100 })
       : Promise.resolve(null),
