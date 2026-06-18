@@ -274,18 +274,20 @@ export function PSITable({ products, periods }: PSITableProps) {
               </TableCell>
               {product.months.map((month) => {
                 const isCurrent = month.period === currentPeriod;
+                const isPast = month.period < currentPeriod;
                 const bg = isCurrent ? "bg-blue-50/50 dark:bg-blue-950/50" : "";
                 const planBg = "bg-purple-50/30 dark:bg-purple-950/20";
+                const dash = <span className="text-slate-300 text-[11px]">-</span>;
 
                 return (
                   <Fragment key={month.period}>
                     {/* SCM (AI 가이드 수량) */}
                     <TableCell className={cn("text-center p-0.5", bg, planBg)}>
-                      <NumCell value={month.sopQuantity} color="text-purple-600" italic />
+                      {isPast ? dash : <NumCell value={month.sopQuantity} color="text-purple-600" italic />}
                     </TableCell>
                     {/* 입고(계획) */}
                     <TableCell className={cn("text-center p-0.5", bg, planBg)}>
-                      <NumCell value={month.inboundPlan} color="text-purple-500" italic />
+                      {isPast ? dash : <NumCell value={month.inboundPlan} color="text-purple-500" italic />}
                     </TableCell>
                     {/* 입고(실적) */}
                     <TableCell className={cn("text-center p-0.5", bg)}>
@@ -293,7 +295,7 @@ export function PSITable({ products, periods }: PSITableProps) {
                     </TableCell>
                     {/* 출고(계획) */}
                     <TableCell className={cn("text-center p-0.5", bg, planBg)}>
-                      <NumCell value={month.outboundPlan} color="text-purple-500" italic />
+                      {isPast ? dash : <NumCell value={month.outboundPlan} color="text-purple-500" italic />}
                     </TableCell>
                     {/* 출고(실적) */}
                     <TableCell className={cn("text-center p-0.5", bg)}>
@@ -301,7 +303,7 @@ export function PSITable({ products, periods }: PSITableProps) {
                     </TableCell>
                     {/* 기말(예상) */}
                     <TableCell className={cn("text-center p-0.5", bg, planBg)}>
-                      <StockCell value={month.plannedEndingStock} safetyStock={product.safetyStock} italic />
+                      {isPast ? dash : <StockCell value={month.plannedEndingStock} safetyStock={product.safetyStock} italic />}
                     </TableCell>
                     {/* 기말(실적) */}
                     <TableCell className={cn("text-center p-0.5 border-r", bg)}>
