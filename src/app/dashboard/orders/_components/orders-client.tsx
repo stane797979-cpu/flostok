@@ -574,7 +574,7 @@ export function OrdersClient({ serverReorderItems = [], serverPurchaseOrders, in
   const currentPage = pageTitles[activeTab] || pageTitles.order;
 
   const TAB_LABELS: Record<TabType, string> = {
-    order: "발주",
+    order: "AI발주 권고",
     orders: "발주현황",
   };
 
@@ -738,8 +738,11 @@ export function OrdersClient({ serverReorderItems = [], serverPurchaseOrders, in
                     ))}
                   </div>
                 </div>
-                {selectedOrderIds.length > 0 && (
-                  <div className="flex gap-2">
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => setOrderDialogOpen(true)}>
+                    + 발주 등록
+                  </Button>
+                  {selectedOrderIds.length > 0 && (
                     <Button
                       variant="destructive"
                       size="sm"
@@ -753,8 +756,8 @@ export function OrdersClient({ serverReorderItems = [], serverPurchaseOrders, in
                       )}
                       {selectedOrderIds.length}건 일괄 취소
                     </Button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </CardHeader>
             <CardContent>
