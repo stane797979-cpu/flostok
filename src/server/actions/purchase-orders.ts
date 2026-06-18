@@ -105,10 +105,11 @@ export async function getReorderItems(options?: {
       .where(
         and(
           eq(products.organizationId, orgId),
-          // 현재고 <= 발주점
+          // 현재고 <= 재발주점 OR 현재고 <= 안전재고 (재발주점 미설정 품목 포함)
           or(
             sql`${inventory.currentStock} IS NULL`,
-            sql`${inventory.currentStock} <= ${products.reorderPoint}`
+            sql`${inventory.currentStock} <= ${products.reorderPoint}`,
+            sql`(${products.reorderPoint} IS NULL OR ${products.reorderPoint} = 0) AND ${inventory.currentStock} <= ${products.safetyStock}`
           )
         )
       );
