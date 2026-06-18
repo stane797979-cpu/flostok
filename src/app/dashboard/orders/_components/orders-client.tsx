@@ -614,8 +614,8 @@ export function OrdersClient({ serverReorderItems = [], serverPurchaseOrders, in
 
           {/* AI 발주 권고 (승인/거부 워크플로우) */}
           <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
+            <CardHeader className="flex flex-row items-start justify-between space-y-0">
+              <div className="flex items-center justify-between w-full">
                 <div>
                   <CardTitle>AI 발주 권고</CardTitle>
                   <CardDescription>
