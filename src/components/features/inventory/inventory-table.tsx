@@ -371,17 +371,26 @@ export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
                   <TableCell className="font-mono text-sm whitespace-nowrap">{item.product.sku}</TableCell>
                   <TableCell className="font-medium">{item.product.name}</TableCell>
                   <TableCell>
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        "font-medium",
-                        status.bgClass,
-                        status.textClass,
-                        status.borderClass
-                      )}
-                    >
-                      {status.label}
-                    </Badge>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "cursor-default font-medium",
+                              status.bgClass,
+                              status.textClass,
+                              status.borderClass
+                            )}
+                          >
+                            {status.label}
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-xs">
+                          {status.description}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </TableCell>
                   <TableCell>
                     {item.product.abcGrade && item.product.xyzGrade ? (
