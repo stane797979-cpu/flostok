@@ -50,6 +50,7 @@ function formatMonth(date: Date): string {
 
 interface OutboundClientProps {
   initialTab?: "records" | "upload" | "confirm";
+  // upload은 records로 리다이렉트됨
 }
 
 export function OutboundClient({ initialTab = "records" }: OutboundClientProps) {
@@ -239,7 +240,9 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
     }
   }, [deleteTarget, outboundMonth, loadOutboundRecords, toast]);
 
-  const [activeTab, setActiveTab] = useState<"records" | "upload" | "confirm">(initialTab);
+  const [activeTab, setActiveTab] = useState<"records" | "confirm">(
+    initialTab === "upload" ? "records" : (initialTab as "records" | "confirm")
+  );
 
   // 출고현황 탭이면 초기 로드
   useEffect(() => {
@@ -260,8 +263,8 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
       {/* 탭 */}
       <div className="border-b">
         <nav className="-mb-px flex gap-6">
-          {(["upload", "records", "confirm"] as const).map((tab) => {
-            const labels = { upload: "출고업로드", records: "출고현황", confirm: "출고확정(창고)" };
+          {(["records", "confirm"] as const).map((tab) => {
+            const labels = { records: "출고현황", confirm: "출고확정(창고)" };
             return (
               <button
                 key={tab}
@@ -285,34 +288,6 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
       </div>
 
       {activeTab === "confirm" && <WarehouseOutboundClient hideTitle />}
-
-      {activeTab === "upload" && (
-        <Card>
-            <CardHeader>
-              <CardTitle>판매/출고 데이터 업로드</CardTitle>
-              <CardDescription>
-                판매(출고) 데이터를 엑셀로 업로드하세요. 업로드된 데이터는 판매 기록에 저장됩니다.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col items-center gap-4 py-8">
-                <div className="rounded-full bg-slate-100 p-6 dark:bg-slate-800">
-                  <Upload className="h-10 w-10 text-slate-400" />
-                </div>
-                <div className="text-center">
-                  <p className="font-medium">엑셀 파일로 판매 데이터를 업로드합니다</p>
-                  <p className="mt-1 text-sm text-slate-500">
-                    필수 컬럼: SKU, 날짜, 판매수량
-                  </p>
-                </div>
-                <Button onClick={() => setImportDialogOpen(true)}>
-                  <Upload className="mr-2 h-4 w-4" />
-                  파일 업로드
-                </Button>
-              </div>
-            </CardContent>
-        </Card>
-      )}
 
       {activeTab === "records" && (
         <Card>
@@ -345,6 +320,14 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
                   </span>
                   <Button variant="outline" size="icon" onClick={handleNextMonth}>
                     <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setImportDialogOpen(true)}
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    엑셀 업로드
                   </Button>
                   <Button
                     variant="outline"
