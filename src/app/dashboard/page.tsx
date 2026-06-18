@@ -131,6 +131,11 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-5">
 
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">대시보드</h1>
+        <p className="mt-2 text-slate-500">재고 현황 및 주요 KPI 요약</p>
+      </div>
+
       {/* 행1: 발주 필요·긴급발주·서비스수준 */}
       <div className="grid gap-4 sm:grid-cols-3">
         <Link href="/dashboard/orders">
