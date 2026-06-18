@@ -168,13 +168,19 @@ export function OutboundRequestsTab() {
                             {req.totalQuantity.toLocaleString()}개
                           </TableCell>
                           <TableCell>
-                            <div className="text-sm text-slate-700">
-                              {new Date(req.createdAt).toLocaleDateString("ko-KR")}
-                            </div>
-                            <div className="flex items-center gap-1 text-xs text-slate-400 mt-0.5">
-                              <Clock className="h-3 w-3" />
-                              {formatTimeAgo(req.createdAt)}
-                            </div>
+                            {req.createdAt ? (
+                              <>
+                                <div className="text-sm text-slate-700">
+                                  {new Date(req.createdAt).toLocaleDateString("ko-KR")}
+                                </div>
+                                <div className="flex items-center gap-1 text-xs text-slate-400 mt-0.5">
+                                  <Clock className="h-3 w-3" />
+                                  {formatTimeAgo(req.createdAt)}
+                                </div>
+                              </>
+                            ) : (
+                              <span className="text-slate-400">-</span>
+                            )}
                           </TableCell>
                         </TableRow>
                       );

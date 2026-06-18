@@ -204,7 +204,7 @@ export async function getOutboundRequests(options?: {
         requestedByName: r.requestedByName,
         itemsCount: stats.itemsCount,
         totalQuantity: stats.totalQuantity,
-        createdAt: r.createdAt,
+        createdAt: r.createdAt ? new Date(r.createdAt) : new Date(),
       };
     }),
     total: Number(countResult?.count || 0),
