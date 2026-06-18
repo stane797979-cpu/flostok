@@ -28,7 +28,7 @@ export interface ReorderItem {
   currentStock: number;
   safetyStock: number;
   reorderPoint: number;
-  daysOfInventory: number;
+  daysOfInventory: number | null;
   recommendedQty: number;
   urgencyLevel: number; // 0: 품절, 1: 위험, 2: 부족, 3: 주의
   supplierId?: string;
@@ -176,8 +176,8 @@ export function ReorderItemsTable({
           bVal = b.reorderPoint;
           break;
         case "daysOfInventory":
-          aVal = a.daysOfInventory;
-          bVal = b.daysOfInventory;
+          aVal = a.daysOfInventory ?? -1;
+          bVal = b.daysOfInventory ?? -1;
           break;
         case "recommendedQty":
           aVal = a.recommendedQty;
@@ -320,7 +320,9 @@ export function ReorderItemsTable({
                 <TableCell className="text-right">{item.currentStock}</TableCell>
                 <TableCell className="text-right">{item.safetyStock}</TableCell>
                 <TableCell className="text-right">{item.reorderPoint}</TableCell>
-                <TableCell className="text-right">{item.daysOfInventory.toFixed(1)}일</TableCell>
+                <TableCell className="text-right text-slate-500">
+                  {item.daysOfInventory !== null ? `${item.daysOfInventory.toFixed(1)}일` : "-"}
+                </TableCell>
                 <TableCell className="text-right">
                   <TooltipProvider delayDuration={200}>
                     <Tooltip>

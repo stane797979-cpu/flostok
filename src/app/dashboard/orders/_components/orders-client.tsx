@@ -49,7 +49,7 @@ function mapServerToClientReorderItem(item: ServerReorderItem): ReorderItem {
     currentStock: item.currentStock,
     safetyStock: item.safetyStock,
     reorderPoint: item.reorderPoint,
-    daysOfInventory: item.daysOfStock ?? 0,
+    daysOfInventory: item.daysOfStock ?? null,
     recommendedQty: item.recommendedQty,
     urgencyLevel: item.urgencyLevel,
     supplierId: item.supplier?.id,
@@ -73,8 +73,8 @@ function generateAutoReorderRecommendations(
 
     const statusReasons: Record<number, string> = {
       0: `품절 상태 (현재고 ${item.currentStock}개)`,
-      1: `위험 상태 (재고일수 ${item.daysOfInventory.toFixed(1)}일)`,
-      2: `부족 상태 (재고일수 ${item.daysOfInventory.toFixed(1)}일)`,
+      1: `위험 상태 (재고일수 ${item.daysOfInventory !== null ? item.daysOfInventory.toFixed(1) + "일" : "판매실적 없음"})`,
+      2: `부족 상태 (재고일수 ${item.daysOfInventory !== null ? item.daysOfInventory.toFixed(1) + "일" : "판매실적 없음"})`,
       3: `주의 상태 (발주점 도달)`,
     };
 
