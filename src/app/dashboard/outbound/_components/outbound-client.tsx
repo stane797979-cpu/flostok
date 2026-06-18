@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -13,29 +13,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ChevronLeft, ChevronRight, Download, Loader2, PackageMinus, Upload } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { ChevronLeft, ChevronRight, Download, Loader2, Plus, Upload } from "lucide-react";
 import { OutboundRecordsTable } from "./outbound-records-table";
 import { OutboundEditDialog } from "./outbound-edit-dialog";
-import { OutboundRequestDialog } from "./outbound-request-dialog";
+import { OutboundRegisterDialog } from "./outbound-register-dialog";
 import { ExcelImportDialog } from "@/components/features/excel/excel-import-dialog";
 import { WarehouseOutboundClient } from "@/app/dashboard/warehouse/outbound/_components/warehouse-outbound-client";
 import { useToast } from "@/hooks/use-toast";
 import { getOutboundRecords, deleteOutboundRecord, type OutboundRecord } from "@/server/actions/outbound";
 import { exportInventoryMovementToExcel } from "@/server/actions/excel-export";
-import { getOutboundRequests, cancelOutboundRequest, holdOutboundRequest, resumeOutboundRequest } from "@/server/actions/outbound-requests";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 
-/**
- * 월의 시작일/종료일 계산
- */
 function getMonthRange(date: Date): { startDate: string; endDate: string } {
   const year = date.getFullYear();
   const month = date.getMonth();
@@ -50,68 +37,28 @@ function formatMonth(date: Date): string {
 
 interface OutboundClientProps {
   initialTab?: "records" | "upload" | "confirm";
-  // upload은 records로 리다이렉트됨
 }
 
 export function OutboundClient({ initialTab = "records" }: OutboundClientProps) {
-
-  // 출고 현황 상태
   const [outboundMonth, setOutboundMonth] = useState<Date>(() => new Date());
   const [outboundRecords, setOutboundRecords] = useState<OutboundRecord[]>([]);
   const [isLoadingRecords, setIsLoadingRecords] = useState(false);
   const [isDownloadingMovement, setIsDownloadingMovement] = useState(false);
 
-  // 출고 요청 현황 카운트
-  const [pendingCount, setPendingCount] = useState(0);
-  const [holdingCount, setHoldingCount] = useState(0);
-
-  // 출고 업로드/요청 상태
   const [importDialogOpen, setImportDialogOpen] = useState(false);
-  const [requestDialogOpen, setRequestDialogOpen] = useState(false);
-
-  // 수정/삭제 상태
+  const [registerDialogOpen, setRegisterDialogOpen] = useState(false);
   const [editRecord, setEditRecord] = useState<OutboundRecord | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<OutboundRecord | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const [activeTab, setActiveTab] = useState<"records" | "confirm">(
+    initialTab === "upload" ? "records" : (initialTab as "records" | "confirm")
+  );
+
   const { toast } = useToast();
 
-  // 출고 요청 목록 상태
-  const [outboundRequestList, setOutboundRequestList] = useState<Array<{
-    id: string;
-    requestNumber: string;
-    status: string;
-    outboundType: string;
-    outboundTypeLabel: string;
-    requestedByName: string | null;
-    itemsCount: number;
-    totalQuantity: number;
-    createdAt: Date;
-  }>>([]);
-  const [isLoadingRequests, setIsLoadingRequests] = useState(false);
-
-  // 출고 요청 목록 조회
-  const loadOutboundRequests = useCallback(async () => {
-    setIsLoadingRequests(true);
-    try {
-      const result = await getOutboundRequests({ limit: 100 });
-      setOutboundRequestList(result.requests);
-      const pending = result.requests.filter((r) => r.status === "pending").length;
-      const holding = result.requests.filter((r) => r.status === "holding").length;
-      setPendingCount(pending);
-      setHoldingCount(holding);
-    } catch {
-    } finally {
-      setIsLoadingRequests(false);
-    }
-  }, []);
-
-  // 출고 요청 카운트 조회 (호환성 유지)
-  const loadRequestCounts = loadOutboundRequests;
-
-  // 출고 기록 조회
   const loadOutboundRecords = useCallback(async (month: Date) => {
     setIsLoadingRecords(true);
     try {
@@ -130,7 +77,6 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
     }
   }, []);
 
-  // 월 이동
   const handlePrevMonth = useCallback(() => {
     setOutboundMonth((prev) => {
       const next = new Date(prev.getFullYear(), prev.getMonth() - 1, 1);
@@ -147,7 +93,6 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
     });
   }, [loadOutboundRecords]);
 
-  // 재고 수불부 다운로드
   const handleDownloadMovement = useCallback(async () => {
     setIsDownloadingMovement(true);
     try {
@@ -171,37 +116,22 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
         link.click();
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
-
-        toast({
-          title: "다운로드 완료",
-          description: `${result.data.filename} 파일이 다운로드되었습니다`,
-        });
+        toast({ title: "다운로드 완료", description: `${result.data.filename} 파일이 다운로드되었습니다` });
       } else {
-        toast({
-          title: "다운로드 실패",
-          description: result.error || "재고 수불부 다운로드에 실패했습니다",
-          variant: "destructive",
-        });
+        toast({ title: "다운로드 실패", description: "수불부 다운로드에 실패했습니다", variant: "destructive" });
       }
-    } catch (error) {
-      console.error("재고 수불부 다운로드 오류:", error);
-      toast({
-        title: "오류",
-        description: "재고 수불부 다운로드 중 오류가 발생했습니다",
-        variant: "destructive",
-      });
+    } catch {
+      toast({ title: "오류", description: "수불부 다운로드 중 오류가 발생했습니다", variant: "destructive" });
     } finally {
       setIsDownloadingMovement(false);
     }
   }, [outboundMonth, toast]);
 
-  // 수정 핸들러
   const handleEdit = useCallback((record: OutboundRecord) => {
     setEditRecord(record);
     setEditOpen(true);
   }, []);
 
-  // 삭제 핸들러
   const handleDeleteRequest = useCallback((record: OutboundRecord) => {
     setDeleteTarget(record);
     setDeleteOpen(true);
@@ -209,30 +139,18 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteTarget) return;
-
     setIsDeleting(true);
     try {
       const result = await deleteOutboundRecord(deleteTarget.id);
       if (result.success) {
-        toast({
-          title: "삭제 완료",
-          description: `${deleteTarget.productSku} 출고 기록이 삭제되었습니다. 재고가 복원됩니다.`,
-        });
+        toast({ title: "삭제 완료", description: `${deleteTarget.productSku} 출고 기록이 삭제되었습니다. 재고가 복원됩니다.` });
         loadOutboundRecords(outboundMonth);
       } else {
-        toast({
-          title: "삭제 실패",
-          description: result.error || "출고 기록 삭제에 실패했습니다",
-          variant: "destructive",
-        });
+        toast({ title: "삭제 실패", description: result.error || "출고 기록 삭제에 실패했습니다", variant: "destructive" });
       }
     } catch (error) {
       console.error("출고 삭제 오류:", error);
-      toast({
-        title: "오류",
-        description: "출고 기록 삭제 중 오류가 발생했습니다",
-        variant: "destructive",
-      });
+      toast({ title: "오류", description: "출고 기록 삭제 중 오류가 발생했습니다", variant: "destructive" });
     } finally {
       setIsDeleting(false);
       setDeleteOpen(false);
@@ -240,30 +158,27 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
     }
   }, [deleteTarget, outboundMonth, loadOutboundRecords, toast]);
 
-  const [activeTab, setActiveTab] = useState<"records" | "confirm">(
-    initialTab === "upload" ? "records" : (initialTab as "records" | "confirm")
-  );
-
-  // 초기 마운트 시 records 탭 데이터 로드
   useEffect(() => {
     loadOutboundRecords(outboundMonth);
-    loadOutboundRequests();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 탭 전환 시 records 탭 데이터 로드
   useEffect(() => {
     if (activeTab === "records") {
       loadOutboundRecords(outboundMonth);
-      loadOutboundRequests();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
+  // 통계 계산
+  const todayStr = new Date().toISOString().split("T")[0];
+  const todayCount = outboundRecords.filter((r) => r.date === todayStr).length;
+  const totalQty = outboundRecords.reduce((sum, r) => sum + Math.abs(r.changeAmount), 0);
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">출고관리</h1>
+        <h1 className="text-3xl font-bold tracking-tight">출고현황</h1>
         <p className="mt-2 text-slate-500">출고 등록 및 현황 관리</p>
       </div>
 
@@ -283,11 +198,6 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
                 }`}
               >
                 {labels[tab]}
-                {tab === "confirm" && pendingCount > 0 && (
-                  <span className="ml-1.5 rounded-full bg-orange-500 px-1.5 py-0.5 text-xs text-white">
-                    {pendingCount}
-                  </span>
-                )}
               </button>
             );
           })}
@@ -297,52 +207,65 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
       {activeTab === "confirm" && <WarehouseOutboundClient hideTitle />}
 
       {activeTab === "records" && (
-        <Card>
+        <>
+          {/* 상단 KPI 카드 4개 */}
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardDescription className="text-blue-600 font-medium">이번달 출고건수</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-blue-600">{outboundRecords.length.toLocaleString()}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardDescription className="text-green-600 font-medium">총 출고수량</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-green-600">{totalQty.toLocaleString()}</div>
+                <p className="text-xs text-slate-400 mt-1">개</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardDescription className="text-orange-500 font-medium">당일 출고</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-orange-500">{todayCount}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardDescription className="font-medium">월 네비게이션</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="icon" onClick={handlePrevMonth} className="h-7 w-7">
+                    <ChevronLeft className="h-3 w-3" />
+                  </Button>
+                  <span className="text-sm font-medium flex-1 text-center">{formatMonth(outboundMonth)}</span>
+                  <Button variant="outline" size="icon" onClick={handleNextMonth} className="h-7 w-7">
+                    <ChevronRight className="h-3 w-3" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* 출고 현황 테이블 */}
+          <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <CardTitle>출고 현황</CardTitle>
-                  <CardDescription>
-                    월별 출고 기록을 확인하고 재고 수불부를 다운로드할 수 있습니다
-                  </CardDescription>
-                  <div className="flex gap-2 pt-1">
-                    {pendingCount > 0 && (
-                      <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">
-                        출고요청중 {pendingCount}건
-                      </Badge>
-                    )}
-                    {holdingCount > 0 && (
-                      <Badge className="bg-yellow-100 text-yellow-700 hover:bg-yellow-100">
-                        홀딩 {holdingCount}건
-                      </Badge>
-                    )}
-                  </div>
-                </div>
+                <CardTitle>출고 현황</CardTitle>
                 <div className="flex items-center gap-2">
-                  <Button variant="outline" size="icon" onClick={handlePrevMonth}>
-                    <ChevronLeft className="h-4 w-4" />
+                  <Button size="sm" onClick={() => setRegisterDialogOpen(true)}>
+                    <Plus className="mr-1 h-4 w-4" />
+                    건별 등록
                   </Button>
-                  <span className="min-w-[120px] text-center font-medium">
-                    {formatMonth(outboundMonth)}
-                  </span>
-                  <Button variant="outline" size="icon" onClick={handleNextMonth}>
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setImportDialogOpen(true)}
-                  >
-                    <Upload className="mr-2 h-4 w-4" />
+                  <Button variant="outline" size="sm" onClick={() => setImportDialogOpen(true)}>
+                    <Upload className="mr-1 h-4 w-4" />
                     엑셀 업로드
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setRequestDialogOpen(true)}
-                  >
-                    <PackageMinus className="mr-2 h-4 w-4" />
-                    출고 요청
                   </Button>
                   <Button
                     variant="outline"
@@ -351,9 +274,9 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
                     disabled={isDownloadingMovement}
                   >
                     {isDownloadingMovement ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                     ) : (
-                      <Download className="mr-2 h-4 w-4" />
+                      <Download className="mr-1 h-4 w-4" />
                     )}
                     엑셀 다운
                   </Button>
@@ -361,116 +284,6 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
               </div>
             </CardHeader>
             <CardContent>
-              {/* 출고 요청 현황 */}
-              <div className="mb-6">
-                <h3 className="mb-3 text-sm font-semibold text-slate-700">출고 요청 현황</h3>
-                {isLoadingRequests ? (
-                  <div className="flex h-24 items-center justify-center text-sm text-slate-400">
-                    불러오는 중...
-                  </div>
-                ) : outboundRequestList.length === 0 ? (
-                  <div className="flex h-24 items-center justify-center rounded-lg border border-dashed text-sm text-slate-400">
-                    출고 요청 내역이 없습니다
-                  </div>
-                ) : (
-                  <div className="rounded-lg border bg-white dark:bg-slate-950">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>요청번호</TableHead>
-                          <TableHead>유형</TableHead>
-                          <TableHead>상태</TableHead>
-                          <TableHead className="text-right">품목수</TableHead>
-                          <TableHead className="text-right">총수량</TableHead>
-                          <TableHead>요청자</TableHead>
-                          <TableHead>요청일시</TableHead>
-                          <TableHead className="w-[160px]" />
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {outboundRequestList.map((req) => (
-                          <TableRow key={req.id}>
-                            <TableCell className="font-mono text-sm">{req.requestNumber}</TableCell>
-                            <TableCell className="text-sm">{req.outboundTypeLabel}</TableCell>
-                            <TableCell>
-                              {req.status === "pending" && (
-                                <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">출고요청중</Badge>
-                              )}
-                              {req.status === "holding" && (
-                                <Badge className="bg-yellow-100 text-yellow-700 hover:bg-yellow-100">홀딩</Badge>
-                              )}
-                              {req.status === "partial" && (
-                                <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100">부분출고(잔량대기)</Badge>
-                              )}
-                              {req.status === "confirmed" && (
-                                <Badge className="bg-green-100 text-green-700 hover:bg-green-100">출고완료</Badge>
-                              )}
-                              {req.status === "cancelled" && (
-                                <Badge className="bg-slate-100 text-slate-500 hover:bg-slate-100">취소</Badge>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right font-mono text-sm">{req.itemsCount}</TableCell>
-                            <TableCell className="text-right font-mono text-sm">{req.totalQuantity.toLocaleString()}</TableCell>
-                            <TableCell className="text-sm text-slate-500">{req.requestedByName || "-"}</TableCell>
-                            <TableCell className="text-sm text-slate-500">
-                              {new Date(req.createdAt).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex gap-1">
-                                {req.status === "pending" && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-7 text-xs"
-                                    onClick={async () => {
-                                      await holdOutboundRequest(req.id);
-                                      loadOutboundRequests();
-                                    }}
-                                  >
-                                    홀딩
-                                  </Button>
-                                )}
-                                {req.status === "holding" && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-7 text-xs"
-                                    onClick={async () => {
-                                      await resumeOutboundRequest(req.id);
-                                      loadOutboundRequests();
-                                    }}
-                                  >
-                                    요청재개
-                                  </Button>
-                                )}
-                                {(req.status === "pending" || req.status === "holding") && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-7 text-xs text-red-600 hover:text-red-700"
-                                    onClick={async () => {
-                                      await cancelOutboundRequest(req.id);
-                                      loadOutboundRequests();
-                                    }}
-                                  >
-                                    취소
-                                  </Button>
-                                )}
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </div>
-
-              {/* 구분선 */}
-              <div className="mb-6 border-t" />
-
-              {/* 출고 완료 기록 */}
-              <h3 className="mb-3 text-sm font-semibold text-slate-700">출고 완료 기록</h3>
               {isLoadingRecords ? (
                 <div className="flex h-48 items-center justify-center text-slate-400">
                   출고 기록을 불러오는 중...
@@ -488,10 +301,21 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
                 </>
               )}
             </CardContent>
-        </Card>
+          </Card>
+        </>
       )}
 
-      {/* 엑셀 임포트 다이얼로그 (기존 재사용) */}
+      {/* 건별 등록 다이얼로그 */}
+      <OutboundRegisterDialog
+        open={registerDialogOpen}
+        onOpenChange={setRegisterDialogOpen}
+        onSuccess={() => {
+          toast({ title: "등록 완료", description: "출고 기록이 등록되었습니다" });
+          loadOutboundRecords(outboundMonth);
+        }}
+      />
+
+      {/* 엑셀 업로드 다이얼로그 */}
       <ExcelImportDialog
         open={importDialogOpen}
         onOpenChange={setImportDialogOpen}
@@ -499,27 +323,12 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
         title="판매/출고 데이터 업로드"
         description="판매(출고) 데이터를 엑셀 파일로 업로드하세요"
         onSuccess={() => {
-          toast({
-            title: "업로드 완료",
-            description: "판매 데이터가 성공적으로 업로드되었습니다",
-          });
+          toast({ title: "업로드 완료", description: "판매 데이터가 성공적으로 업로드되었습니다" });
           loadOutboundRecords(outboundMonth);
         }}
       />
 
-      {/* 출고 요청 다이얼로그 */}
-      <OutboundRequestDialog
-        open={requestDialogOpen}
-        onOpenChange={setRequestDialogOpen}
-        onSuccess={() => {
-          toast({
-            title: "출고 요청 생성 완료",
-            description: "출고 요청이 생성되었습니다. 창고에서 확인 후 처리됩니다.",
-          });
-        }}
-      />
-
-      {/* 출고 수정 다이얼로그 */}
+      {/* 수정 다이얼로그 */}
       <OutboundEditDialog
         open={editOpen}
         onOpenChange={setEditOpen}
@@ -538,8 +347,7 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
                   <strong>{deleteTarget.productSku}</strong> ({deleteTarget.productName})의{" "}
                   {deleteTarget.date} 출고 기록({Math.abs(deleteTarget.changeAmount)}개)을
                   삭제하시겠습니까?
-                  <br />
-                  <br />
+                  <br /><br />
                   삭제 시 재고가 {Math.abs(deleteTarget.changeAmount)}개 복원됩니다.
                   이 작업은 되돌릴 수 없습니다.
                 </>
@@ -553,9 +361,7 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
               disabled={isDeleting}
               className="bg-red-600 hover:bg-red-700"
             >
-              {isDeleting ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : null}
+              {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               삭제
             </AlertDialogAction>
           </AlertDialogFooter>
