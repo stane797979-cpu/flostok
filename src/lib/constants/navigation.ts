@@ -90,8 +90,7 @@ export const MAIN_SECTIONS: NavSection[] = [
         description: "발주 생성 및 현황 관리",
         menuKey: "orders",
         children: [
-          { title: "일반발주", href: "/dashboard/orders?tab=reorder", menuKey: "orders" },
-          { title: "AI발주", href: "/dashboard/orders?tab=auto-reorder", menuKey: "orders" },
+          { title: "AI발주 권고", href: "/dashboard/orders?tab=order", menuKey: "orders" },
           { title: "발주현황", href: "/dashboard/orders?tab=orders", menuKey: "orders" },
         ],
       },
@@ -115,15 +114,13 @@ export const MAIN_SECTIONS: NavSection[] = [
     color: "text-orange-500",
     items: [
       {
-        title: "출고관리",
+        title: "출고현황",
         href: "/dashboard/outbound",
         icon: Truck,
         description: "출고 등록 및 현황 관리",
         menuKey: "outbound",
         children: [
-          { title: "출고업로드", href: "/dashboard/outbound?tab=upload", menuKey: "outbound" },
           { title: "출고확정(창고)", href: "/dashboard/warehouse/outbound", menuKey: "warehouse_outbound" },
-          { title: "출고현황", href: "/dashboard/outbound?tab=records", menuKey: "outbound" },
         ],
       },
     ],
