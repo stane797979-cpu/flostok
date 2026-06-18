@@ -131,12 +131,12 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-5">
 
-      {/* 행1: 발주권고 3카드 */}
+      {/* 행1: 발주 필요·긴급발주·서비스수준 */}
       <div className="grid gap-4 sm:grid-cols-3">
         <Link href="/dashboard/orders">
-          <Card className="cursor-pointer transition-shadow hover:shadow-md">
+          <Card className="cursor-pointer border-orange-200 transition-shadow hover:shadow-md dark:border-orange-900">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-slate-500">발주 필요 (권고)</CardTitle>
+              <CardTitle className="text-sm font-medium text-orange-600">발주 필요 (권고)</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-orange-600">
@@ -169,6 +169,23 @@ export default async function DashboardPage() {
           </Card>
         </Link>
 
+        <Card className="border-green-200 dark:border-green-900">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-green-600">서비스 수준 (SL)</CardTitle>
+            <PackageSearch className="h-4 w-4 text-green-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-green-600">
+              {kpi.onTimeOrderRate}
+              <span className="ml-1 text-base font-normal text-slate-400">%</span>
+            </div>
+            <p className="mt-1 text-xs text-green-600">당일 출고 기준 · 목표 95% 이상</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 행2: 과재고·FA·DOH */}
+      <div className="grid gap-4 sm:grid-cols-3">
         <Link href="/dashboard/inventory">
           <Card className="cursor-pointer border-blue-200 transition-shadow hover:shadow-md dark:border-blue-900">
             <CardHeader className="pb-2">
@@ -189,16 +206,12 @@ export default async function DashboardPage() {
             </CardContent>
           </Card>
         </Link>
-      </div>
 
-      {/* 행2: FA·DOH·발주권고현황대로 3카드 */}
-      <div className="grid gap-4 sm:grid-cols-3">
         <Card className={cn(
           kpi.forecastAccuracy >= 85 ? "border-green-200" : kpi.forecastAccuracy >= 70 ? "border-orange-200" : "border-red-200"
         )}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className={cn(
-              "text-sm font-medium",
+            <CardTitle className={cn("text-sm font-medium",
               kpi.forecastAccuracy >= 85 ? "text-green-600" : kpi.forecastAccuracy >= 70 ? "text-orange-600" : "text-red-600"
             )}>FA (Forecast Accuracy)</CardTitle>
             <Brain className={cn("h-4 w-4",
@@ -231,20 +244,6 @@ export default async function DashboardPage() {
               {kpi.averageInventoryDays}<span className="ml-1 text-base font-normal text-slate-400">일</span>
             </div>
             <p className="mt-1 text-xs text-slate-500">목표 40일 이하</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500">발주권고 — 현황대로</CardTitle>
-            <PackageSearch className="h-4 w-4 text-slate-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-slate-700">
-              {normalOrderCount}
-              <span className="ml-1 text-base font-normal text-slate-400">건</span>
-            </div>
-            <p className="mt-1 text-xs text-slate-500">정상 범위 내 권고</p>
           </CardContent>
         </Card>
       </div>
