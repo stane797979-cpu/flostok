@@ -122,7 +122,7 @@ async function loadDashboardData() {
 }
 
 export default async function DashboardPage() {
-  const { stats, needsOrderProducts, kpi, turnoverTop5, matrixData, categoryDemandRows } =
+  const { stats, needsOrderProducts, kpi, turnoverTop5, matrixData, categoryDemandRows, psiStats } =
     await loadDashboardData();
 
   const urgentCount = stats.outOfStock + stats.critical;
@@ -246,6 +246,96 @@ export default async function DashboardPage() {
             <p className="mt-1 text-xs text-slate-500">목표 40일 이하</p>
           </CardContent>
         </Card>
+      </div>
+
+      {/* 이번달 진척현황 */}
+      <div>
+        <h2 className="mb-3 text-base font-semibold">이번달 진척현황</h2>
+        <div className="grid gap-4 sm:grid-cols-4">
+          <Card className="border-indigo-200 dark:border-indigo-900">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-indigo-600">출고 계획</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-indigo-700">
+                {psiStats.salesPlan.toLocaleString()}
+                <span className="ml-1 text-sm font-normal text-slate-400">개</span>
+              </div>
+              <p className="mt-1 text-xs text-slate-500">이번달 전 SKU 합산</p>
+            </CardContent>
+          </Card>
+
+          <Card className={cn(
+            psiStats.achieveRate >= 90 ? "border-green-200 dark:border-green-900"
+            : psiStats.achieveRate >= 70 ? "border-orange-200 dark:border-orange-900"
+            : "border-red-200 dark:border-red-900"
+          )}>
+            <CardHeader className="pb-2">
+              <CardTitle className={cn("text-sm font-medium",
+                psiStats.achieveRate >= 90 ? "text-green-600"
+                : psiStats.achieveRate >= 70 ? "text-orange-600"
+                : "text-red-600"
+              )}>출고 실적</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className={cn("text-2xl font-bold",
+                psiStats.achieveRate >= 90 ? "text-green-700"
+                : psiStats.achieveRate >= 70 ? "text-orange-700"
+                : "text-red-700"
+              )}>
+                {psiStats.salesActual.toLocaleString()}
+                <span className="ml-1 text-sm font-normal text-slate-400">개</span>
+              </div>
+              <p className={cn("mt-1 text-xs",
+                psiStats.achieveRate >= 90 ? "text-green-600"
+                : psiStats.achieveRate >= 70 ? "text-orange-600"
+                : "text-red-600"
+              )}>계획 대비 {psiStats.achieveRate}%</p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-cyan-200 dark:border-cyan-900">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-cyan-600">발주 계획</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-cyan-700">
+                {psiStats.inboundPlan.toLocaleString()}
+                <span className="ml-1 text-sm font-normal text-slate-400">개</span>
+              </div>
+              <p className="mt-1 text-xs text-slate-500">이번달 입고 예정</p>
+            </CardContent>
+          </Card>
+
+          <Card className={cn(
+            psiStats.avgDoi > 0 && psiStats.avgDoi <= 40 ? "border-green-200 dark:border-green-900"
+            : psiStats.avgDoi <= 60 ? "border-orange-200 dark:border-orange-900"
+            : "border-red-200 dark:border-red-900"
+          )}>
+            <CardHeader className="pb-2">
+              <CardTitle className={cn("text-sm font-medium",
+                psiStats.avgDoi > 0 && psiStats.avgDoi <= 40 ? "text-green-600"
+                : psiStats.avgDoi <= 60 ? "text-orange-600"
+                : "text-red-600"
+              )}>평균 재고일수</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className={cn("text-2xl font-bold",
+                psiStats.avgDoi > 0 && psiStats.avgDoi <= 40 ? "text-green-700"
+                : psiStats.avgDoi <= 60 ? "text-orange-700"
+                : "text-red-700"
+              )}>
+                {psiStats.avgDoi > 0 ? psiStats.avgDoi : "-"}
+                {psiStats.avgDoi > 0 && <span className="ml-1 text-sm font-normal text-slate-400">일</span>}
+              </div>
+              <p className={cn("mt-1 text-xs",
+                psiStats.avgDoi > 0 && psiStats.avgDoi <= 40 ? "text-green-600"
+                : psiStats.avgDoi <= 60 ? "text-orange-600"
+                : "text-red-600"
+              )}>목표 40일 대비 {psiStats.avgDoi > 0 ? `${Math.round((psiStats.avgDoi / 40) * 100)}%` : "-"}</p>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* 빠른 액션 */}
