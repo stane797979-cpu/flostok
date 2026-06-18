@@ -113,18 +113,36 @@ export function PSIClient({ data, onRefresh }: PSIClientProps) {
   const now = new Date();
   const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
+  const TARGET_DOI = 30;
+
+  const prevPeriod = useMemo(() => {
+    const idx = data.periods.indexOf(currentPeriod);
+    return idx > 0 ? data.periods[idx - 1] : null;
+  }, [data.periods, currentPeriod]);
+
   const currentMonthStats = useMemo(() => {
     let salesPlan = 0, salesActual = 0, inboundPlan = 0;
+    let prevSalesPlan = 0, prevInboundPlan = 0;
     for (const p of data.products) {
       const m = p.months.find((mo) => mo.period === currentPeriod);
-      if (!m) continue;
-      salesPlan += m.outboundPlan;
-      salesActual += m.outbound;
-      inboundPlan += m.inboundPlan;
+      if (m) {
+        salesPlan += m.outboundPlan;
+        salesActual += m.outbound;
+        inboundPlan += m.inboundPlan;
+      }
+      if (prevPeriod) {
+        const pm = p.months.find((mo) => mo.period === prevPeriod);
+        if (pm) {
+          prevSalesPlan += pm.outboundPlan;
+          prevInboundPlan += pm.inboundPlan;
+        }
+      }
     }
     const achieveRate = salesPlan > 0 ? Math.round((salesActual / salesPlan) * 100) : 0;
-    return { salesPlan, salesActual, inboundPlan, achieveRate };
-  }, [data.products, currentPeriod]);
+    const salesPlanChange = prevSalesPlan > 0 ? Math.round(((salesPlan - prevSalesPlan) / prevSalesPlan) * 100) : null;
+    const inboundPlanChange = prevInboundPlan > 0 ? Math.round(((inboundPlan - prevInboundPlan) / prevInboundPlan) * 100) : null;
+    return { salesPlan, salesActual, inboundPlan, achieveRate, salesPlanChange, inboundPlanChange };
+  }, [data.products, currentPeriod, prevPeriod]);
 
   // 평균 재고일수: 현재고 / 일평균출고 (최근 3개월 출고 기준)
   const avgDoi = useMemo(() => {
@@ -434,7 +452,13 @@ export function PSIClient({ data, onRefresh }: PSIClientProps) {
             <div className="text-2xl font-bold text-blue-700">
               {currentMonthStats.salesPlan.toLocaleString()}
             </div>
-            <p className="text-xs text-muted-foreground">단위: 개</p>
+            <p className="text-xs text-muted-foreground">
+              {currentMonthStats.salesPlanChange !== null ? (
+                <span className={currentMonthStats.salesPlanChange >= 0 ? "text-green-600" : "text-red-500"}>
+                  전월 대비 {currentMonthStats.salesPlanChange >= 0 ? "+" : ""}{currentMonthStats.salesPlanChange}%
+                </span>
+              ) : "전월 데이터 없음"}
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -446,7 +470,10 @@ export function PSIClient({ data, onRefresh }: PSIClientProps) {
               {currentMonthStats.salesActual.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
-              달성률 {currentMonthStats.achieveRate}%
+              계획 대비{" "}
+              <span className={currentMonthStats.achieveRate >= 100 ? "text-green-600 font-medium" : currentMonthStats.achieveRate >= 80 ? "text-orange-500 font-medium" : "text-red-500 font-medium"}>
+                {currentMonthStats.achieveRate}%
+              </span>
             </p>
           </CardContent>
         </Card>
@@ -458,7 +485,13 @@ export function PSIClient({ data, onRefresh }: PSIClientProps) {
             <div className="text-2xl font-bold text-orange-700">
               {currentMonthStats.inboundPlan.toLocaleString()}
             </div>
-            <p className="text-xs text-muted-foreground">이번달 입고 계획 합계</p>
+            <p className="text-xs text-muted-foreground">
+              {currentMonthStats.inboundPlanChange !== null ? (
+                <span className={currentMonthStats.inboundPlanChange >= 0 ? "text-orange-500" : "text-blue-500"}>
+                  전월 대비 {currentMonthStats.inboundPlanChange >= 0 ? "+" : ""}{currentMonthStats.inboundPlanChange}%
+                </span>
+              ) : "전월 데이터 없음"}
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -469,7 +502,12 @@ export function PSIClient({ data, onRefresh }: PSIClientProps) {
             <div className="text-2xl font-bold">
               {avgDoi}<span className="text-base text-muted-foreground ml-1">일</span>
             </div>
-            <p className="text-xs text-muted-foreground">현재고 기준 (최근 3개월 출고)</p>
+            <p className="text-xs text-muted-foreground">
+              목표 {TARGET_DOI}일 대비{" "}
+              <span className={avgDoi <= TARGET_DOI ? "text-green-600 font-medium" : "text-orange-500 font-medium"}>
+                {TARGET_DOI > 0 ? Math.round((avgDoi / TARGET_DOI) * 100) : 0}%
+              </span>
+            </p>
           </CardContent>
         </Card>
       </div>

@@ -15,18 +15,20 @@ import { getInventoryStatus } from "@/lib/constants/inventory-status";
 import { getKPISummary } from "@/server/actions/kpi";
 import { getInventoryTurnoverData } from "@/server/actions/turnover";
 import { getABCXYZAnalysis, getCategoryDemandSummary } from "@/server/actions/analytics";
+import { getPSIData } from "@/server/actions/psi";
 
 /** 안전하게 대시보드 데이터를 로드 (인증 실패 시 빈 데이터) */
 async function loadDashboardData() {
   try {
     // 병렬 로드: 통계 + 품절/위험 품목 + KPI + 회전율 + ABC-XYZ (모두 병렬)
-    const [stats, needsOrderResult, kpiSummary, turnoverResult, abcResult, categoryDemand] = await Promise.all([
+    const [stats, needsOrderResult, kpiSummary, turnoverResult, abcResult, categoryDemand, psiResult] = await Promise.all([
       getInventoryStats(),
       getInventoryList({ status: ["out_of_stock", "critical", "shortage", "caution"], limit: 10 }),
       getKPISummary(),
       getInventoryTurnoverData().catch(() => null),
       getABCXYZAnalysis().catch(() => ({ products: [], matrixData: [], summary: { aCount: 0, aPercentage: 0, bCount: 0, bPercentage: 0, cCount: 0, cPercentage: 0, period: "" } })),
       getCategoryDemandSummary().catch(() => ({ rows: [], hasData: false })),
+      getPSIData(3).catch(() => null),
     ]);
 
     // 발주 필요 품목 매핑 (TOP10)
@@ -61,6 +63,32 @@ async function loadDashboardData() {
         }
       : { fastest: [], slowest: [] };
 
+    // 이번달 PSI 진척 집계
+    const now = new Date();
+    const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    let psiStats = { salesPlan: 0, salesActual: 0, achieveRate: 0, inboundPlan: 0, avgDoi: 0 };
+    if (psiResult) {
+      let salesPlan = 0, salesActual = 0, inboundPlan = 0;
+      let totalStock = 0, totalDailyOut = 0;
+      const pastPeriods = psiResult.periods.filter((p) => p < currentPeriod).slice(-3);
+      for (const p of psiResult.products) {
+        const m = p.months.find((mo) => mo.period === currentPeriod);
+        if (m) { salesPlan += m.outboundPlan; salesActual += m.outbound; inboundPlan += m.inboundPlan; }
+        if (pastPeriods.length > 0) {
+          const pastOut = p.months.filter((mo) => pastPeriods.includes(mo.period)).reduce((s, mo) => s + mo.outbound, 0);
+          const dailyOut = pastOut / pastPeriods.length / 30;
+          if (dailyOut > 0) { totalStock += p.currentStock; totalDailyOut += dailyOut; }
+        }
+      }
+      psiStats = {
+        salesPlan,
+        salesActual,
+        achieveRate: salesPlan > 0 ? Math.round((salesActual / salesPlan) * 100) : 0,
+        inboundPlan,
+        avgDoi: totalDailyOut > 0 ? Math.round(totalStock / totalDailyOut) : 0,
+      };
+    }
+
     return {
       stats: {
         totalSku: stats.totalProducts,
@@ -75,6 +103,7 @@ async function loadDashboardData() {
       turnoverTop5,
       matrixData: abcResult.matrixData,
       categoryDemandRows: categoryDemand.rows,
+      psiStats,
     };
   } catch (error) {
     console.error("대시보드 데이터 로드 실패:", error);
@@ -86,12 +115,13 @@ async function loadDashboardData() {
       turnoverTop5: { fastest: [], slowest: [] },
       matrixData: [],
       categoryDemandRows: [],
+      psiStats: { salesPlan: 0, salesActual: 0, achieveRate: 0, inboundPlan: 0, avgDoi: 0 },
     };
   }
 }
 
 export default async function DashboardPage() {
-  const { stats, needsOrderProducts, kpi, turnoverTop5, matrixData, categoryDemandRows } =
+  const { stats, needsOrderProducts, kpi, turnoverTop5, matrixData, categoryDemandRows, psiStats } =
     await loadDashboardData();
 
   return (
@@ -143,6 +173,72 @@ export default async function DashboardPage() {
             <p className="text-sm text-blue-500">재고 최적화 검토</p>
           </CardContent>
         </Card>
+      </div>
+
+      {/* 이번달 진척현황 */}
+      <div>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-xl font-semibold">이번달 진척현황</h2>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/dashboard/psi">PSI 계획 보기</Link>
+          </Button>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Card className="border-blue-200 dark:border-blue-900">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-blue-700">판매계획</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-blue-700">{psiStats.salesPlan.toLocaleString()}</div>
+              <p className="text-sm text-slate-500">이번달 출고 계획 (개)</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">판매 실적</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">{psiStats.salesActual.toLocaleString()}</div>
+              <p className="text-sm">
+                계획 대비{" "}
+                <span className={cn(
+                  "font-semibold",
+                  psiStats.achieveRate >= 100 ? "text-green-600" : psiStats.achieveRate >= 80 ? "text-orange-500" : "text-red-500"
+                )}>
+                  {psiStats.achieveRate}%
+                </span>
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="border-orange-200 dark:border-orange-900">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-orange-700">발주 계획</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-orange-700">{psiStats.inboundPlan.toLocaleString()}</div>
+              <p className="text-sm text-slate-500">이번달 입고 계획 (개)</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">평균 재고일수</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {psiStats.avgDoi}<span className="text-base text-slate-400 ml-1">일</span>
+              </div>
+              <p className="text-sm">
+                목표 30일 대비{" "}
+                <span className={cn(
+                  "font-semibold",
+                  psiStats.avgDoi <= 30 ? "text-green-600" : "text-orange-500"
+                )}>
+                  {psiStats.avgDoi > 0 ? Math.round((psiStats.avgDoi / 30) * 100) : 0}%
+                </span>
+              </p>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* 빠른 액션 */}
