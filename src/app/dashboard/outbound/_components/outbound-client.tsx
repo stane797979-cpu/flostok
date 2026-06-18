@@ -244,7 +244,14 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
     initialTab === "upload" ? "records" : (initialTab as "records" | "confirm")
   );
 
-  // 출고현황 탭이면 초기 로드
+  // 초기 마운트 시 records 탭 데이터 로드
+  useEffect(() => {
+    loadOutboundRecords(outboundMonth);
+    loadOutboundRequests();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 탭 전환 시 records 탭 데이터 로드
   useEffect(() => {
     if (activeTab === "records") {
       loadOutboundRecords(outboundMonth);
