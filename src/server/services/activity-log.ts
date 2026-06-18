@@ -25,7 +25,8 @@ export type ActivityEntityType =
   | "organization_settings"
   | "excel_import"
   | "excel_export"
-  | "onboarding";
+  | "onboarding"
+  | "customer";
 
 interface LogActivityParams {
   /** 사용자 정보 (requireAuth() 또는 getCurrentUser() 결과) */
