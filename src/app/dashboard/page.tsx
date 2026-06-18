@@ -1,13 +1,12 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Package, AlertTriangle, TrendingDown, Archive, ShoppingCart } from "lucide-react";
+import { AlertTriangle, TrendingDown, Archive, ShoppingCart, Brain, CalendarDays, PackageX } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { CategoryDemandWidget } from "@/components/features/dashboard/category-demand-widget";
 import { RecentActivityFeed } from "@/components/features/dashboard/recent-activity-feed";
 import { QuickActions } from "@/components/features/dashboard/quick-actions";
-import { KPICard } from "@/components/features/dashboard/kpi-card";
 import { TurnoverTop5Card } from "@/components/features/dashboard/turnover-top5-card";
 import { ABCXYZMiniMatrix } from "@/components/features/dashboard/abc-xyz-mini-matrix";
 import { getInventoryStats, getInventoryList } from "@/server/actions/inventory";
@@ -96,6 +95,8 @@ async function loadDashboardData() {
         critical: stats.critical,
         needsOrder: stats.needsOrder,
         excess: stats.excess,
+        shortageValue: stats.shortageValue,
+        excessValue: stats.excessValue,
       },
       needsOrderProducts,
       totalSku: stats.totalProducts,
@@ -108,10 +109,10 @@ async function loadDashboardData() {
   } catch (error) {
     console.error("대시보드 데이터 로드 실패:", error);
     return {
-      stats: { totalSku: 0, outOfStock: 0, critical: 0, needsOrder: 0, excess: 0 },
+      stats: { totalSku: 0, outOfStock: 0, critical: 0, needsOrder: 0, excess: 0, shortageValue: 0, excessValue: 0 },
       needsOrderProducts: [],
       totalSku: 0,
-      kpi: { inventoryTurnoverRate: 0, averageInventoryDays: 0, onTimeOrderRate: 0, stockoutRate: 0 },
+      kpi: { inventoryTurnoverRate: 0, averageInventoryDays: 0, onTimeOrderRate: 0, stockoutRate: 0, forecastAccuracy: 0 },
       turnoverTop5: { fastest: [], slowest: [] },
       matrixData: [],
       categoryDemandRows: [],
@@ -126,51 +127,120 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* KPI 카드 */}
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      {/* KPI 카드 행1: 발주권고 */}
+      <div className="grid gap-5 sm:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-base font-medium text-slate-500">총 SKU</CardTitle>
-            <Package className="h-5 w-5 text-slate-400" />
+            <CardTitle className="text-base font-medium text-slate-500">발주권고 — 현황대로</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{stats.totalSku}</div>
-            <p className="text-sm text-slate-500">등록된 제품</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-red-200 dark:border-red-900">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-base font-medium text-red-600">발주 필요</CardTitle>
-            <TrendingDown className="h-5 w-5 text-red-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-red-600">{stats.needsOrder}</div>
-            <p className="text-sm text-red-500">품절 + 위험 + 부족</p>
+            <div className="text-3xl font-bold">{stats.needsOrder - (stats.outOfStock + stats.critical)}</div>
+            <p className="text-sm text-slate-500">정상 범위 내 권고</p>
           </CardContent>
         </Card>
 
         <Card className="border-orange-200 dark:border-orange-900">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-base font-medium text-orange-600">위험 품목</CardTitle>
-            <AlertTriangle className="h-5 w-5 text-orange-500" />
+            <CardTitle className="text-base font-medium text-orange-600">발주권고 — 발주필요</CardTitle>
+            <TrendingDown className="h-5 w-5 text-orange-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-orange-600">
-              {stats.outOfStock + stats.critical}
+            <div className="text-3xl font-bold text-orange-600">{stats.needsOrder}</div>
+            <p className="text-sm text-orange-500">재발주점 도달 품목</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-red-200 dark:border-red-900">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-base font-medium text-red-600">발주권고 — 위험품목</CardTitle>
+            <AlertTriangle className="h-5 w-5 text-red-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-red-600">{stats.outOfStock + stats.critical}</div>
+            <p className="text-sm text-red-500">긴급 대응 필요</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* KPI 카드 행2: 재고금액·FA·DOH */}
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
+        <Card className="border-red-200 dark:border-red-900">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-base font-medium text-red-600">부족재고 금액</CardTitle>
+            <PackageX className="h-5 w-5 text-red-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">
+              {stats.shortageValue >= 1_000_000
+                ? `${(stats.shortageValue / 1_000_000).toFixed(1)}백만`
+                : stats.shortageValue.toLocaleString()}
+              <span className="ml-1 text-sm font-normal text-slate-400">원</span>
             </div>
-            <p className="text-sm text-orange-500">긴급 대응 필요</p>
+            <p className="text-sm text-red-500">긴급 발주 필요</p>
           </CardContent>
         </Card>
 
         <Card className="border-blue-200 dark:border-blue-900">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-base font-medium text-blue-600">과재고</CardTitle>
+            <CardTitle className="text-base font-medium text-blue-600">과재고 금액</CardTitle>
             <Archive className="h-5 w-5 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-blue-600">{stats.excess}</div>
+            <div className="text-2xl font-bold text-blue-600">
+              {stats.excessValue >= 1_000_000
+                ? `${(stats.excessValue / 1_000_000).toFixed(1)}백만`
+                : stats.excessValue.toLocaleString()}
+              <span className="ml-1 text-sm font-normal text-slate-400">원</span>
+            </div>
             <p className="text-sm text-blue-500">재고 최적화 검토</p>
+          </CardContent>
+        </Card>
+
+        <Card className={cn(
+          kpi.forecastAccuracy >= 85 ? "border-green-200" : kpi.forecastAccuracy >= 70 ? "border-orange-200" : "border-red-200"
+        )}>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className={cn(
+              "text-base font-medium",
+              kpi.forecastAccuracy >= 85 ? "text-green-600" : kpi.forecastAccuracy >= 70 ? "text-orange-600" : "text-red-600"
+            )}>FA (Forecast Accuracy)</CardTitle>
+            <Brain className={cn(
+              "h-5 w-5",
+              kpi.forecastAccuracy >= 85 ? "text-green-500" : kpi.forecastAccuracy >= 70 ? "text-orange-500" : "text-red-500"
+            )} />
+          </CardHeader>
+          <CardContent>
+            <div className={cn(
+              "text-3xl font-bold",
+              kpi.forecastAccuracy >= 85 ? "text-green-600" : kpi.forecastAccuracy >= 70 ? "text-orange-600" : "text-red-600"
+            )}>
+              {kpi.forecastAccuracy}<span className="ml-1 text-base font-normal text-slate-400">%</span>
+            </div>
+            <p className="text-sm text-slate-500">목표 85% 이상</p>
+          </CardContent>
+        </Card>
+
+        <Card className={cn(
+          kpi.averageInventoryDays <= 40 ? "border-green-200" : "border-orange-200"
+        )}>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className={cn(
+              "text-base font-medium",
+              kpi.averageInventoryDays <= 40 ? "text-green-600" : "text-orange-600"
+            )}>평균재고일 (DOH)</CardTitle>
+            <CalendarDays className={cn(
+              "h-5 w-5",
+              kpi.averageInventoryDays <= 40 ? "text-green-500" : "text-orange-500"
+            )} />
+          </CardHeader>
+          <CardContent>
+            <div className={cn(
+              "text-3xl font-bold",
+              kpi.averageInventoryDays <= 40 ? "text-green-600" : "text-orange-600"
+            )}>
+              {kpi.averageInventoryDays}<span className="ml-1 text-base font-normal text-slate-400">일</span>
+            </div>
+            <p className="text-sm text-slate-500">목표 40일 이하</p>
           </CardContent>
         </Card>
       </div>
@@ -244,41 +314,6 @@ export default async function DashboardPage() {
       {/* 빠른 액션 */}
       <QuickActions />
 
-      {/* 주요 KPI 요약 */}
-      <div>
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-semibold">주요 성과 지표</h2>
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/dashboard/kpi">전체 KPI 보기</Link>
-          </Button>
-        </div>
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          <KPICard
-            name="재고회전율"
-            value={kpi.inventoryTurnoverRate}
-            unit="회/년"
-            target={10}
-            status={kpi.inventoryTurnoverRate >= 10 ? "success" : kpi.inventoryTurnoverRate >= 8 ? "warning" : "danger"}
-            iconName="bar-chart"
-          />
-          <KPICard
-            name="평균 재고일수"
-            value={kpi.averageInventoryDays}
-            unit="일"
-            target={40}
-            status={kpi.averageInventoryDays <= 40 ? "success" : kpi.averageInventoryDays <= 50 ? "warning" : "danger"}
-            iconName="calendar"
-          />
-          <KPICard
-            name="적시 발주율"
-            value={kpi.onTimeOrderRate}
-            unit="%"
-            target={90}
-            status={kpi.onTimeOrderRate >= 90 ? "success" : kpi.onTimeOrderRate >= 72 ? "warning" : "danger"}
-            iconName="check-circle"
-          />
-        </div>
-      </div>
 
       {/* 콘텐츠 영역 */}
       <div className="grid gap-6 lg:grid-cols-2">

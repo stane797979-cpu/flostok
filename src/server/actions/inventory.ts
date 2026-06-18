@@ -450,22 +450,28 @@ async function _getInventoryStatsInternal(orgId: string) {
     optimal: 0,
     excess: 0,
     totalValue: 0,
+    shortageValue: 0,
+    excessValue: 0,
   };
 
   result.forEach((row) => {
     const count = Number(row.count);
+    const value = Number(row.totalValue || 0);
     stats.totalProducts += count;
-    stats.totalValue += Number(row.totalValue || 0);
+    stats.totalValue += value;
 
     switch (row.status) {
       case "out_of_stock":
         stats.outOfStock = count;
+        stats.shortageValue += value;
         break;
       case "critical":
         stats.critical = count;
+        stats.shortageValue += value;
         break;
       case "shortage":
         stats.shortage = count;
+        stats.shortageValue += value;
         break;
       case "caution":
         stats.caution = count;
@@ -476,13 +482,13 @@ async function _getInventoryStatsInternal(orgId: string) {
       case "excess":
       case "overstock":
         stats.excess += count;
+        stats.excessValue += value;
         break;
     }
   });
 
   return {
     ...stats,
-    // 집계 편의 필드 — 여기서 한 번만 계산해 모든 페이지에서 재사용
     needsOrder: stats.outOfStock + stats.critical + stats.shortage + stats.caution,
     urgent: stats.outOfStock + stats.critical,
   };
@@ -500,6 +506,8 @@ export async function getInventoryStats(): Promise<{
   optimal: number;
   excess: number;
   totalValue: number;
+  shortageValue: number;
+  excessValue: number;
   needsOrder: number;
   urgent: number;
 }> {
