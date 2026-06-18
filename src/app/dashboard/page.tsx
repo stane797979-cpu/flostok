@@ -122,7 +122,7 @@ async function loadDashboardData() {
 }
 
 export default async function DashboardPage() {
-  const { stats, needsOrderProducts, kpi, turnoverTop5, matrixData, categoryDemandRows, psiStats } =
+  const { stats, needsOrderProducts, kpi, turnoverTop5, matrixData, categoryDemandRows } =
     await loadDashboardData();
 
   return (
@@ -245,71 +245,6 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      {/* 이번달 진척현황 */}
-      <div>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-xl font-semibold">이번달 진척현황</h2>
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/dashboard/psi">PSI 계획 보기</Link>
-          </Button>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Card className="border-blue-200 dark:border-blue-900">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-blue-700">판매계획</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-blue-700">{psiStats.salesPlan.toLocaleString()}</div>
-              <p className="text-sm text-slate-500">이번달 출고 계획 (개)</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">판매 실적</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">{psiStats.salesActual.toLocaleString()}</div>
-              <p className="text-sm">
-                계획 대비{" "}
-                <span className={cn(
-                  "font-semibold",
-                  psiStats.achieveRate >= 100 ? "text-green-600" : psiStats.achieveRate >= 80 ? "text-orange-500" : "text-red-500"
-                )}>
-                  {psiStats.achieveRate}%
-                </span>
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="border-orange-200 dark:border-orange-900">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-orange-700">발주 계획</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-orange-700">{psiStats.inboundPlan.toLocaleString()}</div>
-              <p className="text-sm text-slate-500">이번달 입고 계획 (개)</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">평균 재고일수</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {psiStats.avgDoi}<span className="text-base text-slate-400 ml-1">일</span>
-              </div>
-              <p className="text-sm">
-                목표 30일 대비{" "}
-                <span className={cn(
-                  "font-semibold",
-                  psiStats.avgDoi <= 30 ? "text-green-600" : "text-orange-500"
-                )}>
-                  {psiStats.avgDoi > 0 ? Math.round((psiStats.avgDoi / 30) * 100) : 0}%
-                </span>
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
 
       {/* 빠른 액션 */}
       <QuickActions />
