@@ -122,7 +122,7 @@ export function AutoReorderRecommendationsTable({
   const sortLabel = (columnKey: SortKey) => {
     if (sortKey !== columnKey) return "";
     if (columnKey === "urgency")
-      return sortDir === "asc" ? "(품절→주의)" : "(주의→품절)";
+      return sortDir === "asc" ? "(주의→품절)" : "(품절→주의)";
     if (columnKey === "status")
       return sortDir === "asc" ? "(대기→거부)" : "(거부→대기)";
     return sortDir === "asc" ? "↑" : "↓";
@@ -182,21 +182,19 @@ export function AutoReorderRecommendationsTable({
 
   const getUrgencyBadge = (level: number) => {
     switch (level) {
-      case 0:
+      case 3:
         return (
           <Badge variant="destructive" className="bg-black">
-            품절
+            품절/위험
           </Badge>
         );
-      case 1:
-        return <Badge variant="destructive">위험</Badge>;
       case 2:
         return (
           <Badge variant="destructive" className="bg-orange-600">
             부족
           </Badge>
         );
-      case 3:
+      case 1:
         return (
           <Badge variant="default" className="bg-yellow-600">
             주의
