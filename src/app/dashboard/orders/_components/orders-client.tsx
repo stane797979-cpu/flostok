@@ -141,18 +141,19 @@ interface OrdersClientProps {
   serverReorderItems?: ServerReorderItem[];
   deliveryComplianceData?: DeliveryComplianceResult | null;
   serverPurchaseOrders?: ServerPurchaseOrder[];
+  initialTab?: string;
 }
 
 const VALID_TABS_SET = new Set(["reorder", "auto-reorder", "orders", "inbound", "delivery", "import-shipment"]);
 
 type TabType = "reorder" | "auto-reorder" | "orders" | "inbound" | "delivery" | "import-shipment";
 
-export function OrdersClient({ serverReorderItems = [], deliveryComplianceData = null, serverPurchaseOrders }: OrdersClientProps) {
+export function OrdersClient({ serverReorderItems = [], deliveryComplianceData = null, serverPurchaseOrders, initialTab }: OrdersClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const getTabFromUrl = (): TabType => {
-    const tab = searchParams.get("tab") || "reorder";
+    const tab = searchParams.get("tab") || initialTab || "reorder";
     return VALID_TABS_SET.has(tab) ? (tab as TabType) : "reorder";
   };
 
@@ -663,7 +664,7 @@ export function OrdersClient({ serverReorderItems = [], deliveryComplianceData =
 
       if (result.success && result.errors.length === 0) {
         toast({
-          title: "자동 발주 승인 완료",
+          title: "AI발주 승인 완료",
           description: `${result.createdOrders.length}개의 발주서가 생성되었습니다`,
         });
         const approvedProductIds = selectedRecs.map((r) => r.productId);
@@ -676,7 +677,7 @@ export function OrdersClient({ serverReorderItems = [], deliveryComplianceData =
         const successProductIds = selectedRecs.filter((r) => !failedIds.has(r.id)).map((r) => r.productId);
         setReorderItems((prev) => prev.filter((item) => !successProductIds.includes(item.productId)));
         toast({
-          title: "자동 발주 부분 완료",
+          title: "AI발주 부분 완료",
           description: `${result.createdOrders.length}개 생성, ${result.errors.length}개 실패 (${result.errors[0]?.error || "공급자 미지정"})`,
           variant: "destructive",
         });
@@ -685,8 +686,8 @@ export function OrdersClient({ serverReorderItems = [], deliveryComplianceData =
         switchTab("orders");
       } else {
         toast({
-          title: "자동 발주 승인 실패",
-          description: result.errors[0]?.error || "자동 발주 승인에 실패했습니다",
+          title: "AI발주 승인 실패",
+          description: result.errors[0]?.error || "AI발주 승인에 실패했습니다",
           variant: "destructive",
         });
       }
@@ -694,7 +695,7 @@ export function OrdersClient({ serverReorderItems = [], deliveryComplianceData =
       console.error("자동 발주 승인 오류:", error);
       toast({
         title: "오류",
-        description: "자동 발주 승인 중 오류가 발생했습니다",
+        description: "AI발주 승인 중 오류가 발생했습니다",
         variant: "destructive",
       });
     }
@@ -706,15 +707,15 @@ export function OrdersClient({ serverReorderItems = [], deliveryComplianceData =
 
       if (result.success) {
         toast({
-          title: "자동 발주 거부 완료",
-          description: `${ids.length}개의 자동 발주가 거부되었습니다`,
+          title: "AI발주 거부 완료",
+          description: `${ids.length}개의 AI발주가 거부되었습니다`,
         });
         setSelectedAutoReorderIds([]);
         loadReorderItems();
       } else if (result.errors.length > 0) {
         toast({
-          title: "일부 자동 발주 거부 실패",
-          description: result.errors[0]?.error || "자동 발주 거부에 실패했습니다",
+          title: "일부 AI발주 거부 실패",
+          description: result.errors[0]?.error || "AI발주 거부에 실패했습니다",
           variant: "destructive",
         });
       }
@@ -722,7 +723,7 @@ export function OrdersClient({ serverReorderItems = [], deliveryComplianceData =
       console.error("자동 발주 거부 오류:", error);
       toast({
         title: "오류",
-        description: "자동 발주 거부 중 오류가 발생했습니다",
+        description: "AI발주 거부 중 오류가 발생했습니다",
         variant: "destructive",
       });
     }
@@ -731,7 +732,7 @@ export function OrdersClient({ serverReorderItems = [], deliveryComplianceData =
   // 페이지 제목 매핑
   const pageTitles: Record<string, { title: string; description: string }> = {
     reorder: { title: "발주 필요", description: "재고 상태를 확인하고 발주를 진행하세요" },
-    "auto-reorder": { title: "자동발주", description: "AI가 분석한 자동 발주 추천 목록입니다" },
+    "auto-reorder": { title: "AI발주", description: "AI가 재고와 수요를 분석하여 추천한 발주 목록입니다" },
     orders: { title: "발주 현황", description: "진행 중인 발주서 목록을 확인하세요" },
     inbound: { title: "입고 현황", description: "월별 입고 기록을 확인하세요" },
     delivery: { title: "납기분석", description: "납기 준수율과 공급자 성과를 분석하세요" },
@@ -822,9 +823,9 @@ export function OrdersClient({ serverReorderItems = [], deliveryComplianceData =
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>자동 발주 추천</CardTitle>
+              <CardTitle>AI 발주 추천</CardTitle>
               <CardDescription>
-                AI가 재고 상태와 수요 예측을 분석하여 자동으로 생성한 발주 추천 목록입니다
+                AI가 재고 상태와 수요 예측을 분석하여 생성한 발주 추천 목록입니다
               </CardDescription>
             </CardHeader>
             <CardContent>

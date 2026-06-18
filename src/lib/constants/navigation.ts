@@ -90,7 +90,7 @@ export const MAIN_SECTIONS: NavSection[] = [
         menuKey: "orders",
         children: [
           { title: "일반발주", href: "/dashboard/orders?tab=reorder", menuKey: "orders" },
-          { title: "자동발주", href: "/dashboard/orders?tab=auto-reorder", menuKey: "orders" },
+          { title: "AI발주", href: "/dashboard/orders?tab=auto-reorder", menuKey: "orders" },
           { title: "발주현황", href: "/dashboard/orders?tab=orders", menuKey: "orders" },
         ],
       },

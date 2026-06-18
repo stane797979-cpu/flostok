@@ -60,7 +60,7 @@ const fallbackResponses: Record<string, string> = {
    - 추천 발주량 제공
    - 개별/일괄 발주 실행
 
-2. **자동발주** 탭: AI 기반 자동 발주 추천
+2. **AI발주** 탭: AI 기반 자동 발주 추천
    - 발주 스코어링 (100점 만점)
    - 일괄 승인/거부 가능
 

@@ -28,7 +28,7 @@ const PLANS = [
     name: "Starter",
     price: "₩29,000/월",
     description: "소규모 사업",
-    features: ["제품 100개", "수요예측", "자동발주 추천", "엑셀 다운로드"],
+    features: ["제품 100개", "수요예측", "AI발주 추천", "엑셀 다운로드"],
     color: "border-blue-200",
   },
   {
@@ -36,7 +36,7 @@ const PLANS = [
     name: "Pro",
     price: "₩79,000/월",
     description: "성장 중인 사업",
-    features: ["제품 무제한", "AI 수요예측", "자동발주", "ABC-XYZ 분석", "멀티 사용자"],
+    features: ["제품 무제한", "AI 수요예측", "AI발주", "ABC-XYZ 분석", "멀티 사용자"],
     color: "border-purple-200",
   },
   {
