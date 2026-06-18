@@ -307,8 +307,8 @@ export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
                         안전재고 <span className="text-[10px] text-primary-600">{sortLabel("safetyStock")}</span><SortIcon columnKey="safetyStock" />
                       </div>
                     </TooltipTrigger>
-                    <TooltipContent side="top" className="max-w-[180px] text-xs">
-                      현재고에 포함된 최소 보유 수량. 이 수량 이하 시 발주 필요.
+                    <TooltipContent side="top" className="max-w-[200px] text-xs">
+                      현재고에 포함된 수량. 수요 변동·리드타임 지연 대비 최소 보유 버퍼로, 이 수량 이하 시 발주가 필요합니다.
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
