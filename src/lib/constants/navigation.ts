@@ -120,6 +120,7 @@ export const MAIN_SECTIONS: NavSection[] = [
         description: "출고 등록 및 현황 관리",
         menuKey: "outbound",
         children: [
+          { title: "출고현황", href: "/dashboard/outbound", menuKey: "outbound" },
           { title: "출고요청", href: "/dashboard/outbound?tab=request", menuKey: "outbound" },
           { title: "출고확정(창고)", href: "/dashboard/warehouse/outbound", menuKey: "warehouse_outbound" },
         ],
