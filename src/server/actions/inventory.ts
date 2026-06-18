@@ -66,6 +66,7 @@ type InventoryListItem = {
   location: string | null;
   inventoryValue: number | null;
   daysOfInventory: number | null;
+  avgDailySales: number | null;
   lastUpdatedAt: Date | null;
   updatedAt: Date;
   createdAt: Date;
@@ -206,6 +207,7 @@ export async function getInventoryList(options?: {
         location: row.location,
         inventoryValue: row.inventoryValue,
         daysOfInventory: calculatedDoi,
+        avgDailySales: avgDailyOutbound > 0 ? avgDailyOutbound : null,
         lastUpdatedAt: row.lastUpdatedAt,
         updatedAt: row.updatedAt,
         createdAt: row.createdAt,

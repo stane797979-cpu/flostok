@@ -19,8 +19,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ShoppingCart, MoreHorizontal, Settings2, ArrowUpDown, ArrowUp, ArrowDown, Info } from "lucide-react";
+import { ShoppingCart, MoreHorizontal, Settings2, ArrowUpDown, ArrowUp, ArrowDown, Info, X } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { getInventoryStatus } from "@/lib/constants/inventory-status";
 
@@ -31,6 +32,7 @@ export interface InventoryItem {
   allocatedStock: number;
   availableStock: number | null;
   daysOfInventory: number | null;
+  avgDailySales: number | null;
   location: string | null;
   product: {
     sku: string;
@@ -64,10 +66,20 @@ const STATUS_ORDER = [
   "overstock",
 ];
 
+interface RopModalItem {
+  name: string;
+  sku: string;
+  reorderPoint: number;
+  safetyStock: number;
+  avgDailySales: number | null;
+  abcGrade: "A" | "B" | "C" | null;
+}
+
 export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [sortKey, setSortKey] = useState<SortKey>("status");
   const [sortDir, setSortDir] = useState<SortDirection>("asc");
+  const [ropModalItem, setRopModalItem] = useState<RopModalItem | null>(null);
   const router = useRouter();
 
   const handleSort = (key: SortKey) => {
@@ -151,6 +163,7 @@ export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
   const sortableHeadClass = "cursor-pointer select-none hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors";
 
   return (
+    <>
     <div className="space-y-4">
       {/* 대량 액션 바 */}
       {selectedIds.length > 0 && (
@@ -396,7 +409,19 @@ export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
                     {safetyStock.toLocaleString()}
                   </TableCell>
                   <TableCell className="text-right font-mono text-slate-500">
-                    {reorderPoint.toLocaleString()}
+                    <span
+                      className="cursor-pointer underline decoration-dotted hover:text-slate-700"
+                      onClick={() => setRopModalItem({
+                        name: item.product.name,
+                        sku: item.product.sku,
+                        reorderPoint,
+                        safetyStock,
+                        avgDailySales: item.avgDailySales,
+                        abcGrade: item.product.abcGrade,
+                      })}
+                    >
+                      {reorderPoint.toLocaleString()}
+                    </span>
                   </TableCell>
                   <TableCell className="text-right font-mono">
                     {inventoryDays !== null ? (
@@ -445,5 +470,71 @@ export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
         </Table>
       </div>
     </div>
+
+    {/* 재발주점 산출 근거 모달 */}
+    {ropModalItem && (() => {
+      const { name, sku, reorderPoint, safetyStock, avgDailySales, abcGrade } = ropModalItem;
+      const leadTimeDemand = reorderPoint - safetyStock;
+      const leadTime = avgDailySales && avgDailySales > 0
+        ? Math.round(leadTimeDemand / avgDailySales)
+        : null;
+      const serviceLevel = abcGrade === "A" ? "95%" : abcGrade === "B" ? "90%" : "85%";
+
+      return (
+        <Dialog open onOpenChange={() => setRopModalItem(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-base">{name}</DialogTitle>
+              <p className="text-xs text-slate-400 font-mono">{sku}</p>
+            </DialogHeader>
+            <p className="text-xs font-semibold text-slate-500 mb-2">재발주점(ROP) 산출 근거</p>
+            <table className="w-full text-sm border-collapse">
+              <tbody>
+                <tr className="border-b border-slate-100">
+                  <td className="py-2 text-slate-500">산출 공식</td>
+                  <td className="py-2 font-semibold">일평균출고 × 리드타임 + 안전재고</td>
+                </tr>
+                <tr className="border-b border-slate-100">
+                  <td className="py-2 text-slate-500">일평균 출고</td>
+                  <td className="py-2">
+                    {avgDailySales != null
+                      ? <>{avgDailySales.toFixed(1)}개/일 <span className="text-xs text-slate-400">(최근 30일 기준)</span></>
+                      : <span className="text-slate-300">판매실적 없음</span>}
+                  </td>
+                </tr>
+                <tr className="border-b border-slate-100">
+                  <td className="py-2 text-slate-500">리드타임 중 수요</td>
+                  <td className="py-2">
+                    {leadTime != null
+                      ? <>{leadTimeDemand}개 <span className="text-xs text-slate-400">(≈ {leadTime}일치)</span></>
+                      : <>{leadTimeDemand}개</>}
+                  </td>
+                </tr>
+                <tr className="border-b border-slate-100">
+                  <td className="py-2 text-slate-500">안전재고(SS)</td>
+                  <td className="py-2">{safetyStock.toLocaleString()}개</td>
+                </tr>
+                <tr className="border-b border-slate-100">
+                  <td className="py-2 text-slate-500">서비스수준</td>
+                  <td className="py-2">{serviceLevel} <span className="text-xs text-slate-400">({abcGrade ?? "-"}등급 기준)</span></td>
+                </tr>
+                <tr>
+                  <td className="py-2 text-slate-500">재발주점</td>
+                  <td className="py-2 text-blue-600 font-bold text-base">
+                    {reorderPoint.toLocaleString()}개
+                    <span className="text-xs text-slate-400 ml-2">= {leadTimeDemand} + {safetyStock}</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div className="mt-2 rounded-lg bg-slate-50 p-3 text-xs text-slate-500 leading-relaxed">
+              현재고가 <b className="text-slate-700">{reorderPoint.toLocaleString()}개</b> 이하로 떨어지면 리드타임 동안 재고가 소진될 수 있으므로 즉시 발주가 필요합니다.
+            </div>
+          </DialogContent>
+        </Dialog>
+      );
+    })()}
+    </>
   );
 }
+

@@ -19,6 +19,7 @@ export default async function InventoryPage() {
       allocatedStock: item.allocatedStock,
       availableStock: item.availableStock,
       daysOfInventory: item.daysOfInventory,
+      avgDailySales: item.avgDailySales ?? null,
       location: item.location,
       product: {
         sku: item.product.sku,
