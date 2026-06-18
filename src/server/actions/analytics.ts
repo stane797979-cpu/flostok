@@ -322,6 +322,7 @@ export async function getDemandForecast(options?: {
     method: string
     confidence: string
     mape: number
+    accuracyInsufficient: boolean  // 백테스트 불가 (데이터 부족)
     selectionReason: string
     seasonallyAdjusted: boolean
     isManual: boolean
@@ -457,8 +458,9 @@ export async function getDemandForecast(options?: {
       })
     }
 
-    // 10. 백테스트 정확도
+    // 10. 백테스트 정확도 (데이터 6개월 미만이면 계산 불가)
     const backtestResult = backtestForecast(historyValues, 3, forecastResult.method)
+    const accuracyInsufficient = backtestResult.mape >= 999
 
     // 11. 제품 정보 확인
     const selectedProduct = allProducts.find((p) => p.id === selectedProductId)
@@ -545,8 +547,9 @@ export async function getDemandForecast(options?: {
         productId: selectedProductId,
         productName: selectedProduct.name,
         method: forecastResult.method,
-        confidence: forecastResult.confidence ?? backtestResult.confidence,
+        confidence: accuracyInsufficient ? "low" : (forecastResult.confidence ?? backtestResult.confidence),
         mape: mapeValue,
+        accuracyInsufficient,
         selectionReason: forecastResult.selectionReason ?? '자동 선택',
         seasonallyAdjusted: forecastResult.seasonallyAdjusted ?? false,
         isManual,

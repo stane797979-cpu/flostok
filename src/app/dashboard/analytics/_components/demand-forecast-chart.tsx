@@ -62,6 +62,7 @@ interface ForecastData {
   method: string;
   confidence: string;
   mape: number;
+  accuracyInsufficient: boolean;
   selectionReason: string;
   seasonallyAdjusted: boolean;
   isManual: boolean;
@@ -797,7 +798,18 @@ export function DemandForecastChart() {
                 <Target className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                {(() => {
+                {forecast.accuracyInsufficient ? (
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl font-bold text-slate-400">-</span>
+                      <Badge className="text-xs bg-slate-100 text-slate-500">측정불가</Badge>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-400">
+                      정확도 산출에 최소 6개월 데이터 필요
+                      <span className="ml-1">(현재 {forecast.meta.dataMonths}개월)</span>
+                    </p>
+                  </div>
+                ) : (() => {
                   const fa = Math.max(0, Math.round((100 - forecast.mape) * 10) / 10);
                   return (
                     <>
@@ -933,15 +945,24 @@ export function DemandForecastChart() {
               <CardTitle className="text-base">월별 상세 데이터</CardTitle>
               <div className="text-right">
                 <div className="text-xs text-slate-500">예측 정확도 (FA)</div>
-                <div className={cn(
-                  "text-lg font-bold",
-                  Math.max(0, 100 - forecast.mape) >= 85 ? "text-green-600"
-                    : Math.max(0, 100 - forecast.mape) >= 70 ? "text-yellow-600"
-                    : "text-red-600"
-                )}>
-                  {Math.max(0, Math.round((100 - forecast.mape) * 10) / 10)}%
-                </div>
-                <div className="text-[10px] text-slate-400">FA = 100 - MAPE({forecast.mape}%)</div>
+                {forecast.accuracyInsufficient ? (
+                  <>
+                    <div className="text-lg font-bold text-slate-400">-</div>
+                    <div className="text-[10px] text-slate-400">데이터 부족 (최소 6개월)</div>
+                  </>
+                ) : (
+                  <>
+                    <div className={cn(
+                      "text-lg font-bold",
+                      Math.max(0, 100 - forecast.mape) >= 85 ? "text-green-600"
+                        : Math.max(0, 100 - forecast.mape) >= 70 ? "text-yellow-600"
+                        : "text-red-600"
+                    )}>
+                      {Math.max(0, Math.round((100 - forecast.mape) * 10) / 10)}%
+                    </div>
+                    <div className="text-[10px] text-slate-400">FA = 100 - MAPE({forecast.mape}%)</div>
+                  </>
+                )}
               </div>
             </CardHeader>
             <CardContent>
