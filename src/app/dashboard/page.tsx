@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, TrendingDown, Archive, ShoppingCart, Brain, CalendarDays, PackageX } from "lucide-react";
+import { AlertTriangle, TrendingDown, Archive, ShoppingCart, Brain, CalendarDays, PackageSearch } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { CategoryDemandWidget } from "@/components/features/dashboard/category-demand-widget";
@@ -125,178 +125,167 @@ export default async function DashboardPage() {
   const { stats, needsOrderProducts, kpi, turnoverTop5, matrixData, categoryDemandRows } =
     await loadDashboardData();
 
+  const urgentCount = stats.outOfStock + stats.critical;
+  const normalOrderCount = stats.needsOrder - urgentCount;
+
   return (
-    <div className="space-y-6">
-      {/* KPI 카드 행1: 발주권고 */}
-      <div className="grid gap-5 sm:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-base font-medium text-slate-500">발주권고 — 현황대로</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{stats.needsOrder - (stats.outOfStock + stats.critical)}</div>
-            <p className="text-sm text-slate-500">정상 범위 내 권고</p>
-          </CardContent>
-        </Card>
+    <div className="space-y-5">
 
-        <Card className="border-orange-200 dark:border-orange-900">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-base font-medium text-orange-600">발주권고 — 발주필요</CardTitle>
-            <TrendingDown className="h-5 w-5 text-orange-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-orange-600">{stats.needsOrder}</div>
-            <p className="text-sm text-orange-500">재발주점 도달 품목</p>
-          </CardContent>
-        </Card>
+      {/* 행1: 발주권고 3카드 */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Link href="/dashboard/orders">
+          <Card className="cursor-pointer transition-shadow hover:shadow-md">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-slate-500">발주 필요 (권고)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-orange-600">
+                {stats.needsOrder}
+                <span className="ml-1 text-base font-normal text-slate-400">건</span>
+              </div>
+              <p className="mt-1 text-xs text-orange-500">재발주점 도달 품목 →</p>
+            </CardContent>
+          </Card>
+        </Link>
 
-        <Card className="border-red-200 dark:border-red-900">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-base font-medium text-red-600">발주권고 — 위험품목</CardTitle>
-            <AlertTriangle className="h-5 w-5 text-red-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-red-600">{stats.outOfStock + stats.critical}</div>
-            <p className="text-sm text-red-500">긴급 대응 필요</p>
-          </CardContent>
-        </Card>
+        <Link href="/dashboard/inventory">
+          <Card className="cursor-pointer border-red-200 transition-shadow hover:shadow-md dark:border-red-900">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-red-600 flex items-center gap-1">
+                <AlertTriangle className="h-4 w-4" /> 긴급 발주
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-red-600">
+                {urgentCount}
+                <span className="ml-1 text-base font-normal text-slate-400">건</span>
+              </div>
+              <p className="mt-1 text-xs text-red-500">
+                {stats.shortageValue >= 1_000_000
+                  ? `₩${(stats.shortageValue / 1_000_000).toFixed(1)}백만 · 즉시 대응 →`
+                  : `₩${stats.shortageValue.toLocaleString()} · 즉시 대응 →`}
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/dashboard/inventory">
+          <Card className="cursor-pointer border-blue-200 transition-shadow hover:shadow-md dark:border-blue-900">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-blue-600 flex items-center gap-1">
+                <Archive className="h-4 w-4" /> 과재고
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-blue-600">
+                {stats.excess}
+                <span className="ml-1 text-base font-normal text-slate-400">건</span>
+              </div>
+              <p className="mt-1 text-xs text-blue-500">
+                {stats.excessValue >= 1_000_000
+                  ? `₩${(stats.excessValue / 1_000_000).toFixed(1)}백만 · 재고 최적화 →`
+                  : `₩${stats.excessValue.toLocaleString()} · 재고 최적화 →`}
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
-      {/* KPI 카드 행2: 재고금액·FA·DOH */}
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
-        <Card className="border-red-200 dark:border-red-900">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-base font-medium text-red-600">부족재고 금액</CardTitle>
-            <PackageX className="h-5 w-5 text-red-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              {stats.shortageValue >= 1_000_000
-                ? `${(stats.shortageValue / 1_000_000).toFixed(1)}백만`
-                : stats.shortageValue.toLocaleString()}
-              <span className="ml-1 text-sm font-normal text-slate-400">원</span>
-            </div>
-            <p className="text-sm text-red-500">긴급 발주 필요</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-blue-200 dark:border-blue-900">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-base font-medium text-blue-600">과재고 금액</CardTitle>
-            <Archive className="h-5 w-5 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
-              {stats.excessValue >= 1_000_000
-                ? `${(stats.excessValue / 1_000_000).toFixed(1)}백만`
-                : stats.excessValue.toLocaleString()}
-              <span className="ml-1 text-sm font-normal text-slate-400">원</span>
-            </div>
-            <p className="text-sm text-blue-500">재고 최적화 검토</p>
-          </CardContent>
-        </Card>
-
+      {/* 행2: FA·DOH·발주권고현황대로 3카드 */}
+      <div className="grid gap-4 sm:grid-cols-3">
         <Card className={cn(
           kpi.forecastAccuracy >= 85 ? "border-green-200" : kpi.forecastAccuracy >= 70 ? "border-orange-200" : "border-red-200"
         )}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className={cn(
-              "text-base font-medium",
+              "text-sm font-medium",
               kpi.forecastAccuracy >= 85 ? "text-green-600" : kpi.forecastAccuracy >= 70 ? "text-orange-600" : "text-red-600"
             )}>FA (Forecast Accuracy)</CardTitle>
-            <Brain className={cn(
-              "h-5 w-5",
+            <Brain className={cn("h-4 w-4",
               kpi.forecastAccuracy >= 85 ? "text-green-500" : kpi.forecastAccuracy >= 70 ? "text-orange-500" : "text-red-500"
             )} />
           </CardHeader>
           <CardContent>
-            <div className={cn(
-              "text-3xl font-bold",
+            <div className={cn("text-3xl font-bold",
               kpi.forecastAccuracy >= 85 ? "text-green-600" : kpi.forecastAccuracy >= 70 ? "text-orange-600" : "text-red-600"
             )}>
               {kpi.forecastAccuracy}<span className="ml-1 text-base font-normal text-slate-400">%</span>
             </div>
-            <p className="text-sm text-slate-500">목표 85% 이상</p>
+            <p className="mt-1 text-xs text-slate-500">목표 85% 이상</p>
           </CardContent>
         </Card>
 
-        <Card className={cn(
-          kpi.averageInventoryDays <= 40 ? "border-green-200" : "border-orange-200"
-        )}>
+        <Card className={cn(kpi.averageInventoryDays <= 40 ? "border-green-200" : "border-orange-200")}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className={cn(
-              "text-base font-medium",
+            <CardTitle className={cn("text-sm font-medium",
               kpi.averageInventoryDays <= 40 ? "text-green-600" : "text-orange-600"
             )}>평균재고일 (DOH)</CardTitle>
-            <CalendarDays className={cn(
-              "h-5 w-5",
+            <CalendarDays className={cn("h-4 w-4",
               kpi.averageInventoryDays <= 40 ? "text-green-500" : "text-orange-500"
             )} />
           </CardHeader>
           <CardContent>
-            <div className={cn(
-              "text-3xl font-bold",
+            <div className={cn("text-3xl font-bold",
               kpi.averageInventoryDays <= 40 ? "text-green-600" : "text-orange-600"
             )}>
               {kpi.averageInventoryDays}<span className="ml-1 text-base font-normal text-slate-400">일</span>
             </div>
-            <p className="text-sm text-slate-500">목표 40일 이하</p>
+            <p className="mt-1 text-xs text-slate-500">목표 40일 이하</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-slate-500">발주권고 — 현황대로</CardTitle>
+            <PackageSearch className="h-4 w-4 text-slate-400" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-slate-700">
+              {normalOrderCount}
+              <span className="ml-1 text-base font-normal text-slate-400">건</span>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">정상 범위 내 권고</p>
           </CardContent>
         </Card>
       </div>
 
-
       {/* 빠른 액션 */}
       <QuickActions />
 
-
-      {/* 콘텐츠 영역 */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* 카테고리별 수요 동향 */}
+      {/* 카테고리 수요 동향 + 발주 필요 품목 */}
+      <div className="grid gap-5 lg:grid-cols-2">
         <CategoryDemandWidget rows={categoryDemandRows} />
 
-        {/* 발주 필요 품목 */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>발주 필요 품목</CardTitle>
+            <CardTitle className="text-base">발주 필요 품목</CardTitle>
             <Button variant="outline" size="sm" asChild>
               <Link href="/dashboard/orders">전체 보기</Link>
             </Button>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
+            <div className="space-y-2">
               {needsOrderProducts.length === 0 ? (
                 <div className="flex h-40 items-center justify-center text-slate-400">
                   발주가 필요한 품목이 없습니다
                 </div>
               ) : (
                 needsOrderProducts.map((product) => (
-                  <div
-                    key={product.id}
-                    className="flex items-center justify-between rounded-lg border p-3"
-                  >
-                    <div className="flex-1">
+                  <div key={product.id} className="flex items-center justify-between rounded-lg border p-3">
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-base font-medium">{product.name}</span>
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            "text-sm",
-                            product.status.bgClass,
-                            product.status.textClass
-                          )}
-                        >
+                        <span className="text-sm font-medium truncate">{product.name}</span>
+                        <Badge variant="outline" className={cn("text-xs shrink-0", product.status.bgClass, product.status.textClass)}>
                           {product.status.label}
                         </Badge>
                       </div>
-                      <div className="mt-1 text-sm text-slate-500">
-                        현재고: {product.currentStock} / 안전재고: {product.safetyStock}
+                      <div className="mt-0.5 text-xs text-slate-500">
+                        현재고 {product.currentStock} / 안전재고 {product.safetyStock}
                       </div>
                     </div>
-                    <Button size="sm" className="ml-4" asChild>
+                    <Button size="sm" className="ml-3 shrink-0" asChild>
                       <Link href={`/dashboard/orders?action=new&sku=${product.sku}`}>
-                        <ShoppingCart className="mr-1 h-4 w-4" />
-                        발주
+                        <ShoppingCart className="mr-1 h-3 w-3" />발주
                       </Link>
                     </Button>
                   </div>
@@ -309,15 +298,16 @@ export default async function DashboardPage() {
 
       {/* 회전율 TOP5 */}
       <div>
-        <h2 className="mb-4 text-xl font-semibold">재고 회전율 TOP5</h2>
+        <h2 className="mb-3 text-base font-semibold">재고 회전율 TOP5</h2>
         <TurnoverTop5Card fastest={turnoverTop5.fastest} slowest={turnoverTop5.slowest} />
       </div>
 
-      {/* ABC-XYZ 미니매트릭스 + 최근 활동 */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      {/* ABC-XYZ + 최근 활동 */}
+      <div className="grid gap-5 lg:grid-cols-2">
         <ABCXYZMiniMatrix matrixData={matrixData} />
         <RecentActivityFeed />
       </div>
+
     </div>
   );
 }
