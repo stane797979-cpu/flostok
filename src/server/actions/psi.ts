@@ -2,7 +2,7 @@
 
 import { db } from "@/server/db";
 import { products, inventory, inboundRecords, demandForecasts, psiPlans, purchaseOrders, purchaseOrderItems, inventoryHistory, salesRecords } from "@/server/db/schema";
-import { eq, and, gte, lte, sql } from "drizzle-orm";
+import { eq, and, gte, lte, lt, sql } from "drizzle-orm";
 import { getCurrentUser } from "./auth-helpers";
 import {
   aggregatePSI,
@@ -13,9 +13,29 @@ import { calculateEOQ } from "@/server/services/scm/eoq";
 import { revalidatePath, revalidateTag } from "next/cache";
 
 /**
+ * 지난달 이전 PSI 계획 행 자동 삭제 (입고P, 출고P, SCM 수치 포함 행)
+ */
+async function _clearPastPsiPlans(orgId: string): Promise<void> {
+  const now = new Date();
+  // 이번달 1일 (이번달 미만 = 지난달 이전)
+  const thisMonthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+
+  await db
+    .delete(psiPlans)
+    .where(
+      and(
+        eq(psiPlans.organizationId, orgId),
+        lt(psiPlans.period, thisMonthStart)
+      )
+    );
+}
+
+/**
  * PSI 데이터 조회 내부 로직 (캐싱 대상)
  */
 async function _getPSIDataInternal(orgId: string, pastMonths: number = 1): Promise<PSIResult> {
+  // 지난달 이전 계획 행 자동 삭제
+  await _clearPastPsiPlans(orgId);
   const periods = generatePeriods(pastMonths, 6);
   const firstPeriod = periods[0]; // YYYY-MM
   const lastPeriod = periods[periods.length - 1];
