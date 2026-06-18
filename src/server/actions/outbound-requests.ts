@@ -338,7 +338,7 @@ export async function getOutboundRequestById(requestId: string): Promise<{
  */
 const confirmOutboundRequestSchema = z.object({
   requestId: z.string().uuid(),
-  scheduledDate: z.string().optional(), // 출고 예정일 (YYYY-MM-DD), 없으면 오늘
+  scheduledDate: z.string().optional(),
   items: z.array(
     z.object({
       itemId: z.string().uuid(),
@@ -346,6 +346,7 @@ const confirmOutboundRequestSchema = z.object({
     })
   ),
   notes: z.string().optional(),
+  partialAction: z.enum(["keep", "close"]).optional(), // 부분출고 시: keep=잔량유지, close=종료
 });
 
 /**
@@ -353,7 +354,7 @@ const confirmOutboundRequestSchema = z.object({
  */
 export async function confirmOutboundRequest(
   input: z.infer<typeof confirmOutboundRequestSchema>
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; needsPartialChoice?: boolean; totalRemaining?: number; error?: string }> {
   try {
     const user = await requireWarehouseOrAbove();
     const validated = confirmOutboundRequestSchema.parse(input);
@@ -397,9 +398,31 @@ export async function confirmOutboundRequest(
       };
     }
 
+    // 부분출고 여부 판별: 항목 중 하나라도 confirmedQty < requestedQty
+    const allItems = await db
+      .select()
+      .from(outboundRequestItems)
+      .where(eq(outboundRequestItems.outboundRequestId, validated.requestId));
+
+    const isPartial = validated.items.some((item) => {
+      const orig = allItems.find((a) => a.id === item.itemId);
+      return orig && item.confirmedQuantity < orig.requestedQuantity;
+    });
+
+    // 부분출고인데 partialAction이 없으면 클라이언트에 선택 요청
+    if (isPartial && !validated.partialAction) {
+      const details = validated.items
+        .map((item) => {
+          const orig = allItems.find((a) => a.id === item.itemId);
+          return orig ? { remaining: orig.requestedQuantity - item.confirmedQuantity } : null;
+        })
+        .filter(Boolean);
+      const totalRemaining = details.reduce((s, d) => s + (d?.remaining || 0), 0);
+      return { success: false, needsPartialChoice: true, totalRemaining };
+    }
+
     // 항목별 확정 수량 업데이트 및 재고 차감
     for (const item of validated.items) {
-      // 항목 정보 조회
       const [requestItem] = await db
         .select()
         .from(outboundRequestItems)
@@ -407,15 +430,20 @@ export async function confirmOutboundRequest(
         .limit(1);
 
       if (!requestItem) continue;
-      if (item.confirmedQuantity === 0) continue; // 0개면 재고 차감 안함
+      if (item.confirmedQuantity === 0) continue;
 
-      // confirmedQuantity 업데이트
+      const remaining = requestItem.requestedQuantity - item.confirmedQuantity;
+
+      // confirmedQuantity, remainingQuantity 업데이트
       await db
         .update(outboundRequestItems)
-        .set({ confirmedQuantity: item.confirmedQuantity })
+        .set({
+          confirmedQuantity: item.confirmedQuantity,
+          remainingQuantity: remaining > 0 ? remaining : null,
+        })
         .where(eq(outboundRequestItems.id, item.itemId));
 
-      // 재고 차감 (processInventoryTransaction)
+      // 재고 차감
       const result = await processInventoryTransaction({
         productId: requestItem.productId,
         changeType: request.outboundType as
@@ -432,13 +460,10 @@ export async function confirmOutboundRequest(
       });
 
       if (!result.success) {
-        return {
-          success: false,
-          error: `재고 차감 실패: ${result.error}`,
-        };
+        return { success: false, error: `재고 차감 실패: ${result.error}` };
       }
 
-      // 확정 수량만큼 reservedStock 차감 (할당재고 해제 — currentStock은 processInventoryTransaction에서 이미 차감)
+      // reservedStock 차감
       await db
         .update(inventory)
         .set({
@@ -454,11 +479,15 @@ export async function confirmOutboundRequest(
         );
     }
 
-    // 요청 상태 업데이트 (confirmed)
+    // 부분출고 keep → partial 상태, 잔량 유지
+    // 부분출고 close 또는 전량출고 → confirmed
+    const newStatus =
+      isPartial && validated.partialAction === "keep" ? "partial" : "confirmed";
+
     await db
       .update(outboundRequests)
       .set({
-        status: "confirmed",
+        status: newStatus,
         confirmedById: user.id,
         confirmedAt: new Date(),
         updatedAt: new Date(),

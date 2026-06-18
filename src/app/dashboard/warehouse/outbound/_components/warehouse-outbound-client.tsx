@@ -38,6 +38,8 @@ interface OutboundRequest {
 
 const statusConfig: Record<string, { label: string; className: string }> = {
   pending: { label: "대기중", className: "bg-orange-600" },
+  holding: { label: "홀딩", className: "bg-yellow-500" },
+  partial: { label: "부분출고(잔량대기)", className: "bg-purple-600" },
   confirmed: { label: "출고완료", className: "bg-green-600" },
   cancelled: { label: "취소됨", className: "bg-slate-500" },
 };
@@ -57,7 +59,7 @@ function formatTimeAgo(date: Date): string {
   return d.toLocaleDateString("ko-KR");
 }
 
-export function WarehouseOutboundClient() {
+export function WarehouseOutboundClient({ hideTitle = false }: { hideTitle?: boolean }) {
   const [requests, setRequests] = useState<OutboundRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("pending");
@@ -105,10 +107,12 @@ export function WarehouseOutboundClient() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">출고예정</h1>
-        <p className="mt-2 text-slate-500">출고 요청 목록을 확인하고 출고를 확정하세요</p>
-      </div>
+      {!hideTitle && (
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">출고예정</h1>
+          <p className="mt-2 text-slate-500">출고 요청 목록을 확인하고 출고를 확정하세요</p>
+        </div>
+      )}
 
       <Card>
         <CardHeader>
@@ -126,6 +130,7 @@ export function WarehouseOutboundClient() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="pending">대기중</SelectItem>
+                  <SelectItem value="partial">부분출고(잔량대기)</SelectItem>
                   <SelectItem value="confirmed">출고완료</SelectItem>
                   <SelectItem value="cancelled">취소됨</SelectItem>
                   <SelectItem value="all">전체</SelectItem>
@@ -191,7 +196,7 @@ export function WarehouseOutboundClient() {
                             {formatTimeAgo(req.createdAt)}
                           </div>
                         </div>
-                        {req.status === "pending" ? (
+                        {(req.status === "pending" || req.status === "partial") ? (
                           <Button size="sm" onClick={() => handleConfirmClick(req.id)}>
                             출고 확정
                           </Button>
@@ -257,7 +262,7 @@ export function WarehouseOutboundClient() {
                             </div>
                           </TableCell>
                           <TableCell className="text-right">
-                            {req.status === "pending" ? (
+                            {(req.status === "pending" || req.status === "partial") ? (
                               <Button
                                 size="sm"
                                 onClick={() => handleConfirmClick(req.id)}

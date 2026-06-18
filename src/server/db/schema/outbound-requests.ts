@@ -17,6 +17,7 @@ export const outboundRequestStatusEnum = pgEnum("outbound_request_status", [
   "holding",   // 홀딩
   "confirmed", // 출고완료
   "cancelled", // 취소
+  "partial",   // 부분출고 (잔량 대기중)
 ]);
 
 // 출고요청
@@ -70,6 +71,7 @@ export const outboundRequestItems = pgTable(
       .notNull(),
     requestedQuantity: integer("requested_quantity").notNull(),
     confirmedQuantity: integer("confirmed_quantity"), // 실제 출고 수량 (창고 확인 시)
+    remainingQuantity: integer("remaining_quantity"),  // 부분출고 후 잔량
     notes: text("notes"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()

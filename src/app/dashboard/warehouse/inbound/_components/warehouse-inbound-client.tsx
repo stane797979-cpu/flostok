@@ -39,7 +39,7 @@ const statusConfig: Record<
   partially_received: { label: "부분입고", className: "bg-purple-600" },
 };
 
-export function WarehouseInboundClient() {
+export function WarehouseInboundClient({ hideTitle = false }: { hideTitle?: boolean }) {
   const [orders, setOrders] = useState<WarehouseOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -84,10 +84,12 @@ export function WarehouseInboundClient() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">입고예정</h1>
-        <p className="mt-2 text-slate-500">입고 대기중인 발주서 목록입니다</p>
-      </div>
+      {!hideTitle && (
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">입고예정</h1>
+          <p className="mt-2 text-slate-500">입고 대기중인 발주서 목록입니다</p>
+        </div>
+      )}
 
       <Card>
         <CardHeader>

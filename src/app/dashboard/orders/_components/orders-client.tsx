@@ -18,6 +18,7 @@ import {
   type AutoReorderRecommendation,
 } from "./auto-reorder-recommendations-table";
 import { InboundRecordsTable, type InboundRecord } from "./inbound-records-table";
+import { WarehouseInboundClient } from "@/app/dashboard/warehouse/inbound/_components/warehouse-inbound-client";
 import { OrderDialog } from "./order-dialog";
 import { BulkOrderDialog } from "./bulk-order-dialog";
 import { OrderDetailDialog } from "./order-detail-dialog";
@@ -144,9 +145,9 @@ interface OrdersClientProps {
   initialTab?: string;
 }
 
-const VALID_TABS_SET = new Set(["reorder", "auto-reorder", "orders", "inbound", "delivery", "import-shipment"]);
+const VALID_TABS_SET = new Set(["reorder", "auto-reorder", "orders", "inbound", "inbound-confirm", "delivery", "import-shipment"]);
 
-type TabType = "reorder" | "auto-reorder" | "orders" | "inbound" | "delivery" | "import-shipment";
+type TabType = "reorder" | "auto-reorder" | "orders" | "inbound" | "inbound-confirm" | "delivery" | "import-shipment";
 
 export function OrdersClient({ serverReorderItems = [], deliveryComplianceData = null, serverPurchaseOrders, initialTab }: OrdersClientProps) {
   const router = useRouter();
@@ -735,17 +736,47 @@ export function OrdersClient({ serverReorderItems = [], deliveryComplianceData =
     "auto-reorder": { title: "AI발주", description: "AI가 재고와 수요를 분석하여 추천한 발주 목록입니다" },
     orders: { title: "발주 현황", description: "진행 중인 발주서 목록을 확인하세요" },
     inbound: { title: "입고 현황", description: "월별 입고 기록을 확인하세요" },
+    "inbound-confirm": { title: "입고확정(창고)", description: "입고 대기중인 발주서를 확인하고 입고를 확정하세요" },
     delivery: { title: "납기분석", description: "납기 준수율과 공급자 성과를 분석하세요" },
     "import-shipment": { title: "입항스케줄", description: "수입 화물 입항 일정을 관리하세요" },
   };
 
   const currentPage = pageTitles[activeTab] || pageTitles.reorder;
 
+  const TAB_LABELS: Record<TabType, string> = {
+    reorder: "발주 필요",
+    "auto-reorder": "AI발주",
+    orders: "발주현황",
+    inbound: "입고현황",
+    "inbound-confirm": "입고확정(창고)",
+    delivery: "납기분석",
+    "import-shipment": "입항스케줄",
+  };
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">{currentPage.title}</h1>
+        <h1 className="text-3xl font-bold tracking-tight">발주관리</h1>
         <p className="mt-2 text-slate-500">{currentPage.description}</p>
+      </div>
+
+      {/* 탭 네비게이션 */}
+      <div className="border-b">
+        <nav className="-mb-px flex flex-wrap gap-x-6">
+          {(["reorder", "auto-reorder", "orders", "inbound", "inbound-confirm", "delivery", "import-shipment"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => switchTab(tab)}
+              className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors whitespace-nowrap ${
+                activeTab === tab
+                  ? "border-primary text-primary"
+                  : "border-transparent text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              {TAB_LABELS[tab]}
+            </button>
+          ))}
+        </nav>
       </div>
 
       {activeTab === "reorder" && (
@@ -997,6 +1028,10 @@ export function OrdersClient({ serverReorderItems = [], deliveryComplianceData =
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {activeTab === "inbound-confirm" && (
+        <WarehouseInboundClient hideTitle />
       )}
 
       {activeTab === "delivery" && (

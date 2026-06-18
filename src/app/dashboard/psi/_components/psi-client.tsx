@@ -446,7 +446,7 @@ export function PSIClient({ data, onRefresh }: PSIClientProps) {
       <div className="grid gap-4 md:grid-cols-4">
         <Card className="border-blue-200">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-blue-700">이번달 판매계획</CardTitle>
+            <CardTitle className="text-sm font-medium text-blue-700">이번달 출고계획</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-700">
@@ -463,7 +463,7 @@ export function PSIClient({ data, onRefresh }: PSIClientProps) {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">판매 실적</CardTitle>
+            <CardTitle className="text-sm font-medium">출고 실적</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">

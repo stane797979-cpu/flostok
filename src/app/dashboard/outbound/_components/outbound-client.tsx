@@ -19,6 +19,7 @@ import { OutboundRecordsTable } from "./outbound-records-table";
 import { OutboundEditDialog } from "./outbound-edit-dialog";
 import { OutboundRequestDialog } from "./outbound-request-dialog";
 import { ExcelImportDialog } from "@/components/features/excel/excel-import-dialog";
+import { WarehouseOutboundClient } from "@/app/dashboard/warehouse/outbound/_components/warehouse-outbound-client";
 import { useToast } from "@/hooks/use-toast";
 import { getOutboundRecords, deleteOutboundRecord, type OutboundRecord } from "@/server/actions/outbound";
 import { exportInventoryMovementToExcel } from "@/server/actions/excel-export";
@@ -48,7 +49,7 @@ function formatMonth(date: Date): string {
 }
 
 interface OutboundClientProps {
-  initialTab?: "records" | "upload";
+  initialTab?: "records" | "upload" | "confirm";
 }
 
 export function OutboundClient({ initialTab = "records" }: OutboundClientProps) {
@@ -238,28 +239,54 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
     }
   }, [deleteTarget, outboundMonth, loadOutboundRecords, toast]);
 
+  const [activeTab, setActiveTab] = useState<"records" | "upload" | "confirm">(initialTab);
+
   // 출고현황 탭이면 초기 로드
   useEffect(() => {
-    if (initialTab === "records") {
+    if (activeTab === "records") {
       loadOutboundRecords(outboundMonth);
       loadOutboundRequests();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const pageTitle = initialTab === "upload" ? "출고 업로드" : "출고 현황";
-  const pageDescription = initialTab === "upload"
-    ? "판매(출고) 데이터를 엑셀로 업로드하세요"
-    : "월별 출고 기록을 확인하고 재고 수불부를 다운로드하세요";
+  }, [activeTab]);
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">{pageTitle}</h1>
-        <p className="mt-2 text-slate-500">{pageDescription}</p>
+        <h1 className="text-3xl font-bold tracking-tight">출고관리</h1>
+        <p className="mt-2 text-slate-500">출고 등록 및 현황 관리</p>
       </div>
 
-      {initialTab === "upload" && (
+      {/* 탭 */}
+      <div className="border-b">
+        <nav className="-mb-px flex gap-6">
+          {(["upload", "records", "confirm"] as const).map((tab) => {
+            const labels = { upload: "출고업로드", records: "출고현황", confirm: "출고확정(창고)" };
+            return (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
+                  activeTab === tab
+                    ? "border-primary text-primary"
+                    : "border-transparent text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                {labels[tab]}
+                {tab === "confirm" && pendingCount > 0 && (
+                  <span className="ml-1.5 rounded-full bg-orange-500 px-1.5 py-0.5 text-xs text-white">
+                    {pendingCount}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+
+      {activeTab === "confirm" && <WarehouseOutboundClient hideTitle />}
+
+      {activeTab === "upload" && (
         <Card>
             <CardHeader>
               <CardTitle>판매/출고 데이터 업로드</CardTitle>
@@ -287,7 +314,7 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
         </Card>
       )}
 
-      {initialTab === "records" && (
+      {activeTab === "records" && (
         <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -381,6 +408,9 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
                               )}
                               {req.status === "holding" && (
                                 <Badge className="bg-yellow-100 text-yellow-700 hover:bg-yellow-100">홀딩</Badge>
+                              )}
+                              {req.status === "partial" && (
+                                <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100">부분출고(잔량대기)</Badge>
                               )}
                               {req.status === "confirmed" && (
                                 <Badge className="bg-green-100 text-green-700 hover:bg-green-100">출고완료</Badge>

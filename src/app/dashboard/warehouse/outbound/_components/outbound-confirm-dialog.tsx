@@ -23,7 +23,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Loader2, AlertTriangle, CheckCircle2, PackageMinus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   getOutboundRequestById,
@@ -73,6 +73,8 @@ export function OutboundConfirmDialog({
     Record<string, number>
   >({});
   const [notes, setNotes] = useState("");
+  const [partialChoiceOpen, setPartialChoiceOpen] = useState(false);
+  const [partialRemaining, setPartialRemaining] = useState(0);
 
   const { toast } = useToast();
 
@@ -144,8 +146,8 @@ export function OutboundConfirmDialog({
     return confirmed < item.requestedQuantity;
   }) ?? [];
 
-  // 출고 확정 제출
-  const handleSubmit = async () => {
+  // 출고 확정 제출 (partialAction 없이 → 서버에서 needsPartialChoice 반환 시 모달 표시)
+  const handleSubmit = async (partialAction?: "keep" | "close") => {
     if (!request) return;
 
     if (hasStockIssues) {
@@ -166,13 +168,23 @@ export function OutboundConfirmDialog({
           confirmedQuantity: confirmedQuantities[item.id] || 0,
         })),
         notes: notes || undefined,
+        partialAction,
       });
+
+      if (result.needsPartialChoice) {
+        setPartialRemaining(result.totalRemaining || 0);
+        setPartialChoiceOpen(true);
+        return;
+      }
 
       if (result.success) {
         toast({
-          title: "출고 확정 완료",
-          description: "출고가 확정되었습니다. 재고가 차감되었습니다.",
+          title: partialAction === "keep" ? "부분출고 확정 완료" : "출고 확정 완료",
+          description: partialAction === "keep"
+            ? `출고가 확정되었습니다. 잔량 ${partialRemaining}개가 대기 상태로 유지됩니다.`
+            : "출고가 확정되었습니다. 재고가 차감되었습니다.",
         });
+        setPartialChoiceOpen(false);
         handleClose();
         onSuccess();
       } else {
@@ -373,7 +385,7 @@ export function OutboundConfirmDialog({
             취소
           </Button>
           <Button
-            onClick={handleSubmit}
+            onClick={() => handleSubmit()}
             disabled={isSubmitting || hasStockIssues || !request}
           >
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -381,6 +393,58 @@ export function OutboundConfirmDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* 부분출고 선택 모달 */}
+      <Dialog open={partialChoiceOpen} onOpenChange={setPartialChoiceOpen}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <PackageMinus className="h-5 w-5 text-orange-500" />
+              부분출고 처리 방법
+            </DialogTitle>
+            <DialogDescription>
+              요청 수량보다 적게 출고합니다. 잔량 <strong>{partialRemaining}개</strong>를 어떻게 처리하시겠습니까?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 py-4">
+            <button
+              onClick={() => handleSubmit("keep")}
+              disabled={isSubmitting}
+              className="flex items-start gap-3 rounded-lg border-2 border-blue-200 bg-blue-50 p-4 text-left hover:border-blue-400 transition-colors disabled:opacity-50"
+            >
+              <div className="mt-0.5 h-4 w-4 rounded-full border-2 border-blue-500 bg-blue-500 flex-shrink-0" />
+              <div>
+                <p className="font-medium text-blue-900">잔량 유지 (부분출고)</p>
+                <p className="mt-0.5 text-sm text-blue-700">
+                  잔량 {partialRemaining}개가 출고대기 상태로 유지됩니다. 나중에 추가 출고할 수 있습니다.
+                </p>
+              </div>
+            </button>
+            <button
+              onClick={() => handleSubmit("close")}
+              disabled={isSubmitting}
+              className="flex items-start gap-3 rounded-lg border-2 border-slate-200 bg-slate-50 p-4 text-left hover:border-slate-400 transition-colors disabled:opacity-50"
+            >
+              <div className="mt-0.5 h-4 w-4 rounded-full border-2 border-slate-400 flex-shrink-0" />
+              <div>
+                <p className="font-medium text-slate-900">종료 (발주 완료 처리)</p>
+                <p className="mt-0.5 text-sm text-slate-600">
+                  잔량 {partialRemaining}개를 취소하고 이 요청을 완료 처리합니다.
+                </p>
+              </div>
+            </button>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setPartialChoiceOpen(false)}
+              disabled={isSubmitting}
+            >
+              돌아가기
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
