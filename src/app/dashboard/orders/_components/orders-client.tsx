@@ -612,32 +612,15 @@ export function OrdersClient({ serverReorderItems = [], serverPurchaseOrders, in
             cautionCount={cautionCount}
           />
 
-          {/* AI 발주 추천 (승인/거부 워크플로우) */}
-          <Card>
-            <CardHeader>
-              <CardTitle>AI 발주 추천</CardTitle>
-              <CardDescription>
-                AI가 재고 상태와 수요 예측을 분석하여 생성한 발주 추천입니다. 승인하면 발주서가 자동 생성됩니다
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <AutoReorderRecommendationsTable
-                recommendations={autoReorderRecommendations}
-                selectedIds={selectedAutoReorderIds}
-                onSelectChange={setSelectedAutoReorderIds}
-                onApprove={handleApproveAutoReorders}
-                onReject={handleRejectAutoReorders}
-              />
-            </CardContent>
-          </Card>
-
-          {/* 직접 발주 (수량 직접 입력) */}
+          {/* AI 발주 권고 (승인/거부 워크플로우) */}
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>직접 발주</CardTitle>
-                  <CardDescription>수량을 직접 입력하여 발주서를 작성합니다</CardDescription>
+                  <CardTitle>AI 발주 권고</CardTitle>
+                  <CardDescription>
+                    AI가 재고 상태와 수요 예측을 분석하여 생성한 발주 권고입니다. 승인하면 발주서가 자동 생성됩니다
+                  </CardDescription>
                 </div>
                 <div className="flex gap-2">
                   <input
@@ -683,12 +666,12 @@ export function OrdersClient({ serverReorderItems = [], serverPurchaseOrders, in
               </div>
             </CardHeader>
             <CardContent>
-              <ReorderItemsTable
-                items={reorderItems}
-                selectedIds={selectedIds}
-                onSelectChange={setSelectedIds}
-                onOrderClick={handleOrderClick}
-                onBulkOrderClick={handleBulkOrderClick}
+              <AutoReorderRecommendationsTable
+                recommendations={autoReorderRecommendations}
+                selectedIds={selectedAutoReorderIds}
+                onSelectChange={setSelectedAutoReorderIds}
+                onApprove={handleApproveAutoReorders}
+                onReject={handleRejectAutoReorders}
               />
             </CardContent>
           </Card>
