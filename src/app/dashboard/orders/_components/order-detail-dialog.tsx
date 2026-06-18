@@ -651,34 +651,49 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
                           <TableHead className="whitespace-nowrap">입고일</TableHead>
                           <TableHead className="whitespace-nowrap">SKU</TableHead>
                           <TableHead className="whitespace-nowrap">제품명</TableHead>
-                          <TableHead className="whitespace-nowrap text-right">수량</TableHead>
+                          <TableHead className="whitespace-nowrap text-right">발주수량</TableHead>
+                          <TableHead className="whitespace-nowrap text-right">입고수량</TableHead>
                           <TableHead className="whitespace-nowrap">품질</TableHead>
+                          <TableHead className="whitespace-nowrap">상태</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {inboundRecordsList.map((rec) => (
+                        {inboundRecordsList.map((rec) => {
+                          const isPartial = rec.expectedQuantity != null && rec.receivedQuantity < rec.expectedQuantity;
+                          return (
                           <TableRow key={rec.id}>
                             <TableCell className="whitespace-nowrap text-sm">
                               {rec.date}
                             </TableCell>
                             <TableCell className="whitespace-nowrap font-mono text-xs">{rec.productSku}</TableCell>
                             <TableCell className="whitespace-nowrap text-sm">{rec.productName}</TableCell>
-                            <TableCell className="whitespace-nowrap text-right font-semibold">{rec.receivedQuantity}</TableCell>
+                            <TableCell className="whitespace-nowrap text-right text-slate-500">{rec.expectedQuantity ?? "-"}</TableCell>
+                            <TableCell className="whitespace-nowrap text-right font-semibold">
+                              <span className={isPartial ? "text-orange-600" : ""}>{rec.receivedQuantity}</span>
+                            </TableCell>
                             <TableCell className="whitespace-nowrap">
                               {rec.qualityResult === "pass" ? (
                                 <Badge className="bg-green-600">합격</Badge>
                               ) : rec.qualityResult === "fail" ? (
                                 <Badge variant="destructive">불합격</Badge>
                               ) : rec.qualityResult === "partial" ? (
-                                <Badge variant="destructive" className="bg-orange-600">부분합격</Badge>
+                                <Badge className="bg-orange-600">부분합격</Badge>
                               ) : rec.qualityResult === "pending" ? (
                                 <Badge variant="secondary">검수대기</Badge>
                               ) : (
                                 <Badge variant="outline">-</Badge>
                               )}
                             </TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              {isPartial ? (
+                                <Badge className="bg-yellow-600">부분입고</Badge>
+                              ) : (
+                                <Badge className="bg-green-600">입고완료</Badge>
+                              )}
+                            </TableCell>
                           </TableRow>
-                        ))}
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </div>
