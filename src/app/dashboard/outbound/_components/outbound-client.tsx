@@ -19,6 +19,7 @@ import { OutboundEditDialog } from "./outbound-edit-dialog";
 import { OutboundRegisterDialog } from "./outbound-register-dialog";
 import { ExcelImportDialog } from "@/components/features/excel/excel-import-dialog";
 import { WarehouseOutboundClient } from "@/app/dashboard/warehouse/outbound/_components/warehouse-outbound-client";
+import { OutboundRequestsTab } from "./outbound-requests-tab";
 import { useToast } from "@/hooks/use-toast";
 import { getOutboundRecords, deleteOutboundRecord, type OutboundRecord } from "@/server/actions/outbound";
 import { exportInventoryMovementToExcel } from "@/server/actions/excel-export";
@@ -53,8 +54,8 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<"records" | "confirm">(
-    initialTab === "upload" ? "records" : (initialTab as "records" | "confirm")
+  const [activeTab, setActiveTab] = useState<"records" | "request" | "confirm">(
+    initialTab === "upload" ? "records" : (initialTab as "records" | "request" | "confirm")
   );
 
   const { toast } = useToast();
@@ -185,8 +186,8 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
       {/* 탭 */}
       <div className="border-b">
         <nav className="-mb-px flex gap-6">
-          {(["records", "confirm"] as const).map((tab) => {
-            const labels = { records: "출고현황", confirm: "출고확정(창고)" };
+          {(["records", "request", "confirm"] as const).map((tab) => {
+            const labels = { records: "출고현황", request: "출고요청", confirm: "출고확정(창고)" };
             return (
               <button
                 key={tab}
@@ -204,6 +205,7 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
         </nav>
       </div>
 
+      {activeTab === "request" && <OutboundRequestsTab />}
       {activeTab === "confirm" && <WarehouseOutboundClient hideTitle />}
 
       {activeTab === "records" && (
