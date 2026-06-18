@@ -280,7 +280,7 @@ export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
                       </div>
                     </TooltipTrigger>
                     <TooltipContent side="top" className="max-w-[200px] text-xs">
-                      출고요청 중이거나 홀딩된 수량. 아직 출고 완료 전이라 실사용 불가. (현재고에 포함안됨)
+                      현재고에 포함된 수량 중 출고 예약(홀딩)된 물량. 출고 완료 전이라 실사용 불가.
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
