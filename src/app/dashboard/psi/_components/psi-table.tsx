@@ -69,14 +69,21 @@ function StockCell({ value, safetyStock, italic }: { value: number; safetyStock:
   );
 }
 
-/** 월별 7개 서브컬럼 정의 */
-const SUB_COLUMNS = [
+/** 현재/미래 월: 7개 서브컬럼 */
+const SUB_COLUMNS_FULL = [
   { key: "sop", label: "SCM 가이드", shortLabel: "SCM" },
   { key: "inboundPlan", label: "입고(계획)", shortLabel: "입고P" },
   { key: "inboundActual", label: "입고(실적)", shortLabel: "입고A" },
   { key: "outboundPlan", label: "출고(계획)", shortLabel: "출고P" },
   { key: "outboundActual", label: "출고(실적)", shortLabel: "출고A" },
   { key: "endingPlan", label: "기말(예상)", shortLabel: "기말P" },
+  { key: "endingActual", label: "기말(실적)", shortLabel: "기말A" },
+] as const;
+
+/** 지난달: 실적 3개만 */
+const SUB_COLUMNS_PAST = [
+  { key: "inboundActual", label: "입고(실적)", shortLabel: "입고A" },
+  { key: "outboundActual", label: "출고(실적)", shortLabel: "출고A" },
   { key: "endingActual", label: "기말(실적)", shortLabel: "기말A" },
 ] as const;
 
@@ -198,39 +205,46 @@ export function PSITable({ products, periods }: PSITableProps) {
                 <SortIcon field="currentStock" currentField={sortField} currentDirection={sortDirection} />
               </button>
             </TableHead>
-            {periods.map((period) => (
-              <TableHead
-                key={period}
-                className={cn(
-                  "text-center border-r py-1",
-                  period === currentPeriod && "bg-blue-50 dark:bg-blue-950"
-                )}
-                colSpan={7}
-              >
-                <span className="font-bold text-xs">{formatPeriodLabel(period)}</span>
-              </TableHead>
-            ))}
+            {periods.map((period) => {
+              const isPast = period < currentPeriod;
+              const cols = isPast ? SUB_COLUMNS_PAST : SUB_COLUMNS_FULL;
+              return (
+                <TableHead
+                  key={period}
+                  className={cn(
+                    "text-center border-r py-1",
+                    period === currentPeriod && "bg-blue-50 dark:bg-blue-950"
+                  )}
+                  colSpan={cols.length}
+                >
+                  <span className="font-bold text-xs">{formatPeriodLabel(period)}</span>
+                </TableHead>
+              );
+            })}
           </TableRow>
           {/* 2행: 각 월별 세부 컬럼 */}
           <TableRow>
-            {periods.map((period) => (
-              <Fragment key={period}>
-                {SUB_COLUMNS.map((col, idx) => (
-                  <TableHead
-                    key={`${period}-${col.key}`}
-                    className={cn(
-                      "text-center px-0.5 py-0.5 text-[9px] font-normal text-muted-foreground min-w-[44px] whitespace-nowrap",
-                      period === currentPeriod && "bg-blue-50 dark:bg-blue-950",
-                      idx === SUB_COLUMNS.length - 1 && "border-r",
-                      // 계획컬럼 배경
-                      (col.key === "sop" || col.key === "inboundPlan" || col.key === "outboundPlan" || col.key === "endingPlan") && "bg-purple-50/50 dark:bg-purple-950/30",
-                    )}
-                  >
-                    {col.shortLabel}
-                  </TableHead>
-                ))}
-              </Fragment>
-            ))}
+            {periods.map((period) => {
+              const isPast = period < currentPeriod;
+              const cols = isPast ? SUB_COLUMNS_PAST : SUB_COLUMNS_FULL;
+              return (
+                <Fragment key={period}>
+                  {cols.map((col, idx) => (
+                    <TableHead
+                      key={`${period}-${col.key}`}
+                      className={cn(
+                        "text-center px-0.5 py-0.5 text-[9px] font-normal text-muted-foreground min-w-[44px] whitespace-nowrap",
+                        period === currentPeriod && "bg-blue-50 dark:bg-blue-950",
+                        idx === cols.length - 1 && "border-r",
+                        ("key" in col && (col.key === "sop" || col.key === "inboundPlan" || col.key === "outboundPlan" || col.key === "endingPlan")) && "bg-purple-50/50 dark:bg-purple-950/30",
+                      )}
+                    >
+                      {col.shortLabel}
+                    </TableHead>
+                  ))}
+                </Fragment>
+              );
+            })}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -277,17 +291,35 @@ export function PSITable({ products, periods }: PSITableProps) {
                 const isPast = month.period < currentPeriod;
                 const bg = isCurrent ? "bg-blue-50/50 dark:bg-blue-950/50" : "";
                 const planBg = "bg-purple-50/30 dark:bg-purple-950/20";
-                const dash = <span className="text-slate-300 text-[11px]">-</span>;
+
+                if (isPast) {
+                  return (
+                    <Fragment key={month.period}>
+                      {/* 입고(실적) */}
+                      <TableCell className={cn("text-center p-0.5", bg)}>
+                        <NumCell value={month.inbound} color="text-blue-600" />
+                      </TableCell>
+                      {/* 출고(실적) */}
+                      <TableCell className={cn("text-center p-0.5", bg)}>
+                        <NumCell value={month.outbound} color="text-orange-600" />
+                      </TableCell>
+                      {/* 기말(실적) */}
+                      <TableCell className={cn("text-center p-0.5 border-r", bg)}>
+                        <StockCell value={month.endingStock} safetyStock={product.safetyStock} />
+                      </TableCell>
+                    </Fragment>
+                  );
+                }
 
                 return (
                   <Fragment key={month.period}>
                     {/* SCM (AI 가이드 수량) */}
                     <TableCell className={cn("text-center p-0.5", bg, planBg)}>
-                      {isPast ? dash : <NumCell value={month.sopQuantity} color="text-purple-600" italic />}
+                      <NumCell value={month.sopQuantity} color="text-purple-600" italic />
                     </TableCell>
                     {/* 입고(계획) */}
                     <TableCell className={cn("text-center p-0.5", bg, planBg)}>
-                      {isPast ? dash : <NumCell value={month.inboundPlan} color="text-purple-500" italic />}
+                      <NumCell value={month.inboundPlan} color="text-purple-500" italic />
                     </TableCell>
                     {/* 입고(실적) */}
                     <TableCell className={cn("text-center p-0.5", bg)}>
@@ -295,7 +327,7 @@ export function PSITable({ products, periods }: PSITableProps) {
                     </TableCell>
                     {/* 출고(계획) */}
                     <TableCell className={cn("text-center p-0.5", bg, planBg)}>
-                      {isPast ? dash : <NumCell value={month.outboundPlan} color="text-purple-500" italic />}
+                      <NumCell value={month.outboundPlan} color="text-purple-500" italic />
                     </TableCell>
                     {/* 출고(실적) */}
                     <TableCell className={cn("text-center p-0.5", bg)}>
@@ -303,7 +335,7 @@ export function PSITable({ products, periods }: PSITableProps) {
                     </TableCell>
                     {/* 기말(예상) */}
                     <TableCell className={cn("text-center p-0.5", bg, planBg)}>
-                      {isPast ? dash : <StockCell value={month.plannedEndingStock} safetyStock={product.safetyStock} italic />}
+                      <StockCell value={month.plannedEndingStock} safetyStock={product.safetyStock} italic />
                     </TableCell>
                     {/* 기말(실적) */}
                     <TableCell className={cn("text-center p-0.5 border-r", bg)}>
