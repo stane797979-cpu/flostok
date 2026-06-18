@@ -900,8 +900,10 @@ export function DemandForecastChart() {
                     {boundaryMonth && (
                       <ReferenceLine
                         x={boundaryMonth}
-                        stroke="#93c5fd"
+                        stroke="#64748b"
                         strokeDasharray="6 3"
+                        strokeWidth={1.5}
+                        label={{ value: "▶ 예측 시작", position: "insideTopRight", fontSize: 11, fill: "#64748b", offset: 6 }}
                       />
                     )}
                     <ChartTooltip
