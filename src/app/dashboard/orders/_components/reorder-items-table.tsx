@@ -282,6 +282,9 @@ export function ReorderItemsTable({
                   <SortIcon columnKey="reorderPoint" />
                 </div>
               </TableHead>
+              <TableHead className="whitespace-nowrap text-right text-slate-500">
+                월평균사용량
+              </TableHead>
               <TableHead className={cn("whitespace-nowrap text-right", sortableHeadClass)} onClick={() => handleSort("daysOfInventory")}>
                 <div className="flex items-center justify-end">
                   재고일수{sortLabel("daysOfInventory")}
@@ -319,7 +322,12 @@ export function ReorderItemsTable({
                 <TableCell className="text-right">{item.safetyStock}</TableCell>
                 <TableCell className="text-right">{item.reorderPoint}</TableCell>
                 <TableCell className="text-right text-slate-500">
-                  {item.daysOfInventory !== null ? `${item.daysOfInventory.toFixed(1)}일` : "-"}
+                  {item.avgDailySales !== undefined && item.avgDailySales > 0
+                    ? `${Math.round(item.avgDailySales * 30)}개`
+                    : <span className="text-slate-300">-</span>}
+                </TableCell>
+                <TableCell className="text-right text-slate-500">
+                  {item.daysOfInventory !== null ? `${item.daysOfInventory.toFixed(1)}일` : <span className="text-slate-300">-</span>}
                 </TableCell>
                 <TableCell className="text-right">
                   {item.daysOfInventory === null ? (

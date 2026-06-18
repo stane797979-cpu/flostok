@@ -454,6 +454,9 @@ export function AutoReorderRecommendationsTable({
                   </span>
                 </div>
               </TableHead>
+              <TableHead className="whitespace-nowrap text-right text-slate-500">
+                월평균사용량
+              </TableHead>
               <TableHead
                 className={cn("text-right", sortableHeadClass)}
                 onClick={() => handleSort("recommendedQty")}
@@ -522,6 +525,11 @@ export function AutoReorderRecommendationsTable({
                   <TableCell className="text-right">{recommendation.currentStock}</TableCell>
                   <TableCell className="text-right">{recommendation.safetyStock}</TableCell>
                   <TableCell className="text-right">{recommendation.reorderPoint}</TableCell>
+                  <TableCell className="text-right text-slate-500">
+                    {recommendation.avgDailySales !== undefined && recommendation.avgDailySales > 0
+                      ? `${Math.round(recommendation.avgDailySales * 30)}개`
+                      : <span className="text-slate-300">-</span>}
+                  </TableCell>
                   <TableCell className="text-right">
                     <TooltipProvider delayDuration={200}>
                       <Tooltip>
