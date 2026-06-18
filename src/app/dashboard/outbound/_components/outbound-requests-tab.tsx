@@ -144,7 +144,7 @@ export function OutboundRequestsTab() {
                       <TableHead>요청자</TableHead>
                       <TableHead className="text-center">품목수</TableHead>
                       <TableHead className="text-center">총수량</TableHead>
-                      <TableHead>요청시간</TableHead>
+                      <TableHead>요청일</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -168,8 +168,11 @@ export function OutboundRequestsTab() {
                             {req.totalQuantity.toLocaleString()}개
                           </TableCell>
                           <TableCell>
-                            <div className="flex items-center gap-1 text-sm text-slate-500">
-                              <Clock className="h-3.5 w-3.5" />
+                            <div className="text-sm text-slate-700">
+                              {new Date(req.createdAt).toLocaleDateString("ko-KR")}
+                            </div>
+                            <div className="flex items-center gap-1 text-xs text-slate-400 mt-0.5">
+                              <Clock className="h-3 w-3" />
                               {formatTimeAgo(req.createdAt)}
                             </div>
                           </TableCell>
