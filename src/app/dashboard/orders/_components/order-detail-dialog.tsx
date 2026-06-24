@@ -526,7 +526,11 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
 
               {/* 결재라인 */}
               <div className="rounded-lg border bg-slate-50/50 p-5 dark:bg-slate-800/20 dark:border-slate-700">
-                <ApprovalTimeline />
+                <ApprovalTimeline
+                  purchaseOrderId={orderId}
+                  orderStatus={orderData?.status ?? "draft"}
+                  onApprovalChange={loadOrderData}
+                />
               </div>
 
               {/* 입항스케줄 등록 */}

@@ -1,31 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { CheckCircle2, XCircle, Clock, AlertTriangle, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
+import {
+  getApprovalSteps,
+  approveStep,
+  rejectStep,
+  submitForApproval,
+  resubmitForApproval,
+} from "@/server/actions/purchase-order-approvals";
+import type { PurchaseOrderApproval } from "@/server/db/schema";
 
 type StepStatus = "waiting" | "pending" | "approved" | "rejected";
-
-interface ApprovalStep {
-  id: string;
-  roleName: string;
-  approverName: string;
-  status: StepStatus;
-  comment: string;
-  actedAt: string | null;
-}
-
-const DEFAULT_STEPS: ApprovalStep[] = [
-  { id: "1", roleName: "구매담당", approverName: "", status: "pending",  comment: "", actedAt: null },
-  { id: "2", roleName: "팀장",     approverName: "", status: "waiting",  comment: "", actedAt: null },
-];
-
-function nowStr() {
-  return new Date().toLocaleString("ko-KR", {
-    month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-  });
-}
 
 function statusMeta(status: StepStatus) {
   switch (status) {
@@ -60,53 +49,127 @@ function statusMeta(status: StepStatus) {
   }
 }
 
-export function ApprovalTimeline() {
-  const [steps, setSteps] = useState<ApprovalStep[]>(DEFAULT_STEPS);
+interface ApprovalTimelineProps {
+  purchaseOrderId: string;
+  orderStatus: string;
+  onApprovalChange?: () => void;
+}
+
+export function ApprovalTimeline({ purchaseOrderId, orderStatus, onApprovalChange }: ApprovalTimelineProps) {
+  const [steps, setSteps] = useState<PurchaseOrderApproval[]>([]);
   const [comments, setComments] = useState<Record<string, string>>({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [isPending, startTransition] = useTransition();
+  const { toast } = useToast();
+
+  const loadSteps = async () => {
+    setIsLoading(true);
+    try {
+      const data = await getApprovalSteps(purchaseOrderId);
+      setSteps(data);
+    } catch {
+      toast({ title: "오류", description: "결재라인을 불러오지 못했습니다", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadSteps();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [purchaseOrderId]);
 
   const isRejected = steps.some((s) => s.status === "rejected");
-  const isAllApproved = steps.every((s) => s.status === "approved");
+  const isAllApproved = steps.every((s) => s.status === "approved") && steps.length > 0;
+  const approvedCount = steps.filter((s) => s.status === "approved").length;
 
-  function handleApprove(id: string) {
-    const comment = comments[id] ?? "";
-    setSteps((prev) => {
-      const idx = prev.findIndex((s) => s.id === id);
-      return prev.map((s, i) => {
-        if (s.id === id)
-          return { ...s, status: "approved", comment, actedAt: nowStr() };
-        if (i === idx + 1 && s.status === "waiting")
-          return { ...s, status: "pending" };
-        return s;
-      });
+  function handleApprove(stepId: string) {
+    const comment = comments[stepId] ?? "";
+    startTransition(async () => {
+      const result = await approveStep(stepId, comment || undefined);
+      if (result.success) {
+        toast({ title: "승인 완료", description: "결재가 승인되었습니다" });
+        await loadSteps();
+        onApprovalChange?.();
+      } else {
+        toast({ title: "승인 실패", description: result.error, variant: "destructive" });
+      }
     });
-    setComments((p) => { const n = { ...p }; delete n[id]; return n; });
+    setComments((p) => { const n = { ...p }; delete n[stepId]; return n; });
   }
 
-  function handleReject(id: string) {
-    const comment = comments[id]?.trim();
+  function handleReject(stepId: string) {
+    const comment = comments[stepId]?.trim();
     if (!comment) {
-      alert("반려 사유를 입력해주세요.");
+      toast({ title: "반려 사유 필요", description: "반려 사유를 입력해주세요", variant: "destructive" });
       return;
     }
-    setSteps((prev) => {
-      const idx = prev.findIndex((s) => s.id === id);
-      return prev.map((s, i) => {
-        if (s.id === id)
-          return { ...s, status: "rejected", comment, actedAt: nowStr() };
-        if (i > idx)
-          return { ...s, status: "waiting", comment: "", actedAt: null };
-        return s;
-      });
+    startTransition(async () => {
+      const result = await rejectStep(stepId, comment);
+      if (result.success) {
+        toast({ title: "반려 완료", description: "결재가 반려되었습니다" });
+        await loadSteps();
+        onApprovalChange?.();
+      } else {
+        toast({ title: "반려 실패", description: result.error, variant: "destructive" });
+      }
     });
-    setComments((p) => { const n = { ...p }; delete n[id]; return n; });
+    setComments((p) => { const n = { ...p }; delete n[stepId]; return n; });
+  }
+
+  function handleSubmit() {
+    startTransition(async () => {
+      const result = await submitForApproval(purchaseOrderId);
+      if (result.success) {
+        toast({ title: "결재 상신", description: "결재가 상신되었습니다" });
+        await loadSteps();
+        onApprovalChange?.();
+      } else {
+        toast({ title: "상신 실패", description: result.error, variant: "destructive" });
+      }
+    });
   }
 
   function handleResubmit() {
-    setSteps(DEFAULT_STEPS.map((s) => ({ ...s })));
-    setComments({});
+    startTransition(async () => {
+      const result = await resubmitForApproval(purchaseOrderId);
+      if (result.success) {
+        toast({ title: "재상신 완료", description: "결재가 재상신되었습니다" });
+        await loadSteps();
+        onApprovalChange?.();
+      } else {
+        toast({ title: "재상신 실패", description: result.error, variant: "destructive" });
+      }
+    });
   }
 
-  const approvedCount = steps.filter((s) => s.status === "approved").length;
+  if (isLoading) {
+    return <div className="text-sm text-slate-400 py-4 text-center">결재라인 불러오는 중...</div>;
+  }
+
+  // 결재라인이 없고 draft 상태면 상신 버튼 표시
+  if (steps.length === 0) {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">결재라인</span>
+        </div>
+        {orderStatus === "draft" && (
+          <Button
+            size="sm"
+            onClick={handleSubmit}
+            disabled={isPending}
+            className="h-8 text-xs"
+          >
+            결재 상신
+          </Button>
+        )}
+        {orderStatus !== "draft" && (
+          <p className="text-xs text-slate-400">결재라인이 없습니다</p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -124,6 +187,7 @@ export function ApprovalTimeline() {
               size="sm"
               variant="outline"
               onClick={handleResubmit}
+              disabled={isPending}
               className="h-7 gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-50 text-xs dark:border-amber-600 dark:text-amber-400"
             >
               <RotateCcw className="h-3 w-3" />
@@ -135,37 +199,40 @@ export function ApprovalTimeline() {
 
       {/* 타임라인 */}
       <div className="relative">
-        {/* 세로 연결선 */}
         <div className="absolute left-[17px] top-5 bottom-5 w-0.5 bg-slate-200 dark:bg-slate-700" />
 
         <div className="space-y-2">
           {steps.map((step, idx) => {
-            const meta = statusMeta(step.status);
-            const isPending = step.status === "pending";
+            const meta = statusMeta(step.status as StepStatus);
+            const isStepPending = step.status === "pending";
 
             return (
               <div key={step.id} className="relative flex gap-3">
-                {/* 원형 아이콘 */}
                 <div className={`relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 ${meta.circle}`}>
                   {meta.icon}
                 </div>
 
-                {/* 내용 */}
                 <div className="flex-1 min-w-0 py-1">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="text-xs text-slate-400">{idx + 1}단계</span>
                     <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
                       {step.roleName}
                     </span>
+                    {step.approverName && (
+                      <span className="text-xs text-slate-500">{step.approverName}</span>
+                    )}
                     <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${meta.badge}`}>
                       {meta.label}
                     </span>
                     {step.actedAt && (
-                      <span className="text-xs text-slate-400">{step.actedAt}</span>
+                      <span className="text-xs text-slate-400">
+                        {new Date(step.actedAt).toLocaleString("ko-KR", {
+                          month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+                        })}
+                      </span>
                     )}
                   </div>
 
-                  {/* 의견 / 반려사유 표시 */}
                   {step.comment && (
                     <div className={`mt-1.5 rounded-lg border px-3 py-1.5 text-xs ${
                       step.status === "rejected"
@@ -181,8 +248,7 @@ export function ApprovalTimeline() {
                     </div>
                   )}
 
-                  {/* 검토 중 단계 — 승인/반려 버튼 */}
-                  {isPending && (
+                  {isStepPending && (
                     <div className="mt-2 space-y-2">
                       <textarea
                         rows={2}
@@ -198,6 +264,7 @@ export function ApprovalTimeline() {
                           size="sm"
                           className="h-7 gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
                           onClick={() => handleApprove(step.id)}
+                          disabled={isPending}
                         >
                           <CheckCircle2 className="h-3.5 w-3.5" />
                           승인
@@ -207,6 +274,7 @@ export function ApprovalTimeline() {
                           variant="destructive"
                           className="h-7 gap-1 text-xs"
                           onClick={() => handleReject(step.id)}
+                          disabled={isPending}
                         >
                           <XCircle className="h-3.5 w-3.5" />
                           반려

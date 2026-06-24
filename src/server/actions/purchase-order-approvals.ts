@@ -4,6 +4,7 @@ import { db } from "@/server/db";
 import {
   purchaseOrderApprovals,
   purchaseOrders,
+  alerts,
   type PurchaseOrderApproval,
 } from "@/server/db/schema";
 import { eq, asc } from "drizzle-orm";
@@ -138,6 +139,16 @@ export async function approveStep(
         .update(purchaseOrderApprovals)
         .set({ status: "pending", updatedAt: now })
         .where(eq(purchaseOrderApprovals.id, nextStep.id));
+
+      // 다음 결재자에게 알림 생성
+      await db.insert(alerts).values({
+        organizationId: user.organizationId,
+        type: "order_pending",
+        severity: "info",
+        title: "발주서 결재 요청",
+        message: `[${nextStep.roleName}] 결재 차례가 되었습니다. 발주서를 검토해주세요.`,
+        actionUrl: "/dashboard/orders",
+      });
     } else {
       // 마지막 단계 승인 → 발주서 approved 처리
       await db
