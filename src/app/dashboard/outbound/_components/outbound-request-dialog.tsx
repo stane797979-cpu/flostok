@@ -32,7 +32,7 @@ import { Loader2, Plus, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { createOutboundRequest } from "@/server/actions/outbound-requests";
 import { getInventoryByProductId } from "@/server/actions/inventory";
-import { ProductCombobox } from "@/components/features/common/product-combobox";
+import { ProductCombobox, type ProductOption } from "@/components/features/common/product-combobox";
 
 const OUTBOUND_TYPES = [
   { value: "OUTBOUND_SALE", label: "판매 출고" },
@@ -71,6 +71,8 @@ export function OutboundRequestDialog({
 
   // 새 항목 추가용 임시 상태
   const [tempProductId, setTempProductId] = useState("");
+  const [tempProductName, setTempProductName] = useState("");
+  const [tempProductSku, setTempProductSku] = useState("");
   const [tempQuantity, setTempQuantity] = useState("");
   const [tempCurrentStock, setTempCurrentStock] = useState<number | null>(null);
   const [isLoadingStock, setIsLoadingStock] = useState(false);
@@ -121,6 +123,8 @@ export function OutboundRequestDialog({
       {
         id: crypto.randomUUID(),
         productId: tempProductId,
+        productName: tempProductName,
+        productSku: tempProductSku,
         quantity: Number(tempQuantity),
         currentStock: tempCurrentStock || 0,
         notes: "",
@@ -129,6 +133,8 @@ export function OutboundRequestDialog({
 
     // 초기화
     setTempProductId("");
+    setTempProductName("");
+    setTempProductSku("");
     setTempQuantity("");
     setTempCurrentStock(null);
   };
@@ -200,6 +206,8 @@ export function OutboundRequestDialog({
     setItems([]);
     setNotes("");
     setTempProductId("");
+    setTempProductName("");
+    setTempProductSku("");
     setTempQuantity("");
     setTempCurrentStock(null);
     onOpenChange(false);
@@ -241,6 +249,10 @@ export function OutboundRequestDialog({
                 <ProductCombobox
                   value={tempProductId}
                   onValueChange={setTempProductId}
+                  onProductChange={(p: ProductOption | null) => {
+                    setTempProductName(p?.name ?? "");
+                    setTempProductSku(p?.sku ?? "");
+                  }}
                   disabled={isSubmitting}
                 />
               </div>
@@ -279,7 +291,7 @@ export function OutboundRequestDialog({
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>제품 ID</TableHead>
+                      <TableHead>제품명</TableHead>
                       <TableHead className="text-right">요청수량</TableHead>
                       <TableHead className="text-right">현재고</TableHead>
                       <TableHead className="w-16"></TableHead>
@@ -289,7 +301,10 @@ export function OutboundRequestDialog({
                     {items.map((item) => (
                       <TableRow key={item.id}>
                         <TableCell className="font-medium">
-                          {item.productId.slice(0, 8)}...
+                          {item.productSku && (
+                            <span className="font-mono text-xs text-slate-400 mr-1.5">[{item.productSku}]</span>
+                          )}
+                          {item.productName || item.productId.slice(0, 8) + "..."}
                         </TableCell>
                         <TableCell className="text-right">
                           <Input

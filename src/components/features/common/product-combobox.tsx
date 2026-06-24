@@ -28,6 +28,7 @@ export interface ProductOption {
 interface ProductComboboxProps {
   value: string;
   onValueChange: (value: string) => void;
+  onProductChange?: (product: ProductOption | null) => void;
   disabled?: boolean;
   placeholder?: string;
 }
@@ -35,6 +36,7 @@ interface ProductComboboxProps {
 export function ProductCombobox({
   value,
   onValueChange,
+  onProductChange,
   disabled = false,
   placeholder = "제품을 검색하세요...",
 }: ProductComboboxProps) {
@@ -95,7 +97,9 @@ export function ProductCombobox({
                       key={product.id}
                       value={`${product.sku} ${product.name}`}
                       onSelect={() => {
-                        onValueChange(product.id === value ? "" : product.id);
+                        const newId = product.id === value ? "" : product.id;
+                        onValueChange(newId);
+                        onProductChange?.(newId ? product : null);
                         setOpen(false);
                       }}
                     >
