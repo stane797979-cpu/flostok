@@ -774,6 +774,20 @@ export function OrdersClient({ serverReorderItems = [], serverPurchaseOrders, in
         onOpenChange={setOrderDialogOpen}
         product={selectedProduct}
         onSubmit={handleOrderSubmit}
+        onExcelUpload={(file) => {
+          const formData = new FormData();
+          formData.append("file", file);
+          startUploadTransition(async () => {
+            const result = await uploadPurchaseOrderExcel(formData);
+            if (result.success) {
+              toast({ title: "업로드 완료", description: result.message });
+              loadPurchaseOrders();
+              loadReorderItems();
+            } else {
+              toast({ title: "업로드 실패", description: result.message, variant: "destructive" });
+            }
+          });
+        }}
       />
 
       <BulkOrderDialog
