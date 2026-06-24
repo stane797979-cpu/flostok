@@ -13,10 +13,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ChevronLeft, ChevronRight, Download, Loader2, Plus, Upload } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Loader2, Upload } from "lucide-react";
 import { OutboundRecordsTable } from "./outbound-records-table";
 import { OutboundEditDialog } from "./outbound-edit-dialog";
-import { OutboundRegisterDialog } from "./outbound-register-dialog";
 import { ExcelImportDialog } from "@/components/features/excel/excel-import-dialog";
 import { WarehouseOutboundClient } from "@/app/dashboard/warehouse/outbound/_components/warehouse-outbound-client";
 import { OutboundRequestsTab } from "./outbound-requests-tab";
@@ -47,7 +46,6 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
   const [isDownloadingMovement, setIsDownloadingMovement] = useState(false);
 
   const [importDialogOpen, setImportDialogOpen] = useState(false);
-  const [registerDialogOpen, setRegisterDialogOpen] = useState(false);
   const [editRecord, setEditRecord] = useState<OutboundRecord | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<OutboundRecord | null>(null);
@@ -261,10 +259,6 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
               <div className="flex items-center justify-between">
                 <CardTitle>출고 현황</CardTitle>
                 <div className="flex items-center gap-2">
-                  <Button size="sm" onClick={() => setRegisterDialogOpen(true)}>
-                    <Plus className="mr-1 h-4 w-4" />
-                    건별 등록
-                  </Button>
                   <Button variant="outline" size="sm" onClick={() => setImportDialogOpen(true)}>
                     <Upload className="mr-1 h-4 w-4" />
                     엑셀 업로드
@@ -306,16 +300,6 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
           </Card>
         </>
       )}
-
-      {/* 건별 등록 다이얼로그 */}
-      <OutboundRegisterDialog
-        open={registerDialogOpen}
-        onOpenChange={setRegisterDialogOpen}
-        onSuccess={() => {
-          toast({ title: "등록 완료", description: "출고 기록이 등록되었습니다" });
-          loadOutboundRecords(outboundMonth);
-        }}
-      />
 
       {/* 엑셀 업로드 다이얼로그 */}
       <ExcelImportDialog
