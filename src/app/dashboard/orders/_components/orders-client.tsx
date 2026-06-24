@@ -29,6 +29,7 @@ import {
   uploadPurchaseOrderExcel,
 } from "@/server/actions/purchase-orders";
 import { exportPurchaseOrderToExcel } from "@/server/actions/excel-export";
+import { submitForApproval } from "@/server/actions/purchase-order-approvals";
 import type { ReorderItem as ServerReorderItem } from "@/server/services/scm/reorder-recommendation";
 
 /**
@@ -337,10 +338,12 @@ export function OrdersClient({ serverReorderItems = [], serverPurchaseOrders, in
         notes: data.notes,
       });
 
-      if (result.success) {
+      if (result.success && result.orderId) {
+        // 발주서 생성 즉시 결재 상신 (draft → pending)
+        await submitForApproval(result.orderId);
         toast({
-          title: "발주 완료",
-          description: `${data.productName} ${data.quantity}개 발주가 생성되었습니다`,
+          title: "발주 등록 완료",
+          description: `${data.productName} ${data.quantity}개 발주가 결재 상신되었습니다`,
         });
         setReorderItems((prev) => prev.filter((item) => item.productId !== data.productId));
         setSelectedProduct(null);
