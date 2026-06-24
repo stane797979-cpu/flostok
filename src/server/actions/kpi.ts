@@ -10,6 +10,7 @@ import { measureKPIMetrics, getKPITrendData } from "@/server/services/scm/kpi-me
 import type { KPIMetrics } from "@/server/services/scm/kpi-improvement";
 import type { KPITrend, KPIFilterOptions } from "@/server/services/scm/kpi-measurement";
 import { getPSIData } from "./psi";
+import { unstable_cache } from "next/cache";
 
 export type { KPIFilterOptions };
 
@@ -38,17 +39,19 @@ export async function getKPIDashboardData(
   filters?: KPIFilterOptions
 ): Promise<KPIDashboardData> {
   const user = await requireAuth();
+  const orgId = user.organizationId;
 
-  const [metrics, trends] = await Promise.all([
-    measureKPIMetrics(user.organizationId, filters),
-    getKPITrendData(user.organizationId, 6, filters),
-  ]);
-
-  return {
-    metrics,
-    trends,
-    targets: DEFAULT_TARGETS,
-  };
+  return unstable_cache(
+    async () => {
+      const [metrics, trends] = await Promise.all([
+        measureKPIMetrics(orgId, filters),
+        getKPITrendData(orgId, 6, filters),
+      ]);
+      return { metrics, trends, targets: DEFAULT_TARGETS };
+    },
+    [`kpi-dashboard-${orgId}-${JSON.stringify(filters ?? {})}`],
+    { revalidate: 120, tags: [`kpi-${orgId}`] }
+  )();
 }
 
 /**
@@ -62,38 +65,45 @@ export async function getKPISummary(): Promise<{
   forecastAccuracy: number;
 }> {
   const user = await requireAuth();
-  const [metrics, psiResult] = await Promise.all([
-    measureKPIMetrics(user.organizationId),
-    getPSIData(3).catch(() => null),
-  ]);
+  const orgId = user.organizationId;
 
-  // FA = 100 - MAPE (PSI 판매계획 vs 실적 기반, 최근 3개월)
-  let forecastAccuracy = 0;
-  if (psiResult && psiResult.periods.length > 0) {
-    const now = new Date();
-    const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    const pastPeriods = psiResult.periods.filter((p) => p < currentPeriod).slice(-3);
-    let totalMAPE = 0;
-    let validCount = 0;
-    for (const p of psiResult.products) {
-      for (const period of pastPeriods) {
-        const m = p.months.find((mo) => mo.period === period);
-        if (m && m.outboundPlan > 0) {
-          totalMAPE += Math.abs(m.outbound - m.outboundPlan) / m.outboundPlan;
-          validCount++;
+  return unstable_cache(
+    async () => {
+      const [metrics, psiResult] = await Promise.all([
+        measureKPIMetrics(orgId),
+        getPSIData(3).catch(() => null),
+      ]);
+
+      let forecastAccuracy = 0;
+      if (psiResult && psiResult.periods.length > 0) {
+        const now = new Date();
+        const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+        const pastPeriods = psiResult.periods.filter((p) => p < currentPeriod).slice(-3);
+        let totalMAPE = 0;
+        let validCount = 0;
+        for (const p of psiResult.products) {
+          for (const period of pastPeriods) {
+            const m = p.months.find((mo) => mo.period === period);
+            if (m && m.outboundPlan > 0) {
+              totalMAPE += Math.abs(m.outbound - m.outboundPlan) / m.outboundPlan;
+              validCount++;
+            }
+          }
         }
+        forecastAccuracy = validCount > 0
+          ? Math.max(0, Number((100 - (totalMAPE / validCount) * 100).toFixed(1)))
+          : 0;
       }
-    }
-    forecastAccuracy = validCount > 0
-      ? Math.max(0, Number((100 - (totalMAPE / validCount) * 100).toFixed(1)))
-      : 0;
-  }
 
-  return {
-    inventoryTurnoverRate: Number(metrics.inventoryTurnoverRate.toFixed(1)),
-    averageInventoryDays: Number(metrics.averageInventoryDays.toFixed(1)),
-    onTimeOrderRate: Number(metrics.onTimeOrderRate.toFixed(1)),
-    stockoutRate: Number(metrics.stockoutRate.toFixed(1)),
-    forecastAccuracy,
-  };
+      return {
+        inventoryTurnoverRate: Number(metrics.inventoryTurnoverRate.toFixed(1)),
+        averageInventoryDays: Number(metrics.averageInventoryDays.toFixed(1)),
+        onTimeOrderRate: Number(metrics.onTimeOrderRate.toFixed(1)),
+        stockoutRate: Number(metrics.stockoutRate.toFixed(1)),
+        forecastAccuracy,
+      };
+    },
+    [`kpi-summary-${orgId}`],
+    { revalidate: 120, tags: [`kpi-${orgId}`] }
+  )();
 }

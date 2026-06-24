@@ -10,7 +10,7 @@ import {
   type PSIResult,
 } from "@/server/services/scm/psi-aggregation";
 import { calculateEOQ } from "@/server/services/scm/eoq";
-import { revalidatePath, revalidateTag } from "next/cache";
+import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 
 /**
  * 지난달 이전 PSI 계획 행 자동 삭제 (입고P, 출고P, SCM 수치 포함 행)
@@ -240,7 +240,11 @@ export async function getPSIData(pastMonths: number = 6): Promise<PSIResult> {
   const user = await getCurrentUser();
   const orgId = user?.organizationId || "00000000-0000-0000-0000-000000000001";
 
-  return _getPSIDataInternal(orgId, pastMonths);
+  return unstable_cache(
+    () => _getPSIDataInternal(orgId, pastMonths),
+    [`psi-data-${orgId}-${pastMonths}`],
+    { revalidate: 60, tags: [`psi-${orgId}`] }
+  )();
 }
 
 /**

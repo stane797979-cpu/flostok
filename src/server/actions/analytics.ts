@@ -11,7 +11,7 @@ import { unstable_cache } from 'next/cache'
 import { requireAuth } from './auth-helpers'
 import { db } from '@/server/db'
 import { products, salesRecords, inventory, demandForecasts } from '@/server/db/schema'
-import { eq, and, gte, sql, desc } from 'drizzle-orm'
+import { eq, and, gte, sql, desc, inArray } from 'drizzle-orm'
 import {
   performABCAnalysis,
   performXYZAnalysis,
@@ -228,20 +228,34 @@ async function _getABCXYZAnalysisInternal(orgId: string) {
   const allCvs = analysisProducts.map((p) => p.variationRate).filter((v) => v > 0)
   const avgCV = allCvs.length > 0 ? allCvs.reduce((s, v) => s + v, 0) / allCvs.length : 0
 
-  // 계산된 등급을 DB에 즉시 저장 (분석 탭 = PSI = 제품목록 모두 동일한 등급 사용)
+  // 계산된 등급을 DB에 즉시 저장 — 단일 CASE WHEN UPDATE (N개 개별 UPDATE 대신)
   const fmrMap3 = new Map(fmrResults.map((r) => [r.id, r.grade]))
-  await Promise.all(
-    combined.map((item) =>
-      db.update(products)
-        .set({
-          abcGrade: item.abcGrade as "A" | "B" | "C",
-          xyzGrade: item.xyzGrade as "X" | "Y" | "Z",
-          fmrGrade: (fmrMap3.get(item.id) ?? null) as "F" | "M" | "R" | null,
-          updatedAt: new Date(),
-        })
-        .where(and(eq(products.id, item.id), eq(products.organizationId, orgId)))
+  if (combined.length > 0) {
+    const productIds = combined.map((item) => item.id)
+    const abcCase = sql.join(
+      combined.map((item) => sql`WHEN ${products.id} = ${item.id} THEN ${item.abcGrade}`),
+      sql` `
     )
-  )
+    const xyzCase = sql.join(
+      combined.map((item) => sql`WHEN ${products.id} = ${item.id} THEN ${item.xyzGrade}`),
+      sql` `
+    )
+    const fmrCase = sql.join(
+      combined.map((item) => {
+        const grade = fmrMap3.get(item.id) ?? null
+        return sql`WHEN ${products.id} = ${item.id} THEN ${grade}`
+      }),
+      sql` `
+    )
+    await db.update(products)
+      .set({
+        abcGrade: sql`CASE ${abcCase} ELSE ${products.abcGrade} END`,
+        xyzGrade: sql`CASE ${xyzCase} ELSE ${products.xyzGrade} END`,
+        fmrGrade: sql`CASE ${fmrCase} ELSE ${products.fmrGrade} END`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(products.organizationId, orgId), inArray(products.id, productIds)))
+  }
 
   return {
     products: analysisProducts,

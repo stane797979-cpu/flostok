@@ -3,7 +3,7 @@
 import { unstable_cache } from "next/cache";
 import { db } from "@/server/db";
 import { products, inventory, salesRecords } from "@/server/db/schema";
-import { eq, and, sql, isNotNull } from "drizzle-orm";
+import { eq, and, sql, isNotNull, gte, lte } from "drizzle-orm";
 import { getCurrentUser } from "./auth-helpers";
 
 export interface TurnoverData {
@@ -51,7 +51,26 @@ export async function getInventoryTurnoverData(): Promise<TurnoverSummary> {
       const oneYearAgoStr = oneYearAgo.toISOString().split("T")[0];
       const todayStr = now.toISOString().split("T")[0];
 
-      // 1) 활성 제품 + 현재 재고 + 연간 판매 합계를 단일 쿼리로 조회
+      // 1) 판매 집계를 별도 쿼리로 먼저 조회 (서브쿼리 N+1 대신 JOIN + GROUP BY)
+      const salesAgg = await db
+        .select({
+          productId: salesRecords.productId,
+          annualSalesQty: sql<number>`coalesce(sum(${salesRecords.quantity}), 0)`,
+          annualSalesAmount: sql<number>`coalesce(sum(${salesRecords.totalAmount}), 0)`,
+        })
+        .from(salesRecords)
+        .where(
+          and(
+            eq(salesRecords.organizationId, orgId),
+            gte(salesRecords.date, oneYearAgoStr),
+            lte(salesRecords.date, todayStr)
+          )
+        )
+        .groupBy(salesRecords.productId);
+
+      const salesMap = new Map(salesAgg.map((r) => [r.productId, r]));
+
+      // 2) 제품 + 재고 조회 (판매 집계와 분리)
       const rows = await db
         .select({
           productId: products.id,
@@ -60,22 +79,6 @@ export async function getInventoryTurnoverData(): Promise<TurnoverSummary> {
           costPrice: products.costPrice,
           unitPrice: products.unitPrice,
           currentStock: inventory.currentStock,
-          // 연간 판매 수량 합계
-          annualSalesQty: sql<number>`coalesce(
-            (SELECT sum(${salesRecords.quantity}) FROM ${salesRecords}
-             WHERE ${salesRecords.productId} = ${products.id}
-               AND ${salesRecords.organizationId} = ${orgId}
-               AND ${salesRecords.date} >= ${oneYearAgoStr}
-               AND ${salesRecords.date} <= ${todayStr}
-            ), 0)`,
-          // 연간 판매 금액 합계
-          annualSalesAmount: sql<number>`coalesce(
-            (SELECT sum(${salesRecords.totalAmount}) FROM ${salesRecords}
-             WHERE ${salesRecords.productId} = ${products.id}
-               AND ${salesRecords.organizationId} = ${orgId}
-               AND ${salesRecords.date} >= ${oneYearAgoStr}
-               AND ${salesRecords.date} <= ${todayStr}
-            ), 0)`,
         })
         .from(products)
         .leftJoin(inventory, eq(products.id, inventory.productId))
@@ -92,8 +95,9 @@ export async function getInventoryTurnoverData(): Promise<TurnoverSummary> {
         const costPrice = row.costPrice || 0;
         const unitPrice = row.unitPrice || 0;
         const currentStock = row.currentStock || 0;
-        const annualSalesQty = Number(row.annualSalesQty) || 0;
-        const annualSalesAmount = Number(row.annualSalesAmount) || 0;
+        const salesData = salesMap.get(row.productId);
+        const annualSalesQty = Number(salesData?.annualSalesQty) || 0;
+        const annualSalesAmount = Number(salesData?.annualSalesAmount) || 0;
 
         // COGS = 판매수량 × 원가 (원가가 없으면 판매액의 70% 추정)
         const cogs = costPrice > 0

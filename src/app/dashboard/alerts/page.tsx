@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -76,55 +76,44 @@ function formatRelativeTime(date: Date): string {
 }
 
 export default function AlertsPage() {
-  const [alertItems, setAlertItems] = useState<AlertListItem[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [total, setTotal] = useState(0);
+  // 전체 알림을 한 번만 가져오고, 탭 필터는 클라이언트에서 처리
+  const [allAlerts, setAllAlerts] = useState<AlertListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("all");
   const { toast } = useToast();
   const router = useRouter();
 
-  const loadAlerts = useCallback(async (unreadOnly = false) => {
-    setIsLoading(true);
-    try {
-      const result = await getAlerts({ unreadOnly, limit: 100 });
-      setAlertItems(result.alerts);
-      setUnreadCount(result.unreadCount);
-      setTotal(result.total);
-    } catch {
-      console.error("알림 조회 실패");
-    } finally {
+  useEffect(() => {
+    getAlerts({ limit: 200 }).then((result) => {
+      setAllAlerts(result.alerts);
       setIsLoading(false);
-    }
+    }).catch(() => setIsLoading(false));
   }, []);
 
-  useEffect(() => {
-    loadAlerts(activeTab === "unread");
-  }, [activeTab, loadAlerts]);
+  // 탭 필터는 클라이언트에서 — DB 재조회 없음
+  const alertItems = activeTab === "unread"
+    ? allAlerts.filter((a) => !a.isRead)
+    : allAlerts;
+
+  const unreadCount = allAlerts.filter((a) => !a.isRead).length;
+  const total = allAlerts.length;
 
   const handleMarkAsRead = async (alertId: string) => {
     await markAlertAsRead(alertId);
-    setAlertItems((prev) =>
-      prev.map((a) => (a.id === alertId ? { ...a, isRead: true } : a))
-    );
-    setUnreadCount((prev) => Math.max(0, prev - 1));
+    setAllAlerts((prev) => prev.map((a) => (a.id === alertId ? { ...a, isRead: true } : a)));
   };
 
   const handleMarkAllAsRead = async () => {
     const result = await markAllAlertsAsRead();
     if (result.success) {
-      setAlertItems((prev) => prev.map((a) => ({ ...a, isRead: true })));
-      setUnreadCount(0);
+      setAllAlerts((prev) => prev.map((a) => ({ ...a, isRead: true })));
       toast({ title: "전체 읽음 처리", description: `${result.count}개 알림을 읽음 처리했습니다` });
     }
   };
 
   const handleDelete = async (alertId: string) => {
-    const item = alertItems.find((a) => a.id === alertId);
     await deleteAlert(alertId);
-    setAlertItems((prev) => prev.filter((a) => a.id !== alertId));
-    setTotal((prev) => prev - 1);
-    if (item && !item.isRead) setUnreadCount((prev) => Math.max(0, prev - 1));
+    setAllAlerts((prev) => prev.filter((a) => a.id !== alertId));
     toast({ title: "알림 삭제", description: "알림이 삭제되었습니다" });
   };
 
@@ -150,7 +139,6 @@ export default function AlertsPage() {
         )}
       </div>
 
-      {/* 요약 카드 */}
       <div className="grid grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-2">
@@ -178,13 +166,12 @@ export default function AlertsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">
-              {alertItems.filter((a) => a.severity === "critical" && !a.isRead).length}
+              {allAlerts.filter((a) => a.severity === "critical" && !a.isRead).length}
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* 알림 리스트 */}
       <Card>
         <CardHeader className="pb-3">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -231,20 +218,13 @@ export default function AlertsPage() {
                     )}
                     onClick={() => handleClick(alert)}
                   >
-                    {/* 아이콘 */}
                     <div className={cn("mt-0.5 rounded-full p-1.5", severity.color)}>
                       <SeverityIcon className="h-4 w-4" />
                     </div>
 
-                    {/* 내용 */}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span
-                          className={cn(
-                            "text-sm font-semibold",
-                            !alert.isRead && "text-slate-900"
-                          )}
-                        >
+                        <span className={cn("text-sm font-semibold", !alert.isRead && "text-slate-900")}>
                           {alert.title}
                         </span>
                         <Badge variant="outline" className="text-[10px]">
@@ -272,17 +252,13 @@ export default function AlertsPage() {
                       </div>
                     </div>
 
-                    {/* 액션 */}
                     <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                       {!alert.isRead && (
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleMarkAsRead(alert.id);
-                          }}
+                          onClick={(e) => { e.stopPropagation(); handleMarkAsRead(alert.id); }}
                           title="읽음 처리"
                         >
                           <CheckCheck className="h-4 w-4 text-slate-400" />
@@ -292,10 +268,7 @@ export default function AlertsPage() {
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(alert.id);
-                        }}
+                        onClick={(e) => { e.stopPropagation(); handleDelete(alert.id); }}
                         title="삭제"
                       >
                         <Trash2 className="h-4 w-4 text-slate-400 hover:text-red-500" />
