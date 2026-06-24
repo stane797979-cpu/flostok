@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useTransition } from "react";
 import {
   Dialog,
   DialogContent,
@@ -19,9 +19,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Package, Calendar, Building2, FileText, Download, ChevronRight, XCircle, Ship, Plus, Pencil, Check, X, History, Clock } from "lucide-react";
+import { Package, Calendar, Building2, FileText, Download, ChevronRight, XCircle, Ship, Plus, Pencil, Check, X, History, Clock, RotateCcw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { getPurchaseOrderById, updatePurchaseOrderStatus, updatePurchaseOrderExpectedDate } from "@/server/actions/purchase-orders";
 import { createImportShipment } from "@/server/actions/import-shipments";
 import { getInboundRecords } from "@/server/actions/inbound";
@@ -29,6 +30,13 @@ import { getEntityActivityLogs } from "@/server/actions/activity-logs";
 import type { ActivityLog } from "@/server/actions/activity-logs";
 import { useToast } from "@/hooks/use-toast";
 import { exportPurchaseOrderToExcel } from "@/server/actions/excel-export";
+import {
+  getApprovalSteps,
+  approveStep,
+  rejectStep,
+  resubmitForApproval,
+} from "@/server/actions/purchase-order-approvals";
+import type { PurchaseOrderApproval } from "@/server/db/schema";
 
 // 상태별 다음 단계 정의
 const nextStatusActions: Record<string, { label: string; status: string; variant?: "default" | "outline" }[]> = {
@@ -93,6 +101,10 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
     qualityResult: string | null;
   }>>([]);
   const [activityLogsList, setActivityLogsList] = useState<ActivityLog[]>([]);
+  const [approvalSteps, setApprovalSteps] = useState<PurchaseOrderApproval[]>([]);
+  const [rejectComment, setRejectComment] = useState("");
+  const [rejectingStepId, setRejectingStepId] = useState<string | null>(null);
+  const [isPendingApproval, startApprovalTransition] = useTransition();
   const { toast } = useToast();
 
   // 발주서 데이터 로드
@@ -106,12 +118,14 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
   const loadOrderData = async () => {
     setIsLoading(true);
     try {
-      const [data, inboundResult, logs] = await Promise.all([
+      const [data, inboundResult, logs, steps] = await Promise.all([
         getPurchaseOrderById(orderId),
         getInboundRecords({ orderId, limit: 100 }),
         getEntityActivityLogs(orderId, 30),
+        getApprovalSteps(orderId),
       ]);
       setOrderData(data);
+      setApprovalSteps(steps);
       setInboundRecordsList(
         inboundResult.records.map((r) => ({
           id: r.id,
@@ -522,6 +536,230 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
                   </div>
                 </div>
               </div>
+
+              {/* 결재 현황 */}
+              {(approvalSteps.length > 0 || ["draft", "pending", "ordered", "received", "completed"].includes(orderData.status)) && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-semibold text-sm text-slate-600">결재 현황</h4>
+                    {approvalSteps.some((s) => s.status === "rejected") && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-50 text-xs"
+                        disabled={isPendingApproval}
+                        onClick={() => {
+                          startApprovalTransition(async () => {
+                            const result = await resubmitForApproval(orderId);
+                            if (result.success) {
+                              toast({ title: "재상신 완료", description: "결재가 재상신되었습니다" });
+                              const steps = await getApprovalSteps(orderId);
+                              setApprovalSteps(steps);
+                              onStatusChange?.();
+                            } else {
+                              toast({ title: "재상신 실패", description: result.error, variant: "destructive" });
+                            }
+                          });
+                        }}
+                      >
+                        <RotateCcw className="h-3 w-3" />
+                        재상신
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* 가로 레인 */}
+                  <div className="flex items-stretch gap-0">
+                    {(() => {
+                      const status = orderData.status;
+                      // 레인 정의: 각 레인이 어느 승인 단계와 연결되는지
+                      const lanes: { label: string; stepOrder: number | null; alwaysDoneOn: string[] }[] = [
+                        { label: "기안", stepOrder: null, alwaysDoneOn: ["pending", "ordered", "received", "completed", "approved"] },
+                        { label: "구매담당", stepOrder: 1, alwaysDoneOn: [] },
+                        { label: "팀장 승인", stepOrder: 2, alwaysDoneOn: [] },
+                        { label: "발주 확정", stepOrder: null, alwaysDoneOn: ["ordered", "received", "completed"] },
+                      ];
+
+                      return lanes.map((lane, idx) => {
+                        const step = lane.stepOrder !== null
+                          ? approvalSteps.find((s) => s.stepOrder === lane.stepOrder)
+                          : null;
+
+                        const isRejected = step?.status === "rejected";
+                        const isDone = step
+                          ? step.status === "approved"
+                          : lane.alwaysDoneOn.includes(status);
+                        const isCurrent = step
+                          ? step.status === "pending"
+                          : (!isDone && !isRejected && lane.stepOrder === null && status === "draft" && idx === 0);
+
+                        // 반려된 경우
+                        if (isRejected) {
+                          const borderRadius = idx === 0 ? "6px 0 0 6px" : idx === lanes.length - 1 ? "0 6px 6px 0" : "0";
+                          return (
+                            <div
+                              key={lane.label}
+                              className="flex-1 text-center px-1 py-2.5"
+                              style={{ background: "#fff1f2", border: "2px solid #fca5a5", borderRadius, boxShadow: "0 0 0 3px rgba(220,38,38,0.12)" }}
+                            >
+                              <div className="text-[10px] font-bold mb-1" style={{ color: "#dc2626" }}>{lane.label}</div>
+                              <div className="text-[11px] font-bold mb-1" style={{ color: "#dc2626" }}>반려</div>
+                              {step?.approverName && (
+                                <div className="text-[10px] text-red-400">{step.approverName}</div>
+                              )}
+                              {step?.comment && (
+                                <div className="mt-1 text-[10px] text-red-500 bg-red-50 rounded px-1 py-0.5 leading-tight">{step.comment}</div>
+                              )}
+                            </div>
+                          );
+                        }
+
+                        if (isDone) {
+                          const borderRadius = idx === 0 ? "6px 0 0 6px" : idx === lanes.length - 1 ? "0 6px 6px 0" : "0";
+                          return (
+                            <div
+                              key={lane.label}
+                              className="flex-1 text-center px-1 py-2.5"
+                              style={{ background: "#f0fdf4", border: "2px solid #bbf7d0", borderRadius }}
+                            >
+                              <div className="text-[10px] font-bold mb-1" style={{ color: "#16a34a" }}>{lane.label}</div>
+                              <div className="text-[11px] font-semibold mb-1" style={{ color: "#16a34a" }}>완료</div>
+                              {step?.approverName ? (
+                                <div className="text-[10px] text-green-600">{step.approverName}</div>
+                              ) : (
+                                <div className="text-[10px] text-green-400">-</div>
+                              )}
+                              {step?.actedAt && (
+                                <div className="text-[9px] text-green-400 mt-0.5">
+                                  {new Date(step.actedAt).toLocaleDateString("ko-KR", { month: "short", day: "numeric" })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+
+                        if (isCurrent) {
+                          const borderRadius = idx === 0 ? "6px 0 0 6px" : idx === lanes.length - 1 ? "0 6px 6px 0" : "0";
+                          return (
+                            <div
+                              key={lane.label}
+                              className="flex-1 text-center px-1 py-2.5"
+                              style={{ background: "#eff6ff", border: "2px solid #2563eb", borderRadius, boxShadow: "0 0 0 3px rgba(37,99,235,0.15)" }}
+                            >
+                              <div className="text-[10px] font-bold mb-1" style={{ color: "#2563eb" }}>{lane.label}</div>
+                              <div className="text-[13px] font-extrabold mb-1" style={{ color: "#1d4ed8" }}>진행 중</div>
+                              {step?.approverName ? (
+                                <div className="text-[10px] text-blue-500">{step.approverName}</div>
+                              ) : (
+                                <div className="text-[10px] text-blue-300">대기</div>
+                              )}
+                              {/* 승인/반려 버튼 */}
+                              {step && (
+                                <div className="mt-2 space-y-1">
+                                  <Button
+                                    size="sm"
+                                    className="h-6 w-full text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white px-1"
+                                    disabled={isPendingApproval}
+                                    onClick={() => {
+                                      startApprovalTransition(async () => {
+                                        const result = await approveStep(step.id);
+                                        if (result.success) {
+                                          toast({ title: "승인 완료" });
+                                          const steps = await getApprovalSteps(orderId);
+                                          setApprovalSteps(steps);
+                                          loadOrderData();
+                                          onStatusChange?.();
+                                        } else {
+                                          toast({ title: "승인 실패", description: result.error, variant: "destructive" });
+                                        }
+                                      });
+                                    }}
+                                  >
+                                    승인
+                                  </Button>
+                                  {rejectingStepId === step.id ? (
+                                    <div className="space-y-1">
+                                      <Textarea
+                                        rows={2}
+                                        placeholder="반려 사유 (필수)"
+                                        className="text-[11px] p-1 min-h-0 h-12"
+                                        value={rejectComment}
+                                        onChange={(e) => setRejectComment(e.target.value)}
+                                      />
+                                      <div className="flex gap-1">
+                                        <Button
+                                          size="sm"
+                                          variant="destructive"
+                                          className="h-6 flex-1 text-[11px] px-1"
+                                          disabled={isPendingApproval}
+                                          onClick={() => {
+                                            if (!rejectComment.trim()) {
+                                              toast({ title: "반려 사유를 입력해주세요", variant: "destructive" });
+                                              return;
+                                            }
+                                            startApprovalTransition(async () => {
+                                              const result = await rejectStep(step.id, rejectComment);
+                                              if (result.success) {
+                                                toast({ title: "반려 완료" });
+                                                setRejectingStepId(null);
+                                                setRejectComment("");
+                                                const steps = await getApprovalSteps(orderId);
+                                                setApprovalSteps(steps);
+                                                loadOrderData();
+                                                onStatusChange?.();
+                                              } else {
+                                                toast({ title: "반려 실패", description: result.error, variant: "destructive" });
+                                              }
+                                            });
+                                          }}
+                                        >
+                                          확인
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-6 text-[11px] px-1"
+                                          onClick={() => { setRejectingStepId(null); setRejectComment(""); }}
+                                        >
+                                          취소
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <Button
+                                      size="sm"
+                                      variant="destructive"
+                                      className="h-6 w-full text-[11px] px-1"
+                                      disabled={isPendingApproval}
+                                      onClick={() => setRejectingStepId(step.id)}
+                                    >
+                                      반려
+                                    </Button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+
+                        // 대기 단계 (회색)
+                        const borderRadius = idx === 0 ? "6px 0 0 6px" : idx === lanes.length - 1 ? "0 6px 6px 0" : "0";
+                        return (
+                          <div
+                            key={lane.label}
+                            className="flex-1 text-center px-1 py-2.5"
+                            style={{ background: "#f8fafc", border: "2px solid #e2e8f0", borderRadius }}
+                          >
+                            <div className="text-[10px] font-bold mb-1 text-slate-400">{lane.label}</div>
+                            <div className="text-[11px] text-slate-300 mb-1">대기</div>
+                            <div className="text-[10px] text-slate-300">-</div>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                </div>
+              )}
 
               {/* 입항스케줄 등록 */}
               {canReceive && (
