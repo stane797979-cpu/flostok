@@ -277,25 +277,44 @@ export async function getOutboundRequestById(requestId: string): Promise<{
       return { success: false, error: "출고 요청을 찾을 수 없습니다" };
     }
 
-    // 요청 항목 조회
-    const items = await db
+    // 요청 항목 조회 (group by 없이 단순 조회 후 JS에서 합산)
+    const rawItems = await db
       .select({
-        id: sql<string>`min(${outboundRequestItems.id})`,
+        id: outboundRequestItems.id,
         productId: outboundRequestItems.productId,
         productSku: products.sku,
         productName: products.name,
-        requestedQuantity: sql<number>`sum(${outboundRequestItems.requestedQuantity})`,
-        confirmedQuantity: sql<number>`sum(${outboundRequestItems.confirmedQuantity})`,
-        notes: sql<string>`min(${outboundRequestItems.notes})`,
+        requestedQuantity: outboundRequestItems.requestedQuantity,
+        confirmedQuantity: outboundRequestItems.confirmedQuantity,
+        notes: outboundRequestItems.notes,
       })
       .from(outboundRequestItems)
       .innerJoin(products, eq(outboundRequestItems.productId, products.id))
-      .where(eq(outboundRequestItems.outboundRequestId, requestId))
-      .groupBy(
-        outboundRequestItems.productId,
-        products.sku,
-        products.name,
-      );
+      .where(eq(outboundRequestItems.outboundRequestId, requestId));
+
+    // productId 기준으로 JS에서 합산
+    const itemMap = new Map<string, {
+      id: string; productId: string; productSku: string; productName: string;
+      requestedQuantity: number; confirmedQuantity: number; notes: string | null;
+    }>();
+    for (const row of rawItems) {
+      const existing = itemMap.get(row.productId);
+      if (existing) {
+        existing.requestedQuantity += row.requestedQuantity ?? 0;
+        existing.confirmedQuantity += row.confirmedQuantity ?? 0;
+      } else {
+        itemMap.set(row.productId, {
+          id: row.id,
+          productId: row.productId,
+          productSku: row.productSku ?? "",
+          productName: row.productName ?? "",
+          requestedQuantity: row.requestedQuantity ?? 0,
+          confirmedQuantity: row.confirmedQuantity ?? 0,
+          notes: row.notes,
+        });
+      }
+    }
+    const items = Array.from(itemMap.values());
 
     // 현재고 별도 조회
     const productIds = items.map((i) => i.productId);
