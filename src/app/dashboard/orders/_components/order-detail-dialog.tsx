@@ -29,6 +29,9 @@ import { getEntityActivityLogs } from "@/server/actions/activity-logs";
 import type { ActivityLog } from "@/server/actions/activity-logs";
 import { useToast } from "@/hooks/use-toast";
 import { exportPurchaseOrderToExcel } from "@/server/actions/excel-export";
+import { getApprovalSteps } from "@/server/actions/purchase-order-approvals";
+import { ApprovalTimeline } from "./approval-timeline";
+import type { PurchaseOrderApproval } from "@/server/db/schema";
 
 // 상태별 다음 단계 정의
 const nextStatusActions: Record<string, { label: string; status: string; variant?: "default" | "outline" }[]> = {
@@ -93,6 +96,7 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
     qualityResult: string | null;
   }>>([]);
   const [activityLogsList, setActivityLogsList] = useState<ActivityLog[]>([]);
+  const [approvalSteps, setApprovalSteps] = useState<PurchaseOrderApproval[]>([]);
   const { toast } = useToast();
 
   // 발주서 데이터 로드
@@ -106,10 +110,11 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
   const loadOrderData = async () => {
     setIsLoading(true);
     try {
-      const [data, inboundResult, logs] = await Promise.all([
+      const [data, inboundResult, logs, approvals] = await Promise.all([
         getPurchaseOrderById(orderId),
         getInboundRecords({ orderId, limit: 100 }),
         getEntityActivityLogs(orderId, 30),
+        getApprovalSteps(orderId),
       ]);
       setOrderData(data);
       setInboundRecordsList(
@@ -123,6 +128,7 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
         }))
       );
       setActivityLogsList(logs);
+      setApprovalSteps(approvals);
     } catch (error) {
       console.error("발주서 조회 오류:", error);
       toast({
@@ -521,6 +527,16 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
                     </div>
                   </div>
                 </div>
+              </div>
+
+              {/* 결재라인 */}
+              <div className="rounded-lg border bg-slate-50/50 p-5 dark:bg-slate-800/20 dark:border-slate-700">
+                <ApprovalTimeline
+                  purchaseOrderId={orderId}
+                  orderStatus={orderData.status}
+                  steps={approvalSteps}
+                  onChanged={loadOrderData}
+                />
               </div>
 
               {/* 입항스케줄 등록 */}
