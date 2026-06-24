@@ -85,7 +85,8 @@ export async function submitForApproval(
     return { success: true };
   } catch (e) {
     console.error("결재 상신 오류:", e);
-    return { success: false, error: "결재 상신에 실패했습니다" };
+    const msg = e instanceof Error ? e.message : String(e);
+    return { success: false, error: msg };
   }
 }
 
