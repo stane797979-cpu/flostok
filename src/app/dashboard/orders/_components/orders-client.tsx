@@ -201,6 +201,15 @@ export function OrdersClient({ serverReorderItems = [], serverPurchaseOrders, in
   });
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
 
+  // 발주현황 KPI
+  const orderKPI = useMemo(() => {
+    const pending = purchaseOrders.filter((o) => o.status === "pending" || o.status === "draft").length;
+    const inbound = purchaseOrders.filter((o) => o.status === "ordered" || o.status === "pending_receipt").length;
+    const completed = purchaseOrders.filter((o) => o.status === "received").length;
+    const total = purchaseOrders.filter((o) => o.status !== "cancelled").length;
+    return { pending, inbound, completed, total };
+  }, [purchaseOrders]);
+
   // 발주 현황 체크박스
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [isCancellingOrders, setIsCancellingOrders] = useState(false);
@@ -690,13 +699,32 @@ export function OrdersClient({ serverReorderItems = [], serverPurchaseOrders, in
 
       {activeTab === "orders" && (
         <div className="space-y-4">
+          {/* KPI 카드 4개 */}
+          <div className="grid grid-cols-4 gap-3">
+            <div className="rounded-lg border border-orange-200 bg-white p-4">
+              <div className="mb-2 text-sm font-medium text-orange-600">승인대기</div>
+              <div className="text-3xl font-bold text-orange-500">{orderKPI.pending}</div>
+            </div>
+            <div className="rounded-lg border border-blue-200 bg-white p-4">
+              <div className="mb-2 text-sm font-medium text-blue-600">입고예정</div>
+              <div className="text-3xl font-bold text-blue-600">{orderKPI.inbound}</div>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-white p-4">
+              <div className="mb-2 text-sm font-medium text-emerald-600">완료</div>
+              <div className="text-3xl font-bold text-emerald-600">{orderKPI.completed}</div>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-white p-4">
+              <div className="mb-2 text-sm font-medium text-slate-500">전체</div>
+              <div className="text-3xl font-bold text-slate-800">{orderKPI.total}</div>
+            </div>
+          </div>
+
           <Card>
             <CardHeader>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle>발주 현황</CardTitle>
-                    <CardDescription>진행 중인 발주서 목록입니다</CardDescription>
+                    <CardTitle>전체 발주 현황</CardTitle>
                   </div>
                   <div className="flex gap-2">
                     <Button size="sm" onClick={() => setOrderDialogOpen(true)}>
@@ -719,7 +747,26 @@ export function OrdersClient({ serverReorderItems = [], serverPurchaseOrders, in
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {[
+                    { value: "all", label: `전체 (${orderKPI.total})` },
+                    { value: "pending", label: `승인대기 (${orderKPI.pending})` },
+                    { value: "ordered", label: `입고예정 (${orderKPI.inbound})` },
+                    { value: "received", label: `완료 (${orderKPI.completed})` },
+                  ].map((f) => (
+                    <button
+                      key={f.value}
+                      onClick={() => setStatusFilter(f.value)}
+                      className={`rounded-md border px-3 py-1 text-sm font-semibold transition-colors ${
+                        statusFilter === f.value
+                          ? "border-blue-300 bg-blue-50 text-blue-600"
+                          : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                  <div className="mx-1 h-5 w-px bg-slate-200" />
                   <div className="flex items-center gap-1.5">
                     <Checkbox
                       id="hide-received"
@@ -729,28 +776,6 @@ export function OrdersClient({ serverReorderItems = [], serverPurchaseOrders, in
                     <Label htmlFor="hide-received" className="text-xs text-slate-500 cursor-pointer">
                       입고완료 숨기기
                     </Label>
-                  </div>
-                  <div className="flex items-center gap-1 flex-wrap">
-                    {[
-                      { value: "all", label: "전체" },
-                      { value: "draft", label: "초안" },
-                      { value: "pending", label: "승인대기" },
-                      { value: "ordered", label: "발주완료" },
-                      { value: "pending_receipt", label: "입고대기" },
-                      { value: "cancelled", label: "취소" },
-                    ].map((f) => (
-                      <button
-                        key={f.value}
-                        onClick={() => setStatusFilter(f.value)}
-                        className={`px-2 py-0.5 rounded text-xs border transition-colors ${
-                          statusFilter === f.value
-                            ? "bg-slate-800 text-white border-slate-800"
-                            : "bg-white text-slate-600 border-slate-300 hover:border-slate-500"
-                        }`}
-                      >
-                        {f.label}
-                      </button>
-                    ))}
                   </div>
                 </div>
               </div>
@@ -764,8 +789,10 @@ export function OrdersClient({ serverReorderItems = [], serverPurchaseOrders, in
                 <PurchaseOrdersTable
                   orders={purchaseOrders.filter((o) => {
                     if (hideReceived && o.status === "received") return false;
-                    if (statusFilter !== "all" && o.status !== statusFilter) return false;
-                    return true;
+                    if (statusFilter === "all") return true;
+                    if (statusFilter === "pending") return o.status === "pending" || o.status === "draft";
+                    if (statusFilter === "ordered") return o.status === "ordered" || o.status === "pending_receipt";
+                    return o.status === statusFilter;
                   })}
                   onViewClick={handleViewOrder}
                   onDownloadClick={handleDownloadOrder}
