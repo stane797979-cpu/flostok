@@ -56,8 +56,8 @@ export async function submitForApproval(
         organizationId: user.organizationId,
         stepOrder: s.stepOrder,
         roleName: s.roleName,
-        approverId: i === 0 ? user.id : null,
-        approverName: i === 0 ? (user.name ?? user.email) : null,
+        approverId: null,
+        approverName: null,
         status: (i === 0 ? "pending" : "waiting") as "pending" | "waiting",
       }));
 
@@ -282,8 +282,8 @@ export async function resubmitForApproval(
           status: s.stepOrder === 1 ? "pending" : "waiting",
           comment: null,
           actedAt: null,
-          approverId: s.stepOrder === 1 ? user.id : null,
-          approverName: s.stepOrder === 1 ? (user.name ?? user.email) : null,
+          approverId: null,
+          approverName: null,
           updatedAt: now,
         })
         .where(eq(purchaseOrderApprovals.id, s.id));
