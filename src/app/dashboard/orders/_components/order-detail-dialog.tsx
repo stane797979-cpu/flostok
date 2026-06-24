@@ -29,7 +29,6 @@ import { getEntityActivityLogs } from "@/server/actions/activity-logs";
 import type { ActivityLog } from "@/server/actions/activity-logs";
 import { useToast } from "@/hooks/use-toast";
 import { exportPurchaseOrderToExcel } from "@/server/actions/excel-export";
-import { ApprovalTimeline } from "./approval-timeline";
 
 // 상태별 다음 단계 정의
 const nextStatusActions: Record<string, { label: string; status: string; variant?: "default" | "outline" }[]> = {
@@ -38,7 +37,7 @@ const nextStatusActions: Record<string, { label: string; status: string; variant
     { label: "취소", status: "cancelled", variant: "outline" },
   ],
   pending: [
-    { label: "승인", status: "ordered" },
+    { label: "승인", status: "approved" },
     { label: "취소", status: "cancelled", variant: "outline" },
   ],
   approved: [
@@ -522,15 +521,6 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
                     </div>
                   </div>
                 </div>
-              </div>
-
-              {/* 결재라인 */}
-              <div className="rounded-lg border bg-slate-50/50 p-5 dark:bg-slate-800/20 dark:border-slate-700">
-                <ApprovalTimeline
-                  purchaseOrderId={orderId}
-                  orderStatus={orderData?.status ?? "draft"}
-                  onApprovalChange={loadOrderData}
-                />
               </div>
 
               {/* 입항스케줄 등록 */}
