@@ -291,7 +291,13 @@ export async function getOutboundRequestById(requestId: string): Promise<{
       })
       .from(outboundRequestItems)
       .innerJoin(products, eq(outboundRequestItems.productId, products.id))
-      .leftJoin(inventory, eq(outboundRequestItems.productId, inventory.productId))
+      .leftJoin(
+        inventory,
+        and(
+          eq(outboundRequestItems.productId, inventory.productId),
+          eq(inventory.organizationId, user.organizationId)
+        )
+      )
       .where(eq(outboundRequestItems.outboundRequestId, requestId))
       .groupBy(
         outboundRequestItems.productId,
