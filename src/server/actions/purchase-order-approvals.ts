@@ -15,7 +15,6 @@ import { logActivity } from "@/server/services/activity-log";
 const DEFAULT_APPROVAL_STEPS = [
   { stepOrder: 1, roleName: "구매담당" },
   { stepOrder: 2, roleName: "팀장" },
-  { stepOrder: 3, roleName: "대표이사" },
 ];
 
 /**
