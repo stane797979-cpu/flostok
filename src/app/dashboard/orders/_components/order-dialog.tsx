@@ -44,6 +44,7 @@ interface OrderDialogProps {
   product: SelectedProduct | null;
   onSubmit: (data: {
     productId: string;
+    productName: string;
     quantity: number;
     supplierId: string;
     expectedDate: string;
@@ -145,8 +146,11 @@ export function OrderDialog({ open, onOpenChange, product, onSubmit, onExcelUplo
       return;
     }
     const productId = isDirectMode ? selectedProductId : product!.productId;
+    const productName = isDirectMode
+      ? (productOptions.find((p) => p.id === selectedProductId)?.name ?? "")
+      : product!.productName;
     if (!productId || !supplierId || quantity < 1 || !expectedDate) return;
-    onSubmit({ productId, quantity, supplierId, expectedDate, notes });
+    onSubmit({ productId, productName, quantity, supplierId, expectedDate, notes });
     onOpenChange(false);
   };
 

@@ -63,18 +63,20 @@ export function ApprovalTimeline({ purchaseOrderId, orderStatus, onApprovalChang
   const { toast } = useToast();
 
   const loadSteps = async () => {
+    if (!purchaseOrderId) return;
     setIsLoading(true);
     try {
       const data = await getApprovalSteps(purchaseOrderId);
       setSteps(data);
     } catch {
-      toast({ title: "오류", description: "결재라인을 불러오지 못했습니다", variant: "destructive" });
+      // 조용히 실패 — 결재라인이 없는 발주서는 정상
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
+    if (!purchaseOrderId) return;
     loadSteps();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [purchaseOrderId]);

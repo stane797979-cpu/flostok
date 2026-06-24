@@ -318,6 +318,7 @@ export function OrdersClient({ serverReorderItems = [], serverPurchaseOrders, in
 
   const handleOrderSubmit = async (data: {
     productId: string;
+    productName: string;
     quantity: number;
     supplierId: string;
     expectedDate: string;
@@ -339,7 +340,7 @@ export function OrdersClient({ serverReorderItems = [], serverPurchaseOrders, in
       if (result.success) {
         toast({
           title: "발주 완료",
-          description: `${selectedProduct?.productName} ${data.quantity}개 발주가 생성되었습니다`,
+          description: `${data.productName} ${data.quantity}개 발주가 생성되었습니다`,
         });
         setReorderItems((prev) => prev.filter((item) => item.productId !== data.productId));
         setSelectedProduct(null);
