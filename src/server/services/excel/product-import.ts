@@ -4,7 +4,7 @@
 
 import { db } from "@/server/db";
 import { products, inventory } from "@/server/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { parseExcelBuffer, sheetToJson, parseNumber } from "./parser";
 import type { ExcelImportResult, ExcelImportError, ProductExcelRow } from "./types";
 
@@ -145,13 +145,18 @@ export async function importProductData(
       };
     }
 
-    // 기존 제품 조회
+    // 기존 제품 조회 (1회)
     const existingProducts = await db
       .select({ id: products.id, sku: products.sku })
       .from(products)
       .where(eq(products.organizationId, organizationId));
 
     const skuToId = new Map(existingProducts.map((p) => [p.sku, p.id]));
+
+    // 1단계: 모든 행을 파싱하여 update/insert 대상 분리
+    type ParsedRow = { data: ProductExcelRow; rowIndex: number };
+    const toUpdate: (ParsedRow & { existingId: string })[] = [];
+    const toInsert: ParsedRow[] = [];
 
     for (let i = 0; i < rows.length; i++) {
       const { data, errors } = parseProductRow(rows[i], i);
@@ -160,54 +165,49 @@ export async function importProductData(
         allErrors.push(...errors);
         continue;
       }
-
       if (!data) continue;
 
       const existingId = skuToId.get(data.sku);
 
       if (existingId) {
         if (duplicateHandling === "error") {
-          allErrors.push({
-            row: i + 2,
-            column: "SKU",
-            value: data.sku,
-            message: `중복 SKU: ${data.sku}`,
-          });
+          allErrors.push({ row: i + 2, column: "SKU", value: data.sku, message: `중복 SKU: ${data.sku}` });
           continue;
         }
-
-        if (duplicateHandling === "skip") {
-          continue;
-        }
-
-        // update: 기존 제품 업데이트
-        await db
-          .update(products)
-          .set({
-            name: data.name,
-            category: data.category,
-            unit: data.unit ?? "EA",
-            unitPrice: data.unitPrice ?? 0,
-            costPrice: data.costPrice ?? 0,
-            safetyStock: data.safetyStock ?? 0,
-            reorderPoint: data.reorderPoint ?? 0,
-            leadTime: data.leadTime ?? 7,
-            moq: data.moq ?? 1,
-            updatedAt: new Date(),
-          })
-          .where(eq(products.id, existingId));
-
-        // 재고수량이 있으면 inventory 업데이트
-        if (data.currentStock !== undefined) {
-          await upsertInventory(organizationId, existingId, data.currentStock);
-        }
-
-        successData.push(data);
-        continue;
+        if (duplicateHandling === "skip") continue;
+        toUpdate.push({ data, rowIndex: i, existingId });
+      } else {
+        toInsert.push({ data, rowIndex: i });
       }
+    }
 
-      // 새 제품 삽입
-      const [newProduct] = await db.insert(products).values({
+    // 2단계: 기존 제품 업데이트 — 개별 쿼리 불가피하나 Promise.all로 병렬 처리
+    if (toUpdate.length > 0) {
+      await Promise.all(
+        toUpdate.map(({ data, existingId }) =>
+          db.update(products)
+            .set({
+              name: data.name,
+              category: data.category,
+              unit: data.unit ?? "EA",
+              unitPrice: data.unitPrice ?? 0,
+              costPrice: data.costPrice ?? 0,
+              safetyStock: data.safetyStock ?? 0,
+              reorderPoint: data.reorderPoint ?? 0,
+              leadTime: data.leadTime ?? 7,
+              moq: data.moq ?? 1,
+              updatedAt: new Date(),
+            })
+            .where(eq(products.id, existingId))
+        )
+      );
+      toUpdate.forEach(({ data }) => successData.push(data));
+    }
+
+    // 3단계: 신규 제품 배치 insert (1회)
+    let insertedIds: string[] = [];
+    if (toInsert.length > 0) {
+      const insertValues = toInsert.map(({ data }) => ({
         organizationId,
         sku: data.sku,
         name: data.name,
@@ -219,14 +219,60 @@ export async function importProductData(
         reorderPoint: data.reorderPoint ?? 0,
         leadTime: data.leadTime ?? 7,
         moq: data.moq ?? 1,
-      }).returning({ id: products.id });
+      }));
 
-      // 재고수량이 있으면 inventory 생성
-      if (newProduct && data.currentStock !== undefined) {
-        await upsertInventory(organizationId, newProduct.id, data.currentStock);
+      const inserted = await db.insert(products).values(insertValues).returning({ id: products.id, sku: products.sku });
+      insertedIds = inserted.map((r) => r.id);
+      const insertedSkuToId = new Map(inserted.map((r) => [r.sku, r.id]));
+      toInsert.forEach(({ data }) => {
+        if (insertedSkuToId.has(data.sku)) successData.push(data);
+      });
+    }
+
+    // 4단계: inventory 배치 upsert — onConflictDoUpdate (1회)
+    const inventoryValues: { organizationId: string; productId: string; currentStock: number; availableStock: number }[] = [];
+
+    for (const { data, existingId } of toUpdate) {
+      if (data.currentStock !== undefined) {
+        inventoryValues.push({ organizationId, productId: existingId, currentStock: data.currentStock, availableStock: data.currentStock });
       }
+    }
 
-      successData.push(data);
+    if (toInsert.length > 0 && insertedIds.length > 0) {
+      const insertedProducts = await db
+        .select({ id: products.id, sku: products.sku })
+        .from(products)
+        .where(inArray(products.id, insertedIds));
+      const idToSku = new Map(insertedProducts.map((p) => [p.id, p.sku]));
+
+      for (const { data } of toInsert) {
+        if (data.currentStock === undefined) continue;
+        const productId = insertedProducts.find((p) => p.sku === data.sku)?.id;
+        if (productId) {
+          inventoryValues.push({ organizationId, productId, currentStock: data.currentStock, availableStock: data.currentStock });
+        }
+      }
+      void idToSku; // suppress unused warning
+    }
+
+    if (inventoryValues.length > 0) {
+      await db.insert(inventory).values(
+        inventoryValues.map((v) => ({
+          organizationId: v.organizationId,
+          productId: v.productId,
+          currentStock: v.currentStock,
+          availableStock: v.availableStock,
+          reservedStock: 0,
+          incomingStock: 0,
+        }))
+      ).onConflictDoUpdate({
+        target: [inventory.organizationId, inventory.productId],
+        set: {
+          currentStock: inventory.currentStock,
+          availableStock: inventory.availableStock,
+          updatedAt: new Date(),
+        },
+      });
     }
 
     return {
@@ -257,42 +303,6 @@ export async function importProductData(
 /**
  * inventory 테이블 upsert (있으면 업데이트, 없으면 생성)
  */
-async function upsertInventory(
-  organizationId: string,
-  productId: string,
-  currentStock: number
-) {
-  const [existing] = await db
-    .select({ id: inventory.id })
-    .from(inventory)
-    .where(
-      and(
-        eq(inventory.organizationId, organizationId),
-        eq(inventory.productId, productId)
-      )
-    )
-    .limit(1);
-
-  if (existing) {
-    await db
-      .update(inventory)
-      .set({
-        currentStock,
-        availableStock: currentStock,
-        updatedAt: new Date(),
-      })
-      .where(eq(inventory.id, existing.id));
-  } else {
-    await db.insert(inventory).values({
-      organizationId,
-      productId,
-      currentStock,
-      availableStock: currentStock,
-      reservedStock: 0,
-      incomingStock: 0,
-    });
-  }
-}
 
 /**
  * 제품 데이터 Excel 템플릿 생성

@@ -6,7 +6,7 @@
 import { db } from "@/server/db";
 import { products, inventory, suppliers, purchaseOrders } from "@/server/db/schema";
 import { eq, and, sql, or, desc } from "drizzle-orm";
-import { getAverageDailySales } from "@/server/actions/sales";
+import { getAverageDailySalesBatch } from "@/server/actions/sales";
 import {
   convertToReorderItem,
   calculateReorderPriority,
@@ -142,9 +142,13 @@ export async function executeGetReorderRecommendations(input: {
         )
       );
 
-    // 각 제품의 발주 추천 정보 생성
-    const reorderItemsPromises = reorderCandidates.map(async (row) => {
-      const avgDailySales = await getAverageDailySales(row.product.id, 30);
+    // 모든 후보 제품의 일평균 판매량을 단일 쿼리로 일괄 조회
+    const candidateProductIds = reorderCandidates.map((r) => r.product.id);
+    const avgDailySalesMap = await getAverageDailySalesBatch(candidateProductIds, 30);
+
+    // 각 제품의 발주 추천 정보 생성 (DB 쿼리 없음)
+    const results = reorderCandidates.map((row) => {
+      const avgDailySales = avgDailySalesMap.get(row.product.id) ?? 0;
 
       const data: ProductReorderData = {
         productId: row.product.id,
@@ -171,8 +175,6 @@ export async function executeGetReorderRecommendations(input: {
         avgDailySales,
       };
     });
-
-    const results = await Promise.all(reorderItemsPromises);
     const validResults = results.filter((r) => r.item !== null);
 
     // 긴급도 필터링

@@ -246,10 +246,10 @@ export async function confirmInbound(input: ConfirmInboundInput): Promise<{
           inArray(stockoutRecords.productId, inboundProductIds)
         ));
 
-      for (const record of activeStockouts) {
+      if (activeStockouts.length > 0) {
         await db.update(stockoutRecords)
           .set({ stockoutEndDate: todayStr, actionStatus: "normalized", updatedAt: new Date() })
-          .where(eq(stockoutRecords.id, record.id));
+          .where(inArray(stockoutRecords.id, activeStockouts.map((r) => r.id)));
       }
     }
 

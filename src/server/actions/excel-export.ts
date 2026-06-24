@@ -10,7 +10,7 @@ import {
   inventoryHistory,
   organizations,
 } from "@/server/db/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import {
   generatePurchaseOrderExcel,
   generateMultiplePurchaseOrdersExcel,
@@ -164,31 +164,37 @@ export async function exportPurchaseOrdersToExcel(
       return { success: false, error: "발주서를 찾을 수 없습니다" };
     }
 
-    const orders: PurchaseOrderWithDetails[] = await Promise.all(
-      ordersData.map(async (orderData) => {
-        const items = await db
-          .select({
-            item: purchaseOrderItems,
-            product: {
-              sku: products.sku,
-              name: products.name,
-              unit: products.unit,
-            },
-          })
-          .from(purchaseOrderItems)
-          .innerJoin(products, eq(purchaseOrderItems.productId, products.id))
-          .where(eq(purchaseOrderItems.purchaseOrderId, orderData.order.id));
+    const fetchedOrderIds = ordersData.map((o) => o.order.id)
 
-        return {
-          ...orderData.order,
-          supplier: orderData.supplier?.id ? orderData.supplier : null,
-          items: items.map((row) => ({
-            ...row.item,
-            product: row.product,
-          })),
-        };
+    const allItems = await db
+      .select({
+        purchaseOrderId: purchaseOrderItems.purchaseOrderId,
+        item: purchaseOrderItems,
+        product: {
+          sku: products.sku,
+          name: products.name,
+          unit: products.unit,
+        },
       })
-    );
+      .from(purchaseOrderItems)
+      .innerJoin(products, eq(purchaseOrderItems.productId, products.id))
+      .where(inArray(purchaseOrderItems.purchaseOrderId, fetchedOrderIds));
+
+    const itemsByOrderId = new Map<string, typeof allItems>()
+    for (const row of allItems) {
+      const list = itemsByOrderId.get(row.purchaseOrderId) ?? []
+      list.push(row)
+      itemsByOrderId.set(row.purchaseOrderId, list)
+    }
+
+    const orders: PurchaseOrderWithDetails[] = ordersData.map((orderData) => ({
+      ...orderData.order,
+      supplier: orderData.supplier?.id ? orderData.supplier : null,
+      items: (itemsByOrderId.get(orderData.order.id) ?? []).map((row) => ({
+        ...row.item,
+        product: row.product,
+      })),
+    }));
 
     const buffer = await generateMultiplePurchaseOrdersExcel(orders);
     const today = new Date().toISOString().split("T")[0].replace(/-/g, "");

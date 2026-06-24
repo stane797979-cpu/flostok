@@ -2,7 +2,7 @@
 
 import { db } from "@/server/db";
 import { salesRecords, products, type SalesRecord } from "@/server/db/schema";
-import { eq, and, desc, asc, sql, gte, lte } from "drizzle-orm";
+import { eq, and, desc, asc, sql, gte, lte, inArray } from "drizzle-orm";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 import { processInventoryTransaction } from "./inventory";
@@ -344,7 +344,7 @@ export async function getSalesChannels(): Promise<string[]> {
 }
 
 /**
- * 일평균 판매량 계산 (제품별)
+ * 일평균 판매량 계산 (제품별 단건)
  */
 export async function getAverageDailySales(
   productId: string,
@@ -371,4 +371,43 @@ export async function getAverageDailySales(
 
   const total = Number(result[0]?.totalQuantity || 0);
   return Math.round((total / periodDays) * 100) / 100;
+}
+
+/**
+ * 일평균 판매량 일괄 계산 (제품 목록 — N+1 방지용)
+ * 단일 쿼리로 모든 제품의 합계를 GROUP BY로 조회한 뒤 Map으로 반환
+ */
+export async function getAverageDailySalesBatch(
+  productIds: string[],
+  periodDays: number = 30
+): Promise<Map<string, number>> {
+  if (productIds.length === 0) return new Map();
+
+  const endDate = new Date().toISOString().split("T")[0];
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - periodDays);
+  const startDateStr = startDate.toISOString().split("T")[0];
+
+  const rows = await db
+    .select({
+      productId: salesRecords.productId,
+      totalQuantity: sql<number>`sum(${salesRecords.quantity})`,
+    })
+    .from(salesRecords)
+    .where(
+      and(
+        eq(salesRecords.organizationId, TEMP_ORG_ID),
+        inArray(salesRecords.productId, productIds),
+        gte(salesRecords.date, startDateStr),
+        lte(salesRecords.date, endDate)
+      )
+    )
+    .groupBy(salesRecords.productId);
+
+  const result = new Map<string, number>();
+  for (const row of rows) {
+    const avg = Math.round((Number(row.totalQuantity || 0) / periodDays) * 100) / 100;
+    result.set(row.productId, avg);
+  }
+  return result;
 }

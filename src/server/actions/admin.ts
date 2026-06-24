@@ -10,7 +10,7 @@ import {
   paymentHistory,
   inventory,
 } from '@/server/db/schema'
-import { eq, desc, sql, count, sum, gte, and, ne } from 'drizzle-orm'
+import { eq, desc, sql, count, sum, gte, and, ne, inArray } from 'drizzle-orm'
 import { requireSuperadmin } from './auth-helpers'
 
 type ActionResponse<T = unknown> =
@@ -98,24 +98,37 @@ export async function getAllOrganizations(): Promise<ActionResponse<Organization
       .where(ne(organizations.id, SYSTEM_ORG_ID))
       .orderBy(desc(organizations.createdAt))
 
-    const orgsWithStats = await Promise.all(
-      orgs.map(async (org) => {
-        const [uc] = await db.select({ value: count() }).from(users).where(eq(users.organizationId, org.id))
-        const [pc] = await db.select({ value: count() }).from(products).where(eq(products.organizationId, org.id))
-        const [oc] = await db.select({ value: count() }).from(purchaseOrders).where(eq(purchaseOrders.organizationId, org.id))
+    const orgIds = orgs.map((o) => o.id)
 
-        return {
-          id: org.id,
-          name: org.name,
-          slug: org.slug,
-          plan: org.plan,
-          createdAt: org.createdAt,
-          userCount: uc?.value ?? 0,
-          productCount: pc?.value ?? 0,
-          orderCount: oc?.value ?? 0,
-        }
-      })
-    )
+    const [userCounts, productCounts, orderCounts] = await Promise.all([
+      db.select({ orgId: users.organizationId, value: count() })
+        .from(users)
+        .where(inArray(users.organizationId, orgIds))
+        .groupBy(users.organizationId),
+      db.select({ orgId: products.organizationId, value: count() })
+        .from(products)
+        .where(inArray(products.organizationId, orgIds))
+        .groupBy(products.organizationId),
+      db.select({ orgId: purchaseOrders.organizationId, value: count() })
+        .from(purchaseOrders)
+        .where(inArray(purchaseOrders.organizationId, orgIds))
+        .groupBy(purchaseOrders.organizationId),
+    ])
+
+    const ucMap = new Map(userCounts.map((r) => [r.orgId, r.value]))
+    const pcMap = new Map(productCounts.map((r) => [r.orgId, r.value]))
+    const ocMap = new Map(orderCounts.map((r) => [r.orgId, r.value]))
+
+    const orgsWithStats = orgs.map((org) => ({
+      id: org.id,
+      name: org.name,
+      slug: org.slug,
+      plan: org.plan,
+      createdAt: org.createdAt,
+      userCount: ucMap.get(org.id) ?? 0,
+      productCount: pcMap.get(org.id) ?? 0,
+      orderCount: ocMap.get(org.id) ?? 0,
+    }))
 
     return { success: true, data: orgsWithStats }
   } catch (error) {

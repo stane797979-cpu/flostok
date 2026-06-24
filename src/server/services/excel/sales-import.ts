@@ -427,18 +427,37 @@ export async function importSalesData(
       await db.insert(salesRecords).values(toInsert.slice(i, i + CHUNK));
     }
 
-    // 9. 제품별 reservedStock 증가 (할당재고) — 실시간 출고 요청 시만 적용
+    // 9. 제품별 reservedStock 증가 (할당재고) — CASE WHEN 단일 쿼리로 일괄 처리
     if (options.deductInventory !== false) {
-      for (const [productId, totalQty] of requestedQtyMap) {
-        if (!toInsert.some((r) => r.productId === productId)) continue;
+      const insertedProductIds = new Set(toInsert.map((r) => r.productId));
+      const activeEntries = Array.from(requestedQtyMap.entries()).filter(
+        ([productId]) => insertedProductIds.has(productId)
+      );
+
+      if (activeEntries.length > 0) {
+        const productIds = activeEntries.map(([id]) => id);
+        // CASE WHEN으로 각 제품마다 다른 delta를 단일 UPDATE로 처리
+        const reservedDeltaCase = sql.join(
+          activeEntries.map(([productId, qty]) =>
+            sql`WHEN ${inventory.productId} = ${productId} THEN coalesce(${inventory.reservedStock}, 0) + ${qty}`
+          ),
+          sql` `
+        );
+        const availableDeltaCase = sql.join(
+          activeEntries.map(([productId, qty]) =>
+            sql`WHEN ${inventory.productId} = ${productId} THEN ${inventory.currentStock} - (coalesce(${inventory.reservedStock}, 0) + ${qty})`
+          ),
+          sql` `
+        );
+
         await db
           .update(inventory)
           .set({
-            reservedStock: sql`coalesce(${inventory.reservedStock}, 0) + ${totalQty}`,
-            availableStock: sql`${inventory.currentStock} - (coalesce(${inventory.reservedStock}, 0) + ${totalQty})`,
+            reservedStock: sql`CASE ${reservedDeltaCase} ELSE coalesce(${inventory.reservedStock}, 0) END`,
+            availableStock: sql`CASE ${availableDeltaCase} ELSE ${inventory.availableStock} END`,
             updatedAt: new Date(),
           })
-          .where(and(eq(inventory.organizationId, organizationId), eq(inventory.productId, productId)));
+          .where(and(eq(inventory.organizationId, organizationId), inArray(inventory.productId, productIds)));
       }
     }
 
