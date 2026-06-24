@@ -37,7 +37,7 @@ const nextStatusActions: Record<string, { label: string; status: string; variant
     { label: "취소", status: "cancelled", variant: "outline" },
   ],
   pending: [
-    { label: "승인", status: "approved" },
+    { label: "승인 (발주 확정)", status: "ordered" },
     { label: "취소", status: "cancelled", variant: "outline" },
   ],
   approved: [
