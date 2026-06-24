@@ -121,11 +121,11 @@ interface OrdersClientProps {
   initialTab?: string;
 }
 
-const VALID_TABS_SET = new Set(["order", "orders"]);
+const VALID_TABS_SET = new Set(["order", "orders", "inbound", "delivery", "import-shipment"]);
 // URL 하위 호환: reorder, auto-reorder → order로 리다이렉트
 const TAB_ALIAS: Record<string, string> = { reorder: "order", "auto-reorder": "order" };
 
-type TabType = "order" | "orders";
+type TabType = "order" | "orders" | "inbound" | "delivery" | "import-shipment";
 
 export function OrdersClient({ serverReorderItems = [], serverPurchaseOrders, initialTab }: OrdersClientProps) {
   const router = useRouter();
@@ -567,22 +567,28 @@ export function OrdersClient({ serverReorderItems = [], serverPurchaseOrders, in
     }
   };
 
-  const pageTitles: Record<TabType, { description: string }> = {
-    order: { description: "발주 필요 품목을 확인하고 AI추천 또는 직접 발주를 진행하세요" },
-    orders: { description: "생성된 발주서 목록을 확인하세요" },
+  const pageTitles: Record<TabType, { title: string; description: string }> = {
+    order:             { title: "발주관리",   description: "발주 필요 품목을 확인하고 AI추천 또는 직접 발주를 진행하세요" },
+    orders:            { title: "발주관리",   description: "생성된 발주서 목록을 확인하세요" },
+    inbound:           { title: "입고현황",   description: "발주서별 입고 현황을 확인하세요" },
+    delivery:          { title: "납기분석",   description: "납기 준수율 및 지연 현황을 분석합니다" },
+    "import-shipment": { title: "입항스케줄", description: "수입 화물의 입항 스케줄을 관리합니다" },
   };
 
   const currentPage = pageTitles[activeTab] || pageTitles.order;
 
   const TAB_LABELS: Record<TabType, string> = {
-    order: "AI발주 권고",
-    orders: "발주현황",
+    order:             "AI발주 권고",
+    orders:            "발주현황",
+    inbound:           "입고현황",
+    delivery:          "납기분석",
+    "import-shipment": "입항스케줄",
   };
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">발주관리</h1>
+        <h1 className="text-3xl font-bold tracking-tight">{currentPage.title}</h1>
         <p className="mt-2 text-slate-500">{currentPage.description}</p>
       </div>
 
