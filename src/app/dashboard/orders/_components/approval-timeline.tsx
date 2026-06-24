@@ -19,8 +19,7 @@ interface ApprovalStep {
 const DEFAULT_STEPS: ApprovalStep[] = [
   { id: "1", roleName: "구매담당", approverName: "", status: "pending",  comment: "", actedAt: null },
   { id: "2", roleName: "팀장",     approverName: "", status: "waiting",  comment: "", actedAt: null },
-  { id: "3", roleName: "재무부서", approverName: "", status: "waiting",  comment: "", actedAt: null },
-  { id: "4", roleName: "대표이사", approverName: "", status: "waiting",  comment: "", actedAt: null },
+  { id: "3", roleName: "대표이사", approverName: "", status: "waiting",  comment: "", actedAt: null },
 ];
 
 function nowStr() {
