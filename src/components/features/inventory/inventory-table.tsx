@@ -75,11 +75,19 @@ interface RopModalItem {
   abcGrade: "A" | "B" | "C" | null;
 }
 
+interface SsModalItem {
+  name: string;
+  sku: string;
+  safetyStock: number;
+  abcGrade: "A" | "B" | "C" | null;
+}
+
 export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [sortKey, setSortKey] = useState<SortKey>("status");
   const [sortDir, setSortDir] = useState<SortDirection>("asc");
   const [ropModalItem, setRopModalItem] = useState<RopModalItem | null>(null);
+  const [ssModalItem, setSsModalItem] = useState<SsModalItem | null>(null);
   const router = useRouter();
 
   const handleSort = (key: SortKey) => {
@@ -415,7 +423,17 @@ export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
                     {Math.max(0, item.currentStock - item.allocatedStock).toLocaleString()}
                   </TableCell>
                   <TableCell className="text-right font-mono text-slate-500">
-                    {safetyStock.toLocaleString()}
+                    <span
+                      className="cursor-pointer underline decoration-dotted hover:text-slate-700"
+                      onClick={() => setSsModalItem({
+                        name: item.product.name,
+                        sku: item.product.sku,
+                        safetyStock,
+                        abcGrade: item.product.abcGrade,
+                      })}
+                    >
+                      {safetyStock.toLocaleString()}
+                    </span>
                   </TableCell>
                   <TableCell className="text-right font-mono text-slate-500">
                     <span
@@ -538,6 +556,57 @@ export function InventoryTable({ items, onAdjust }: InventoryTableProps) {
             </table>
             <div className="mt-2 rounded-lg bg-slate-50 p-3 text-xs text-slate-500 leading-relaxed">
               현재고가 <b className="text-slate-700">{reorderPoint.toLocaleString()}개</b> 이하로 떨어지면 리드타임 동안 재고가 소진될 수 있으므로 즉시 발주가 필요합니다.
+            </div>
+          </DialogContent>
+        </Dialog>
+      );
+    })()}
+    {/* 안전재고 산출 근거 모달 */}
+    {ssModalItem && (() => {
+      const { name, sku, safetyStock, abcGrade } = ssModalItem;
+      const serviceLevel = abcGrade === "A" ? "95%" : abcGrade === "B" ? "90%" : "85%";
+      const zScore = abcGrade === "A" ? "1.65" : abcGrade === "B" ? "1.28" : "1.04";
+
+      return (
+        <Dialog open onOpenChange={() => setSsModalItem(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-base">{name}</DialogTitle>
+              <p className="text-xs text-slate-400 font-mono">{sku}</p>
+            </DialogHeader>
+            <p className="text-xs font-semibold text-slate-500 mb-2">안전재고(SS) 산출 근거</p>
+            <table className="w-full text-sm border-collapse">
+              <tbody>
+                <tr className="border-b border-slate-100">
+                  <td className="py-2 text-slate-500">산출 공식</td>
+                  <td className="py-2 font-semibold">Z × σ수요 × √리드타임</td>
+                </tr>
+                <tr className="border-b border-slate-100">
+                  <td className="py-2 text-slate-500">서비스수준</td>
+                  <td className="py-2">{serviceLevel} <span className="text-xs text-slate-400">({abcGrade ?? "-"}등급 기준)</span></td>
+                </tr>
+                <tr className="border-b border-slate-100">
+                  <td className="py-2 text-slate-500">Z값</td>
+                  <td className="py-2">{zScore} <span className="text-xs text-slate-400">(표준정규분포)</span></td>
+                </tr>
+                <tr className="border-b border-slate-100">
+                  <td className="py-2 text-slate-500">σ수요</td>
+                  <td className="py-2 text-slate-400 text-xs">최근 판매 이력의 일별 표준편차</td>
+                </tr>
+                <tr className="border-b border-slate-100">
+                  <td className="py-2 text-slate-500">리드타임</td>
+                  <td className="py-2 text-slate-400 text-xs">제품 설정의 리드타임(일) 기준</td>
+                </tr>
+                <tr>
+                  <td className="py-2 text-slate-500">안전재고</td>
+                  <td className="py-2 text-blue-600 font-bold text-base">
+                    {safetyStock.toLocaleString()}개
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div className="mt-2 rounded-lg bg-slate-50 p-3 text-xs text-slate-500 leading-relaxed">
+              수요 변동과 리드타임 불확실성에 대비한 최소 버퍼 재고입니다. 현재고가 이 수량 이하로 떨어지면 발주점에 도달한 것입니다.
             </div>
           </DialogContent>
         </Dialog>
