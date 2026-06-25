@@ -181,27 +181,6 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
         <p className="mt-2 text-slate-500">출고 등록 및 현황 관리</p>
       </div>
 
-      {/* 탭 */}
-      <div className="border-b">
-        <nav className="-mb-px flex gap-6">
-          {(["records", "request", "confirm"] as const).map((tab) => {
-            const labels = { records: "출고현황", request: "출고요청", confirm: "출고확정(창고)" };
-            return (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
-                  activeTab === tab
-                    ? "border-primary text-primary"
-                    : "border-transparent text-slate-500 hover:text-slate-700"
-                }`}
-              >
-                {labels[tab]}
-              </button>
-            );
-          })}
-        </nav>
-      </div>
 
       {activeTab === "request" && <OutboundRequestsTab />}
       {activeTab === "confirm" && <WarehouseOutboundClient hideTitle />}

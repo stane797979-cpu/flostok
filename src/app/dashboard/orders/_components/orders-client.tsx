@@ -597,36 +597,11 @@ export function OrdersClient({ serverReorderItems = [], serverPurchaseOrders, in
     "import-shipment": "입항스케줄",
   };
 
-  // 사이드바 그룹과 일치: 발주관리 탭 / 입고관리 탭
-  const ORDER_TABS = ["order", "orders"] as const;
-  const INBOUND_TABS = ["inbound", "delivery", "import-shipment"] as const;
-  const isInboundGroup = (INBOUND_TABS as readonly string[]).includes(activeTab);
-  const visibleTabs = isInboundGroup ? INBOUND_TABS : ORDER_TABS;
-
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">{currentPage.title}</h1>
         <p className="mt-2 text-slate-500">{currentPage.description}</p>
-      </div>
-
-      {/* 탭 네비게이션 */}
-      <div className="border-b">
-        <nav className="-mb-px flex flex-wrap gap-x-6">
-          {visibleTabs.map((tab) => (
-            <button
-              key={tab}
-              onClick={() => switchTab(tab)}
-              className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors whitespace-nowrap ${
-                activeTab === tab
-                  ? "border-primary text-primary"
-                  : "border-transparent text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              {TAB_LABELS[tab]}
-            </button>
-          ))}
-        </nav>
       </div>
 
       {activeTab === "order" && (

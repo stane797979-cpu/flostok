@@ -85,7 +85,7 @@ export const MAIN_SECTIONS: NavSection[] = [
     items: [
       {
         title: "발주관리",
-        href: "/dashboard/orders",
+        href: "/dashboard/orders?tab=order",
         icon: ClipboardList,
         description: "발주 생성 및 현황 관리",
         menuKey: "orders",
@@ -114,7 +114,7 @@ export const MAIN_SECTIONS: NavSection[] = [
     color: "text-orange-500",
     items: [
       {
-        title: "출고현황",
+        title: "출고관리",
         href: "/dashboard/outbound",
         icon: Truck,
         description: "출고 등록 및 현황 관리",
