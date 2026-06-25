@@ -177,8 +177,12 @@ export function OutboundClient({ initialTab = "records" }: OutboundClientProps) 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">출고현황</h1>
-        <p className="mt-2 text-slate-500">출고 등록 및 현황 관리</p>
+        <h1 className="text-3xl font-bold tracking-tight">
+          {{ records: "출고현황", request: "출고요청", confirm: "출고확정(창고)" }[activeTab]}
+        </h1>
+        <p className="mt-2 text-slate-500">
+          {{ records: "출고 등록 및 현황 관리", request: "출고 요청 접수 및 관리", confirm: "창고 출고 확정 처리" }[activeTab]}
+        </p>
       </div>
 
 

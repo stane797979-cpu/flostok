@@ -80,7 +80,8 @@ export function NavItem({
   if (subItems && subItems.length > 0 && !collapsed) {
     return (
       <div>
-        <div
+        <button
+          onClick={() => setExpanded(!expanded)}
           className={cn(
             "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-base font-medium transition-colors",
             "hover:bg-slate-100 dark:hover:bg-slate-800",
@@ -89,25 +90,14 @@ export function NavItem({
               : "text-slate-600 dark:text-slate-400"
           )}
         >
-          <Link
-            href={href}
-            onClick={onClick}
-            className="flex flex-1 items-center gap-3 min-w-0"
-          >
-            <Icon className={cn("h-5 w-5 shrink-0", isActive && "text-primary-600")} />
-            <span className="flex-1 text-left truncate">{title}</span>
-          </Link>
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className="ml-1 rounded p-0.5 hover:bg-slate-200 dark:hover:bg-slate-700"
-          >
-            {expanded ? (
-              <ChevronDown className="h-4 w-4 text-slate-400" />
-            ) : (
-              <ChevronRight className="h-4 w-4 text-slate-400" />
-            )}
-          </button>
-        </div>
+          <Icon className={cn("h-5 w-5 shrink-0", isActive && "text-primary-600")} />
+          <span className="flex-1 text-left truncate">{title}</span>
+          {expanded ? (
+            <ChevronDown className="h-4 w-4 text-slate-400" />
+          ) : (
+            <ChevronRight className="h-4 w-4 text-slate-400" />
+          )}
+        </button>
         {expanded && (
           <div className="ml-4 mt-0.5 space-y-0.5 border-l border-slate-200 pl-3 dark:border-slate-700">
             {subItems.map((child) => {

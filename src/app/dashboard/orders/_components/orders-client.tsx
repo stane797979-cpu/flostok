@@ -580,11 +580,11 @@ export function OrdersClient({ serverReorderItems = [], serverPurchaseOrders, in
   };
 
   const pageTitles: Record<TabType, { title: string; description: string }> = {
-    order:             { title: "발주관리",   description: "발주 필요 품목을 확인하고 AI추천 또는 직접 발주를 진행하세요" },
-    orders:            { title: "발주관리",   description: "생성된 발주서 목록을 확인하세요" },
-    inbound:           { title: "입고관리",   description: "발주서별 입고 현황을 확인하세요" },
-    delivery:          { title: "입고관리",   description: "납기 준수율 및 지연 현황을 분석합니다" },
-    "import-shipment": { title: "입고관리",   description: "수입 화물의 입항 스케줄을 관리합니다" },
+    order:             { title: "AI발주 권고",  description: "발주 필요 품목을 확인하고 AI추천 또는 직접 발주를 진행하세요" },
+    orders:            { title: "발주현황",     description: "생성된 발주서 목록을 확인하세요" },
+    inbound:           { title: "입고현황",     description: "발주서별 입고 현황을 확인하세요" },
+    delivery:          { title: "납기분석",     description: "납기 준수율 및 지연 현황을 분석합니다" },
+    "import-shipment": { title: "입항스케줄",   description: "수입 화물의 입항 스케줄을 관리합니다" },
   };
 
   const currentPage = pageTitles[activeTab] || pageTitles.order;
