@@ -74,7 +74,7 @@ function GradeTag({ label, value }: { label: string; value: string | null }) {
 function ReviewPanel({ data }: { data: OrderReviewData }) {
   return (
     <div className="mt-3 space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-      <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">근거 검토 — 재고 영향 분석</p>
+      <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">검토 — 재고 영향 분석</p>
       {data.items.map((item) => {
         const shortageAbs = Math.abs(item.shortage);
         const isShort = item.shortage < 0;
@@ -377,7 +377,7 @@ export function ApprovalTimeline({ purchaseOrderId, orderStatus, onApprovalChang
                       className="ml-1 h-6 gap-1 border-blue-300 text-blue-600 hover:bg-blue-50 text-[11px] px-2 dark:border-blue-700 dark:text-blue-400"
                     >
                       <FileSearch className="h-3 w-3" />
-                      {reviewLoading ? "로딩..." : reviewOpen ? "검토 닫기" : "근거 검토"}
+                      {reviewLoading ? "로딩..." : reviewOpen ? "검토 닫기" : "검토"}
                     </Button>
                   </div>
 
