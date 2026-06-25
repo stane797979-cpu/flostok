@@ -368,19 +368,17 @@ export function ApprovalTimeline({ purchaseOrderId, orderStatus, onApprovalChang
                         })}
                       </span>
                     )}
-                    {/* 팀장 검토 중일 때 근거검토 버튼 */}
-                    {isManagerPending && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={handleToggleReview}
-                        disabled={reviewLoading}
-                        className="ml-1 h-6 gap-1 border-blue-300 text-blue-600 hover:bg-blue-50 text-[11px] px-2 dark:border-blue-700 dark:text-blue-400"
-                      >
-                        <FileSearch className="h-3 w-3" />
-                        {reviewLoading ? "로딩..." : reviewOpen ? "검토 닫기" : "근거 검토"}
-                      </Button>
-                    )}
+                    {/* 근거검토 버튼 — 모든 단계에서 표시 */}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleToggleReview}
+                      disabled={reviewLoading}
+                      className="ml-1 h-6 gap-1 border-blue-300 text-blue-600 hover:bg-blue-50 text-[11px] px-2 dark:border-blue-700 dark:text-blue-400"
+                    >
+                      <FileSearch className="h-3 w-3" />
+                      {reviewLoading ? "로딩..." : reviewOpen ? "검토 닫기" : "근거 검토"}
+                    </Button>
                   </div>
 
                   {step.comment && (
@@ -398,8 +396,8 @@ export function ApprovalTimeline({ purchaseOrderId, orderStatus, onApprovalChang
                     </div>
                   )}
 
-                  {/* 근거검토 패널 (팀장 단계에서만) */}
-                  {isManagerPending && reviewOpen && reviewData && (
+                  {/* 근거검토 패널 */}
+                  {reviewOpen && reviewData && (
                     <ReviewPanel data={reviewData} />
                   )}
 
