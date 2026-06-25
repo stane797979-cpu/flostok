@@ -104,6 +104,10 @@ export function CustomersClient({ initialCustomers }: CustomersClientProps) {
 
   return (
     <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">거래처</h1>
+        <p className="mt-2 text-slate-500">거래처(판매처) 정보 관리</p>
+      </div>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative w-full sm:w-80">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />

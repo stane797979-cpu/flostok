@@ -17,6 +17,12 @@ import {
 import { OrderDialog } from "./order-dialog";
 import { BulkOrderDialog } from "./bulk-order-dialog";
 import { OrderDetailDialog } from "./order-detail-dialog";
+import { InboundRecordsTable, type InboundRecord } from "./inbound-records-table";
+import { DeliveryComplianceTab } from "./delivery-compliance-tab";
+import { ImportShipmentTab } from "./import-shipment-tab";
+import { getInboundRecords } from "@/server/actions/inbound";
+import { getDeliveryComplianceData } from "@/server/actions/delivery-compliance";
+import type { DeliveryComplianceResult } from "@/server/services/scm/delivery-compliance";
 import { useToast } from "@/hooks/use-toast";
 import {
   createPurchaseOrder,
@@ -201,6 +207,14 @@ export function OrdersClient({ serverReorderItems = [], serverPurchaseOrders, in
   });
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
 
+  // 입고현황 데이터
+  const [inboundRecords, setInboundRecords] = useState<InboundRecord[]>([]);
+  const [isLoadingInbound, setIsLoadingInbound] = useState(false);
+
+  // 납기분석 데이터
+  const [deliveryData, setDeliveryData] = useState<DeliveryComplianceResult | null>(null);
+  const [isLoadingDelivery, setIsLoadingDelivery] = useState(false);
+
   // 발주현황 KPI
   const orderKPI = useMemo(() => {
     const pending = purchaseOrders.filter((o) => o.status === "pending" || o.status === "draft").length;
@@ -250,6 +264,18 @@ export function OrdersClient({ serverReorderItems = [], serverPurchaseOrders, in
   useEffect(() => {
     if (activeTab === "orders") {
       loadPurchaseOrders();
+    }
+    if (activeTab === "inbound") {
+      setIsLoadingInbound(true);
+      getInboundRecords({ limit: 200 }).then((result) => {
+        setInboundRecords(result.records as unknown as InboundRecord[]);
+      }).catch(console.error).finally(() => setIsLoadingInbound(false));
+    }
+    if (activeTab === "delivery") {
+      setIsLoadingDelivery(true);
+      getDeliveryComplianceData().then((data) => {
+        setDeliveryData(data);
+      }).catch(console.error).finally(() => setIsLoadingDelivery(false));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
@@ -786,6 +812,18 @@ export function OrdersClient({ serverReorderItems = [], serverPurchaseOrders, in
         </div>
       )}
 
+
+      {activeTab === "inbound" && (
+        isLoadingInbound
+          ? <div className="flex h-48 items-center justify-center text-slate-400">입고현황 불러오는 중...</div>
+          : <InboundRecordsTable records={inboundRecords} />
+      )}
+      {activeTab === "delivery" && (
+        isLoadingDelivery
+          ? <div className="flex h-48 items-center justify-center text-slate-400">납기분석 불러오는 중...</div>
+          : <DeliveryComplianceTab data={deliveryData} />
+      )}
+      {activeTab === "import-shipment" && <ImportShipmentTab />}
 
       <OrderDialog
         open={orderDialogOpen}

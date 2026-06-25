@@ -155,7 +155,7 @@ export const MAIN_SECTIONS: NavSection[] = [
         menuKey: "movement",
       },
       {
-        title: "제품 관리",
+        title: "제품관리",
         href: "/dashboard/products",
         icon: Tags,
         description: "제품/SKU 정보 관리",

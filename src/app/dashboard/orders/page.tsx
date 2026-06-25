@@ -1,7 +1,7 @@
 import { getReorderItems, getPurchaseOrders } from "@/server/actions/purchase-orders";
 import { OrdersClient } from "./_components/orders-client";
 
-const VALID_TABS = ["order", "orders"] as const;
+const VALID_TABS = ["order", "orders", "inbound", "delivery", "import-shipment"] as const;
 type OrderTab = (typeof VALID_TABS)[number];
 
 export default async function OrdersPage({
@@ -12,17 +12,10 @@ export default async function OrdersPage({
   const { tab } = await searchParams;
   const resolvedTab: OrderTab = tab && VALID_TABS.includes(tab as OrderTab) ? (tab as OrderTab) : "order";
 
-  const fetchPromises: [
-    Promise<Awaited<ReturnType<typeof getReorderItems>> | null>,
-    Promise<Awaited<ReturnType<typeof getPurchaseOrders>> | null>,
-  ] = [
+  const [reorderResult, ordersResult] = await Promise.allSettled([
     getReorderItems(),
-    resolvedTab === "orders"
-      ? getPurchaseOrders({ limit: 100 })
-      : Promise.resolve(null),
-  ];
-
-  const [reorderResult, ordersResult] = await Promise.allSettled(fetchPromises);
+    resolvedTab === "orders" ? getPurchaseOrders({ limit: 100 }) : Promise.resolve(null),
+  ]);
 
   const serverReorderItems =
     reorderResult.status === "fulfilled" && reorderResult.value

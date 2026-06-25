@@ -133,6 +133,10 @@ export function SuppliersClient({ initialSuppliers }: SuppliersClientProps) {
 
   return (
     <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">공급업체</h1>
+        <p className="mt-2 text-slate-500">공급업체 정보 및 연락처</p>
+      </div>
       <input
         ref={fileInputRef}
         type="file"
