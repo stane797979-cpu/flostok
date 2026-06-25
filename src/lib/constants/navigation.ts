@@ -96,15 +96,15 @@ export const MAIN_SECTIONS: NavSection[] = [
       },
       {
         title: "입고관리",
-        href: "/dashboard/warehouse/inbound",
+        href: "/dashboard/orders?tab=inbound",
         icon: PackageCheck,
         description: "입고 확인 및 이력 관리",
         menuKey: "inbound",
         children: [
-          { title: "입고확정(창고)", href: "/dashboard/warehouse/inbound", menuKey: "warehouse_inbound" },
           { title: "입고현황", href: "/dashboard/orders?tab=inbound", menuKey: "inbound" },
           { title: "납기분석", href: "/dashboard/orders?tab=delivery", menuKey: "inbound" },
           { title: "입항스케줄", href: "/dashboard/orders?tab=import-shipment", menuKey: "inbound" },
+          { title: "입고확정(창고)", href: "/dashboard/warehouse/inbound", menuKey: "warehouse_inbound" },
         ],
       },
     ],
