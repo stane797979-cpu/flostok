@@ -132,8 +132,8 @@ export const MAIN_SECTIONS: NavSection[] = [
     color: "text-violet-500",
     items: [
       {
-        title: "재고 현황",
-        href: "/dashboard/inventory",
+        title: "재고관리",
+        href: "/dashboard/inventory?tab=inventory",
         icon: Package,
         description: "재고 상태 및 수량 관리",
         menuKey: "inventory",
