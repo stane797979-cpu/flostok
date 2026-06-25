@@ -220,9 +220,6 @@ export function ApprovalTimeline({ purchaseOrderId, orderStatus, onApprovalChang
                     <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
                       {step.roleName}
                     </span>
-                    {step.approverName && (
-                      <span className="text-xs text-slate-500">{step.approverName}</span>
-                    )}
                     <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${meta.badge}`}>
                       {meta.label}
                     </span>

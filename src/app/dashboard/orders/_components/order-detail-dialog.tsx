@@ -38,14 +38,12 @@ import {
 } from "@/server/actions/purchase-order-approvals";
 import type { PurchaseOrderApproval } from "@/server/db/schema";
 
-// 상태별 다음 단계 정의
+// 상태별 다음 단계 정의 — draft/pending/approved 승인 계열은 결재라인에서 처리, 취소만 유지
 const nextStatusActions: Record<string, { label: string; status: string; variant?: "default" | "outline" }[]> = {
   draft: [
-    { label: "결재 요청", status: "pending" },
     { label: "취소", status: "cancelled", variant: "outline" },
   ],
   pending: [
-    { label: "승인 (발주 확정)", status: "ordered" },
     { label: "취소", status: "cancelled", variant: "outline" },
   ],
   approved: [
@@ -953,8 +951,6 @@ export function OrderDetailDialog({ open, onOpenChange, orderId, onStatusChange 
                           <div className="min-w-0 flex-1">
                             <p className="text-sm text-slate-700">{log.description}</p>
                             <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-400">
-                              <span>{log.userName || "시스템"}</span>
-                              <span>·</span>
                               <span>
                                 {new Date(log.createdAt).toLocaleString("ko-KR", {
                                   month: "short",
