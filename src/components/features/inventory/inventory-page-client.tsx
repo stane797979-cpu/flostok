@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Search, RefreshCw, Download, Loader2 } from "lucide-react";
 import { exportInventoryToExcel } from "@/server/actions/excel-export";
-import { updateStockoutRecord, type StockoutSummary } from "@/server/actions/stockout";
+import { getStockoutData, type StockoutSummary } from "@/server/actions/stockout";
 import { useToast } from "@/hooks/use-toast";
 import {
   InventoryTable,
@@ -34,20 +34,42 @@ interface InventoryStats {
 interface InventoryPageClientProps {
   items: InventoryItem[];
   stats: InventoryStats;
-  stockoutData: StockoutSummary;
 }
 
-export function InventoryPageClient({ items, stats, stockoutData }: InventoryPageClientProps) {
+export function InventoryPageClient({ items, stats }: InventoryPageClientProps) {
   const [search, setSearch] = useState("");
   const [adjustTarget, setAdjustTarget] = useState<AdjustmentTarget | null>(null);
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [pageSize, setPageSize] = useState(20);
   const [currentPage, setCurrentPage] = useState(1);
+  const [stockoutData, setStockoutData] = useState<StockoutSummary | null>(null);
+  const [isLoadingStockout, setIsLoadingStockout] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const defaultTab = searchParams.get("tab") === "stockout" ? "stockout" : "inventory";
+
+  const handleTabChange = useCallback(async (tab: string) => {
+    if (tab === "stockout" && !stockoutData && !isLoadingStockout) {
+      setIsLoadingStockout(true);
+      try {
+        const data = await getStockoutData();
+        setStockoutData(data);
+      } catch {
+        toast({ title: "오류", description: "결품 데이터를 불러오지 못했습니다", variant: "destructive" });
+      } finally {
+        setIsLoadingStockout(false);
+      }
+    }
+  }, [stockoutData, isLoadingStockout, toast]);
+
+  useEffect(() => {
+    if (defaultTab === "stockout") {
+      handleTabChange("stockout");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filtered = useMemo(() => {
     setCurrentPage(1);
@@ -153,19 +175,21 @@ export function InventoryPageClient({ items, stats, stockoutData }: InventoryPag
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">
-              {stockoutData.records.filter((r) => r.actionStatus !== "normalized").length}
+              {stockoutData
+                ? stockoutData.records.filter((r) => r.actionStatus !== "normalized").length
+                : "-"}
             </div>
           </CardContent>
         </Card>
       </div>
 
       {/* 탭 */}
-      <Tabs defaultValue={defaultTab}>
+      <Tabs defaultValue={defaultTab} onValueChange={handleTabChange}>
         <TabsList>
           <TabsTrigger value="inventory">재고현황</TabsTrigger>
           <TabsTrigger value="stockout">
             결품관리
-            {stockoutData.records.filter((r) => r.actionStatus !== "normalized").length > 0 && (
+            {stockoutData && stockoutData.records.filter((r) => r.actionStatus !== "normalized").length > 0 && (
               <Badge className="ml-2 h-5 bg-red-500 px-1.5 text-[10px] text-white">
                 {stockoutData.records.filter((r) => r.actionStatus !== "normalized").length}
               </Badge>
@@ -235,7 +259,15 @@ export function InventoryPageClient({ items, stats, stockoutData }: InventoryPag
 
         {/* 결품관리 탭 */}
         <TabsContent value="stockout" className="mt-4">
-          <StockoutClient data={stockoutData} />
+          {isLoadingStockout && (
+            <div className="flex items-center justify-center py-16 text-slate-400">
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              결품 데이터 불러오는 중...
+            </div>
+          )}
+          {!isLoadingStockout && stockoutData && (
+            <StockoutClient data={stockoutData} />
+          )}
         </TabsContent>
       </Tabs>
 

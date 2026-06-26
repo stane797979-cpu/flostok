@@ -73,19 +73,13 @@ type InventoryListItem = {
   product: { sku: string; name: string; safetyStock: number | null; reorderPoint: number | null; abcGrade: string | null; xyzGrade: string | null };
 };
 
-export async function getInventoryList(options?: {
-  productId?: string;
-  status?: string | string[];
-  limit?: number;
-  offset?: number;
-}): Promise<{
-  items: InventoryListItem[];
-  total: number;
-}> {
-  const user = await requireAuth();
-  const { productId, status, limit = 50, offset = 0 } = options || {};
+async function _getInventoryListInternal(
+  orgId: string,
+  options: { productId?: string; status?: string | string[]; limit: number; offset: number }
+): Promise<{ items: InventoryListItem[]; total: number }> {
+  const { productId, status, limit, offset } = options;
 
-  const conditions = [eq(inventory.organizationId, user.organizationId)];
+  const conditions = [eq(inventory.organizationId, orgId)];
 
   if (productId) {
     conditions.push(eq(inventory.productId, productId));
@@ -99,7 +93,6 @@ export async function getInventoryList(options?: {
     }
   }
 
-  // 30일 전 날짜 (일평균출고량 계산용)
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split("T")[0];
@@ -140,7 +133,6 @@ export async function getInventoryList(options?: {
       .select({ count: sql<number>`count(*)` })
       .from(inventory)
       .where(and(...conditions)),
-    // 최근 30일 제품별 총 출고수량 (inventory_history에서 음수 변동 합산)
     db
       .select({
         productId: inventoryHistory.productId,
@@ -149,13 +141,12 @@ export async function getInventoryList(options?: {
       .from(inventoryHistory)
       .where(
         and(
-          eq(inventoryHistory.organizationId, user.organizationId),
+          eq(inventoryHistory.organizationId, orgId),
           gte(inventoryHistory.date, thirtyDaysAgoStr),
           sql`${inventoryHistory.changeAmount} < 0`
         )
       )
       .groupBy(inventoryHistory.productId),
-    // 출고요청중/홀딩 상태의 제품별 할당수량
     db
       .select({
         productId: outboundRequestItems.productId,
@@ -166,20 +157,18 @@ export async function getInventoryList(options?: {
         outboundRequests,
         and(
           eq(outboundRequestItems.outboundRequestId, outboundRequests.id),
-          eq(outboundRequests.organizationId, user.organizationId),
+          eq(outboundRequests.organizationId, orgId),
           inArray(outboundRequests.status, ["pending", "holding"])
         )
       )
       .groupBy(outboundRequestItems.productId),
   ]);
 
-  // 제품별 일평균출고량 매핑
   const avgDailyOutboundMap = new Map<string, number>();
   for (const row of outboundData) {
     avgDailyOutboundMap.set(row.productId, Math.round((Number(row.totalOutbound) / 30) * 100) / 100);
   }
 
-  // 제품별 할당재고 매핑
   const allocatedMap = new Map<string, number>();
   for (const row of allocatedData) {
     allocatedMap.set(row.productId, Number(row.allocatedQty));
@@ -216,6 +205,33 @@ export async function getInventoryList(options?: {
     }),
     total: Number(countResult[0]?.count || 0),
   };
+}
+
+export async function getInventoryList(options?: {
+  productId?: string;
+  status?: string | string[];
+  limit?: number;
+  offset?: number;
+}): Promise<{
+  items: InventoryListItem[];
+  total: number;
+}> {
+  const user = await requireAuth();
+  const { productId, status, limit = 50, offset = 0 } = options || {};
+
+  const cacheKey = [
+    `inventory-list-${user.organizationId}`,
+    productId ?? "all",
+    Array.isArray(status) ? status.join(",") : (status ?? "all"),
+    String(limit),
+    String(offset),
+  ];
+
+  return unstable_cache(
+    () => _getInventoryListInternal(user.organizationId, { productId, status, limit, offset }),
+    cacheKey,
+    { revalidate: 60, tags: [`inventory-${user.organizationId}`] }
+  )();
 }
 
 /**

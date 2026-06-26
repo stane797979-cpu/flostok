@@ -1,15 +1,13 @@
 import { getInventoryList, getInventoryStats } from "@/server/actions/inventory";
-import { getStockoutData } from "@/server/actions/stockout";
 import { InventoryPageClient } from "@/components/features/inventory/inventory-page-client";
 
 export const dynamic = "force-dynamic";
 
 export default async function InventoryPage() {
   try {
-    const [{ items }, stats, stockoutData] = await Promise.all([
+    const [{ items }, stats] = await Promise.all([
       getInventoryList({ limit: 500 }),
       getInventoryStats(),
-      getStockoutData(),
     ]);
 
     const inventoryItems = items.map((item) => ({
@@ -42,7 +40,6 @@ export default async function InventoryPage() {
       <InventoryPageClient
         items={inventoryItems}
         stats={clientStats}
-        stockoutData={stockoutData}
       />
     );
   } catch (error) {
@@ -51,7 +48,6 @@ export default async function InventoryPage() {
       <InventoryPageClient
         items={[]}
         stats={{ totalProducts: 0, needsOrder: 0, outOfStockAndCritical: 0, excess: 0 }}
-        stockoutData={{ records: [], totalProducts: 0, stockoutCount: 0, criticalCount: 0, normalizedCount: 0 }}
       />
     );
   }

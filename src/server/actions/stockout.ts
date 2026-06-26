@@ -74,26 +74,27 @@ export async function getStockoutData(): Promise<StockoutSummary> {
       )
     );
 
-  for (const record of activeRecords) {
-    const currentStock = stockMap.get(record.productId) ?? 0;
-    if (currentStock >= 1) {
-      // 재고 회복 → 자동 정상화
-      const startDate = record.stockoutStartDate ? new Date(record.stockoutStartDate) : new Date();
-      const endDate = new Date(today);
-      const duration = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+  await Promise.all(
+    activeRecords
+      .filter((record) => (stockMap.get(record.productId) ?? 0) >= 1)
+      .map((record) => {
+        const currentStock = stockMap.get(record.productId)!;
+        const startDate = record.stockoutStartDate ? new Date(record.stockoutStartDate) : new Date();
+        const endDate = new Date(today);
+        const duration = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
 
-      await db
-        .update(stockoutRecords)
-        .set({
-          stockoutEndDate: today,
-          durationDays: duration,
-          closingStock: currentStock,
-          actionStatus: "normalized",
-          updatedAt: new Date(),
-        })
-        .where(eq(stockoutRecords.id, record.id));
-    }
-  }
+        return db
+          .update(stockoutRecords)
+          .set({
+            stockoutEndDate: today,
+            durationDays: duration,
+            closingStock: currentStock,
+            actionStatus: "normalized",
+            updatedAt: new Date(),
+          })
+          .where(eq(stockoutRecords.id, record.id));
+      })
+  );
 
   // 3. 전체 결품 기록 조회 (정상화 반영 후)
   const existingRecords = await db
